@@ -835,6 +835,36 @@ def format_j1939_table(result: CommandResult) -> list[str]:
     return lines
 
 
+def format_uds_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}", f"interface: {result.data.get('interface', 'unknown')}"]
+    events = result.data.get("events", [])
+    if result.command == "uds scan":
+        lines.append(f"responders: {result.data.get('responder_count', 0)}")
+    else:
+        lines.append(f"transactions: {result.data.get('transaction_count', 0)}")
+
+    lines.append("transactions:")
+    if not events:
+        lines.append("- no uds transactions")
+        return lines
+
+    for event in events:
+        payload = event["payload"]
+        ecu = payload["ecu_address"]
+        ecu_text = f"0x{ecu:02X}" if ecu is not None else "unknown"
+        lines.append(
+            "- "
+            f"service=0x{payload['service']:02X} "
+            f"name={payload['service_name']} "
+            f"ecu={ecu_text} "
+            f"req_id=0x{payload['request_id']:03X} "
+            f"resp_id=0x{payload['response_id']:03X} "
+            f"req={payload['request_data']} "
+            f"resp={payload['response_data']}"
+        )
+    return lines
+
+
 def format_candump_lines(result: CommandResult) -> list[str]:
     lines: list[str] = []
     for event in result.data.get("events", []):
@@ -902,6 +932,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "table" and result.ok and result.command in J1939_COMMANDS:
         for line in format_j1939_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command in UDS_COMMANDS:
+        for line in format_uds_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
