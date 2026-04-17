@@ -31,7 +31,7 @@ The project is centered on CAN security research, with strong support for heavy 
 
 ### Documentation
 
-* [Command spec](docs/COMMAND_SPEC.md)
+* [Command spec](docs/command_spec.md)
 * [Architecture](docs/architecture.md)
 
 ### Example Usage
