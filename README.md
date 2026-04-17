@@ -1,4 +1,4 @@
-# README.md (initial)
+# README.md
 
 ## CANarchy
 
