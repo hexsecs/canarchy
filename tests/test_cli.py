@@ -286,6 +286,27 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][1]["payload"]["service"], 0x27)
         self.assertEqual(payload["data"]["events"][1]["payload"]["service_name"], "SecurityAccess")
 
+    def test_uds_scan_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--table")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("command: uds scan", stdout)
+        self.assertIn("interface: can0", stdout)
+        self.assertIn("responders:", stdout)
+        self.assertIn("transactions:", stdout)
+        self.assertIn("service=0x10", stdout)
+        self.assertIn("name=DiagnosticSessionControl", stdout)
+        self.assertIn("req_id=0x7DF", stdout)
+        self.assertIn("resp_id=0x7E8", stdout)
+
+    def test_uds_trace_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--table")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("command: uds trace", stdout)
+        self.assertIn("interface: can0", stdout)
+        self.assertIn("transactions:", stdout)
+        self.assertIn("service=0x27", stdout)
+        self.assertIn("name=SecurityAccess", stdout)
+
     def test_uds_transport_error_returns_backend_exit_code(self) -> None:
         exit_code, stdout, stderr = run_cli("uds", "scan", "offline0", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
