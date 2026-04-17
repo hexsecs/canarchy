@@ -167,6 +167,7 @@ class CliTests(unittest.TestCase):
 
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["implementation"], "file-backed analysis")
         self.assertEqual(payload["data"]["total_frames"], 3)
         self.assertEqual(payload["data"]["unique_arbitration_ids"], 3)
 
@@ -375,6 +376,30 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         self.assertEqual(stdout.strip(), "J1939 PGN must be between 0 and 262143.")
 
+    def test_j1939_pgn_requires_capture_file(self) -> None:
+        exit_code, stdout, stderr = run_cli("j1939", "pgn", "65262", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_FILE_REQUIRED")
+
+    def test_j1939_pgn_uses_real_capture_file(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "pgn",
+            "65262",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["file"], str(FIXTURES / "sample.candump"))
+        self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
+
     def test_transport_error_returns_backend_exit_code(self) -> None:
         exit_code, stdout, stderr = run_cli("capture", "offline0", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
@@ -475,6 +500,15 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_INVALID")
         self.assertIn("line 1", payload["errors"][0]["message"])
+
+    def test_unsupported_capture_file_format_returns_transport_error(self) -> None:
+        exit_code, stdout, stderr = run_cli("stats", str(FIXTURES / "sample.dbc"), "--json")
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_FORMAT_UNSUPPORTED")
+        self.assertIn("unsupported file format", payload["errors"][0]["message"])
 
 
 if __name__ == "__main__":

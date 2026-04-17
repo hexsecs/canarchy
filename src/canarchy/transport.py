@@ -52,6 +52,7 @@ class TransportError(Exception):
 CANDUMP_LINE_RE = re.compile(
     r"^\((?P<timestamp>\d+(?:\.\d+)?)\)\s+(?P<interface>\S+)\s+(?P<frame_id>[0-9A-Fa-f]+)#(?P<data>[0-9A-Fa-f]*)$"
 )
+SUPPORTED_CAPTURE_SUFFIXES = {".candump", ".log"}
 
 
 @dataclass(slots=True, frozen=True)
@@ -418,6 +419,13 @@ class LocalTransport:
                 "CAPTURE_SOURCE_UNAVAILABLE",
                 f"Capture source '{file_name}' is not a readable file.",
                 "Provide a readable candump log file path.",
+            )
+        if path.suffix.lower() not in SUPPORTED_CAPTURE_SUFFIXES:
+            supported_formats = ", ".join(sorted(SUPPORTED_CAPTURE_SUFFIXES))
+            raise TransportError(
+                "CAPTURE_FORMAT_UNSUPPORTED",
+                f"Capture source '{file_name}' uses an unsupported file format.",
+                f"Use a candump log file with one of these suffixes: {supported_formats}.",
             )
 
         try:

@@ -214,6 +214,7 @@ def build_parser() -> CanarchyArgumentParser:
 
     j1939_pgn = j1939_subparsers.add_parser("pgn", help="inspect a J1939 PGN")
     j1939_pgn.add_argument("pgn", type=int)
+    j1939_pgn.add_argument("--file", help="inspect the PGN within a capture file")
     add_output_arguments(j1939_pgn)
     j1939_pgn.set_defaults(command="j1939 pgn")
 
@@ -377,6 +378,20 @@ def validate_args(args: argparse.Namespace) -> None:
                 ],
                 data={"pgn": args.pgn},
             )
+
+    if args.command == "j1939 pgn" and not getattr(args, "file", None):
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="CAPTURE_FILE_REQUIRED",
+                    message="J1939 PGN inspection requires a capture file.",
+                    hint="Pass `--file <capture.candump>` to inspect a PGN in recorded traffic.",
+                )
+            ],
+            data={"pgn": args.pgn},
+        )
 
     if args.command == "j1939 spn" and args.spn < 0:
         raise CommandError(
@@ -542,7 +557,7 @@ def transport_payload(
                 "file": args.file,
                 "expression": args.expression,
                 "status": "implemented",
-                "implementation": "fixture-backed analysis",
+                "implementation": "file-backed analysis",
             },
             transport.filter_events(args.file, args.expression),
             [],
@@ -555,7 +570,7 @@ def transport_payload(
                 "file": args.file,
                 **stats.to_payload(),
                 "status": "implemented",
-                "implementation": "fixture-backed analysis",
+                "implementation": "file-backed analysis",
             },
             [],
             [],
@@ -581,8 +596,8 @@ def j1939_payload(
         )
     if args.command == "j1939 pgn":
         return (
-            {"mode": "passive", "pgn": args.pgn},
-            transport.j1939_decode_events("capture.log", args.pgn),
+            {"mode": "passive", "pgn": args.pgn, "file": args.file},
+            transport.j1939_decode_events(args.file, args.pgn),
             [],
         )
     raise AssertionError(f"unsupported j1939 command: {args.command}")

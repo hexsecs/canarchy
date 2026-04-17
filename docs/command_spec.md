@@ -21,11 +21,12 @@ Some other commands are already present in the CLI tree but still return placeho
 
 Important current behavior:
 
-* transport-facing commands default to the deterministic `LocalTransport` scaffold and built-in sample frames
+* live transport-facing commands default to the deterministic `LocalTransport` scaffold for `capture` and `send`
 * `capture` and `send` can use a live `python-can` backend by setting `CANARCHY_TRANSPORT_BACKEND=python-can`
 * the first supported live backend target is `CANARCHY_PYTHON_CAN_INTERFACE=virtual`
 * most successful results currently include `status: planned` and `implementation: command surface scaffold`
 * specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
+* file-backed analysis commands currently support standard timestamped candump log files with `.candump` and `.log` suffixes
 
 ---
 
@@ -46,9 +47,9 @@ canarchy <action> <object>
 Examples:
 
 * `canarchy capture can0 --json`
-* `canarchy replay capture.log --rate 2.0 --json`
+* `canarchy replay tests/fixtures/sample.candump --rate 2.0 --json`
 * `canarchy j1939 monitor --pgn 65262 --json`
-* `canarchy decode capture.log --dbc tests/fixtures/sample.dbc --json`
+* `canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json`
 
 ---
 
@@ -78,6 +79,7 @@ Notes:
 Supported file input today:
 
 * file-backed commands consume standard timestamped candump logs in the form `(timestamp) interface frame#data`
+* supported capture-file suffixes today are `.candump` and `.log`
 * malformed log lines fail with structured transport errors rather than silently falling back to fixture data
 
 ### send
@@ -127,7 +129,7 @@ canarchy replay <file> [--rate <factor>] [--json|--jsonl|--table|--raw]
 Example:
 
 ```bash
-canarchy replay capture.log --rate 2.0 --json
+canarchy replay tests/fixtures/sample.candump --rate 2.0 --json
 ```
 
 ### decode
@@ -141,7 +143,7 @@ canarchy decode <file> --dbc <file> [--json|--jsonl|--table|--raw]
 Example:
 
 ```bash
-canarchy decode capture.log --dbc tests/fixtures/sample.dbc --json
+canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
 ```
 
 ### encode
@@ -339,13 +341,13 @@ canarchy capture can0 --json
 ### Transport Stats
 
 ```bash
-canarchy stats capture.log --json
+canarchy stats tests/fixtures/sample.candump --json
 ```
 
 ### Deterministic Replay
 
 ```bash
-canarchy replay capture.log --rate 0.5 --json
+canarchy replay tests/fixtures/sample.candump --rate 0.5 --json
 ```
 
 ### J1939 Monitor
@@ -363,7 +365,7 @@ canarchy j1939 monitor --pgn 65262 --json
 ### DBC Decode
 
 ```bash
-canarchy decode capture.log --dbc tests/fixtures/sample.dbc --json
+canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
 ```
 
 ### DBC Encode
@@ -387,7 +389,7 @@ canarchy uds trace can0 --json
 ### Session Save
 
 ```bash
-canarchy session save lab-a --interface can0 --dbc tests/fixtures/sample.dbc --capture capture.log --json
+canarchy session save lab-a --interface can0 --dbc tests/fixtures/sample.dbc --capture tests/fixtures/sample.candump --json
 ```
 
 ### Shell One-Shot Command

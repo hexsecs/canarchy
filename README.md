@@ -100,13 +100,13 @@ uv run canarchy --help
 ```bash
 canarchy capture can0 --json
 canarchy capture can0 --candump
-canarchy decode capture.log --dbc tests/fixtures/sample.dbc --json
+canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
 canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 OilTemp=65 Load=40 LampState=1 --json
 canarchy j1939 monitor --pgn 65262
-canarchy replay capture.log --rate 0.5 --json
+canarchy replay tests/fixtures/sample.candump --rate 0.5 --json
 ```
 
-These examples work against the current scaffolded transport and fixture-driven protocol data by default. Set `CANARCHY_TRANSPORT_BACKEND=python-can` to exercise the live `capture` and `send` path through `python-can`.
+These examples use the scaffolded live transport for `capture` by default and real candump log input for file-backed workflows. Set `CANARCHY_TRANSPORT_BACKEND=python-can` to exercise the live `capture` and `send` path through `python-can`.
 
 Use `canarchy capture <interface> --candump` when you want a familiar human-oriented live dump view. Use `--json` or `--jsonl` when you need stable machine-readable output.
 
@@ -114,6 +114,7 @@ Current file support:
 
 * file-backed workflows such as `filter`, `stats`, `decode`, `j1939 decode`, and `replay` now read standard timestamped candump log files
 * the supported log form today is `(timestamp) interface frame#data`
+* supported capture-file suffixes today are `.candump` and `.log`
 * malformed candump log lines return structured transport errors instead of falling back to sample data
 
 ### Structured Output
