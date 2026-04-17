@@ -6,6 +6,7 @@ import threading
 import time
 import uuid
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from canarchy.models import CanFrame
@@ -14,8 +15,13 @@ from canarchy.transport import (
     ScaffoldCanBackend,
     TransportError,
     build_live_backend,
+    load_candump_file,
+    parse_candump_line,
     python_can,
 )
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class FakeMessage:
@@ -51,6 +57,35 @@ class FakeBus:
 
 
 class TransportBackendTests(unittest.TestCase):
+    def test_load_candump_file_returns_real_frames(self) -> None:
+        frames = load_candump_file(FIXTURES / "sample.candump")
+
+        self.assertEqual(len(frames), 3)
+        self.assertEqual(frames[0].timestamp, 0.0)
+        self.assertEqual(frames[1].arbitration_id, 0x18F00431)
+        self.assertTrue(frames[1].is_extended_id)
+        self.assertEqual(frames[2].interface, "can1")
+
+    def test_parse_candump_line_rejects_malformed_lines(self) -> None:
+        with self.assertRaises(TransportError) as ctx:
+            parse_candump_line(
+                "not a candump line", path=FIXTURES / "invalid.candump", line_number=1
+            )
+
+        self.assertEqual(ctx.exception.code, "CAPTURE_SOURCE_INVALID")
+        self.assertIn("line 1", ctx.exception.message)
+
+    def test_parse_candump_line_rejects_invalid_hex_payload(self) -> None:
+        with self.assertRaises(TransportError) as ctx:
+            parse_candump_line(
+                "(0.000000) can0 123#123",
+                path=FIXTURES / "invalid_hex.candump",
+                line_number=1,
+            )
+
+        self.assertEqual(ctx.exception.code, "CAPTURE_SOURCE_INVALID")
+        self.assertIn("invalid hex payload", ctx.exception.message)
+
     def test_build_live_backend_defaults_to_scaffold(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             backend = build_live_backend()

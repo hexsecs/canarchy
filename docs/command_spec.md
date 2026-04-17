@@ -75,6 +75,11 @@ Notes:
 * `--candump` does not change structured `--json` or `--jsonl` output; those remain stable for automation
 * default table output without `--candump` remains the generic key/value renderer
 
+Supported file input today:
+
+* file-backed commands consume standard timestamped candump logs in the form `(timestamp) interface frame#data`
+* malformed log lines fail with structured transport errors rather than silently falling back to fixture data
+
 ### send
 
 Prepare an active transmit frame.

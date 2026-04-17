@@ -6,10 +6,14 @@ import json
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from canarchy.cli import EXIT_OK, EXIT_TRANSPORT_ERROR, EXIT_USER_ERROR, main
 from canarchy.transport import PythonCanBackend, TransportError
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def run_cli(*argv: str) -> tuple[int, str, str]:
@@ -145,7 +149,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["event_type"], "frame")
 
     def test_filter_json_output_returns_matching_frames(self) -> None:
-        exit_code, stdout, _ = run_cli("filter", "capture.log", "id==0x18FEEE31", "--json")
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"), "id==0x18FEEE31", "--json"
+        )
         self.assertEqual(exit_code, EXIT_OK)
 
         payload = json.loads(stdout)
@@ -156,7 +162,7 @@ class CliTests(unittest.TestCase):
         )
 
     def test_stats_json_output_returns_summary(self) -> None:
-        exit_code, stdout, _ = run_cli("stats", "capture.log", "--json")
+        exit_code, stdout, _ = run_cli("stats", str(FIXTURES / "sample.candump"), "--json")
         self.assertEqual(exit_code, EXIT_OK)
 
         payload = json.loads(stdout)
@@ -190,11 +196,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
 
     def test_j1939_decode_returns_j1939_events(self) -> None:
-        exit_code, stdout, _ = run_cli("j1939", "decode", "capture.log", "--json")
+        exit_code, stdout, _ = run_cli(
+            "j1939", "decode", str(FIXTURES / "sample.candump"), "--json"
+        )
         self.assertEqual(exit_code, EXIT_OK)
 
         payload = json.loads(stdout)
-        self.assertEqual(payload["data"]["file"], "capture.log")
+        self.assertEqual(payload["data"]["file"], str(FIXTURES / "sample.candump"))
         self.assertEqual(payload["data"]["events"][1]["payload"]["pgn"], 61444)
 
     def test_j1939_monitor_table_output_is_pretty_printed(self) -> None:
@@ -211,11 +219,13 @@ class CliTests(unittest.TestCase):
         self.assertIn("data=11223344", stdout)
 
     def test_j1939_decode_table_output_is_pretty_printed(self) -> None:
-        exit_code, stdout, stderr = run_cli("j1939", "decode", "capture.log", "--table")
+        exit_code, stdout, stderr = run_cli(
+            "j1939", "decode", str(FIXTURES / "sample.candump"), "--table"
+        )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
         self.assertIn("command: j1939 decode", stdout)
-        self.assertIn("file: capture.log", stdout)
+        self.assertIn(f"file: {FIXTURES / 'sample.candump'}", stdout)
         self.assertIn("pgn=61444", stdout)
         self.assertIn("sa=0x31", stdout)
 
@@ -316,7 +326,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "INVALID_ARGUMENTS")
 
     def test_replay_rate_validation_returns_structured_error(self) -> None:
-        exit_code, stdout, stderr = run_cli("replay", "capture.log", "--rate", "0", "--json")
+        exit_code, stdout, stderr = run_cli(
+            "replay", str(FIXTURES / "sample.candump"), "--rate", "0", "--json"
+        )
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         self.assertEqual(stderr, "")
 
@@ -327,7 +339,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["rate"], 0.0)
 
     def test_replay_json_output_is_structured(self) -> None:
-        exit_code, stdout, stderr = run_cli("replay", "capture.log", "--rate", "2.0", "--json")
+        exit_code, stdout, stderr = run_cli(
+            "replay", str(FIXTURES / "sample.candump"), "--rate", "2.0", "--json"
+        )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
@@ -445,11 +459,22 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
 
     def test_filter_expression_error_returns_backend_exit_code(self) -> None:
-        exit_code, stdout, _ = run_cli("filter", "capture.log", "unknown", "--json")
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"), "unknown", "--json"
+        )
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
 
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "FILTER_EXPRESSION_UNSUPPORTED")
+
+    def test_invalid_candump_file_returns_structured_transport_error(self) -> None:
+        exit_code, stdout, stderr = run_cli("stats", str(FIXTURES / "invalid.candump"), "--json")
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_INVALID")
+        self.assertIn("line 1", payload["errors"][0]["message"])
 
 
 if __name__ == "__main__":

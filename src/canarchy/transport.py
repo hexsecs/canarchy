@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 try:
@@ -45,6 +47,11 @@ class TransportError(Exception):
         self.code = code
         self.message = message
         self.hint = hint
+
+
+CANDUMP_LINE_RE = re.compile(
+    r"^\((?P<timestamp>\d+(?:\.\d+)?)\)\s+(?P<interface>\S+)\s+(?P<frame_id>[0-9A-Fa-f]+)#(?P<data>[0-9A-Fa-f]*)$"
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -399,13 +406,28 @@ class LocalTransport:
         ScaffoldCanBackend()._require_interface(interface)
 
     def _frames_for_file(self, file_name: str) -> list[CanFrame]:
-        if file_name.lower() in {"missing.log", "missing", "offline.log"}:
+        path = Path(file_name)
+        if file_name.lower() in {"missing.log", "missing", "offline.log"} or not path.exists():
             raise TransportError(
                 "CAPTURE_SOURCE_UNAVAILABLE",
                 f"Capture source '{file_name}' is not available.",
                 "Provide a readable capture file or generate traffic with `canarchy capture` first.",
             )
-        return recorded_frames()
+        if not path.is_file():
+            raise TransportError(
+                "CAPTURE_SOURCE_UNAVAILABLE",
+                f"Capture source '{file_name}' is not a readable file.",
+                "Provide a readable candump log file path.",
+            )
+
+        try:
+            return load_candump_file(path)
+        except OSError as exc:
+            raise TransportError(
+                "CAPTURE_SOURCE_UNAVAILABLE",
+                f"Capture source '{file_name}' could not be read.",
+                "Check file permissions and try again.",
+            ) from exc
 
     def _pgn(self, frame: CanFrame) -> int:
         return decompose_arbitration_id(frame.arbitration_id).pgn
@@ -433,3 +455,49 @@ class LocalTransport:
                 )
             )
         return events
+
+
+def load_candump_file(path: Path) -> list[CanFrame]:
+    frames: list[CanFrame] = []
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        frames.append(parse_candump_line(stripped, path=path, line_number=line_number))
+    return frames
+
+
+def parse_candump_line(line: str, *, path: Path, line_number: int) -> CanFrame:
+    match = CANDUMP_LINE_RE.match(line)
+    if match is None:
+        raise TransportError(
+            "CAPTURE_SOURCE_INVALID",
+            f"Failed to parse candump log line {line_number} in '{path}'.",
+            "Use the standard candump log format `(timestamp) interface frame#data`.",
+        )
+
+    frame_id_text = match.group("frame_id")
+    data_text = match.group("data")
+    if len(data_text) % 2 != 0:
+        raise TransportError(
+            "CAPTURE_SOURCE_INVALID",
+            f"Candump log line {line_number} in '{path}' contains invalid hex payload data.",
+            "Use full byte pairs in the candump payload field.",
+        )
+
+    arbitration_id = int(frame_id_text, 16)
+    is_extended_id = len(frame_id_text) > 3
+    try:
+        return CanFrame(
+            arbitration_id=arbitration_id,
+            data=bytes.fromhex(data_text),
+            timestamp=float(match.group("timestamp")),
+            interface=match.group("interface"),
+            is_extended_id=is_extended_id,
+        )
+    except ValueError as exc:
+        raise TransportError(
+            "CAPTURE_SOURCE_INVALID",
+            f"Candump log line {line_number} in '{path}' is not a valid CAN frame.",
+            "Check the frame identifier width and payload length for the selected frame type.",
+        ) from exc

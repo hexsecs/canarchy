@@ -110,6 +110,12 @@ These examples work against the current scaffolded transport and fixture-driven 
 
 Use `canarchy capture <interface> --candump` when you want a familiar human-oriented live dump view. Use `--json` or `--jsonl` when you need stable machine-readable output.
 
+Current file support:
+
+* file-backed workflows such as `filter`, `stats`, `decode`, `j1939 decode`, and `replay` now read standard timestamped candump log files
+* the supported log form today is `(timestamp) interface frame#data`
+* malformed candump log lines return structured transport errors instead of falling back to sample data
+
 ### Structured Output
 
 Successful commands return a stable JSON envelope:

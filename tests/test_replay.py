@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from canarchy.replay import build_replay_plan
 from canarchy.transport import LocalTransport
 
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
 class ReplayTests(unittest.TestCase):
     def test_replay_plan_preserves_frame_count(self) -> None:
-        frames = LocalTransport().frames_from_file("capture.log")
+        frames = LocalTransport().frames_from_file(str(FIXTURES / "sample.candump"))
         plan = build_replay_plan(frames, rate=1.0)
 
         self.assertEqual(plan.frame_count, 3)
@@ -16,7 +20,7 @@ class ReplayTests(unittest.TestCase):
         self.assertEqual(plan.duration, 0.2)
 
     def test_replay_rate_scales_relative_timing(self) -> None:
-        frames = LocalTransport().frames_from_file("capture.log")
+        frames = LocalTransport().frames_from_file(str(FIXTURES / "sample.candump"))
         plan = build_replay_plan(frames, rate=0.5)
 
         self.assertEqual(plan.events[0]["timestamp"], 0.0)
