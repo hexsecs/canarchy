@@ -77,11 +77,43 @@ uv run canarchy
 ### Example Usage
 
 ```bash
-canarchy capture can0 --jsonl
-canarchy decode capture.log --dbc truck.dbc
+canarchy capture can0 --json
+canarchy decode capture.log --dbc tests/fixtures/sample.dbc --json
+canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 OilTemp=65 Load=40 LampState=1 --json
 canarchy j1939 monitor --pgn 65262
-canarchy uds scan can0
-canarchy replay drive.log --rate 0.5
+canarchy replay capture.log --rate 0.5 --json
+```
+
+### Structured Output
+
+Successful commands return a stable JSON envelope:
+
+```json
+{
+  "ok": true,
+  "command": "capture",
+  "data": {},
+  "warnings": [],
+  "errors": []
+}
+```
+
+Failures return structured errors with actionable hints:
+
+```json
+{
+  "ok": false,
+  "command": "decode",
+  "data": {},
+  "warnings": [],
+  "errors": [
+    {
+      "code": "DBC_LOAD_FAILED",
+      "message": "Failed to parse DBC file.",
+      "hint": "Validate the DBC syntax and line endings."
+    }
+  ]
+}
 ```
 
 ### Philosophy
