@@ -10,6 +10,7 @@ authors = [
 ]
 dependencies = [
     "canmatrix>=1.2",
+    "msgpack>=1.1.2",
     "python-can>=4.4",
 ]
 

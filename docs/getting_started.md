@@ -16,32 +16,40 @@ Confirm the CLI is available:
 uv run canarchy --help
 ```
 
-## Live Candump on a Virtual CAN Bus
+## Live Candump with Software Loopback
 
-For a real local send-and-receive loop, use the `python-can` virtual backend.
+For a local send-and-receive loop across two terminals, use the `python-can` backend with
+`udp_multicast`. The `virtual` interface is in-process only and will not deliver frames
+between separate terminal sessions.
+
+On macOS you may need to add a multicast route first:
+
+```bash
+sudo route add -net 239.0.0.0/8 -interface lo0
+```
 
 In one terminal, start a live candump capture:
 
 ```bash
 CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=virtual \
-uv run canarchy capture vcan0 --candump
+CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
+uv run canarchy capture 239.0.0.1 --candump
 ```
 
 This command stays open and keeps printing frames until you interrupt it with `Ctrl+C`.
 
-In another terminal, send a frame onto the same virtual channel:
+In another terminal, send a frame:
 
 ```bash
 CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=virtual \
-uv run canarchy send vcan0 0x123 11223344 --json
+CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
+uv run canarchy send 239.0.0.1 0x123 11223344 --json
 ```
 
 The capture terminal should print a line like:
 
 ```text
-(0.000000) vcan0 123#11223344
+(1713369600.000000) 239.0.0.1 123#11223344
 ```
 
 ## Structured Capture Output
