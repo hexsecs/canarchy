@@ -74,6 +74,9 @@ class LocalTransport:
             interfaces=sorted({frame.interface or "unknown" for frame in frames}),
         )
 
+    def frames_from_file(self, file_name: str) -> list[CanFrame]:
+        return self._frames_for_file(file_name)
+
     def capture_events(self, interface: str) -> list[dict[str, object]]:
         frames = self.capture(interface)
         return serialize_events(

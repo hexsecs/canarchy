@@ -8,7 +8,9 @@ license = { text = "MIT" }
 authors = [
   { name = "hexsecs" },
 ]
-dependencies = []
+dependencies = [
+    "cantools>=41.3.0",
+]
 
 [project.scripts]
 canarchy = "canarchy.cli:main"

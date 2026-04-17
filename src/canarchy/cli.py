@@ -8,12 +8,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from canarchy.dbc import DbcError, decode_frames, encode_message
 from canarchy.models import (
     AlertEvent,
     CanFrame,
-    DecodedMessageEvent,
     ReplayActionEvent,
-    SignalValueEvent,
     serialize_events,
 )
 from canarchy.transport import LocalTransport, TransportError
@@ -24,6 +23,7 @@ EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats"}
+DBC_COMMANDS = {"decode", "encode"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn"}
 
 
@@ -378,6 +378,22 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
+    if args.command == "encode":
+        for assignment in args.signals:
+            if "=" not in assignment:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_SIGNAL_ASSIGNMENT",
+                            message="Signal assignments must use key=value syntax.",
+                            hint="Pass signal values like `CoolantTemp=55`.",
+                        )
+                    ],
+                    data={"signal": assignment},
+                )
+
 
 def sample_frame(*, interface: str | None = None, frame_format: str = "can") -> CanFrame:
     data = bytes.fromhex("11223344") if frame_format == "can" else bytes.fromhex("1122334455667788")
@@ -431,6 +447,26 @@ def parse_send_frame(args: argparse.Namespace) -> CanFrame:
             ],
             data={"frame_id": args.frame_id, "data": args.data},
         ) from exc
+
+
+def parse_signal_assignments(assignments: list[str]) -> dict[str, Any]:
+    parsed: dict[str, Any] = {}
+    for assignment in assignments:
+        key, raw_value = assignment.split("=", 1)
+        value: Any = raw_value
+        lowered = raw_value.lower()
+        if lowered in {"true", "false"}:
+            value = lowered == "true"
+        else:
+            try:
+                if any(char in raw_value for char in (".", "e", "E")):
+                    value = float(raw_value)
+                else:
+                    value = int(raw_value, 0)
+            except ValueError:
+                value = raw_value
+        parsed[key] = value
+    return parsed
 
 
 def transport_payload(
@@ -491,28 +527,56 @@ def j1939_payload(
     raise AssertionError(f"unsupported j1939 command: {args.command}")
 
 
+def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    transport = LocalTransport()
+    if args.command == "decode":
+        frames = transport.frames_from_file(args.file)
+        events = decode_frames(frames, args.dbc)
+        warnings = []
+        if not events:
+            warnings.append("No frames in the capture matched messages from the selected DBC.")
+        matched_messages = len(
+            [event for event in events if event["event_type"] == "decoded_message"]
+        )
+        return (
+            {
+                "dbc": args.dbc,
+                "file": args.file,
+                "matched_messages": matched_messages,
+                "mode": "passive",
+            },
+            events,
+            warnings,
+        )
+    if args.command == "encode":
+        signals = parse_signal_assignments(args.signals)
+        frame, events = encode_message(args.dbc, args.message, signals)
+        return (
+            {
+                "dbc": args.dbc,
+                "frame": frame.to_payload(),
+                "message": args.message,
+                "mode": "active",
+                "signals": signals,
+            },
+            events,
+            [
+                "Encoding prepares an active transmit frame; send it intentionally via a transmit workflow."
+            ],
+        )
+    raise AssertionError(f"unsupported dbc command: {args.command}")
+
+
 def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in TRANSPORT_COMMANDS:
         _, events, _ = transport_payload(args)
         return events
+    if args.command in DBC_COMMANDS:
+        _, events, _ = dbc_payload(args)
+        return events
     if args.command in J1939_COMMANDS:
         _, events, _ = j1939_payload(args)
         return events
-    elif args.command == "decode":
-        frame = sample_frame()
-        events = [
-            DecodedMessageEvent(
-                message_name="planned_decode_message",
-                frame=frame,
-                signals={"engine_speed": 621.0},
-            ).to_event(),
-            SignalValueEvent(
-                message_name="planned_decode_message",
-                signal_name="engine_speed",
-                value=621.0,
-                units="rpm",
-            ).to_event(),
-        ]
     elif args.command == "replay":
         events = [
             ReplayActionEvent(
@@ -546,6 +610,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(transport_data)
         data["events"] = transport_events
         warnings.extend(transport_warnings)
+    elif args.command in DBC_COMMANDS:
+        decode_data, decode_events, decode_warnings = dbc_payload(args)
+        data.update(decode_data)
+        data["events"] = decode_events
+        warnings.extend(decode_warnings)
     elif args.command in J1939_COMMANDS:
         protocol_data, protocol_events, protocol_warnings = j1939_payload(args)
         data.update(protocol_data)
@@ -616,6 +685,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = build_result(args)
         emit_result(result, output_format)
         return EXIT_OK
+    except DbcError as exc:
+        result = error_result(
+            args.command,
+            errors=[
+                ErrorDetail(
+                    code=exc.code,
+                    message=exc.message,
+                    hint=exc.hint,
+                )
+            ],
+        )
+        emit_result(result, output_format)
+        return EXIT_DECODE_ERROR
     except TransportError as exc:
         result = error_result(
             args.command,
