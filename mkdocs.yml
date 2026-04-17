@@ -1,0 +1,54 @@
+site_name: CANarchy
+site_description: CLI-first CAN security research toolkit documentation
+site_url: https://hexsecs.github.io/canarchy/
+repo_url: https://github.com/hexsecs/canarchy
+repo_name: hexsecs/canarchy
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.path
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: amber
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: lime
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - .
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Operators:
+      - Project Overview: overview.md
+      - Command Spec: command_spec.md
+  - Developers:
+      - Architecture: architecture.md
+      - Docs Workflow: docs_site.md
+      - TUI Plan: tui_plan.md
+  - Agents:
+      - Agent Guide: agents.md
+
+strict: true

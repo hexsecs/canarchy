@@ -13,6 +13,13 @@ dependencies = [
     "python-can>=4.4",
 ]
 
+[dependency-groups]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "pymdown-extensions>=10.14",
+]
+
 [project.scripts]
 canarchy = "canarchy.cli:main"
 
