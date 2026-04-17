@@ -33,6 +33,22 @@ Agents should follow these rules:
 * close an issue when its scope and acceptance criteria have been satisfied
 * when creating a new issue, always include explicit acceptance criteria that define what must be true to close it
 * if code changes only partially satisfy an issue, leave the issue open and note the remaining work
+* if work for an issue is complete locally but has not yet been committed and pushed, explicitly offer to the user to commit and push the changes and then close or update the issue
+* after completing issue-scoped work, summarize what was implemented, recommend the most sensible next steps, and present those next steps as a concise multiple-choice menu the user can select from
+
+Recommended completion handoff when issue-scoped work is done locally:
+
+1. state that the issue work is complete locally
+2. summarize the shipped changes and verification results
+3. offer to commit and push the changes if that has not happened yet
+4. if commit/push is already done, offer to close or update the issue if still needed
+5. recommend the next 2-4 highest-value follow-up tasks
+6. present the next steps as a multiple-choice menu, for example:
+
+   A. commit, push, and close the issue
+   B. start the next recommended issue
+   C. refine docs or tests around the completed work
+   D. inspect or review the implementation before moving on
 
 ---
 
