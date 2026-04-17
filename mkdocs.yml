@@ -42,6 +42,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Operators:
+      - Getting Started: getting_started.md
       - Project Overview: overview.md
       - Command Spec: command_spec.md
   - Developers:

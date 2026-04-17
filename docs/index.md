@@ -6,7 +6,7 @@ This docs site is the project documentation portal hosted from the same reposito
 
 Start here:
 
-* Operators: [Project Overview](overview.md) and [Command Spec](command_spec.md)
+* Operators: [Getting Started](getting_started.md), [Project Overview](overview.md), and [Command Spec](command_spec.md)
 * Developers: [Architecture](architecture.md), [Docs Workflow](docs_site.md), and [TUI Plan](tui_plan.md)
 * Agents: [Agent Guide](agents.md)
 
