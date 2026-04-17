@@ -4,6 +4,8 @@
 
 CANarchy is composed of three primary layers:
 
+The implementation language is Python, and the project uses `uv` as the standard workflow for dependency management, environment setup, and package execution.
+
 ### 1. Core Engine
 
 Responsible for:
@@ -49,6 +51,8 @@ All internal data should be expressed as structured events:
 * anomaly
 * replay_event
 * fuzz_event
+
+The initial Python implementation models these as typed dataclasses so they can be validated in the core engine and serialized deterministically for CLI, REPL, TUI, and agent-driven workflows.
 
 These events power:
 

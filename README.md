@@ -4,6 +4,8 @@
 
 CANarchy is a CLI-first CAN security research environment for reproducible, protocol-aware, automation-friendly workflows.
 
+The project is implemented in Python and uses `uv` for environment, dependency, and packaging workflows.
+
 It combines:
 
 * a stable command surface for analysts, scripts, and coding agents
@@ -33,6 +35,13 @@ The project is centered on CAN security research, with strong support for heavy 
 
 * [Command spec](docs/command_spec.md)
 * [Architecture](docs/architecture.md)
+
+### Development
+
+```bash
+uv sync
+uv run canarchy
+```
 
 ### Example Usage
 

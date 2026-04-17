@@ -4,6 +4,8 @@
 
 **CANarchy** is a CLI-first CAN security research toolkit with optional REPL and TUI front ends.
 
+The implementation language is Python, and the project uses `uv` for dependency management, virtual environments, and packaging workflows.
+
 The core design rule is simple:
 
 > The CLI is the contract. The REPL and TUI are views over the same engine.
@@ -14,7 +16,23 @@ The project is focused on:
 * J1939-first heavy vehicle workflows
 * security research and protocol exploration
 * automation-friendly use by coding agents
+* automation-friendly development by coding agents
 * structured outputs suitable for pipelines and machine parsing
+
+---
+
+## Project planning
+
+GitHub Issues are the source of truth for project planning and task tracking.
+
+Agents should follow these rules:
+
+* use GitHub Issues to track planned work rather than ad hoc task lists in docs
+* when starting or completing work that relates to an issue, update the issue with progress or implementation notes
+* commit and push the relevant code changes before closing an issue so the issue state matches the remote repository state
+* close an issue when its scope and acceptance criteria have been satisfied
+* when creating a new issue, always include explicit acceptance criteria that define what must be true to close it
+* if code changes only partially satisfy an issue, leave the issue open and note the remaining work
 
 ---
 

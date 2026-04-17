@@ -109,6 +109,40 @@ All commands should support:
 * `--table`
 * `--raw`
 
+### JSON Result Shape
+
+Successful JSON and JSONL output should use this shape:
+
+```json
+{
+  "ok": true,
+  "command": "capture",
+  "data": {},
+  "warnings": [],
+  "errors": []
+}
+```
+
+Error JSON and JSONL output should use this shape:
+
+```json
+{
+  "ok": false,
+  "command": "decode",
+  "data": {},
+  "warnings": [],
+  "errors": [
+    {
+      "code": "DBC_LOAD_FAILED",
+      "message": "Failed to parse DBC file.",
+      "hint": "Validate file format and line endings."
+    }
+  ]
+}
+```
+
+`--jsonl` should emit one JSON object per line.
+
 ---
 
 ## Exit Codes
