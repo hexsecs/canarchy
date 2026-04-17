@@ -6,7 +6,8 @@ This document describes the current implemented CLI contract.
 
 Implemented and verified in the current codebase:
 
-* scaffolded transport workflows for `capture`, `send`, `filter`, and `stats`
+* scaffolded transport workflows for `capture` and `send`
+* file-backed `filter` and `stats` over candump capture logs
 * opt-in live `python-can` support for `capture` and `send`
 * deterministic `replay`
 * DBC-backed `decode` and `encode`
@@ -24,7 +25,7 @@ Important current behavior:
 * live transport-facing commands default to the deterministic `LocalTransport` scaffold for `capture` and `send`
 * `capture` and `send` can use a live `python-can` backend by setting `CANARCHY_TRANSPORT_BACKEND=python-can`
 * the first supported live backend target is `CANARCHY_PYTHON_CAN_INTERFACE=virtual`
-* most successful results currently include `status: planned` and `implementation: command surface scaffold`
+* placeholder-only commands still return `status: planned` and `implementation: command surface scaffold`
 * specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
 * file-backed analysis commands currently support standard timestamped candump log files with `.candump` and `.log` suffixes
 
@@ -216,7 +217,17 @@ canarchy j1939 decode <file> [--json|--jsonl|--table|--raw]
 
 ### j1939 pgn
 
-Inspect events for a specific PGN from the current scaffolded capture source.
+Inspect events for a specific PGN from a capture file.
+
+```bash
+canarchy j1939 pgn <pgn> --file <file> [--json|--jsonl|--table|--raw]
+```
+
+Example:
+
+```bash
+canarchy j1939 pgn 65262 --file tests/fixtures/sample.candump --json
+```
 
 ```bash
 canarchy j1939 pgn <id> [--json|--jsonl|--table|--raw]

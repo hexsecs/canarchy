@@ -279,7 +279,7 @@ class CliTests(unittest.TestCase):
                     "--dbc",
                     "tests/fixtures/sample.dbc",
                     "--capture",
-                    "capture.log",
+                    str(FIXTURES / "sample.candump"),
                     "--json",
                 )
                 self.assertEqual(exit_code, EXIT_OK)
@@ -293,7 +293,10 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(exit_code, EXIT_OK)
                 payload = json.loads(stdout)
                 self.assertEqual(payload["data"]["session"]["name"], "lab-a")
-                self.assertEqual(payload["data"]["session"]["context"]["capture"], "capture.log")
+                self.assertEqual(
+                    payload["data"]["session"]["context"]["capture"],
+                    str(FIXTURES / "sample.candump"),
+                )
 
                 exit_code, stdout, _ = run_cli("session", "show", "--json")
                 self.assertEqual(exit_code, EXIT_OK)
