@@ -10,6 +10,7 @@ Implemented and verified in the current codebase:
 * file-backed `filter` and `stats` over candump capture logs
 * opt-in live `python-can` support for `capture` and `send`
 * deterministic `replay`
+* live `gateway` bridging between CAN interfaces via `python-can`
 * DBC-backed `decode` and `encode`
 * J1939 `monitor`, `decode`, and `pgn`
 * session `save`, `load`, and `show`
@@ -136,6 +137,28 @@ Example:
 ```bash
 canarchy replay tests/fixtures/sample.candump --rate 2.0 --json
 ```
+
+### gateway
+
+Bridge frames from one live CAN interface to another through the `python-can` backend.
+
+```bash
+canarchy gateway <src> <dst> [--src-backend <type>] [--dst-backend <type>] [--bidirectional] [--count <n>] [--json|--jsonl|--table|--raw]
+```
+
+Examples:
+
+```bash
+CANARCHY_TRANSPORT_BACKEND=python-can canarchy gateway can0 can1 --table
+CANARCHY_TRANSPORT_BACKEND=python-can canarchy gateway can0 239.0.0.1 --dst-backend udp_multicast --count 10 --json
+```
+
+Notes:
+
+* `gateway` requires `CANARCHY_TRANSPORT_BACKEND=python-can`
+* `--src-backend` and `--dst-backend` default to `CANARCHY_PYTHON_CAN_INTERFACE`
+* default table and raw output use candump-style forwarded frame lines with direction labels such as `[src->dst]`
+* JSON and JSONL output return standard command envelopes whose frame event `source` fields are `gateway.src->dst` or `gateway.dst->src`
 
 ### decode
 

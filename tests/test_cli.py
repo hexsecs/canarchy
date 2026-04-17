@@ -43,6 +43,8 @@ class FakeBus:
     ) -> None:
         self.messages = list(messages or [])
         self.end_exception = end_exception
+        self.sent_messages: list[object] = []
+        self.shutdown_called = False
 
     def __enter__(self):
         return self
@@ -58,8 +60,11 @@ class FakeBus:
             raise self.end_exception()
         return None
 
+    def send(self, message: object) -> None:
+        self.sent_messages.append(message)
+
     def shutdown(self) -> None:
-        return None
+        self.shutdown_called = True
 
 
 class CliTests(unittest.TestCase):
@@ -193,6 +198,135 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["transport_backend"], "python-can")
         self.assertEqual(payload["data"]["events"][0]["event_type"], "frame")
 
+    def test_gateway_json_output_contains_forwarded_frame_event(self) -> None:
+        src_bus = FakeBus([self.fake_message(0x123, bytes.fromhex("11223344"))])
+        dst_bus = FakeBus()
+        open_bus_calls: list[tuple[str, str]] = []
+
+        def fake_open_bus(backend: PythonCanBackend, interface: str):
+            open_bus_calls.append((backend.bus_interface, interface))
+            return {"src0": src_bus, "dst0": dst_bus}[interface]
+
+        with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "python-can"}, clear=False):
+            with patch.object(PythonCanBackend, "_open_bus", new=fake_open_bus):
+                with patch.object(PythonCanBackend, "_encode_message", return_value=object()):
+                    exit_code, stdout, stderr = run_cli(
+                        "gateway",
+                        "src0",
+                        "dst0",
+                        "--src-backend",
+                        "virtual",
+                        "--dst-backend",
+                        "udp_multicast",
+                        "--count",
+                        "1",
+                        "--json",
+                    )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["command"], "gateway")
+        self.assertEqual(payload["data"]["status"], "implemented")
+        self.assertEqual(payload["data"]["implementation"], "live transport gateway")
+        self.assertEqual(payload["data"]["forwarded_frames"], 1)
+        self.assertEqual(payload["data"]["events"][0]["source"], "gateway.src->dst")
+        self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["interface"], "src0")
+        self.assertEqual(open_bus_calls, [("virtual", "src0"), ("udp_multicast", "dst0")])
+        self.assertEqual(len(dst_bus.sent_messages), 1)
+
+    def test_gateway_bidirectional_json_labels_both_directions(self) -> None:
+        src_bus = FakeBus([self.fake_message(0x123, bytes.fromhex("1122"))])
+        dst_bus = FakeBus([self.fake_message(0x456, bytes.fromhex("3344"))])
+
+        def fake_open_bus(backend: PythonCanBackend, interface: str):
+            return {"src0": src_bus, "dst0": dst_bus}[interface]
+
+        with patch.dict(
+            os.environ,
+            {
+                "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                "CANARCHY_CAPTURE_TIMEOUT": "0.01",
+            },
+            clear=False,
+        ):
+            with patch.object(PythonCanBackend, "_open_bus", new=fake_open_bus):
+                with patch.object(PythonCanBackend, "_encode_message", return_value=object()):
+                    exit_code, stdout, stderr = run_cli(
+                        "gateway",
+                        "src0",
+                        "dst0",
+                        "--bidirectional",
+                        "--count",
+                        "2",
+                        "--json",
+                    )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["forwarded_frames"], 2)
+        self.assertEqual(
+            {event["source"] for event in payload["data"]["events"]},
+            {"gateway.src->dst", "gateway.dst->src"},
+        )
+
+    def test_gateway_requires_live_backend(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            exit_code, stdout, stderr = run_cli("gateway", "src0", "dst0", "--count", "1", "--json")
+
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "GATEWAY_LIVE_BACKEND_REQUIRED")
+
+    def test_gateway_invalid_count_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli("gateway", "src0", "dst0", "--count", "0", "--json")
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_COUNT")
+
+    def test_gateway_channel_error_returns_transport_error(self) -> None:
+        def fake_open_bus(backend: PythonCanBackend, interface: str):
+            raise TransportError(
+                "TRANSPORT_UNAVAILABLE",
+                f"Interface '{interface}' is not available.",
+                "Check that the python-can interface and channel are configured correctly.",
+            )
+
+        with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "python-can"}, clear=False):
+            with patch.object(PythonCanBackend, "_open_bus", new=fake_open_bus):
+                exit_code, stdout, stderr = run_cli(
+                    "gateway", "missing0", "dst0", "--count", "1", "--json"
+                )
+
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
+
+    def test_gateway_table_output_prints_header_and_direction(self) -> None:
+        src_bus = FakeBus([self.fake_message(0x18FEEE31, bytes.fromhex("11223344"), is_extended_id=True)])
+        dst_bus = FakeBus()
+
+        def fake_open_bus(backend: PythonCanBackend, interface: str):
+            return {"src0": src_bus, "dst0": dst_bus}[interface]
+
+        with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "python-can"}, clear=False):
+            with patch.object(PythonCanBackend, "_open_bus", new=fake_open_bus):
+                with patch.object(PythonCanBackend, "_encode_message", return_value=object()):
+                    exit_code, stdout, stderr = run_cli(
+                        "gateway", "src0", "dst0", "--count", "1", "--table"
+                    )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("gateway: src=src0 dst=dst0", stdout)
+        self.assertIn("src0 18FEEE31#11223344  [src->dst]", stdout)
+
     def test_filter_json_output_returns_matching_frames(self) -> None:
         exit_code, stdout, _ = run_cli(
             "filter", str(FIXTURES / "sample.candump"), "id==0x18FEEE31", "--json"
@@ -288,7 +422,7 @@ class CliTests(unittest.TestCase):
             payload["data"]["events"][0]["payload"]["service_name"], "DiagnosticSessionControl"
         )
         self.assertEqual(
-            payload["warnings"][1],
+            payload["warnings"][0],
             "UDS scanning is active and should be used intentionally on a controlled bus.",
         )
 
@@ -421,7 +555,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["duration"], 0.1)
         self.assertEqual(payload["data"]["events"][0]["event_type"], "replay_event")
         self.assertEqual(
-            payload["warnings"][1],
+            payload["warnings"][0],
             "Replay schedules active frame transmission; use it intentionally on a controlled bus.",
         )
 

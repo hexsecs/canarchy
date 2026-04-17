@@ -30,6 +30,7 @@ DBC_COMMANDS = {"decode", "encode"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace"}
+IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | {"replay", "gateway", "shell"}
 
 
 class CliUsageError(Exception):
@@ -153,6 +154,16 @@ def build_parser() -> CanarchyArgumentParser:
     generate.add_argument("--extended", action="store_true", help="force 29-bit extended IDs")
     add_output_arguments(generate)
     generate.set_defaults(command="generate")
+
+    gateway = subparsers.add_parser("gateway", help="bridge frames between CAN interfaces")
+    gateway.add_argument("src")
+    gateway.add_argument("dst")
+    gateway.add_argument("--src-backend", help="python-can interface type for the source bus")
+    gateway.add_argument("--dst-backend", help="python-can interface type for the destination bus")
+    gateway.add_argument("--bidirectional", action="store_true", help="also forward frames from dst back to src")
+    gateway.add_argument("--count", type=int, help="stop after forwarding N frames")
+    add_output_arguments(gateway)
+    gateway.set_defaults(command="gateway")
 
     replay = subparsers.add_parser("replay", help="replay recorded traffic")
     replay.add_argument("file")
@@ -454,6 +465,20 @@ def validate_args(args: argparse.Namespace) -> None:
                 ],
                 data={"gap": args.gap},
             )
+
+    if args.command == "gateway" and args.count is not None and args.count < 1:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_COUNT",
+                    message="Frame count must be at least 1.",
+                    hint="Pass a positive integer to --count.",
+                )
+            ],
+            data={"count": args.count},
+        )
 
     if args.command in {"j1939 monitor", "j1939 pgn"} and getattr(args, "pgn", None) is not None:
         if args.pgn < 0 or args.pgn > 262143:
@@ -790,6 +815,36 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     raise AssertionError(f"unsupported uds command: {args.command}")
 
 
+def gateway_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    transport = LocalTransport()
+    events = transport.gateway_events(
+        args.src,
+        args.dst,
+        src_backend=args.src_backend,
+        dst_backend=args.dst_backend,
+        bidirectional=args.bidirectional,
+        count=args.count,
+    )
+    return (
+        {
+            "mode": "active",
+            "src": args.src,
+            "dst": args.dst,
+            "src_backend": args.src_backend,
+            "dst_backend": args.dst_backend,
+            "bidirectional": args.bidirectional,
+            "count": args.count,
+            "forwarded_frames": len(events),
+            "status": "implemented",
+            "implementation": "live transport gateway",
+        },
+        events,
+        [],
+    )
+
+
 def replay_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -856,6 +911,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in UDS_COMMANDS:
         _, events, _ = uds_payload(args)
         return events
+    if args.command == "gateway":
+        _, events, _ = gateway_payload(args)
+        return events
     if args.command == "replay":
         _, events, _ = replay_payload(args)
         return events
@@ -873,7 +931,7 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def build_result(args: argparse.Namespace) -> CommandResult:
-    warnings = ["Command implementation is not complete yet."]
+    warnings = [] if args.command in IMPLEMENTED_COMMANDS else ["Command implementation is not complete yet."]
     data = {
         key: value
         for key, value in vars(args).items()
@@ -906,6 +964,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(uds_data)
         data["events"] = uds_events
         warnings.extend(uds_warnings)
+    elif args.command == "gateway":
+        gateway_data, gateway_events, gateway_warnings = gateway_payload(args)
+        data.update(gateway_data)
+        data["events"] = gateway_events
+        warnings.extend(gateway_warnings)
     elif args.command in J1939_COMMANDS:
         protocol_data, protocol_events, protocol_warnings = j1939_payload(args)
         data.update(protocol_data)
@@ -913,13 +976,13 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         warnings.extend(protocol_warnings)
     else:
         data["events"] = build_events(args)
-    if args.command not in TRANSPORT_COMMANDS:
+    if args.command not in IMPLEMENTED_COMMANDS:
         data["status"] = "planned"
         data["implementation"] = "command surface scaffold"
     return CommandResult(
         command=args.command,
         data=data,
-        warnings=warnings if args.command not in TRANSPORT_COMMANDS else warnings[1:],
+        warnings=warnings,
     )
 
 
@@ -996,9 +1059,19 @@ def format_candump_lines(result: CommandResult) -> list[str]:
         timestamp_text = (
             f"({timestamp:0.6f})" if isinstance(timestamp, (int, float)) else "(0.000000)"
         )
-        lines.append(f"{timestamp_text} {interface} {format_candump_frame(frame)}")
+        line = f"{timestamp_text} {interface} {format_candump_frame(frame)}"
+        if isinstance(event.get("source"), str) and event["source"].startswith("gateway."):
+            direction = event["source"].removeprefix("gateway.")
+            line = f"{line}  [{direction}]"
+        lines.append(line)
     if not lines:
         lines.append("(no frames captured)")
+    return lines
+
+
+def format_gateway_lines(result: CommandResult) -> list[str]:
+    lines = [f"gateway: src={result.data.get('src')} dst={result.data.get('dst')}"]
+    lines.extend(format_candump_lines(result))
     return lines
 
 
@@ -1039,6 +1112,31 @@ def emit_live_candump(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def emit_live_gateway(args: argparse.Namespace) -> int:
+    transport = LocalTransport()
+    print(f"gateway: src={args.src} dst={args.dst}")
+    try:
+        for event in transport.gateway_stream_events(
+            args.src,
+            args.dst,
+            src_backend=args.src_backend,
+            dst_backend=args.dst_backend,
+            bidirectional=args.bidirectional,
+            count=args.count,
+        ):
+            frame = event["payload"]["frame"]
+            interface = frame["interface"] or args.src
+            timestamp = event.get("timestamp")
+            timestamp_text = (
+                f"({timestamp:0.6f})" if isinstance(timestamp, (int, float)) else "(0.000000)"
+            )
+            direction = str(event["source"]).removeprefix("gateway.")
+            print(f"{timestamp_text} {interface} {format_candump_frame(frame)}  [{direction}]")
+    except KeyboardInterrupt:
+        return EXIT_OK
+    return EXIT_OK
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     if output_format in {"json", "jsonl"}:
@@ -1046,6 +1144,10 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         return
 
     if output_format == "raw":
+        if result.ok and result.command == "gateway":
+            for line in format_gateway_lines(result):
+                print(line)
+            return
         if result.ok and result.command == "capture" and result.data.get("display") == "candump":
             for line in format_candump_lines(result):
                 print(line)
@@ -1063,6 +1165,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         and result.data.get("display") == "candump"
     ):
         for line in format_candump_lines(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command == "gateway":
+        for line in format_gateway_lines(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
@@ -1156,6 +1265,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             and output_format in {"table", "raw"}
         ):
             return emit_live_candump(args)
+        if args.command == "gateway" and output_format in {"table", "raw"}:
+            return emit_live_gateway(args)
         result = build_result(args)
         emit_result(result, output_format)
         return EXIT_OK

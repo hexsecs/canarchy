@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import queue
 import random
 import re
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -294,6 +296,74 @@ class LocalTransport:
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         return self.live_backend.send(interface, frame)
 
+    def gateway_events(
+        self,
+        src: str,
+        dst: str,
+        *,
+        src_backend: str | None = None,
+        dst_backend: str | None = None,
+        bidirectional: bool = False,
+        count: int | None = None,
+    ) -> list[dict[str, object]]:
+        return list(
+            self.gateway_stream_events(
+                src,
+                dst,
+                src_backend=src_backend,
+                dst_backend=dst_backend,
+                bidirectional=bidirectional,
+                count=count,
+            )
+        )
+
+    def gateway_stream_events(
+        self,
+        src: str,
+        dst: str,
+        *,
+        src_backend: str | None = None,
+        dst_backend: str | None = None,
+        bidirectional: bool = False,
+        count: int | None = None,
+    ) -> Iterator[dict[str, object]]:
+        config = transport_backend_config()
+        if config.backend != "python-can":
+            raise TransportError(
+                "GATEWAY_LIVE_BACKEND_REQUIRED",
+                "Gateway mode requires the python-can backend.",
+                "Set `CANARCHY_TRANSPORT_BACKEND=python-can` to bridge live CAN traffic.",
+            )
+
+        src_live_backend = PythonCanBackend(
+            bus_interface=src_backend or config.python_can_interface,
+            capture_limit=config.capture_limit,
+            capture_timeout=config.capture_timeout,
+        )
+        dst_live_backend = PythonCanBackend(
+            bus_interface=dst_backend or config.python_can_interface,
+            capture_limit=config.capture_limit,
+            capture_timeout=config.capture_timeout,
+        )
+
+        if bidirectional:
+            yield from self._gateway_bidirectional_stream(
+                src,
+                dst,
+                src_live_backend=src_live_backend,
+                dst_live_backend=dst_live_backend,
+                count=count,
+            )
+            return
+
+        yield from self._gateway_unidirectional_stream(
+            src,
+            dst,
+            src_live_backend=src_live_backend,
+            dst_live_backend=dst_live_backend,
+            count=count,
+        )
+
     def backend_metadata(self) -> dict[str, str | int | float]:
         metadata: dict[str, str | int | float] = {
             "transport_backend": self.live_backend.backend_name,
@@ -453,6 +523,159 @@ class LocalTransport:
             FrameEvent(frame=f, source="transport.generate").to_event() for f in sent_frames
         )
         return serialize_events(events)
+
+    def _gateway_unidirectional_stream(
+        self,
+        src: str,
+        dst: str,
+        *,
+        src_live_backend: PythonCanBackend,
+        dst_live_backend: PythonCanBackend,
+        count: int | None,
+    ) -> Iterator[dict[str, object]]:
+        src_bus = src_live_backend._open_bus(src)
+        dst_bus = dst_live_backend._open_bus(dst)
+        forwarded = 0
+        try:
+            while count is None or forwarded < count:
+                message = src_bus.recv(timeout=src_live_backend.capture_timeout)
+                if message is None:
+                    continue
+                frame = src_live_backend._decode_message(message, src)
+                self._gateway_send(
+                    dst_bus,
+                    dst_live_backend,
+                    frame,
+                    destination=dst,
+                )
+                forwarded += 1
+                yield self._gateway_event(frame, direction="src->dst")
+        finally:
+            src_bus.shutdown()
+            dst_bus.shutdown()
+
+    def _gateway_bidirectional_stream(
+        self,
+        src: str,
+        dst: str,
+        *,
+        src_live_backend: PythonCanBackend,
+        dst_live_backend: PythonCanBackend,
+        count: int | None,
+    ) -> Iterator[dict[str, object]]:
+        src_bus = src_live_backend._open_bus(src)
+        dst_bus = dst_live_backend._open_bus(dst)
+        forwarded = 0
+        forwarded_lock = threading.Lock()
+        stop_event = threading.Event()
+        forwarded_events: queue.Queue[dict[str, object]] = queue.Queue()
+        errors: queue.Queue[TransportError] = queue.Queue()
+
+        def worker(
+            read_bus: object,
+            write_bus: object,
+            read_backend: PythonCanBackend,
+            write_backend: PythonCanBackend,
+            read_interface: str,
+            write_interface: str,
+            direction: str,
+        ) -> None:
+            nonlocal forwarded
+            try:
+                while not stop_event.is_set():
+                    message = read_bus.recv(timeout=read_backend.capture_timeout)
+                    if message is None:
+                        continue
+
+                    frame = read_backend._decode_message(message, read_interface)
+                    event = self._gateway_event(frame, direction=direction)
+                    with forwarded_lock:
+                        if count is not None and forwarded >= count:
+                            stop_event.set()
+                            return
+                        self._gateway_send(
+                            write_bus,
+                            write_backend,
+                            frame,
+                            destination=write_interface,
+                        )
+                        forwarded += 1
+                        if count is not None and forwarded >= count:
+                            stop_event.set()
+                    forwarded_events.put(event)
+            except TransportError as exc:
+                errors.put(exc)
+                stop_event.set()
+
+        workers = [
+            threading.Thread(
+                target=worker,
+                args=(
+                    src_bus,
+                    dst_bus,
+                    src_live_backend,
+                    dst_live_backend,
+                    src,
+                    dst,
+                    "src->dst",
+                ),
+            ),
+            threading.Thread(
+                target=worker,
+                args=(
+                    dst_bus,
+                    src_bus,
+                    dst_live_backend,
+                    src_live_backend,
+                    dst,
+                    src,
+                    "dst->src",
+                ),
+            ),
+        ]
+
+        for worker_thread in workers:
+            worker_thread.start()
+
+        try:
+            while True:
+                if not errors.empty():
+                    raise errors.get_nowait()
+                try:
+                    yield forwarded_events.get(timeout=0.05)
+                    continue
+                except queue.Empty:
+                    pass
+                if stop_event.is_set() and forwarded_events.empty():
+                    break
+                if all(not worker_thread.is_alive() for worker_thread in workers) and forwarded_events.empty():
+                    break
+        finally:
+            stop_event.set()
+            for worker_thread in workers:
+                worker_thread.join()
+            src_bus.shutdown()
+            dst_bus.shutdown()
+
+    def _gateway_send(
+        self,
+        bus: object,
+        backend: PythonCanBackend,
+        frame: CanFrame,
+        *,
+        destination: str,
+    ) -> None:
+        try:
+            bus.send(backend._encode_message(frame))
+        except Exception as exc:
+            raise TransportError(
+                "TRANSPORT_UNAVAILABLE",
+                f"Failed to forward CAN frame to interface '{destination}'.",
+                "Check that the python-can interface and channel are configured correctly.",
+            ) from exc
+
+    def _gateway_event(self, frame: CanFrame, *, direction: str) -> dict[str, object]:
+        return serialize_events([FrameEvent(frame=frame, source=f"gateway.{direction}").to_event()])[0]
 
     def _require_interface(self, interface: str) -> None:
         ScaffoldCanBackend()._require_interface(interface)
