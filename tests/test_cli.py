@@ -136,6 +136,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "INVALID_RATE")
         self.assertEqual(payload["data"]["rate"], 0.0)
 
+    def test_replay_json_output_is_structured(self) -> None:
+        exit_code, stdout, stderr = run_cli("replay", "capture.log", "--rate", "2.0", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["frame_count"], 3)
+        self.assertEqual(payload["data"]["duration"], 0.1)
+        self.assertEqual(payload["data"]["events"][0]["event_type"], "replay_event")
+        self.assertEqual(
+            payload["warnings"][1],
+            "Replay schedules active frame transmission; use it intentionally on a controlled bus.",
+        )
+
+    def test_replay_missing_source_returns_transport_error(self) -> None:
+        exit_code, stdout, _ = run_cli("replay", "missing.log", "--json")
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
+
     def test_jsonl_output_is_single_json_line(self) -> None:
         exit_code, stdout, _ = run_cli("capture", "can0", "--jsonl")
         self.assertEqual(exit_code, EXIT_OK)

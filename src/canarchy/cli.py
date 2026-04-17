@@ -15,6 +15,7 @@ from canarchy.models import (
     ReplayActionEvent,
     serialize_events,
 )
+from canarchy.replay import build_replay_plan
 from canarchy.transport import LocalTransport, TransportError
 
 EXIT_OK = 0
@@ -567,6 +568,25 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
 
+def replay_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    transport = LocalTransport()
+    frames = transport.frames_from_file(args.file)
+    plan = build_replay_plan(frames, rate=args.rate)
+    return (
+        {
+            "duration": plan.duration,
+            "file": args.file,
+            "frame_count": plan.frame_count,
+            "mode": "active",
+            "rate": plan.rate,
+        },
+        plan.events,
+        ["Replay schedules active frame transmission; use it intentionally on a controlled bus."],
+    )
+
+
 def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in TRANSPORT_COMMANDS:
         _, events, _ = transport_payload(args)
@@ -577,12 +597,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in J1939_COMMANDS:
         _, events, _ = j1939_payload(args)
         return events
-    elif args.command == "replay":
-        events = [
-            ReplayActionEvent(
-                action="planned_replay", frame=sample_frame(), rate=args.rate
-            ).to_event()
-        ]
+    if args.command == "replay":
+        _, events, _ = replay_payload(args)
+        return events
     else:
         events = [
             AlertEvent(
@@ -610,6 +627,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(transport_data)
         data["events"] = transport_events
         warnings.extend(transport_warnings)
+    elif args.command == "replay":
+        replay_data, replay_events, replay_warnings = replay_payload(args)
+        data.update(replay_data)
+        data["events"] = replay_events
+        warnings.extend(replay_warnings)
     elif args.command in DBC_COMMANDS:
         decode_data, decode_events, decode_warnings = dbc_payload(args)
         data.update(decode_data)
