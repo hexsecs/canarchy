@@ -35,6 +35,7 @@ The project is centered on CAN security research, with strong support for heavy 
 
 * [Command spec](docs/command_spec.md)
 * [Architecture](docs/architecture.md)
+* [TUI plan](docs/tui_plan.md)
 
 ### Installation
 

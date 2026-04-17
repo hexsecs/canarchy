@@ -35,6 +35,8 @@ Responsible for:
 
 All front ends must use the same command and event system.
 
+The current TUI direction and initial pane plan are documented in [TUI plan](tui_plan.md).
+
 This shared architecture is intended to support both agentic use and agentic development: agents should be able to operate the tool through a stable CLI contract and extend the project without introducing UI-only behavior or split logic paths.
 
 ---
