@@ -88,6 +88,20 @@ class CanFrame:
             frame_format=self.frame_format,
         )
 
+    def with_timestamp(self, timestamp: float | None) -> CanFrame:
+        return CanFrame(
+            arbitration_id=self.arbitration_id,
+            data=self.data,
+            timestamp=timestamp,
+            interface=self.interface,
+            is_extended_id=self.is_extended_id,
+            is_remote_frame=self.is_remote_frame,
+            is_error_frame=self.is_error_frame,
+            bitrate_switch=self.bitrate_switch,
+            error_state_indicator=self.error_state_indicator,
+            frame_format=self.frame_format,
+        )
+
 
 @dataclass(slots=True, frozen=True)
 class Event:

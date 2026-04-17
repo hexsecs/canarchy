@@ -99,6 +99,7 @@ uv run canarchy --help
 
 ```bash
 canarchy capture can0 --json
+canarchy capture can0 --candump
 canarchy decode capture.log --dbc tests/fixtures/sample.dbc --json
 canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 OilTemp=65 Load=40 LampState=1 --json
 canarchy j1939 monitor --pgn 65262
@@ -106,6 +107,8 @@ canarchy replay capture.log --rate 0.5 --json
 ```
 
 These examples work against the current scaffolded transport and fixture-driven protocol data by default. Set `CANARCHY_TRANSPORT_BACKEND=python-can` to exercise the live `capture` and `send` path through `python-can`.
+
+Use `canarchy capture <interface> --candump` when you want a familiar human-oriented live dump view. Use `--json` or `--jsonl` when you need stable machine-readable output.
 
 ### Structured Output
 

@@ -128,6 +128,11 @@ def build_parser() -> CanarchyArgumentParser:
 
     capture = subparsers.add_parser("capture", help="capture CAN traffic")
     capture.add_argument("interface")
+    capture.add_argument(
+        "--candump",
+        action="store_true",
+        help="emit candump-style human output for live capture",
+    )
     add_output_arguments(capture)
     capture.set_defaults(command="capture")
 
@@ -497,29 +502,61 @@ def transport_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
+    backend_metadata = transport.backend_metadata()
+    implementation = (
+        "live transport"
+        if backend_metadata["transport_backend"] != "scaffold"
+        else "scaffold transport"
+    )
     if args.command == "capture":
         return (
-            {"mode": "passive", "interface": args.interface},
+            {
+                "display": "candump" if args.candump else "structured",
+                "mode": "passive",
+                "interface": args.interface,
+                **backend_metadata,
+                "status": "implemented",
+                "implementation": implementation,
+            },
             transport.capture_events(args.interface),
             [],
         )
     if args.command == "send":
         frame = parse_send_frame(args)
         return (
-            {"mode": "active", "interface": args.interface, "frame": frame.to_payload()},
+            {
+                "mode": "active",
+                "interface": args.interface,
+                "frame": frame.to_payload(),
+                **backend_metadata,
+                "status": "implemented",
+                "implementation": implementation,
+            },
             transport.send_events(args.interface, frame),
             ["Active transmission is intentionally distinct from passive monitoring workflows."],
         )
     if args.command == "filter":
         return (
-            {"mode": "passive", "file": args.file, "expression": args.expression},
+            {
+                "mode": "passive",
+                "file": args.file,
+                "expression": args.expression,
+                "status": "implemented",
+                "implementation": "fixture-backed analysis",
+            },
             transport.filter_events(args.file, args.expression),
             [],
         )
     if args.command == "stats":
         stats = transport.stats(args.file)
         return (
-            {"mode": "passive", "file": args.file, **stats.to_payload()},
+            {
+                "mode": "passive",
+                "file": args.file,
+                **stats.to_payload(),
+                "status": "implemented",
+                "implementation": "fixture-backed analysis",
+            },
             [],
             [],
         )
@@ -741,12 +778,13 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         warnings.extend(protocol_warnings)
     else:
         data["events"] = build_events(args)
-    data["status"] = "planned"
-    data["implementation"] = "command surface scaffold"
+    if args.command not in TRANSPORT_COMMANDS:
+        data["status"] = "planned"
+        data["implementation"] = "command surface scaffold"
     return CommandResult(
         command=args.command,
         data=data,
-        warnings=warnings,
+        warnings=warnings if args.command not in TRANSPORT_COMMANDS else warnings[1:],
     )
 
 
@@ -782,6 +820,25 @@ def format_j1939_table(result: CommandResult) -> list[str]:
     return lines
 
 
+def format_candump_lines(result: CommandResult) -> list[str]:
+    lines: list[str] = []
+    for event in result.data.get("events", []):
+        if event.get("event_type") != "frame":
+            continue
+        frame = event["payload"]["frame"]
+        interface = frame["interface"] or result.data.get("interface") or "can0"
+        arbitration_id = frame["arbitration_id"]
+        frame_id = f"{arbitration_id:08X}" if frame["is_extended_id"] else f"{arbitration_id:03X}"
+        timestamp = event.get("timestamp")
+        timestamp_text = (
+            f"({timestamp:0.6f})" if isinstance(timestamp, (int, float)) else "(0.000000)"
+        )
+        lines.append(f"{timestamp_text} {interface} {frame_id}#{frame['data'].upper()}")
+    if not lines:
+        lines.append("(no frames captured)")
+    return lines
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     if output_format in {"json", "jsonl"}:
@@ -789,10 +846,26 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         return
 
     if output_format == "raw":
+        if result.ok and result.command == "capture" and result.data.get("display") == "candump":
+            for line in format_candump_lines(result):
+                print(line)
+            return
         if result.ok:
             print(result.command)
         elif payload["errors"]:
             print(payload["errors"][0]["message"])
+        return
+
+    if (
+        output_format == "table"
+        and result.ok
+        and result.command == "capture"
+        and result.data.get("display") == "candump"
+    ):
+        for line in format_candump_lines(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
         return
 
     if output_format == "table" and result.ok and result.command in J1939_COMMANDS:

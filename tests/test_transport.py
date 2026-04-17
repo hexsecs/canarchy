@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import os
+import queue
+import threading
+import time
+import uuid
 import unittest
 from unittest.mock import patch
 
@@ -10,6 +14,7 @@ from canarchy.transport import (
     ScaffoldCanBackend,
     TransportError,
     build_live_backend,
+    python_can,
 )
 
 
@@ -107,6 +112,34 @@ class TransportBackendTests(unittest.TestCase):
             error_state_indicator=False,
         )
         self.assertTrue(fake_bus.shutdown_called)
+
+    @unittest.skipIf(python_can is None, "python-can is not installed")
+    def test_python_can_virtual_backend_round_trips_frame(self) -> None:
+        interface = f"canarchy-test-{uuid.uuid4().hex}"
+        backend = PythonCanBackend(bus_interface="virtual", capture_limit=1, capture_timeout=0.5)
+        frame = CanFrame(arbitration_id=0x123, data=bytes.fromhex("11223344"), interface=interface)
+        captured_frames: queue.Queue[list[CanFrame]] = queue.Queue()
+
+        def capture_frames() -> None:
+            captured_frames.put(backend.capture(interface))
+
+        capture_thread = threading.Thread(target=capture_frames)
+        capture_thread.start()
+        try:
+            time.sleep(0.05)
+            sent_frame = backend.send(interface, frame)
+            capture_thread.join(timeout=2.0)
+        finally:
+            capture_thread.join(timeout=2.0)
+
+        self.assertFalse(capture_thread.is_alive())
+        self.assertEqual(sent_frame.interface, interface)
+        self.assertIsNotNone(sent_frame.timestamp)
+        frames = captured_frames.get_nowait()
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(frames[0].arbitration_id, 0x123)
+        self.assertEqual(frames[0].data, bytes.fromhex("11223344"))
+        self.assertEqual(frames[0].interface, interface)
 
 
 if __name__ == "__main__":

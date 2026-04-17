@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -55,6 +56,9 @@ class TransportBackendConfig:
 
 
 class LiveCanBackend(Protocol):
+    @property
+    def backend_name(self) -> str: ...
+
     def capture(self, interface: str) -> list[CanFrame]: ...
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame: ...
@@ -62,6 +66,10 @@ class LiveCanBackend(Protocol):
 
 class ScaffoldCanBackend:
     """Deterministic backend used when no live CAN backend is selected."""
+
+    @property
+    def backend_name(self) -> str:
+        return "scaffold"
 
     def capture(self, interface: str) -> list[CanFrame]:
         self._require_interface(interface)
@@ -94,6 +102,10 @@ class PythonCanBackend:
         self.capture_limit = capture_limit
         self.capture_timeout = capture_timeout
 
+    @property
+    def backend_name(self) -> str:
+        return "python-can"
+
     def capture(self, interface: str) -> list[CanFrame]:
         frames: list[CanFrame] = []
         bus = self._open_bus(interface)
@@ -120,7 +132,7 @@ class PythonCanBackend:
                 ) from exc
         finally:
             bus.shutdown()
-        return frame.with_interface(interface)
+        return frame.with_interface(interface).with_timestamp(time.time())
 
     def _open_bus(self, interface: str):
         if python_can is None:
@@ -243,6 +255,16 @@ class LocalTransport:
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         return self.live_backend.send(interface, frame)
+
+    def backend_metadata(self) -> dict[str, str | int | float]:
+        metadata: dict[str, str | int | float] = {
+            "transport_backend": self.live_backend.backend_name,
+        }
+        if isinstance(self.live_backend, PythonCanBackend):
+            metadata["python_can_interface"] = self.live_backend.bus_interface
+            metadata["capture_limit"] = self.live_backend.capture_limit
+            metadata["capture_timeout"] = self.live_backend.capture_timeout
+        return metadata
 
     def filter(self, file_name: str, expression: str) -> list[CanFrame]:
         frames = self._frames_for_file(file_name)

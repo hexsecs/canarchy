@@ -93,11 +93,15 @@ class CliTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["command"], "capture")
         self.assertEqual(payload["data"]["interface"], "can0")
+        self.assertEqual(payload["data"]["display"], "structured")
         self.assertEqual(payload["data"]["mode"], "passive")
-        self.assertEqual(payload["data"]["status"], "planned")
+        self.assertEqual(payload["data"]["status"], "implemented")
+        self.assertEqual(payload["data"]["implementation"], "scaffold transport")
+        self.assertEqual(payload["data"]["transport_backend"], "scaffold")
         self.assertEqual(len(payload["data"]["events"]), 2)
         self.assertEqual(payload["data"]["events"][0]["event_type"], "frame")
         self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["interface"], "can0")
+        self.assertEqual(payload["warnings"], [])
 
     def test_send_json_output_marks_active_mode(self) -> None:
         exit_code, stdout, stderr = run_cli("send", "can0", "0x123", "11223344", "--json")
@@ -106,12 +110,39 @@ class CliTests(unittest.TestCase):
 
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["status"], "implemented")
+        self.assertEqual(payload["data"]["implementation"], "scaffold transport")
+        self.assertEqual(payload["data"]["transport_backend"], "scaffold")
         self.assertEqual(payload["data"]["frame"]["arbitration_id"], 0x123)
         self.assertEqual(payload["data"]["events"][0]["event_type"], "alert")
         self.assertEqual(
-            payload["warnings"][1],
+            payload["warnings"][0],
             "Active transmission is intentionally distinct from passive monitoring workflows.",
         )
+
+    def test_capture_candump_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli("capture", "can0", "--candump")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        lines = stdout.strip().splitlines()
+        self.assertEqual(lines[0], "(0.000000) can0 18FEEE31#11223344")
+        self.assertEqual(lines[1], "(0.100000) can0 18F00431#AABBCCDD")
+
+    def test_capture_candump_raw_output_matches_dump_lines(self) -> None:
+        exit_code, stdout, stderr = run_cli("capture", "can0", "--candump", "--raw")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        lines = stdout.strip().splitlines()
+        self.assertEqual(lines[0], "(0.000000) can0 18FEEE31#11223344")
+        self.assertEqual(lines[1], "(0.100000) can0 18F00431#AABBCCDD")
+
+    def test_capture_candump_json_keeps_structured_payload(self) -> None:
+        exit_code, stdout, stderr = run_cli("capture", "can0", "--candump", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["display"], "candump")
+        self.assertEqual(payload["data"]["events"][0]["event_type"], "frame")
 
     def test_filter_json_output_returns_matching_frames(self) -> None:
         exit_code, stdout, _ = run_cli("filter", "capture.log", "id==0x18FEEE31", "--json")
@@ -361,12 +392,39 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(len(payload["data"]["events"]), 2)
+        self.assertEqual(payload["data"]["transport_backend"], "python-can")
+        self.assertEqual(payload["data"]["python_can_interface"], "virtual")
+        self.assertEqual(payload["data"]["implementation"], "live transport")
         self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["arbitration_id"], 0x123)
         self.assertFalse(payload["data"]["events"][0]["payload"]["frame"]["is_extended_id"])
         self.assertEqual(
             payload["data"]["events"][1]["payload"]["frame"]["arbitration_id"], 0x18FEEE31
         )
         self.assertTrue(payload["data"]["events"][1]["payload"]["frame"]["is_extended_id"])
+
+    def test_capture_candump_uses_python_can_backend_when_requested(self) -> None:
+        fake_bus = FakeBus(
+            [
+                self.fake_message(0x123, bytes.fromhex("11223344")),
+                self.fake_message(0x18FEEE31, bytes.fromhex("AABBCCDD"), is_extended_id=True),
+            ]
+        )
+        with patch.dict(
+            os.environ,
+            {
+                "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+            },
+            clear=False,
+        ):
+            with patch.object(PythonCanBackend, "_open_bus", return_value=fake_bus):
+                exit_code, stdout, stderr = run_cli("capture", "vcan0", "--candump")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        lines = stdout.strip().splitlines()
+        self.assertEqual(lines[0], "(0.000000) vcan0 123#11223344")
+        self.assertEqual(lines[1], "(0.000000) vcan0 18FEEE31#AABBCCDD")
 
     def test_python_can_backend_error_returns_backend_exit_code(self) -> None:
         with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "python-can"}, clear=False):

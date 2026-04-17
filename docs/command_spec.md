@@ -59,14 +59,21 @@ Examples:
 Capture traffic from a local interface through the default scaffold backend or the opt-in `python-can` live backend.
 
 ```bash
-canarchy capture <interface> [--json|--jsonl|--table|--raw]
+canarchy capture <interface> [--candump] [--json|--jsonl|--table|--raw]
 ```
 
 Example:
 
 ```bash
 canarchy capture can0 --json
+canarchy capture can0 --candump
 ```
+
+Notes:
+
+* `--candump` changes the human-readable output path to a `candump`-style line format such as `(0.100000) can0 18F00431#AABBCCDD`
+* `--candump` does not change structured `--json` or `--jsonl` output; those remain stable for automation
+* default table output without `--candump` remains the generic key/value renderer
 
 ### send
 
