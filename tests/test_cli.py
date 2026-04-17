@@ -6,8 +6,10 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from canarchy.cli import EXIT_OK, EXIT_TRANSPORT_ERROR, EXIT_USER_ERROR, main
+from canarchy.transport import PythonCanBackend, TransportError
 
 
 def run_cli(*argv: str) -> tuple[int, str, str]:
@@ -28,7 +30,44 @@ def working_directory(path: str):
         os.chdir(original)
 
 
+class FakeBus:
+    def __init__(self, messages: list[object] | None = None) -> None:
+        self.messages = list(messages or [])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def recv(self, timeout: float | None = None):
+        del timeout
+        if self.messages:
+            return self.messages.pop(0)
+        return None
+
+    def shutdown(self) -> None:
+        return None
+
+
 class CliTests(unittest.TestCase):
+    def fake_message(self, arbitration_id: int, data: bytes, *, is_extended_id: bool = False):
+        return type(
+            "FakeMessage",
+            (),
+            {
+                "arbitration_id": arbitration_id,
+                "data": data,
+                "is_extended_id": is_extended_id,
+                "is_remote_frame": False,
+                "is_error_frame": False,
+                "is_fd": False,
+                "bitrate_switch": False,
+                "error_state_indicator": False,
+                "timestamp": 0.0,
+            },
+        )()
+
     def test_help_exits_successfully(self) -> None:
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
@@ -298,6 +337,53 @@ class CliTests(unittest.TestCase):
 
         payload = json.loads(stdout)
         self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
+
+    def test_capture_uses_python_can_backend_when_requested(self) -> None:
+        fake_bus = FakeBus(
+            [
+                self.fake_message(0x123, bytes.fromhex("11223344")),
+                self.fake_message(0x18FEEE31, bytes.fromhex("AABBCCDD"), is_extended_id=True),
+            ]
+        )
+        with patch.dict(
+            os.environ,
+            {
+                "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+            },
+            clear=False,
+        ):
+            with patch.object(PythonCanBackend, "_open_bus", return_value=fake_bus):
+                exit_code, stdout, stderr = run_cli("capture", "can0", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 2)
+        self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["arbitration_id"], 0x123)
+        self.assertFalse(payload["data"]["events"][0]["payload"]["frame"]["is_extended_id"])
+        self.assertEqual(
+            payload["data"]["events"][1]["payload"]["frame"]["arbitration_id"], 0x18FEEE31
+        )
+        self.assertTrue(payload["data"]["events"][1]["payload"]["frame"]["is_extended_id"])
+
+    def test_python_can_backend_error_returns_backend_exit_code(self) -> None:
+        with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "python-can"}, clear=False):
+            with patch.object(
+                PythonCanBackend,
+                "_open_bus",
+                side_effect=TransportError(
+                    "TRANSPORT_UNAVAILABLE",
+                    "python-can is not installed.",
+                    "Install the `python-can` dependency or select the scaffold backend.",
+                ),
+            ):
+                exit_code, stdout, stderr = run_cli("capture", "can0", "--json")
+
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
 
     def test_filter_expression_error_returns_backend_exit_code(self) -> None:

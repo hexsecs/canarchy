@@ -6,7 +6,8 @@ This document describes the current implemented CLI contract.
 
 Implemented and verified in the current codebase:
 
-* transport scaffolds for `capture`, `send`, `filter`, and `stats`
+* scaffolded transport workflows for `capture`, `send`, `filter`, and `stats`
+* opt-in live `python-can` support for `capture` and `send`
 * deterministic `replay`
 * DBC-backed `decode` and `encode`
 * J1939 `monitor`, `decode`, and `pgn`
@@ -17,6 +18,14 @@ Implemented and verified in the current codebase:
 * explicit error schema and exit codes
 
 Some other commands are already present in the CLI tree but still return placeholder results until their implementation issues are completed.
+
+Important current behavior:
+
+* transport-facing commands default to the deterministic `LocalTransport` scaffold and built-in sample frames
+* `capture` and `send` can use a live `python-can` backend by setting `CANARCHY_TRANSPORT_BACKEND=python-can`
+* the first supported live backend target is `CANARCHY_PYTHON_CAN_INTERFACE=virtual`
+* most successful results currently include `status: planned` and `implementation: command surface scaffold`
+* specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
 
 ---
 
@@ -47,7 +56,7 @@ Examples:
 
 ### capture
 
-Capture traffic from a local interface through the transport scaffold.
+Capture traffic from a local interface through the default scaffold backend or the opt-in `python-can` live backend.
 
 ```bash
 canarchy capture <interface> [--json|--jsonl|--table|--raw]
@@ -163,7 +172,7 @@ canarchy session show [--json|--jsonl|--table|--raw]
 
 ### shell
 
-Run a single shell command through the shared parser, or start an interactive shell loop.
+Run a single shell command through the shared parser, or start a minimal interactive shell loop.
 
 ```bash
 canarchy shell [--command "capture can0 --raw"] [--json|--jsonl|--table|--raw]
@@ -387,3 +396,9 @@ These commands are present in the CLI tree but still scaffolded or not yet imple
 * `re signals|counters|entropy|correlate`
 * `fuzz replay|mutate|id`
 * `tui`
+
+These deeper capabilities are also not implemented yet even where the command surface exists:
+
+* live transport integration beyond the initial `python-can` `virtual` backend path
+* structured export workflows behind `canarchy export`
+* pretty-print output tailored for UDS commands

@@ -2,34 +2,52 @@
 
 ## CANarchy
 
-CANarchy is a CLI-first CAN security research environment for reproducible, protocol-aware, automation-friendly workflows.
+CANarchy is a CLI-first CAN security research toolkit for reproducible, protocol-aware, automation-friendly workflows.
 
 The project is implemented in Python and uses `uv` for environment, dependency, and packaging workflows.
 
-It combines:
+Today the repository combines:
 
 * a stable command surface for analysts, scripts, and coding agents
 * J1939-first heavy vehicle workflows alongside broader CAN analysis
 * structured output for pipelines, replayable research, and machine parsing
-* shared core logic across CLI, REPL, and TUI for both agentic use and agentic development
+* a shared Python core used by the CLI, session workflows, and shell scaffolding
 
 ### Why CANarchy?
 
 Most CAN tools force the wrong tradeoff: interactive but hard to automate, scriptable but too raw, protocol-aware but inconsistent across interfaces, or just poorly documented.
 
-CANarchy is built differently. The CLI is the contract. Structured output is a first-class feature. J1939 is treated as a primary workflow, not an afterthought. The same core engine should power CLI, REPL, and TUI so analysts, scripts, coding agents, and agent-driven development workflows can all rely on the same behavior.
+CANarchy is built differently. The CLI is the contract. Structured output is a first-class feature. J1939 is treated as a primary workflow, not an afterthought. The current codebase focuses on making that CLI contract testable while adding a first real live-transport path through `python-can`.
 
 The project is centered on CAN security research, with strong support for heavy vehicle and J1939 workflows and broader CAN analysis through a security-first lens.
 
-### Key Features
+### Current State
 
-* CLI-first design with deterministic behavior for automation, coding-agent use, and agentic development
-* JSON and JSONL output as first-class interfaces, not add-ons
-* J1939-first workflows with PGN/SPN-centric analysis for heavy vehicle research
-* DBC-backed decode and encode for moving between raw frames and signal semantics
-* Replay, mutation, and fuzzing primitives for controlled lab workflows
-* Reverse engineering helpers oriented toward explainable evidence capture
-* Session-based workflows with shared engine parity across CLI, REPL, and TUI
+Implemented and exercised in tests:
+
+* scaffolded transport workflows for `capture`, `send`, `filter`, and `stats`
+* optional live `python-can` transport for `capture` and `send`, with the virtual CAN interface as the first supported backend
+* deterministic `replay` planning from sample capture data
+* DBC-backed `decode` and `encode`
+* J1939 `monitor`, `decode`, and `pgn`
+* UDS `scan` and `trace`
+* session `save`, `load`, and `show`
+* structured `--json`, `--jsonl`, `--table`, and `--raw` output modes
+* shell command reuse through `canarchy shell --command ...`
+
+Present in the CLI tree but still scaffolded or placeholder-only:
+
+* `export`
+* `j1939 spn`, `j1939 tp`, and `j1939 dm1`
+* `uds services`
+* `re signals`, `re counters`, `re entropy`, and `re correlate`
+* `fuzz replay`, `fuzz mutate`, and `fuzz id`
+* `tui`
+
+Current implementation note:
+
+* `capture` and `send` default to the deterministic scaffold backend, with an opt-in `python-can` backend for live transport work
+* successful command payloads currently include `status: planned` and `implementation: command surface scaffold`
 
 ### Documentation
 
@@ -66,13 +84,15 @@ Notes:
 
 * `uv sync` creates the local virtual environment and installs the package from the current checkout.
 * The checked-in `uv.lock` file should be used for reproducible dependency resolution.
-* Transport-oriented commands may require platform-specific CAN interface setup beyond the Python environment.
+* Live transport support currently uses `python-can`; set `CANARCHY_TRANSPORT_BACKEND=python-can` to enable it.
+* The initial real backend focus is the `python-can` `virtual` interface, which is also the default `CANARCHY_PYTHON_CAN_INTERFACE` value.
+* The scaffold backend remains the default, so transport workflows can still be exercised locally without a live CAN interface.
 
 ### Development
 
 ```bash
 uv sync
-uv run canarchy
+uv run canarchy --help
 ```
 
 ### Example Usage
@@ -84,6 +104,8 @@ canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 Oil
 canarchy j1939 monitor --pgn 65262
 canarchy replay capture.log --rate 0.5 --json
 ```
+
+These examples work against the current scaffolded transport and fixture-driven protocol data by default. Set `CANARCHY_TRANSPORT_BACKEND=python-can` to exercise the live `capture` and `send` path through `python-can`.
 
 ### Structured Output
 

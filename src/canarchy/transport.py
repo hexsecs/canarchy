@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from typing import Protocol
+
+try:
+    import can as python_can
+except ImportError:  # pragma: no cover - exercised through backend selection failures
+    python_can = None
 
 from canarchy.j1939 import decompose_arbitration_id
 from canarchy.models import (
@@ -39,16 +46,203 @@ class TransportError(Exception):
         self.hint = hint
 
 
-class LocalTransport:
-    """Deterministic local transport scaffold for CLI workflows."""
+@dataclass(slots=True, frozen=True)
+class TransportBackendConfig:
+    backend: str
+    python_can_interface: str = "virtual"
+    capture_limit: int = 2
+    capture_timeout: float = 0.05
+
+
+class LiveCanBackend(Protocol):
+    def capture(self, interface: str) -> list[CanFrame]: ...
+
+    def send(self, interface: str, frame: CanFrame) -> CanFrame: ...
+
+
+class ScaffoldCanBackend:
+    """Deterministic backend used when no live CAN backend is selected."""
 
     def capture(self, interface: str) -> list[CanFrame]:
         self._require_interface(interface)
-        return [frame.with_interface(interface) for frame in self._recorded_frames()[:2]]
+        return [frame.with_interface(interface) for frame in recorded_frames()[:2]]
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         self._require_interface(interface)
         return frame.with_interface(interface)
+
+    def _require_interface(self, interface: str) -> None:
+        if interface.lower() in {"offline0", "down0", "missing0"}:
+            raise TransportError(
+                "TRANSPORT_UNAVAILABLE",
+                f"Interface '{interface}' is not available.",
+                "Use an active local CAN interface such as `can0`.",
+            )
+
+
+class PythonCanBackend:
+    """python-can backend for live local CAN capture and transmit."""
+
+    def __init__(
+        self,
+        *,
+        bus_interface: str = "virtual",
+        capture_limit: int = 2,
+        capture_timeout: float = 0.05,
+    ) -> None:
+        self.bus_interface = bus_interface
+        self.capture_limit = capture_limit
+        self.capture_timeout = capture_timeout
+
+    def capture(self, interface: str) -> list[CanFrame]:
+        frames: list[CanFrame] = []
+        bus = self._open_bus(interface)
+        try:
+            while len(frames) < self.capture_limit:
+                message = bus.recv(timeout=self.capture_timeout)
+                if message is None:
+                    break
+                frames.append(self._decode_message(message, interface))
+        finally:
+            bus.shutdown()
+        return frames
+
+    def send(self, interface: str, frame: CanFrame) -> CanFrame:
+        bus = self._open_bus(interface)
+        try:
+            try:
+                bus.send(self._encode_message(frame))
+            except Exception as exc:
+                raise TransportError(
+                    "TRANSPORT_UNAVAILABLE",
+                    f"Failed to send CAN frame on interface '{interface}'.",
+                    "Check that the python-can backend is available and the channel is configured.",
+                ) from exc
+        finally:
+            bus.shutdown()
+        return frame.with_interface(interface)
+
+    def _open_bus(self, interface: str):
+        if python_can is None:
+            raise TransportError(
+                "TRANSPORT_UNAVAILABLE",
+                "python-can is not installed.",
+                "Install the `python-can` dependency or select the scaffold backend.",
+            )
+
+        try:
+            return python_can.Bus(
+                channel=interface,
+                interface=self.bus_interface,
+                receive_own_messages=self.bus_interface == "virtual",
+            )
+        except Exception as exc:
+            raise TransportError(
+                "TRANSPORT_UNAVAILABLE",
+                f"Interface '{interface}' is not available.",
+                "Check that the python-can interface and channel are configured correctly.",
+            ) from exc
+
+    def _decode_message(self, message, interface: str) -> CanFrame:
+        return CanFrame(
+            arbitration_id=message.arbitration_id,
+            data=bytes(message.data),
+            frame_format="can_fd" if getattr(message, "is_fd", False) else "can",
+            interface=interface,
+            is_extended_id=message.is_extended_id,
+            is_remote_frame=message.is_remote_frame,
+            is_error_frame=message.is_error_frame,
+            bitrate_switch=getattr(message, "bitrate_switch", False),
+            error_state_indicator=getattr(message, "error_state_indicator", False),
+            timestamp=message.timestamp,
+        )
+
+    def _encode_message(self, frame: CanFrame):
+        assert python_can is not None
+        return python_can.Message(
+            arbitration_id=frame.arbitration_id,
+            data=frame.data,
+            is_extended_id=frame.is_extended_id,
+            is_remote_frame=frame.is_remote_frame,
+            is_error_frame=frame.is_error_frame,
+            is_fd=frame.frame_format == "can_fd",
+            bitrate_switch=frame.bitrate_switch,
+            error_state_indicator=frame.error_state_indicator,
+        )
+
+
+def transport_backend_config() -> TransportBackendConfig:
+    backend = os.environ.get("CANARCHY_TRANSPORT_BACKEND", "scaffold").strip().lower() or "scaffold"
+    python_can_interface = (
+        os.environ.get("CANARCHY_PYTHON_CAN_INTERFACE", "virtual").strip().lower() or "virtual"
+    )
+    capture_limit = int(os.environ.get("CANARCHY_CAPTURE_LIMIT", "2"))
+    capture_timeout = float(os.environ.get("CANARCHY_CAPTURE_TIMEOUT", "0.05"))
+    return TransportBackendConfig(
+        backend=backend,
+        python_can_interface=python_can_interface,
+        capture_limit=max(capture_limit, 1),
+        capture_timeout=max(capture_timeout, 0.0),
+    )
+
+
+def build_live_backend(config: TransportBackendConfig | None = None) -> LiveCanBackend:
+    config = config or transport_backend_config()
+    if config.backend == "scaffold":
+        return ScaffoldCanBackend()
+    if config.backend == "python-can":
+        return PythonCanBackend(
+            bus_interface=config.python_can_interface,
+            capture_limit=config.capture_limit,
+            capture_timeout=config.capture_timeout,
+        )
+    raise TransportError(
+        "TRANSPORT_BACKEND_INVALID",
+        f"Unknown transport backend '{config.backend}'.",
+        "Use `python-can` or `scaffold` for CANARCHY_TRANSPORT_BACKEND.",
+    )
+
+
+def recorded_frames() -> list[CanFrame]:
+    return [
+        CanFrame(
+            arbitration_id=0x18FEEE31,
+            data=bytes.fromhex("11223344"),
+            frame_format="can",
+            interface="can0",
+            is_extended_id=True,
+            timestamp=0.0,
+        ),
+        CanFrame(
+            arbitration_id=0x18F00431,
+            data=bytes.fromhex("AABBCCDD"),
+            frame_format="can",
+            interface="can0",
+            is_extended_id=True,
+            timestamp=0.1,
+        ),
+        CanFrame(
+            arbitration_id=0x18FEF100,
+            data=bytes.fromhex("0102030405060708"),
+            frame_format="can",
+            interface="can1",
+            is_extended_id=True,
+            timestamp=0.2,
+        ),
+    ]
+
+
+class LocalTransport:
+    """Local transport facade that selects a live CAN backend when available."""
+
+    def __init__(self, live_backend: LiveCanBackend | None = None) -> None:
+        self.live_backend = live_backend or build_live_backend()
+
+    def capture(self, interface: str) -> list[CanFrame]:
+        return self.live_backend.capture(interface)
+
+    def send(self, interface: str, frame: CanFrame) -> CanFrame:
+        return self.live_backend.send(interface, frame)
 
     def filter(self, file_name: str, expression: str) -> list[CanFrame]:
         frames = self._frames_for_file(file_name)
@@ -104,7 +298,7 @@ class LocalTransport:
         )
 
     def j1939_monitor_events(self, pgn: int | None = None) -> list[dict[str, object]]:
-        frames = [frame for frame in self._recorded_frames() if frame.is_extended_id]
+        frames = [frame for frame in recorded_frames() if frame.is_extended_id]
         return serialize_events(
             [
                 event.to_event()
@@ -180,12 +374,7 @@ class LocalTransport:
         return serialize_events(events)
 
     def _require_interface(self, interface: str) -> None:
-        if interface.lower() in {"offline0", "down0", "missing0"}:
-            raise TransportError(
-                "TRANSPORT_UNAVAILABLE",
-                f"Interface '{interface}' is not available.",
-                "Use an active local CAN interface such as `can0`.",
-            )
+        ScaffoldCanBackend()._require_interface(interface)
 
     def _frames_for_file(self, file_name: str) -> list[CanFrame]:
         if file_name.lower() in {"missing.log", "missing", "offline.log"}:
@@ -194,35 +383,7 @@ class LocalTransport:
                 f"Capture source '{file_name}' is not available.",
                 "Provide a readable capture file or generate traffic with `canarchy capture` first.",
             )
-        return self._recorded_frames()
-
-    def _recorded_frames(self) -> list[CanFrame]:
-        return [
-            CanFrame(
-                arbitration_id=0x18FEEE31,
-                data=bytes.fromhex("11223344"),
-                frame_format="can",
-                interface="can0",
-                is_extended_id=True,
-                timestamp=0.0,
-            ),
-            CanFrame(
-                arbitration_id=0x18F00431,
-                data=bytes.fromhex("AABBCCDD"),
-                frame_format="can",
-                interface="can0",
-                is_extended_id=True,
-                timestamp=0.1,
-            ),
-            CanFrame(
-                arbitration_id=0x18FEF100,
-                data=bytes.fromhex("0102030405060708"),
-                frame_format="can",
-                interface="can1",
-                is_extended_id=True,
-                timestamp=0.2,
-            ),
-        ]
+        return recorded_frames()
 
     def _pgn(self, frame: CanFrame) -> int:
         return decompose_arbitration_id(frame.arbitration_id).pgn
