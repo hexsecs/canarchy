@@ -115,6 +115,7 @@ Current file support:
 * file-backed workflows such as `filter`, `stats`, `decode`, `j1939 decode`, and `replay` now read standard timestamped candump log files
 * `j1939 pgn` inspects recorded traffic with `--file <capture.candump>`
 * the supported log form today is `(timestamp) interface frame#data`
+* additional supported candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier such as `20000080#0000000000000000`
 * supported capture-file suffixes today are `.candump` and `.log`
 * malformed candump log lines return structured transport errors instead of falling back to sample data
 

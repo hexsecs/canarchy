@@ -72,6 +72,34 @@ class CliTests(unittest.TestCase):
             },
         )()
 
+    def fake_message_with_flags(
+        self,
+        arbitration_id: int,
+        data: bytes,
+        *,
+        is_extended_id: bool = False,
+        is_remote_frame: bool = False,
+        is_error_frame: bool = False,
+        is_fd: bool = False,
+        bitrate_switch: bool = False,
+        error_state_indicator: bool = False,
+    ):
+        return type(
+            "FakeMessage",
+            (),
+            {
+                "arbitration_id": arbitration_id,
+                "data": data,
+                "is_extended_id": is_extended_id,
+                "is_remote_frame": is_remote_frame,
+                "is_error_frame": is_error_frame,
+                "is_fd": is_fd,
+                "bitrate_switch": bitrate_switch,
+                "error_state_indicator": error_state_indicator,
+                "timestamp": 0.0,
+            },
+        )()
+
     def test_help_exits_successfully(self) -> None:
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
@@ -424,6 +452,7 @@ class CliTests(unittest.TestCase):
             {
                 "CANARCHY_TRANSPORT_BACKEND": "python-can",
                 "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+                "CANARCHY_CAPTURE_LIMIT": "3",
             },
             clear=False,
         ):
@@ -456,6 +485,7 @@ class CliTests(unittest.TestCase):
             {
                 "CANARCHY_TRANSPORT_BACKEND": "python-can",
                 "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+                "CANARCHY_CAPTURE_LIMIT": "3",
             },
             clear=False,
         ):
@@ -467,6 +497,43 @@ class CliTests(unittest.TestCase):
         lines = stdout.strip().splitlines()
         self.assertEqual(lines[0], "(0.000000) vcan0 123#11223344")
         self.assertEqual(lines[1], "(0.000000) vcan0 18FEEE31#AABBCCDD")
+
+    def test_capture_candump_formats_fd_rtr_and_error_frames(self) -> None:
+        fake_bus = FakeBus(
+            [
+                self.fake_message_with_flags(
+                    0x123,
+                    bytes.fromhex("1122334455667788"),
+                    is_fd=True,
+                    bitrate_switch=True,
+                    error_state_indicator=True,
+                ),
+                self.fake_message_with_flags(0x123, b"", is_remote_frame=True),
+                self.fake_message_with_flags(
+                    0x80,
+                    bytes.fromhex("0000000000000000"),
+                    is_error_frame=True,
+                ),
+            ]
+        )
+        with patch.dict(
+            os.environ,
+            {
+                "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+                "CANARCHY_CAPTURE_LIMIT": "3",
+            },
+            clear=False,
+        ):
+            with patch.object(PythonCanBackend, "_open_bus", return_value=fake_bus):
+                exit_code, stdout, stderr = run_cli("capture", "vcan0", "--candump")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        lines = stdout.strip().splitlines()
+        self.assertEqual(lines[0], "(0.000000) vcan0 123##31122334455667788")
+        self.assertEqual(lines[1], "(0.000000) vcan0 123#R")
+        self.assertEqual(lines[2], "(0.000000) vcan0 20000080#0000000000000000")
 
     def test_python_can_backend_error_returns_backend_exit_code(self) -> None:
         with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "python-can"}, clear=False):

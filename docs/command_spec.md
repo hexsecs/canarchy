@@ -80,6 +80,8 @@ Notes:
 Supported file input today:
 
 * file-backed commands consume standard timestamped candump logs in the form `(timestamp) interface frame#data`
+* supported additional candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier
+* supported CAN FD flags today are the BRS and ESI bits in the single-nibble candump flags field
 * supported capture-file suffixes today are `.candump` and `.log`
 * malformed log lines fail with structured transport errors rather than silently falling back to fixture data
 

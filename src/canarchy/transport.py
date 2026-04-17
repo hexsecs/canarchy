@@ -49,10 +49,15 @@ class TransportError(Exception):
         self.hint = hint
 
 
-CANDUMP_LINE_RE = re.compile(
-    r"^\((?P<timestamp>\d+(?:\.\d+)?)\)\s+(?P<interface>\S+)\s+(?P<frame_id>[0-9A-Fa-f]+)#(?P<data>[0-9A-Fa-f]*)$"
+CANDUMP_CLASSIC_LINE_RE = re.compile(
+    r"^\((?P<timestamp>\d+(?:\.\d+)?)\)\s+(?P<interface>\S+)\s+(?P<frame_id>[0-9A-Fa-f]+)#(?P<body>[0-9A-Fa-f]*|R)$"
+)
+CANDUMP_FD_LINE_RE = re.compile(
+    r"^\((?P<timestamp>\d+(?:\.\d+)?)\)\s+(?P<interface>\S+)\s+(?P<frame_id>[0-9A-Fa-f]+)##(?P<flags>[0-9A-Fa-f])(?P<data>[0-9A-Fa-f]*)$"
 )
 SUPPORTED_CAPTURE_SUFFIXES = {".candump", ".log"}
+CAN_ERR_FLAG = 0x20000000
+SUPPORTED_CANDUMP_FD_FLAGS = 0x3
 
 
 @dataclass(slots=True, frozen=True)
@@ -476,16 +481,66 @@ def load_candump_file(path: Path) -> list[CanFrame]:
 
 
 def parse_candump_line(line: str, *, path: Path, line_number: int) -> CanFrame:
-    match = CANDUMP_LINE_RE.match(line)
-    if match is None:
+    fd_match = CANDUMP_FD_LINE_RE.match(line)
+    if fd_match is not None:
+        return parse_candump_fd_line(fd_match, path=path, line_number=line_number)
+
+    classic_match = CANDUMP_CLASSIC_LINE_RE.match(line)
+    if classic_match is not None:
+        return parse_candump_classic_line(classic_match, path=path, line_number=line_number)
+
+    raise TransportError(
+        "CAPTURE_SOURCE_INVALID",
+        f"Failed to parse candump log line {line_number} in '{path}'.",
+        "Use candump forms like `(timestamp) interface id#data`, `id#R`, or `id##<flags><data>`.",
+    )
+
+
+def parse_candump_classic_line(match: re.Match[str], *, path: Path, line_number: int) -> CanFrame:
+    frame_id_text = match.group("frame_id")
+    raw_identifier = int(frame_id_text, 16)
+    is_error_frame = bool(raw_identifier & CAN_ERR_FLAG)
+    arbitration_id = raw_identifier & 0x1FFFFFFF if is_error_frame else raw_identifier
+    body = match.group("body")
+    is_remote_frame = body.upper() == "R"
+    data_text = "" if is_remote_frame else body
+    if len(data_text) % 2 != 0:
         raise TransportError(
             "CAPTURE_SOURCE_INVALID",
-            f"Failed to parse candump log line {line_number} in '{path}'.",
-            "Use the standard candump log format `(timestamp) interface frame#data`.",
+            f"Candump log line {line_number} in '{path}' contains invalid hex payload data.",
+            "Use full byte pairs in the candump payload field.",
         )
 
+    try:
+        return CanFrame(
+            arbitration_id=arbitration_id,
+            data=bytes.fromhex(data_text),
+            timestamp=float(match.group("timestamp")),
+            interface=match.group("interface"),
+            is_extended_id=bool(
+                arbitration_id > 0x7FF or (len(frame_id_text) > 3 and not is_error_frame)
+            ),
+            is_remote_frame=is_remote_frame,
+            is_error_frame=is_error_frame,
+        )
+    except ValueError as exc:
+        raise TransportError(
+            "CAPTURE_SOURCE_INVALID",
+            f"Candump log line {line_number} in '{path}' is not a valid CAN frame.",
+            "Check the frame identifier width and payload length for the selected frame type.",
+        ) from exc
+
+
+def parse_candump_fd_line(match: re.Match[str], *, path: Path, line_number: int) -> CanFrame:
     frame_id_text = match.group("frame_id")
     data_text = match.group("data")
+    flags = int(match.group("flags"), 16)
+    if flags & ~SUPPORTED_CANDUMP_FD_FLAGS:
+        raise TransportError(
+            "CAPTURE_SOURCE_INVALID",
+            f"Candump log line {line_number} in '{path}' uses unsupported CAN FD flags 0x{flags:X}.",
+            "Use CAN FD flags within the supported BRS/ESI subset.",
+        )
     if len(data_text) % 2 != 0:
         raise TransportError(
             "CAPTURE_SOURCE_INVALID",
@@ -494,18 +549,20 @@ def parse_candump_line(line: str, *, path: Path, line_number: int) -> CanFrame:
         )
 
     arbitration_id = int(frame_id_text, 16)
-    is_extended_id = len(frame_id_text) > 3
     try:
         return CanFrame(
             arbitration_id=arbitration_id,
             data=bytes.fromhex(data_text),
             timestamp=float(match.group("timestamp")),
             interface=match.group("interface"),
-            is_extended_id=is_extended_id,
+            is_extended_id=len(frame_id_text) > 3,
+            frame_format="can_fd",
+            bitrate_switch=bool(flags & 0x1),
+            error_state_indicator=bool(flags & 0x2),
         )
     except ValueError as exc:
         raise TransportError(
             "CAPTURE_SOURCE_INVALID",
-            f"Candump log line {line_number} in '{path}' is not a valid CAN frame.",
-            "Check the frame identifier width and payload length for the selected frame type.",
+            f"Candump log line {line_number} in '{path}' is not a valid CAN FD frame.",
+            "Check the frame identifier width, payload length, and CAN FD flags.",
         ) from exc

@@ -25,15 +25,26 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class FakeMessage:
-    def __init__(self, arbitration_id: int, data: bytes, *, is_extended_id: bool = False) -> None:
+    def __init__(
+        self,
+        arbitration_id: int,
+        data: bytes,
+        *,
+        is_extended_id: bool = False,
+        is_remote_frame: bool = False,
+        is_error_frame: bool = False,
+        is_fd: bool = False,
+        bitrate_switch: bool = False,
+        error_state_indicator: bool = False,
+    ) -> None:
         self.arbitration_id = arbitration_id
         self.data = data
         self.is_extended_id = is_extended_id
-        self.is_remote_frame = False
-        self.is_error_frame = False
-        self.is_fd = False
-        self.bitrate_switch = False
-        self.error_state_indicator = False
+        self.is_remote_frame = is_remote_frame
+        self.is_error_frame = is_error_frame
+        self.is_fd = is_fd
+        self.bitrate_switch = bitrate_switch
+        self.error_state_indicator = error_state_indicator
         self.timestamp = 0.0
 
 
@@ -85,6 +96,50 @@ class TransportBackendTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, "CAPTURE_SOURCE_INVALID")
         self.assertIn("invalid hex payload", ctx.exception.message)
+
+    def test_parse_candump_line_supports_can_fd_flags(self) -> None:
+        frame = parse_candump_line(
+            "(0.000000) can0 123##31122334455667788",
+            path=FIXTURES / "sample.candump",
+            line_number=1,
+        )
+
+        self.assertEqual(frame.frame_format, "can_fd")
+        self.assertTrue(frame.bitrate_switch)
+        self.assertTrue(frame.error_state_indicator)
+        self.assertEqual(frame.data, bytes.fromhex("1122334455667788"))
+
+    def test_parse_candump_line_supports_remote_frames(self) -> None:
+        frame = parse_candump_line(
+            "(0.000000) can0 123#R",
+            path=FIXTURES / "sample.candump",
+            line_number=1,
+        )
+
+        self.assertTrue(frame.is_remote_frame)
+        self.assertEqual(frame.data, b"")
+
+    def test_parse_candump_line_supports_error_frames(self) -> None:
+        frame = parse_candump_line(
+            "(0.000000) can0 20000080#0000000000000000",
+            path=FIXTURES / "sample.candump",
+            line_number=1,
+        )
+
+        self.assertTrue(frame.is_error_frame)
+        self.assertEqual(frame.arbitration_id, 0x80)
+        self.assertEqual(frame.data, bytes.fromhex("0000000000000000"))
+
+    def test_parse_candump_line_rejects_unsupported_can_fd_flags(self) -> None:
+        with self.assertRaises(TransportError) as ctx:
+            parse_candump_line(
+                "(0.000000) can0 123##411223344",
+                path=FIXTURES / "sample.candump",
+                line_number=1,
+            )
+
+        self.assertEqual(ctx.exception.code, "CAPTURE_SOURCE_INVALID")
+        self.assertIn("unsupported CAN FD flags", ctx.exception.message)
 
     def test_build_live_backend_defaults_to_scaffold(self) -> None:
         with patch.dict(os.environ, {}, clear=True):

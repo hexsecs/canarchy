@@ -842,16 +842,33 @@ def format_candump_lines(result: CommandResult) -> list[str]:
             continue
         frame = event["payload"]["frame"]
         interface = frame["interface"] or result.data.get("interface") or "can0"
-        arbitration_id = frame["arbitration_id"]
-        frame_id = f"{arbitration_id:08X}" if frame["is_extended_id"] else f"{arbitration_id:03X}"
         timestamp = event.get("timestamp")
         timestamp_text = (
             f"({timestamp:0.6f})" if isinstance(timestamp, (int, float)) else "(0.000000)"
         )
-        lines.append(f"{timestamp_text} {interface} {frame_id}#{frame['data'].upper()}")
+        lines.append(f"{timestamp_text} {interface} {format_candump_frame(frame)}")
     if not lines:
         lines.append("(no frames captured)")
     return lines
+
+
+def format_candump_frame(frame: dict[str, Any]) -> str:
+    arbitration_id = frame["arbitration_id"]
+    if frame["is_error_frame"]:
+        frame_id = f"{(0x20000000 | arbitration_id):08X}"
+        return f"{frame_id}#{frame['data'].upper()}"
+
+    frame_id = f"{arbitration_id:08X}" if frame["is_extended_id"] else f"{arbitration_id:03X}"
+    if frame["frame_format"] == "can_fd":
+        flags = 0
+        if frame["bitrate_switch"]:
+            flags |= 0x1
+        if frame["error_state_indicator"]:
+            flags |= 0x2
+        return f"{frame_id}##{flags:X}{frame['data'].upper()}"
+    if frame["is_remote_frame"]:
+        return f"{frame_id}#R"
+    return f"{frame_id}#{frame['data'].upper()}"
 
 
 def emit_result(result: CommandResult, output_format: str) -> None:
