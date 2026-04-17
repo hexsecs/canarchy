@@ -10,6 +10,8 @@ Implemented and verified in the current codebase:
 * deterministic `replay`
 * DBC-backed `decode` and `encode`
 * J1939 `monitor`, `decode`, and `pgn`
+* session `save`, `load`, and `show`
+* shell one-shot command execution
 * UDS `scan` and `trace`
 * structured JSON and JSONL output
 * explicit error schema and exit codes
@@ -133,6 +135,38 @@ Example:
 
 ```bash
 canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 OilTemp=65 Load=40 LampState=1 --json
+```
+
+### session save
+
+Save a named session with useful CLI context.
+
+```bash
+canarchy session save <name> [--interface <name>] [--dbc <file>] [--capture <file>] [--json|--jsonl|--table|--raw]
+```
+
+### session load
+
+Load a previously saved session and mark it active.
+
+```bash
+canarchy session load <name> [--json|--jsonl|--table|--raw]
+```
+
+### session show
+
+Show saved sessions and the active session.
+
+```bash
+canarchy session show [--json|--jsonl|--table|--raw]
+```
+
+### shell
+
+Run a single shell command through the shared parser, or start an interactive shell loop.
+
+```bash
+canarchy shell [--command "capture can0 --raw"] [--json|--jsonl|--table|--raw]
 ```
 
 ### j1939 monitor
@@ -329,6 +363,18 @@ canarchy uds scan can0 --json
 canarchy uds trace can0 --json
 ```
 
+### Session Save
+
+```bash
+canarchy session save lab-a --interface can0 --dbc tests/fixtures/sample.dbc --capture capture.log --json
+```
+
+### Shell One-Shot Command
+
+```bash
+canarchy shell --command "capture can0 --raw"
+```
+
 ---
 
 ## Current Gaps
@@ -336,10 +382,8 @@ canarchy uds trace can0 --json
 These commands are present in the CLI tree but still scaffolded or not yet implemented end to end:
 
 * `export`
-* `session save|load|show`
 * `j1939 spn|tp|dm1`
 * `uds services`
 * `re signals|counters|entropy|correlate`
 * `fuzz replay|mutate|id`
-* `shell`
 * `tui`

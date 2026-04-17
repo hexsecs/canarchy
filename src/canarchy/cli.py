@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,7 @@ from canarchy.models import (
     serialize_events,
 )
 from canarchy.replay import build_replay_plan
+from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.transport import LocalTransport, TransportError
 
 EXIT_OK = 0
@@ -26,6 +28,7 @@ EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats"}
 DBC_COMMANDS = {"decode", "encode"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn"}
+SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace"}
 
 
@@ -176,6 +179,9 @@ def build_parser() -> CanarchyArgumentParser:
 
     session_save = session_subparsers.add_parser("save", help="save a session")
     session_save.add_argument("name")
+    session_save.add_argument("--interface")
+    session_save.add_argument("--dbc")
+    session_save.add_argument("--capture")
     add_output_arguments(session_save)
     session_save.set_defaults(command="session save")
 
@@ -278,6 +284,7 @@ def build_parser() -> CanarchyArgumentParser:
     fuzz_id.set_defaults(command="fuzz id")
 
     shell = subparsers.add_parser("shell", help="start the interactive shell")
+    shell.add_argument("--command", dest="shell_command", help="run a single shell command")
     add_output_arguments(shell)
     shell.set_defaults(command="shell")
 
@@ -395,6 +402,21 @@ def validate_args(args: argparse.Namespace) -> None:
                     ],
                     data={"signal": assignment},
                 )
+
+    if args.command in {"session save", "session load"}:
+        if "/" in args.name or args.name in {".", ".."}:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_SESSION_NAME",
+                        message="Session names must not contain path separators.",
+                        hint="Use a simple name such as `lab-a` or `truck-session`.",
+                    )
+                ],
+                data={"name": args.name},
+            )
 
 
 def sample_frame(*, interface: str | None = None, frame_format: str = "can") -> CanFrame:
@@ -615,6 +637,37 @@ def replay_payload(
     )
 
 
+def session_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    store = SessionStore()
+    if args.command == "session save":
+        record = store.save(args.name, build_session_context(args))
+        return (
+            {
+                "mode": "stateful",
+                "session": record.to_payload(),
+            },
+            [],
+            [],
+        )
+    if args.command == "session load":
+        record = store.load(args.name)
+        return (
+            {
+                "mode": "stateful",
+                "session": record.to_payload(),
+            },
+            [],
+            [],
+        )
+    if args.command == "session show":
+        payload = store.show()
+        payload["mode"] = "stateful"
+        return (payload, [], [])
+    raise AssertionError(f"unsupported session command: {args.command}")
+
+
 def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in TRANSPORT_COMMANDS:
         _, events, _ = transport_payload(args)
@@ -624,6 +677,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
         return events
     if args.command in J1939_COMMANDS:
         _, events, _ = j1939_payload(args)
+        return events
+    if args.command in SESSION_COMMANDS:
+        _, events, _ = session_payload(args)
         return events
     if args.command in UDS_COMMANDS:
         _, events, _ = uds_payload(args)
@@ -663,6 +719,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(replay_data)
         data["events"] = replay_events
         warnings.extend(replay_warnings)
+    elif args.command in SESSION_COMMANDS:
+        session_data, session_events, session_warnings = session_payload(args)
+        data.update(session_data)
+        data["events"] = session_events
+        warnings.extend(session_warnings)
     elif args.command in DBC_COMMANDS:
         decode_data, decode_events, decode_warnings = dbc_payload(args)
         data.update(decode_data)
@@ -757,6 +818,24 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"hint: {error['hint']}", file=stream)
 
 
+def run_shell(shell_command: str | None) -> int:
+    if shell_command is not None:
+        return main(shlex.split(shell_command))
+
+    while True:
+        try:
+            line = input("canarchy> ")
+        except EOFError:
+            return EXIT_OK
+
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped in {"exit", "quit"}:
+            return EXIT_OK
+        main(shlex.split(stripped))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     output_format = requested_output_format(argv)
@@ -779,9 +858,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     output_format = format_name(args)
     try:
         validate_args(args)
+        if args.command == "shell":
+            return run_shell(args.shell_command)
         result = build_result(args)
         emit_result(result, output_format)
         return EXIT_OK
+    except SessionError as exc:
+        result = error_result(
+            args.command,
+            errors=[
+                ErrorDetail(
+                    code=exc.code,
+                    message=exc.message,
+                    hint=exc.hint,
+                )
+            ],
+        )
+        emit_result(result, output_format)
+        return EXIT_USER_ERROR
     except DbcError as exc:
         result = error_result(
             args.command,

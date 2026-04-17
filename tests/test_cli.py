@@ -3,6 +3,8 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
+import tempfile
 import unittest
 
 from canarchy.cli import EXIT_OK, EXIT_TRANSPORT_ERROR, EXIT_USER_ERROR, main
@@ -14,6 +16,16 @@ def run_cli(*argv: str) -> tuple[int, str, str]:
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
         exit_code = main(argv)
     return exit_code, stdout.getvalue(), stderr.getvalue()
+
+
+@contextlib.contextmanager
+def working_directory(path: str):
+    original = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(original)
 
 
 class CliTests(unittest.TestCase):
@@ -173,6 +185,55 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
+
+    def test_session_save_load_and_show_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with working_directory(temp_dir):
+                exit_code, stdout, stderr = run_cli(
+                    "session",
+                    "save",
+                    "lab-a",
+                    "--interface",
+                    "can0",
+                    "--dbc",
+                    "tests/fixtures/sample.dbc",
+                    "--capture",
+                    "capture.log",
+                    "--json",
+                )
+                self.assertEqual(exit_code, EXIT_OK)
+                self.assertEqual(stderr, "")
+                payload = json.loads(stdout)
+                self.assertEqual(payload["data"]["mode"], "stateful")
+                self.assertEqual(payload["data"]["session"]["name"], "lab-a")
+                self.assertEqual(payload["data"]["session"]["context"]["interface"], "can0")
+
+                exit_code, stdout, _ = run_cli("session", "load", "lab-a", "--json")
+                self.assertEqual(exit_code, EXIT_OK)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["data"]["session"]["name"], "lab-a")
+                self.assertEqual(payload["data"]["session"]["context"]["capture"], "capture.log")
+
+                exit_code, stdout, _ = run_cli("session", "show", "--json")
+                self.assertEqual(exit_code, EXIT_OK)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["data"]["active_session"]["name"], "lab-a")
+                self.assertEqual(payload["data"]["sessions"][0]["name"], "lab-a")
+
+    def test_session_load_missing_returns_user_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with working_directory(temp_dir):
+                exit_code, stdout, stderr = run_cli("session", "load", "missing", "--json")
+                self.assertEqual(exit_code, EXIT_USER_ERROR)
+                self.assertEqual(stderr, "")
+                payload = json.loads(stdout)
+                self.assertEqual(payload["errors"][0]["code"], "SESSION_NOT_FOUND")
+
+    def test_shell_command_reuses_cli_parser(self) -> None:
+        exit_code, stdout, stderr = run_cli("shell", "--command", "capture can0 --raw")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertEqual(stdout.strip(), "capture")
 
     def test_usage_error_respects_json_output(self) -> None:
         exit_code, stdout, stderr = run_cli("decode", "capture.log", "--json")
