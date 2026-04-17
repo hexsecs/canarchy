@@ -115,6 +115,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["file"], "capture.log")
         self.assertEqual(payload["data"]["events"][1]["payload"]["pgn"], 61444)
 
+    def test_j1939_monitor_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli("j1939", "monitor", "--pgn", "65262", "--table")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 monitor", stdout)
+        self.assertIn("pgn_filter: 65262", stdout)
+        self.assertIn("observations:", stdout)
+        self.assertIn("pgn=65262", stdout)
+        self.assertIn("sa=0x31", stdout)
+        self.assertIn("da=broadcast", stdout)
+        self.assertIn("prio=6", stdout)
+        self.assertIn("data=11223344", stdout)
+
+    def test_j1939_decode_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli("j1939", "decode", "capture.log", "--table")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 decode", stdout)
+        self.assertIn("file: capture.log", stdout)
+        self.assertIn("pgn=61444", stdout)
+        self.assertIn("sa=0x31", stdout)
+
     def test_usage_error_respects_json_output(self) -> None:
         exit_code, stdout, stderr = run_cli("decode", "capture.log", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)

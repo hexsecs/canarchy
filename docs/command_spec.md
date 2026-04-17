@@ -179,8 +179,17 @@ Current behavior:
 
 * `--json` emits one structured JSON object
 * `--jsonl` emits one structured JSON object per line
-* `--table` emits a simple human-readable summary view
+* `--table` emits a human-readable summary view, with protocol-aware pretty-printing for J1939 monitor and decode workflows
 * `--raw` emits the command name on success or the primary error message on failure
+
+J1939 `--table` output includes:
+
+* PGN
+* source address
+* destination address when present, otherwise broadcast
+* priority
+* CAN identifier
+* payload bytes
 
 ### JSON Result Shape
 

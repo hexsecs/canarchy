@@ -653,6 +653,38 @@ def build_result(args: argparse.Namespace) -> CommandResult:
     )
 
 
+def format_j1939_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    events = result.data.get("events", [])
+    if result.command == "j1939 monitor" and result.data.get("pgn_filter") is not None:
+        lines.append(f"pgn_filter: {result.data['pgn_filter']}")
+    if result.command == "j1939 decode":
+        lines.append(f"file: {result.data['file']}")
+    if result.command == "j1939 pgn":
+        lines.append(f"pgn: {result.data['pgn']}")
+
+    lines.append("observations:")
+    if not events:
+        lines.append("- no j1939 observations")
+        return lines
+
+    for event in events:
+        payload = event["payload"]
+        frame = payload["frame"]
+        destination = payload["destination_address"]
+        destination_text = f"0x{destination:02X}" if destination is not None else "broadcast"
+        lines.append(
+            "- "
+            f"pgn={payload['pgn']} "
+            f"sa=0x{payload['source_address']:02X} "
+            f"da={destination_text} "
+            f"prio={payload['priority']} "
+            f"id=0x{frame['arbitration_id']:08X} "
+            f"data={frame['data']}"
+        )
+    return lines
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     if output_format in {"json", "jsonl"}:
@@ -664,6 +696,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(result.command)
         elif payload["errors"]:
             print(payload["errors"][0]["message"])
+        return
+
+    if output_format == "table" and result.ok and result.command in J1939_COMMANDS:
+        for line in format_j1939_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
         return
 
     stream = None
