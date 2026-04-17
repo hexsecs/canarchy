@@ -513,6 +513,125 @@ class CliTests(unittest.TestCase):
                 payload = json.loads(stdout)
                 self.assertEqual(payload["errors"][0]["code"], "SESSION_NOT_FOUND")
 
+    def test_export_capture_file_to_json_writes_structured_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "capture-export.json"
+            exit_code, stdout, stderr = run_cli(
+                "export",
+                str(FIXTURES / "sample.candump"),
+                str(destination),
+                "--json",
+            )
+
+            self.assertEqual(exit_code, EXIT_OK)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["data"]["artifact_type"], "event_stream")
+            self.assertEqual(payload["data"]["export_format"], "json")
+            self.assertEqual(payload["data"]["exported_events"], 3)
+
+            artifact = json.loads(destination.read_text())
+            self.assertTrue(artifact["ok"])
+            self.assertEqual(artifact["command"], "export")
+            self.assertEqual(artifact["data"]["artifact_type"], "event_stream")
+            self.assertEqual(artifact["data"]["source"]["kind"], "capture_file")
+            self.assertEqual(len(artifact["data"]["events"]), 3)
+            self.assertEqual(artifact["data"]["events"][0]["event_type"], "frame")
+
+    def test_export_capture_file_to_jsonl_writes_one_event_per_line(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "capture-export.jsonl"
+            exit_code, stdout, stderr = run_cli(
+                "export",
+                str(FIXTURES / "sample.candump"),
+                str(destination),
+                "--json",
+            )
+
+            self.assertEqual(exit_code, EXIT_OK)
+            self.assertEqual(stderr, "")
+            lines = destination.read_text().splitlines()
+            self.assertEqual(len(lines), 3)
+            first_event = json.loads(lines[0])
+            self.assertEqual(first_event["event_type"], "frame")
+            self.assertEqual(first_event["source"], "export.capture_file")
+
+    def test_export_session_to_json_writes_session_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with working_directory(temp_dir):
+                exit_code, stdout, stderr = run_cli(
+                    "session",
+                    "save",
+                    "lab-a",
+                    "--interface",
+                    "can0",
+                    "--capture",
+                    str(FIXTURES / "sample.candump"),
+                    "--json",
+                )
+                self.assertEqual(exit_code, EXIT_OK)
+                self.assertEqual(stderr, "")
+
+                destination = Path(temp_dir) / "session-export.json"
+                exit_code, stdout, stderr = run_cli(
+                    "export",
+                    "session:lab-a",
+                    str(destination),
+                    "--json",
+                )
+
+                self.assertEqual(exit_code, EXIT_OK)
+                self.assertEqual(stderr, "")
+                payload = json.loads(stdout)
+                self.assertEqual(payload["data"]["artifact_type"], "session_record")
+                self.assertEqual(payload["data"]["source_kind"], "session")
+
+                artifact = json.loads(destination.read_text())
+                self.assertEqual(artifact["data"]["artifact_type"], "session_record")
+                self.assertEqual(artifact["data"]["session"]["name"], "lab-a")
+                self.assertEqual(artifact["data"]["source"]["value"], "lab-a")
+
+    def test_export_session_to_jsonl_returns_user_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with working_directory(temp_dir):
+                exit_code, stdout, stderr = run_cli("session", "save", "lab-a", "--json")
+                self.assertEqual(exit_code, EXIT_OK)
+                self.assertEqual(stderr, "")
+
+                destination = Path(temp_dir) / "session-export.jsonl"
+                exit_code, stdout, stderr = run_cli(
+                    "export",
+                    "session:lab-a",
+                    str(destination),
+                    "--json",
+                )
+
+                self.assertEqual(exit_code, EXIT_USER_ERROR)
+                self.assertEqual(stderr, "")
+                payload = json.loads(stdout)
+                self.assertEqual(payload["errors"][0]["code"], "EXPORT_EVENTS_UNAVAILABLE")
+
+    def test_export_rejects_unsupported_source(self) -> None:
+        exit_code, stdout, stderr = run_cli("export", "unknown-source", "artifact.json", "--json")
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "EXPORT_SOURCE_UNSUPPORTED")
+
+    def test_export_rejects_unsupported_destination_suffix(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "export",
+            str(FIXTURES / "sample.candump"),
+            "artifact.txt",
+            "--json",
+        )
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "EXPORT_FORMAT_UNSUPPORTED")
+
     def test_shell_command_reuses_cli_parser(self) -> None:
         exit_code, stdout, stderr = run_cli("shell", "--command", "capture can0 --raw")
         self.assertEqual(exit_code, EXIT_OK)

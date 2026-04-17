@@ -11,6 +11,7 @@ Implemented and verified in the current codebase:
 * opt-in live `python-can` support for `capture` and `send`
 * deterministic `replay`
 * live `gateway` bridging between CAN interfaces via `python-can`
+* structured `export` for capture files and saved sessions
 * DBC-backed `decode` and `encode`
 * J1939 `monitor`, `decode`, and `pgn`
 * session `save`, `load`, and `show`
@@ -159,6 +160,29 @@ Notes:
 * `--src-backend` and `--dst-backend` default to `CANARCHY_PYTHON_CAN_INTERFACE`
 * default table and raw output use candump-style forwarded frame lines with direction labels such as `[src->dst]`
 * JSON and JSONL output return standard command envelopes whose frame event `source` fields are `gateway.src->dst` or `gateway.dst->src`
+
+### export
+
+Export structured artifacts for later analysis.
+
+```bash
+canarchy export <source> <destination> [--json|--jsonl|--table|--raw]
+```
+
+Examples:
+
+```bash
+canarchy export tests/fixtures/sample.candump artifacts/sample.json --json
+canarchy export tests/fixtures/sample.candump artifacts/sample.jsonl --json
+canarchy export session:lab-a artifacts/session.json --json
+```
+
+Notes:
+
+* capture file sources use `.candump` or `.log` paths
+* saved sessions use the explicit `session:<name>` source form
+* destination `.json` writes a full structured artifact envelope
+* destination `.jsonl` writes one serialized event per line and is only supported for event-capable sources such as capture files
 
 ### decode
 
@@ -442,7 +466,6 @@ canarchy shell --command "capture can0 --raw"
 
 These commands are present in the CLI tree but still scaffolded or not yet implemented end to end:
 
-* `export`
 * `j1939 spn|tp|dm1`
 * `uds services`
 * `re signals|counters|entropy|correlate`
@@ -452,5 +475,4 @@ These commands are present in the CLI tree but still scaffolded or not yet imple
 These deeper capabilities are also not implemented yet even where the command surface exists:
 
 * live transport integration beyond the initial `python-can` `virtual` backend path
-* structured export workflows behind `canarchy export`
 * pretty-print output tailored for UDS commands

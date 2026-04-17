@@ -19,6 +19,7 @@ Implemented and exercised in the current codebase:
 * J1939 `monitor`, `decode`, and `pgn`
 * UDS `scan` and `trace`
 * session `save`, `load`, and `show`
+* structured `export` for capture files and saved sessions
 * shell command reuse through `canarchy shell --command ...`
 * structured `--json`, `--jsonl`, `--table`, and `--raw` output modes
 
@@ -26,7 +27,6 @@ Implemented and exercised in the current codebase:
 
 Present in the CLI tree but still scaffolded or placeholder-only:
 
-* `export`
 * `j1939 spn`, `j1939 tp`, and `j1939 dm1`
 * `uds services`
 * `re signals`, `re counters`, `re entropy`, and `re correlate`

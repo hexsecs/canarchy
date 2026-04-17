@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from canarchy.dbc import DbcError, decode_frames, encode_message
+from canarchy.exporter import ExportError, export_artifact
 from canarchy.models import (
     AlertEvent,
     CanFrame,
@@ -30,7 +31,7 @@ DBC_COMMANDS = {"decode", "encode"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace"}
-IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | {"replay", "gateway", "shell"}
+IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | {"replay", "gateway", "shell", "export"}
 
 
 class CliUsageError(Exception):
@@ -845,6 +846,22 @@ def gateway_payload(
     )
 
 
+def export_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    export_data = export_artifact(args.source, args.destination)
+    return (
+        {
+            "mode": "stateful",
+            **export_data,
+            "status": "implemented",
+            "implementation": "structured artifact export",
+        },
+        [],
+        [],
+    )
+
+
 def replay_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -911,6 +928,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in UDS_COMMANDS:
         _, events, _ = uds_payload(args)
         return events
+    if args.command == "export":
+        _, events, _ = export_payload(args)
+        return events
     if args.command == "gateway":
         _, events, _ = gateway_payload(args)
         return events
@@ -964,6 +984,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(uds_data)
         data["events"] = uds_events
         warnings.extend(uds_warnings)
+    elif args.command == "export":
+        export_data, export_events, export_warnings = export_payload(args)
+        data.update(export_data)
+        data["events"] = export_events
+        warnings.extend(export_warnings)
     elif args.command == "gateway":
         gateway_data, gateway_events, gateway_warnings = gateway_payload(args)
         data.update(gateway_data)
@@ -1309,6 +1334,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         emit_result(result, output_format)
         return EXIT_TRANSPORT_ERROR
+    except ExportError as exc:
+        result = error_result(
+            args.command,
+            errors=[
+                ErrorDetail(
+                    code=exc.code,
+                    message=exc.message,
+                    hint=exc.hint,
+                )
+            ],
+        )
+        emit_result(result, output_format)
+        return EXIT_USER_ERROR
     except CommandError as exc:
         result = error_result(
             exc.command,
