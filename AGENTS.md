@@ -484,6 +484,53 @@ Prefer example-heavy docs.
 
 ---
 
+## Design and architecture documents
+
+CANarchy maintains living specification documents alongside the code. These documents are the authoritative record of how the system is designed to work.
+
+### Document types
+
+**Architecture documents** (`docs/architecture/`)
+
+Describe the overall structure and module responsibilities. Each document should cover:
+
+* the problem the component solves
+* its boundaries and responsibilities
+* how it interacts with adjacent components
+* key design decisions and the reasons for them
+* what is intentionally out of scope
+
+**Software design specs** (`docs/design/`)
+
+Describe the intended behavior of a specific feature or subsystem before or during implementation. Each spec should include:
+
+* the goal and user-facing motivation
+* the proposed command surface or API shape
+* data models and event types involved
+* output format definitions (JSON schema or representative examples)
+* error cases and expected error codes
+* open questions or deferred decisions
+
+**Test specs** (`docs/tests/`)
+
+Describe the test strategy and coverage expectations for a component or feature. Each test spec should include:
+
+* what behaviors must be covered
+* representative test cases including happy path, edge cases, and failure modes
+* fixture requirements
+* what is explicitly not tested and why
+
+### Rules for agents
+
+* When implementing a new feature or command, check `docs/design/` for an existing spec before writing code. If a spec exists, implement against it. If it conflicts with the code, flag the conflict rather than silently diverging.
+* When no spec exists for a significant new feature, create one in `docs/design/` before or alongside the implementation.
+* When adding new protocol logic, transport backends, or output formats, update or create the relevant architecture document in `docs/architecture/`.
+* After implementing a feature, verify the test spec in `docs/tests/` matches what was actually tested. Update it if coverage changed.
+* Specs are living documents. Update them when the implementation changes rather than letting them drift.
+* Do not create specs for trivial changes (single-function fixes, minor output tweaks). Reserve them for features that affect the command surface, data model, or module boundaries.
+
+---
+
 ## Preferred development style for agents
 
 When proposing code changes or new modules, agents should:
