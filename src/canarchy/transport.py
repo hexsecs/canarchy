@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from canarchy.models import AlertEvent, CanFrame, FrameEvent, serialize_events
+from canarchy.j1939 import decompose_arbitration_id
+from canarchy.models import (
+    AlertEvent,
+    CanFrame,
+    FrameEvent,
+    J1939ObservationEvent,
+    serialize_events,
+)
 
 
 @dataclass(slots=True)
@@ -92,6 +99,26 @@ class LocalTransport:
             [FrameEvent(frame=frame, source="transport.filter").to_event() for frame in frames]
         )
 
+    def j1939_monitor_events(self, pgn: int | None = None) -> list[dict[str, object]]:
+        frames = [frame for frame in self._recorded_frames() if frame.is_extended_id]
+        return serialize_events(
+            [
+                event.to_event()
+                for event in self._j1939_events(frames, pgn=pgn, source="transport.j1939.monitor")
+            ]
+        )
+
+    def j1939_decode_events(
+        self, file_name: str, pgn: int | None = None
+    ) -> list[dict[str, object]]:
+        frames = [frame for frame in self._frames_for_file(file_name) if frame.is_extended_id]
+        return serialize_events(
+            [
+                event.to_event()
+                for event in self._j1939_events(frames, pgn=pgn, source="transport.j1939.decode")
+            ]
+        )
+
     def _require_interface(self, interface: str) -> None:
         if interface.lower() in {"offline0", "down0", "missing0"}:
             raise TransportError(
@@ -138,4 +165,28 @@ class LocalTransport:
         ]
 
     def _pgn(self, frame: CanFrame) -> int:
-        return (frame.arbitration_id >> 8) & 0x3FFFF
+        return decompose_arbitration_id(frame.arbitration_id).pgn
+
+    def _j1939_events(
+        self,
+        frames: list[CanFrame],
+        *,
+        pgn: int | None,
+        source: str,
+    ) -> list[J1939ObservationEvent]:
+        events: list[J1939ObservationEvent] = []
+        for frame in frames:
+            identifier = decompose_arbitration_id(frame.arbitration_id)
+            if pgn is not None and identifier.pgn != pgn:
+                continue
+            events.append(
+                J1939ObservationEvent(
+                    pgn=identifier.pgn,
+                    source_address=identifier.source_address,
+                    destination_address=identifier.destination_address,
+                    priority=identifier.priority,
+                    frame=frame,
+                    source=source,
+                )
+            )
+        return events

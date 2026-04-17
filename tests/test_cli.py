@@ -87,6 +87,34 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stdout.strip(), "j1939 monitor")
 
+    def test_j1939_monitor_returns_observations(self) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "monitor", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["events"][0]["event_type"], "j1939_pgn")
+        self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
+        self.assertEqual(payload["data"]["events"][0]["payload"]["source_address"], 0x31)
+        self.assertEqual(payload["data"]["events"][0]["payload"]["priority"], 6)
+
+    def test_j1939_monitor_pgn_filter_is_applied(self) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "monitor", "--pgn", "65262", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["pgn_filter"], 65262)
+        self.assertEqual(len(payload["data"]["events"]), 1)
+        self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
+
+    def test_j1939_decode_returns_j1939_events(self) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "decode", "capture.log", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["file"], "capture.log")
+        self.assertEqual(payload["data"]["events"][1]["payload"]["pgn"], 61444)
+
     def test_usage_error_respects_json_output(self) -> None:
         exit_code, stdout, stderr = run_cli("decode", "capture.log", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)

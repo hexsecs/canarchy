@@ -12,8 +12,6 @@ from canarchy.models import (
     AlertEvent,
     CanFrame,
     DecodedMessageEvent,
-    FrameEvent,
-    J1939ObservationEvent,
     ReplayActionEvent,
     SignalValueEvent,
     serialize_events,
@@ -26,6 +24,7 @@ EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats"}
+J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn"}
 
 
 class CliUsageError(Exception):
@@ -467,14 +466,38 @@ def transport_payload(
     raise AssertionError(f"unsupported transport command: {args.command}")
 
 
+def j1939_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    transport = LocalTransport()
+    if args.command == "j1939 monitor":
+        return (
+            {"mode": "passive", "pgn_filter": args.pgn},
+            transport.j1939_monitor_events(args.pgn),
+            [],
+        )
+    if args.command == "j1939 decode":
+        return (
+            {"mode": "passive", "file": args.file},
+            transport.j1939_decode_events(args.file),
+            [],
+        )
+    if args.command == "j1939 pgn":
+        return (
+            {"mode": "passive", "pgn": args.pgn},
+            transport.j1939_decode_events("capture.log", args.pgn),
+            [],
+        )
+    raise AssertionError(f"unsupported j1939 command: {args.command}")
+
+
 def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in TRANSPORT_COMMANDS:
         _, events, _ = transport_payload(args)
         return events
-    if args.command == "capture":
-        events = [
-            FrameEvent(frame=sample_frame(interface=args.interface), source="capture").to_event()
-        ]
+    if args.command in J1939_COMMANDS:
+        _, events, _ = j1939_payload(args)
+        return events
     elif args.command == "decode":
         frame = sample_frame()
         events = [
@@ -489,17 +512,6 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
                 value=621.0,
                 units="rpm",
             ).to_event(),
-        ]
-    elif args.command == "j1939 monitor":
-        frame = sample_frame()
-        events = [
-            J1939ObservationEvent(
-                pgn=args.pgn if getattr(args, "pgn", None) is not None else 65262,
-                source_address=0x31,
-                destination_address=0xFF,
-                priority=6,
-                frame=frame,
-            ).to_event()
         ]
     elif args.command == "replay":
         events = [
@@ -534,6 +546,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(transport_data)
         data["events"] = transport_events
         warnings.extend(transport_warnings)
+    elif args.command in J1939_COMMANDS:
+        protocol_data, protocol_events, protocol_warnings = j1939_payload(args)
+        data.update(protocol_data)
+        data["events"] = protocol_events
+        warnings.extend(protocol_warnings)
     else:
         data["events"] = build_events(args)
     data["status"] = "planned"
