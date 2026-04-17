@@ -35,8 +35,14 @@ def working_directory(path: str):
 
 
 class FakeBus:
-    def __init__(self, messages: list[object] | None = None) -> None:
+    def __init__(
+        self,
+        messages: list[object] | None = None,
+        *,
+        end_exception: type[BaseException] | None = None,
+    ) -> None:
         self.messages = list(messages or [])
+        self.end_exception = end_exception
 
     def __enter__(self):
         return self
@@ -48,6 +54,8 @@ class FakeBus:
         del timeout
         if self.messages:
             return self.messages.pop(0)
+        if self.end_exception is not None:
+            raise self.end_exception()
         return None
 
     def shutdown(self) -> None:
@@ -152,28 +160,37 @@ class CliTests(unittest.TestCase):
             "Active transmission is intentionally distinct from passive monitoring workflows.",
         )
 
-    def test_capture_candump_table_output_is_pretty_printed(self) -> None:
-        exit_code, stdout, stderr = run_cli("capture", "can0", "--candump")
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
-        lines = stdout.strip().splitlines()
-        self.assertEqual(lines[0], "(0.000000) can0 18FEEE31#11223344")
-        self.assertEqual(lines[1], "(0.100000) can0 18F00431#AABBCCDD")
-
-    def test_capture_candump_raw_output_matches_dump_lines(self) -> None:
-        exit_code, stdout, stderr = run_cli("capture", "can0", "--candump", "--raw")
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
-        lines = stdout.strip().splitlines()
-        self.assertEqual(lines[0], "(0.000000) can0 18FEEE31#11223344")
-        self.assertEqual(lines[1], "(0.100000) can0 18F00431#AABBCCDD")
-
-    def test_capture_candump_json_keeps_structured_payload(self) -> None:
+    def test_capture_candump_requires_live_backend(self) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--candump", "--json")
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CANDUMP_LIVE_BACKEND_REQUIRED")
+
+    def test_capture_candump_json_uses_live_backend_when_requested(self) -> None:
+        fake_bus = FakeBus(
+            [
+                self.fake_message(0x123, bytes.fromhex("11223344")),
+                self.fake_message(0x18FEEE31, bytes.fromhex("AABBCCDD"), is_extended_id=True),
+            ]
+        )
+        with patch.dict(
+            os.environ,
+            {
+                "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+            },
+            clear=False,
+        ):
+            with patch.object(PythonCanBackend, "_open_bus", return_value=fake_bus):
+                exit_code, stdout, stderr = run_cli("capture", "vcan0", "--candump", "--json")
+
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["display"], "candump")
+        self.assertEqual(payload["data"]["transport_backend"], "python-can")
         self.assertEqual(payload["data"]["events"][0]["event_type"], "frame")
 
     def test_filter_json_output_returns_matching_frames(self) -> None:
@@ -452,6 +469,92 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["file"], str(FIXTURES / "sample.candump"))
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
 
+    def test_generate_fixed_id_and_data_returns_frame_events(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["frame_count"], 1)
+        self.assertEqual(payload["data"]["transport_backend"], "scaffold")
+        frame_event = payload["data"]["events"][1]
+        self.assertEqual(frame_event["event_type"], "frame")
+        self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x123)
+        self.assertEqual(frame_event["payload"]["frame"]["data"], "11223344")
+
+    def test_generate_count_produces_correct_number_of_frames(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "generate", "can0", "--id", "0x7DF", "--dlc", "2", "--data", "I", "--count", "3", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["frame_count"], 3)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 3)
+
+    def test_generate_incrementing_data_produces_rolling_bytes(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "generate", "can0", "--id", "0x100", "--dlc", "2", "--data", "I", "--count", "2", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(frame_events[0]["payload"]["frame"]["data"], "0001")
+        self.assertEqual(frame_events[1]["payload"]["frame"]["data"], "0203")
+
+    def test_generate_random_produces_frame_events(self) -> None:
+        exit_code, stdout, stderr = run_cli("generate", "can0", "--count", "5", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 5)
+
+    def test_generate_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "AABBCCDD", "--count", "2", "--table"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("command: generate", stdout)
+        self.assertIn("interface: can0", stdout)
+        self.assertIn("frames: 2", stdout)
+        self.assertIn("123#AABBCCDD", stdout)
+
+    def test_generate_extended_flag_sets_29bit_id(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "generate", "can0", "--id", "0x100", "--dlc", "0", "--data", "R", "--extended", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        self.assertTrue(frame_event["payload"]["frame"]["is_extended_id"])
+
+    def test_generate_invalid_id_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli("generate", "can0", "--id", "ZZZZ", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_FRAME_ID")
+
+    def test_generate_invalid_dlc_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli("generate", "can0", "--dlc", "99", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_DLC")
+
+    def test_generate_invalid_count_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli("generate", "can0", "--count", "0", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_COUNT")
+
+    def test_generate_negative_gap_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli("generate", "can0", "--gap", "-1", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_GAP")
+
     def test_transport_error_returns_backend_exit_code(self) -> None:
         exit_code, stdout, stderr = run_cli("capture", "offline0", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
@@ -499,14 +602,14 @@ class CliTests(unittest.TestCase):
             [
                 self.fake_message(0x123, bytes.fromhex("11223344")),
                 self.fake_message(0x18FEEE31, bytes.fromhex("AABBCCDD"), is_extended_id=True),
-            ]
+            ],
+            end_exception=KeyboardInterrupt,
         )
         with patch.dict(
             os.environ,
             {
                 "CANARCHY_TRANSPORT_BACKEND": "python-can",
                 "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
-                "CANARCHY_CAPTURE_LIMIT": "3",
             },
             clear=False,
         ):
@@ -535,14 +638,14 @@ class CliTests(unittest.TestCase):
                     bytes.fromhex("0000000000000000"),
                     is_error_frame=True,
                 ),
-            ]
+            ],
+            end_exception=KeyboardInterrupt,
         )
         with patch.dict(
             os.environ,
             {
                 "CANARCHY_TRANSPORT_BACKEND": "python-can",
                 "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
-                "CANARCHY_CAPTURE_LIMIT": "3",
             },
             clear=False,
         ):

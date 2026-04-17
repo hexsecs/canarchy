@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
+import random
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Iterator, Protocol
 
 try:
     import can as python_can
@@ -74,6 +75,8 @@ class LiveCanBackend(Protocol):
 
     def capture(self, interface: str) -> list[CanFrame]: ...
 
+    def capture_stream(self, interface: str) -> Iterator[CanFrame]: ...
+
     def send(self, interface: str, frame: CanFrame) -> CanFrame: ...
 
 
@@ -87,6 +90,14 @@ class ScaffoldCanBackend:
     def capture(self, interface: str) -> list[CanFrame]:
         self._require_interface(interface)
         return [frame.with_interface(interface) for frame in recorded_frames()[:2]]
+
+    def capture_stream(self, interface: str) -> Iterator[CanFrame]:
+        self._require_interface(interface)
+        raise TransportError(
+            "CANDUMP_LIVE_BACKEND_REQUIRED",
+            "Candump mode requires a live CAN backend.",
+            "Set `CANARCHY_TRANSPORT_BACKEND=python-can` to use live candump capture.",
+        )
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         self._require_interface(interface)
@@ -131,6 +142,17 @@ class PythonCanBackend:
         finally:
             bus.shutdown()
         return frames
+
+    def capture_stream(self, interface: str) -> Iterator[CanFrame]:
+        bus = self._open_bus(interface)
+        try:
+            while True:
+                message = bus.recv(timeout=None)
+                if message is None:
+                    continue
+                yield self._decode_message(message, interface)
+        finally:
+            bus.shutdown()
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         bus = self._open_bus(interface)
@@ -266,6 +288,9 @@ class LocalTransport:
     def capture(self, interface: str) -> list[CanFrame]:
         return self.live_backend.capture(interface)
 
+    def capture_stream(self, interface: str) -> Iterator[CanFrame]:
+        return self.live_backend.capture_stream(interface)
+
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         return self.live_backend.send(interface, frame)
 
@@ -312,6 +337,12 @@ class LocalTransport:
         return serialize_events(
             [FrameEvent(frame=frame, source="transport.capture").to_event() for frame in frames]
         )
+
+    def capture_stream_events(self, interface: str) -> Iterator[dict[str, object]]:
+        for frame in self.capture_stream(interface):
+            yield serialize_events(
+                [FrameEvent(frame=frame, source="transport.capture").to_event()]
+            )[0]
 
     def send_events(self, interface: str, frame: CanFrame) -> list[dict[str, object]]:
         sent_frame = self.send(interface, frame)
@@ -406,6 +437,21 @@ class LocalTransport:
                 timestamp=0.2,
             ).to_event(),
         ]
+        return serialize_events(events)
+
+    def generate_events(self, interface: str, frames: list[CanFrame]) -> list[dict[str, object]]:
+        sent_frames = [self.send(interface, frame) for frame in frames]
+        events: list[object] = [
+            AlertEvent(
+                level="warning",
+                code="ACTIVE_TRANSMIT",
+                message="Active frame generation requested on the selected interface.",
+                source="transport.generate",
+            ).to_event(),
+        ]
+        events.extend(
+            FrameEvent(frame=f, source="transport.generate").to_event() for f in sent_frames
+        )
         return serialize_events(events)
 
     def _require_interface(self, interface: str) -> None:
@@ -566,3 +612,45 @@ def parse_candump_fd_line(match: re.Match[str], *, path: Path, line_number: int)
             f"Candump log line {line_number} in '{path}' is not a valid CAN FD frame.",
             "Check the frame identifier width, payload length, and CAN FD flags.",
         ) from exc
+
+
+def generate_frames(
+    interface: str,
+    *,
+    id_spec: str = "R",
+    dlc_spec: str = "R",
+    data_spec: str = "R",
+    count: int = 1,
+    gap_ms: float = 200.0,
+    extended: bool = False,
+) -> list[CanFrame]:
+    frames: list[CanFrame] = []
+    for i in range(count):
+        if id_spec.upper() == "R":
+            arb_id = random.randint(0, 0x1FFFFFFF if extended else 0x7FF)
+        else:
+            arb_id = int(id_spec, 16)
+        is_extended = extended or arb_id > 0x7FF
+
+        if dlc_spec.upper() == "R":
+            dlc = random.randint(0, 8)
+        else:
+            dlc = int(dlc_spec)
+
+        if data_spec.upper() == "R":
+            data = bytes(random.randint(0, 255) for _ in range(dlc))
+        elif data_spec.upper() == "I":
+            data = bytes((i * dlc + j) % 256 for j in range(dlc))
+        else:
+            data = bytes.fromhex(data_spec)
+
+        frames.append(
+            CanFrame(
+                arbitration_id=arb_id,
+                data=data,
+                interface=interface,
+                is_extended_id=is_extended,
+                timestamp=i * gap_ms / 1000.0,
+            )
+        )
+    return frames

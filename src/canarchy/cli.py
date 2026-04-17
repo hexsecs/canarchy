@@ -18,14 +18,14 @@ from canarchy.models import (
 )
 from canarchy.replay import build_replay_plan
 from canarchy.session import SessionError, SessionStore, build_session_context
-from canarchy.transport import LocalTransport, TransportError
+from canarchy.transport import LocalTransport, TransportError, generate_frames
 
 EXIT_OK = 0
 EXIT_USER_ERROR = 1
 EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
-TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats"}
+TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate"}
 DBC_COMMANDS = {"decode", "encode"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
@@ -142,6 +142,17 @@ def build_parser() -> CanarchyArgumentParser:
     send.add_argument("data")
     add_output_arguments(send)
     send.set_defaults(command="send")
+
+    generate = subparsers.add_parser("generate", help="generate CAN frames")
+    generate.add_argument("interface")
+    generate.add_argument("--id", default="R", help="frame ID as hex or R for random")
+    generate.add_argument("--dlc", default="R", help="data length 0-8 or R for random")
+    generate.add_argument("--data", default="R", help="payload hex, R for random, I for incrementing")
+    generate.add_argument("--count", type=int, default=1, help="number of frames to generate")
+    generate.add_argument("--gap", type=float, default=200.0, help="inter-frame gap in milliseconds")
+    generate.add_argument("--extended", action="store_true", help="force 29-bit extended IDs")
+    add_output_arguments(generate)
+    generate.set_defaults(command="generate")
 
     replay = subparsers.add_parser("replay", help="replay recorded traffic")
     replay.add_argument("file")
@@ -364,6 +375,86 @@ def validate_args(args: argparse.Namespace) -> None:
                 data={"data": args.data},
             )
 
+    if args.command == "generate":
+        if args.id.upper() != "R":
+            try:
+                int(args.id, 16)
+            except ValueError as exc:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_FRAME_ID",
+                            message="Frame ID must be a hex value such as 0x123 or R for random.",
+                            hint="Pass a standard or extended CAN identifier, or R.",
+                        )
+                    ],
+                    data={"id": args.id},
+                ) from exc
+
+        if args.dlc.upper() != "R":
+            try:
+                dlc = int(args.dlc)
+                if dlc < 0 or dlc > 8:
+                    raise ValueError
+            except ValueError as exc:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_DLC",
+                            message="DLC must be an integer between 0 and 8, or R for random.",
+                            hint="Use a value from 0 to 8, or R.",
+                        )
+                    ],
+                    data={"dlc": args.dlc},
+                ) from exc
+
+        if args.data.upper() not in {"R", "I"}:
+            if len(args.data) % 2 != 0:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_FRAME_DATA",
+                            message="Frame data must contain an even number of hex characters.",
+                            hint="Use pairs of hex digits such as 11223344, or R or I.",
+                        )
+                    ],
+                    data={"data": args.data},
+                )
+
+        if args.count < 1:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_COUNT",
+                        message="Frame count must be at least 1.",
+                        hint="Pass a positive integer to --count.",
+                    )
+                ],
+                data={"count": args.count},
+            )
+
+        if args.gap < 0:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_GAP",
+                        message="Inter-frame gap must be zero or greater.",
+                        hint="Pass a non-negative millisecond value to --gap.",
+                    )
+                ],
+                data={"gap": args.gap},
+            )
+
     if args.command in {"j1939 monitor", "j1939 pgn"} and getattr(args, "pgn", None) is not None:
         if args.pgn < 0 or args.pgn > 262143:
             raise CommandError(
@@ -524,6 +615,12 @@ def transport_payload(
         else "scaffold transport"
     )
     if args.command == "capture":
+        if args.candump and backend_metadata["transport_backend"] == "scaffold":
+            raise TransportError(
+                "CANDUMP_LIVE_BACKEND_REQUIRED",
+                "Candump mode requires a live CAN backend.",
+                "Set `CANARCHY_TRANSPORT_BACKEND=python-can` to use live candump capture.",
+            )
         return (
             {
                 "display": "candump" if args.candump else "structured",
@@ -549,6 +646,29 @@ def transport_payload(
             },
             transport.send_events(args.interface, frame),
             ["Active transmission is intentionally distinct from passive monitoring workflows."],
+        )
+    if args.command == "generate":
+        frames = generate_frames(
+            args.interface,
+            id_spec=args.id,
+            dlc_spec=args.dlc,
+            data_spec=args.data,
+            count=args.count,
+            gap_ms=args.gap,
+            extended=args.extended,
+        )
+        return (
+            {
+                "interface": args.interface,
+                "mode": "active",
+                "frame_count": len(frames),
+                "gap_ms": args.gap,
+                **backend_metadata,
+                "status": "implemented",
+                "implementation": implementation,
+            },
+            transport.generate_events(args.interface, frames),
+            ["Frame generation is an active transmission workflow; use intentionally on a controlled bus."],
         )
     if args.command == "filter":
         return (
@@ -901,6 +1021,24 @@ def format_candump_frame(frame: dict[str, Any]) -> str:
     return f"{frame_id}#{frame['data'].upper()}"
 
 
+def emit_live_candump(args: argparse.Namespace) -> int:
+    transport = LocalTransport()
+    try:
+        for event in transport.capture_stream_events(args.interface):
+            if event.get("event_type") != "frame":
+                continue
+            frame = event["payload"]["frame"]
+            interface = frame["interface"] or args.interface
+            timestamp = event.get("timestamp")
+            timestamp_text = (
+                f"({timestamp:0.6f})" if isinstance(timestamp, (int, float)) else "(0.000000)"
+            )
+            print(f"{timestamp_text} {interface} {format_candump_frame(frame)}")
+    except KeyboardInterrupt:
+        return EXIT_OK
+    return EXIT_OK
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     if output_format in {"json", "jsonl"}:
@@ -939,6 +1077,16 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "table" and result.ok and result.command in UDS_COMMANDS:
         for line in format_uds_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command == "generate":
+        print(f"command: {result.command}")
+        print(f"interface: {result.data.get('interface', 'unknown')}")
+        print(f"frames: {result.data.get('frame_count', 0)}")
+        for line in format_candump_lines(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
@@ -1002,6 +1150,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         validate_args(args)
         if args.command == "shell":
             return run_shell(args.shell_command)
+        if (
+            args.command == "capture"
+            and getattr(args, "candump", False)
+            and output_format in {"table", "raw"}
+        ):
+            return emit_live_candump(args)
         result = build_result(args)
         emit_result(result, output_format)
         return EXIT_OK
