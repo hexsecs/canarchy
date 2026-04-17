@@ -13,7 +13,7 @@ It combines:
 
 ### Why CANarchy?
 
-Most CAN tools force the wrong tradeoff: interactive but hard to automate, scriptable but too raw, or protocol-aware but inconsistent across interfaces.
+Most CAN tools force the wrong tradeoff: interactive but hard to automate, scriptable but too raw, protocol-aware but inconsistent across interfaces, or just poorly documented.
 
 CANarchy is built differently. The CLI is the contract. Structured output is a first-class feature. J1939 is treated as a primary workflow, not an afterthought. The same core engine should power CLI, REPL, and TUI so analysts, scripts, coding agents, and agent-driven development workflows can all rely on the same behavior.
 
