@@ -58,7 +58,7 @@ Examples:
 
 ### capture
 
-Capture traffic from a local interface through the default scaffold backend or the opt-in `python-can` live backend.
+Capture traffic from a local interface. Structured capture works with the default scaffold backend or the opt-in `python-can` live backend. `--candump` is a live-only mode.
 
 ```bash
 canarchy capture <interface> [--candump] [--json|--jsonl|--table|--raw]
@@ -68,13 +68,15 @@ Example:
 
 ```bash
 canarchy capture can0 --json
-canarchy capture can0 --candump
+CANARCHY_TRANSPORT_BACKEND=python-can CANARCHY_PYTHON_CAN_INTERFACE=virtual canarchy capture vcan0 --candump
 ```
 
 Notes:
 
-* `--candump` changes the human-readable output path to a `candump`-style line format such as `(0.100000) can0 18F00431#AABBCCDD`
-* `--candump` does not change structured `--json` or `--jsonl` output; those remain stable for automation
+* `--candump` is a live-only mode that requires `CANARCHY_TRANSPORT_BACKEND=python-can`
+* `--candump` keeps running and printing frames until interrupted
+* `--candump` changes the human-readable output path to a `candump`-style line format such as `(0.100000) vcan0 18F00431#AABBCCDD`
+* `--candump --json` and `--candump --jsonl` keep structured output for automation, but still require a live backend
 * default table output without `--candump` remains the generic key/value renderer
 
 Supported file input today:

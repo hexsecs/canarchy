@@ -16,25 +16,6 @@ Confirm the CLI is available:
 uv run canarchy --help
 ```
 
-## Quickest Candump View
-
-CANarchy can render a `candump`-style live view from its default scaffolded transport.
-
-Run:
-
-```bash
-uv run canarchy capture can0 --candump
-```
-
-Example output:
-
-```text
-(0.000000) can0 18FEEE31#11223344
-(0.100000) can0 18F00431#AABBCCDD
-```
-
-Use this when you want a quick human-readable view without setting up a live interface.
-
 ## Live Candump on a Virtual CAN Bus
 
 For a real local send-and-receive loop, use the `python-can` virtual backend.
@@ -46,6 +27,8 @@ CANARCHY_TRANSPORT_BACKEND=python-can \
 CANARCHY_PYTHON_CAN_INTERFACE=virtual \
 uv run canarchy capture vcan0 --candump
 ```
+
+This command stays open and keeps printing frames until you interrupt it with `Ctrl+C`.
 
 In another terminal, send a frame onto the same virtual channel:
 
@@ -69,7 +52,7 @@ If you want machine-readable output instead of a terminal-oriented dump view, us
 uv run canarchy capture can0 --json
 ```
 
-Use `--candump` for operator-friendly traffic watching. Use `--json` or `--jsonl` for scripting and automation.
+Use `--candump` for operator-friendly live traffic watching on a real backend. Use `--json` or `--jsonl` for scripting and automation.
 
 ## Read an Existing Candump File
 

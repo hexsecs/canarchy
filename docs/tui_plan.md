@@ -1,5 +1,7 @@
 # TUI Plan
 
+Current status: the `canarchy tui` command exists in the CLI tree as a placeholder, but there is no TUI runtime yet.
+
 ## Goal
 
 Define the initial TUI scope as a presentation layer over the existing CANarchy engine rather than as a separate application with its own business logic.
