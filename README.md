@@ -36,6 +36,37 @@ The project is centered on CAN security research, with strong support for heavy 
 * [Command spec](docs/command_spec.md)
 * [Architecture](docs/architecture.md)
 
+### Installation
+
+CANarchy currently targets Python 3.12 or newer and uses `uv` for environment and packaging workflows.
+
+1. Install Python 3.12 or newer.
+2. Install `uv`.
+3. Clone the repository.
+4. Sync the project environment and dependencies:
+
+```bash
+uv sync
+```
+
+5. Run the CLI:
+
+```bash
+uv run canarchy --help
+```
+
+If you want to verify the local environment end to end, run:
+
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+Notes:
+
+* `uv sync` creates the local virtual environment and installs the package from the current checkout.
+* The checked-in `uv.lock` file should be used for reproducible dependency resolution.
+* Transport-oriented commands may require platform-specific CAN interface setup beyond the Python environment.
+
 ### Development
 
 ```bash
