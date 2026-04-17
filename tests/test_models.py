@@ -10,6 +10,7 @@ from canarchy.models import (
     J1939ObservationEvent,
     ReplayActionEvent,
     SignalValueEvent,
+    UdsTransactionEvent,
     serialize_events,
 )
 
@@ -85,3 +86,20 @@ class EventTests(unittest.TestCase):
         self.assertEqual(payloads[0]["payload"]["rate"], 1.0)
         self.assertEqual(payloads[1]["event_type"], "alert")
         self.assertEqual(payloads[1]["payload"]["code"], "TEST")
+
+    def test_uds_transaction_event_serializes(self) -> None:
+        event = UdsTransactionEvent(
+            request_id=0x7E0,
+            response_id=0x7E8,
+            service=0x10,
+            service_name="DiagnosticSessionControl",
+            request_data=bytes.fromhex("1003"),
+            response_data=bytes.fromhex("5003003201F4"),
+            ecu_address=0x7E8,
+            timestamp=0.0,
+        ).to_event()
+
+        payload = event.to_payload()
+        self.assertEqual(payload["event_type"], "uds_transaction")
+        self.assertEqual(payload["payload"]["service_name"], "DiagnosticSessionControl")
+        self.assertEqual(payload["payload"]["request_data"], "1003")

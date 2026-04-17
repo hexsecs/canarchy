@@ -26,6 +26,7 @@ EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats"}
 DBC_COMMANDS = {"decode", "encode"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn"}
+UDS_COMMANDS = {"uds scan", "uds trace"}
 
 
 class CliUsageError(Exception):
@@ -568,6 +569,33 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
 
+def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    transport = LocalTransport()
+    if args.command == "uds scan":
+        events = transport.uds_scan_events(args.interface)
+        return (
+            {
+                "interface": args.interface,
+                "mode": "active",
+                "responder_count": len(events),
+            },
+            events,
+            ["UDS scanning is active and should be used intentionally on a controlled bus."],
+        )
+    if args.command == "uds trace":
+        events = transport.uds_trace_events(args.interface)
+        return (
+            {
+                "interface": args.interface,
+                "mode": "passive",
+                "transaction_count": len(events),
+            },
+            events,
+            [],
+        )
+    raise AssertionError(f"unsupported uds command: {args.command}")
+
+
 def replay_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -596,6 +624,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
         return events
     if args.command in J1939_COMMANDS:
         _, events, _ = j1939_payload(args)
+        return events
+    if args.command in UDS_COMMANDS:
+        _, events, _ = uds_payload(args)
         return events
     if args.command == "replay":
         _, events, _ = replay_payload(args)
@@ -637,6 +668,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(decode_data)
         data["events"] = decode_events
         warnings.extend(decode_warnings)
+    elif args.command in UDS_COMMANDS:
+        uds_data, uds_events, uds_warnings = uds_payload(args)
+        data.update(uds_data)
+        data["events"] = uds_events
+        warnings.extend(uds_warnings)
     elif args.command in J1939_COMMANDS:
         protocol_data, protocol_events, protocol_warnings = j1939_payload(args)
         data.update(protocol_data)

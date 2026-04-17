@@ -10,6 +10,7 @@ from canarchy.models import (
     CanFrame,
     FrameEvent,
     J1939ObservationEvent,
+    UdsTransactionEvent,
     serialize_events,
 )
 
@@ -121,6 +122,62 @@ class LocalTransport:
                 for event in self._j1939_events(frames, pgn=pgn, source="transport.j1939.decode")
             ]
         )
+
+    def uds_scan_events(self, interface: str) -> list[dict[str, object]]:
+        self._require_interface(interface)
+        events = [
+            UdsTransactionEvent(
+                request_id=0x7DF,
+                response_id=0x7E8,
+                service=0x10,
+                service_name="DiagnosticSessionControl",
+                request_data=bytes.fromhex("1001"),
+                response_data=bytes.fromhex("5001003201F4"),
+                ecu_address=0x7E8,
+                source="transport.uds.scan",
+                timestamp=0.0,
+            ).to_event(),
+            UdsTransactionEvent(
+                request_id=0x7DF,
+                response_id=0x7E9,
+                service=0x22,
+                service_name="ReadDataByIdentifier",
+                request_data=bytes.fromhex("22F190"),
+                response_data=bytes.fromhex("62F19056494E313233"),
+                ecu_address=0x7E9,
+                source="transport.uds.scan",
+                timestamp=0.1,
+            ).to_event(),
+        ]
+        return serialize_events(events)
+
+    def uds_trace_events(self, interface: str) -> list[dict[str, object]]:
+        self._require_interface(interface)
+        events = [
+            UdsTransactionEvent(
+                request_id=0x7E0,
+                response_id=0x7E8,
+                service=0x10,
+                service_name="DiagnosticSessionControl",
+                request_data=bytes.fromhex("1003"),
+                response_data=bytes.fromhex("5003003201F4"),
+                ecu_address=0x7E8,
+                source="transport.uds.trace",
+                timestamp=0.0,
+            ).to_event(),
+            UdsTransactionEvent(
+                request_id=0x7E0,
+                response_id=0x7E8,
+                service=0x27,
+                service_name="SecurityAccess",
+                request_data=bytes.fromhex("2701"),
+                response_data=bytes.fromhex("670112345678"),
+                ecu_address=0x7E8,
+                source="transport.uds.trace",
+                timestamp=0.2,
+            ).to_event(),
+        ]
+        return serialize_events(events)
 
     def _require_interface(self, interface: str) -> None:
         if interface.lower() in {"offline0", "down0", "missing0"}:

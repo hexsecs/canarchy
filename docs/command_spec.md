@@ -10,6 +10,7 @@ Implemented and verified in the current codebase:
 * deterministic `replay`
 * DBC-backed `decode` and `encode`
 * J1939 `monitor`, `decode`, and `pgn`
+* UDS `scan` and `trace`
 * structured JSON and JSONL output
 * explicit error schema and exit codes
 
@@ -164,6 +165,22 @@ Inspect events for a specific PGN from the current scaffolded capture source.
 canarchy j1939 pgn <id> [--json|--jsonl|--table|--raw]
 ```
 
+### uds scan
+
+Scan for UDS responders through the transport scaffold.
+
+```bash
+canarchy uds scan <interface> [--json|--jsonl|--table|--raw]
+```
+
+### uds trace
+
+Emit structured request and response transactions for a UDS session trace.
+
+```bash
+canarchy uds trace <interface> [--json|--jsonl|--table|--raw]
+```
+
 ---
 
 ## Output Modes
@@ -231,6 +248,7 @@ Implemented commands currently emit these event types:
 * `decoded_message`
 * `signal`
 * `j1939_pgn`
+* `uds_transaction`
 * `replay_event`
 * `alert`
 
@@ -299,6 +317,18 @@ canarchy decode capture.log --dbc tests/fixtures/sample.dbc --json
 canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 OilTemp=65 Load=40 LampState=1 --json
 ```
 
+### UDS Scan
+
+```bash
+canarchy uds scan can0 --json
+```
+
+### UDS Trace
+
+```bash
+canarchy uds trace can0 --json
+```
+
 ---
 
 ## Current Gaps
@@ -308,7 +338,7 @@ These commands are present in the CLI tree but still scaffolded or not yet imple
 * `export`
 * `session save|load|show`
 * `j1939 spn|tp|dm1`
-* `uds scan|trace|services`
+* `uds services`
 * `re signals|counters|entropy|correlate`
 * `fuzz replay|mutate|id`
 * `shell`

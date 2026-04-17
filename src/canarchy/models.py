@@ -11,6 +11,7 @@ EventType = Literal[
     "decoded_message",
     "signal",
     "j1939_pgn",
+    "uds_transaction",
     "replay_event",
     "alert",
 ]
@@ -220,6 +221,35 @@ class ReplayActionEvent:
             timestamp=self.timestamp
             if self.timestamp is not None
             else (self.frame.timestamp if self.frame else None),
+        )
+
+
+@dataclass(slots=True, frozen=True)
+class UdsTransactionEvent:
+    request_id: int
+    response_id: int
+    service: int
+    service_name: str
+    request_data: bytes = field(repr=False)
+    response_data: bytes = field(repr=False)
+    ecu_address: int | None = None
+    source: str = "uds"
+    timestamp: float | None = None
+
+    def to_event(self) -> Event:
+        return Event(
+            event_type="uds_transaction",
+            source=self.source,
+            payload={
+                "ecu_address": self.ecu_address,
+                "request_data": self.request_data.hex(),
+                "request_id": self.request_id,
+                "response_data": self.response_data.hex(),
+                "response_id": self.response_id,
+                "service": self.service,
+                "service_name": self.service_name,
+            },
+            timestamp=self.timestamp,
         )
 
 

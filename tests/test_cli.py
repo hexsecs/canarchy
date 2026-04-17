@@ -137,6 +137,43 @@ class CliTests(unittest.TestCase):
         self.assertIn("pgn=61444", stdout)
         self.assertIn("sa=0x31", stdout)
 
+    def test_uds_scan_returns_transaction_events(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["responder_count"], 2)
+        self.assertEqual(payload["data"]["events"][0]["event_type"], "uds_transaction")
+        self.assertEqual(
+            payload["data"]["events"][0]["payload"]["service_name"], "DiagnosticSessionControl"
+        )
+        self.assertEqual(
+            payload["warnings"][1],
+            "UDS scanning is active and should be used intentionally on a controlled bus.",
+        )
+
+    def test_uds_trace_returns_transaction_events(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["transaction_count"], 2)
+        self.assertEqual(payload["data"]["events"][1]["payload"]["service"], 0x27)
+        self.assertEqual(payload["data"]["events"][1]["payload"]["service_name"], "SecurityAccess")
+
+    def test_uds_transport_error_returns_backend_exit_code(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "scan", "offline0", "--json")
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
+
     def test_usage_error_respects_json_output(self) -> None:
         exit_code, stdout, stderr = run_cli("decode", "capture.log", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)
