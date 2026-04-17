@@ -45,6 +45,7 @@ nav:
       - Getting Started: getting_started.md
       - Project Overview: overview.md
       - Command Spec: command_spec.md
+      - "Demo: Generate and Capture": demo_generate_and_capture.md
   - Developers:
       - Architecture: architecture.md
       - Docs Workflow: docs_site.md
