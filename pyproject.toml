@@ -9,7 +9,7 @@ authors = [
   { name = "hexsecs" },
 ]
 dependencies = [
-    "cantools>=41.3.0",
+    "canmatrix>=1.2",
 ]
 
 [project.scripts]
