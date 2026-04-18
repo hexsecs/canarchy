@@ -1344,7 +1344,27 @@ def emit_live_gateway(args: argparse.Namespace) -> int:
 
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
-    if output_format in {"json", "jsonl"}:
+    if output_format == "json":
+        print(json.dumps(payload, sort_keys=True))
+        return
+
+    if output_format == "jsonl":
+        events = payload.get("data", {}).get("events")
+        if result.ok and isinstance(events, list) and events:
+            for event in events:
+                print(json.dumps(event, sort_keys=True))
+            for warning in payload["warnings"]:
+                print(
+                    json.dumps(
+                        AlertEvent(
+                            level="warning",
+                            message=warning,
+                            source=f"cli.{result.command}",
+                        ).to_event().to_payload(),
+                        sort_keys=True,
+                    )
+                )
+            return
         print(json.dumps(payload, sort_keys=True))
         return
 

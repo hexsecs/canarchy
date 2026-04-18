@@ -125,7 +125,7 @@ Each DTC includes:
 
 ## Output Contracts
 
-JSON and JSONL use standard CANarchy result envelopes with protocol-relevant fields under `data`. Table output remains protocol-first and summarizes SPN observations, TP sessions, and DM1 fault content without dropping to raw-ID-only views.
+For the current `j1939 spn`, `j1939 tp`, and `j1939 dm1` commands, both `--json` and `--jsonl` emit a single CANarchy result object because these commands currently return structured observations under `data` rather than event streams. Table output remains protocol-first and summarizes SPN observations, TP sessions, and DM1 fault content without dropping to raw-ID-only views.
 
 ## Error Contracts
 

@@ -111,7 +111,7 @@ gateway: src=can0 dst=239.0.0.1
 
 ### JSON and JSONL
 
-Standard CANarchy command envelopes are returned. Forwarded frame events use `source` values `gateway.src->dst` and `gateway.dst->src`.
+`--json` returns the standard CANarchy command envelope. `--jsonl` emits one forwarded frame event per line. Forwarded frame events use `source` values `gateway.src->dst` and `gateway.dst->src`.
 
 ## Error Contracts
 

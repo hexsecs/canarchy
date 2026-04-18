@@ -160,7 +160,7 @@ Notes:
 * `gateway` requires `CANARCHY_TRANSPORT_BACKEND=python-can`
 * `--src-backend` and `--dst-backend` default to `CANARCHY_PYTHON_CAN_INTERFACE`
 * default table and raw output use candump-style forwarded frame lines with direction labels such as `[src->dst]`
-* JSON and JSONL output return standard command envelopes whose frame event `source` fields are `gateway.src->dst` or `gateway.dst->src`
+* `--json` returns a standard command envelope; `--jsonl` emits one forwarded event per line for `gateway`
 
 ### export
 
@@ -382,7 +382,10 @@ All commands support:
 Current behavior:
 
 * `--json` emits one structured JSON object
-* `--jsonl` emits one structured JSON object per line
+* `--jsonl` emits one JSON object per line
+* event-producing commands emit each event as its own JSON line; command warnings that are not already events are emitted as `alert` event lines
+* event-less successful commands emit a single result object line
+* failed commands emit a single error result object line
 * `--table` emits a human-readable summary view, with protocol-aware pretty-printing for J1939 monitor and decode workflows
 * `--raw` emits the command name on success or the primary error message on failure
 
@@ -397,7 +400,7 @@ J1939 `--table` output includes:
 
 ### JSON Result Shape
 
-Successful JSON and JSONL output uses this shape:
+Successful `--json` output uses this shape:
 
 ```json
 {
@@ -409,7 +412,7 @@ Successful JSON and JSONL output uses this shape:
 }
 ```
 
-Error JSON and JSONL output uses this shape:
+Error `--json` output and event-less/error `--jsonl` output use this shape:
 
 ```json
 {

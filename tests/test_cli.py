@@ -838,13 +838,46 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
 
-    def test_jsonl_output_is_single_json_line(self) -> None:
+    def test_jsonl_output_emits_one_event_per_line_for_event_commands(self) -> None:
         exit_code, stdout, _ = run_cli("capture", "can0", "--jsonl")
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(len(stdout.strip().splitlines()), 1)
+        lines = stdout.strip().splitlines()
+        self.assertEqual(len(lines), 2)
 
-        payload = json.loads(stdout)
-        self.assertEqual(payload["command"], "capture")
+        first_event = json.loads(lines[0])
+        second_event = json.loads(lines[1])
+        self.assertEqual(first_event["event_type"], "frame")
+        self.assertEqual(second_event["event_type"], "frame")
+
+    def test_jsonl_output_emits_warning_alert_lines_for_event_commands(self) -> None:
+        exit_code, stdout, _ = run_cli("uds", "scan", "can0", "--jsonl")
+        self.assertEqual(exit_code, EXIT_OK)
+
+        lines = stdout.strip().splitlines()
+        self.assertEqual(len(lines), 3)
+        warning_event = json.loads(lines[-1])
+        self.assertEqual(warning_event["event_type"], "alert")
+        self.assertEqual(warning_event["payload"]["level"], "warning")
+        self.assertIn("UDS scanning is active", warning_event["payload"]["message"])
+
+    def test_jsonl_output_falls_back_to_result_line_for_eventless_commands(self) -> None:
+        exit_code, stdout, _ = run_cli("uds", "services", "--jsonl")
+        self.assertEqual(exit_code, EXIT_OK)
+        lines = stdout.strip().splitlines()
+        self.assertEqual(len(lines), 1)
+
+        payload = json.loads(lines[0])
+        self.assertEqual(payload["command"], "uds services")
+        self.assertIn("services", payload["data"])
+
+    def test_jsonl_error_output_is_single_result_line(self) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "pgn", "300000", "--jsonl")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        lines = stdout.strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        payload = json.loads(lines[0])
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_PGN")
 
     def test_raw_error_output_is_message_only(self) -> None:
         exit_code, stdout, _ = run_cli("j1939", "pgn", "300000", "--raw")

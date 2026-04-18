@@ -81,7 +81,7 @@ Each generated frame produces a `FrameEvent` with `source="transport.generate"`.
 
 ### JSON and JSONL
 
-Standard CANarchy envelope:
+`--json` returns the standard CANarchy envelope:
 
 ```json
 {
@@ -99,6 +99,8 @@ Standard CANarchy envelope:
   "errors": []
 }
 ```
+
+`--jsonl` emits the generated event stream one event per line. Because `generate` already includes the active-transmit `AlertEvent` in its event stream, the warning is preserved in JSONL form without an additional wrapper envelope.
 
 ### Table
 

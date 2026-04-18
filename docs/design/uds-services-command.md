@@ -60,7 +60,7 @@ Each catalog entry includes:
 
 ### JSON and JSONL
 
-The command returns the standard CANarchy envelope with `service_count` and `services` under `data`.
+Because `uds services` is reference-only and does not emit an event stream, both `--json` and `--jsonl` return a single CANarchy result object with `service_count` and `services` under `data`.
 
 ### Table
 
