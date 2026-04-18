@@ -560,8 +560,9 @@ class LocalTransport:
         ]
         return serialize_events(events)
 
-    def generate_events(self, interface: str, frames: list[CanFrame]) -> list[dict[str, object]]:
-        sent_frames = [self.send(interface, frame) for frame in frames]
+    def generate_events(
+        self, interface: str, frames: list[CanFrame], *, gap_ms: float = 0.0
+    ) -> list[dict[str, object]]:
         events: list[object] = [
             AlertEvent(
                 level="warning",
@@ -570,9 +571,11 @@ class LocalTransport:
                 source="transport.generate",
             ).to_event(),
         ]
-        events.extend(
-            FrameEvent(frame=f, source="transport.generate").to_event() for f in sent_frames
-        )
+        for i, frame in enumerate(frames):
+            if i > 0 and gap_ms > 0:
+                time.sleep(gap_ms / 1000.0)
+            sent_frame = self.send(interface, frame)
+            events.append(FrameEvent(frame=sent_frame, source="transport.generate").to_event())
         return serialize_events(events)
 
     def _gateway_unidirectional_stream(

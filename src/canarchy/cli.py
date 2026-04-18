@@ -728,7 +728,7 @@ def transport_payload(
                 "status": "implemented",
                 "implementation": implementation,
             },
-            transport.generate_events(args.interface, frames),
+            transport.generate_events(args.interface, frames, gap_ms=args.gap),
             ["Frame generation is an active transmission workflow; use intentionally on a controlled bus."],
         )
     if args.command == "filter":
