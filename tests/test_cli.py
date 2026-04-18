@@ -1766,5 +1766,117 @@ class CompletionTests(unittest.TestCase):
             completion_mod.readline = original
 
 
+class ConfigShowTests(unittest.TestCase):
+    """Tests for `canarchy config show`."""
+
+    def test_config_show_defaults_json(self) -> None:
+        """All-default config returns scaffold backend with source=default for every field."""
+        with (
+            patch("canarchy.transport._load_user_config", return_value={}),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            exit_code, stdout, _ = run_cli("config", "show", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["backend"], "scaffold")
+        self.assertEqual(payload["data"]["interface"], "virtual")
+        self.assertEqual(payload["data"]["capture_limit"], 2)
+        sources = payload["data"]["sources"]
+        self.assertEqual(sources["backend"], "default")
+        self.assertEqual(sources["interface"], "default")
+        self.assertEqual(sources["capture_limit"], "default")
+        self.assertEqual(sources["capture_timeout"], "default")
+
+    def test_config_show_file_config_overrides_default(self) -> None:
+        """Values set in the config file appear with source=file."""
+        file_cfg = {
+            "CANARCHY_TRANSPORT_BACKEND": "python-can",
+            "CANARCHY_PYTHON_CAN_INTERFACE": "udp_multicast",
+        }
+        with (
+            patch("canarchy.transport._load_user_config", return_value=file_cfg),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            exit_code, stdout, _ = run_cli("config", "show", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["backend"], "python-can")
+        self.assertEqual(payload["data"]["interface"], "udp_multicast")
+        sources = payload["data"]["sources"]
+        self.assertEqual(sources["backend"], "file")
+        self.assertEqual(sources["interface"], "file")
+        # capture_limit and capture_timeout not in file_config → default
+        self.assertEqual(sources["capture_limit"], "default")
+        self.assertEqual(sources["capture_timeout"], "default")
+
+    def test_config_show_env_var_overrides_file(self) -> None:
+        """Environment variables take precedence over the config file."""
+        file_cfg = {
+            "CANARCHY_TRANSPORT_BACKEND": "python-can",
+            "CANARCHY_PYTHON_CAN_INTERFACE": "udp_multicast",
+        }
+        env_override = {"CANARCHY_TRANSPORT_BACKEND": "scaffold"}
+        with (
+            patch("canarchy.transport._load_user_config", return_value=file_cfg),
+            patch.dict(os.environ, env_override, clear=False),
+        ):
+            # Remove the key first so patch.dict controls it cleanly
+            os.environ.pop("CANARCHY_PYTHON_CAN_INTERFACE", None)
+            exit_code, stdout, _ = run_cli("config", "show", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        # env var wins for backend
+        self.assertEqual(payload["data"]["backend"], "scaffold")
+        sources = payload["data"]["sources"]
+        self.assertEqual(sources["backend"], "env")
+        # interface came from file
+        self.assertEqual(sources["interface"], "file")
+
+    def test_config_show_table_output(self) -> None:
+        """Table output includes backend, interface, and config-file path."""
+        with (
+            patch("canarchy.transport._load_user_config", return_value={}),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            exit_code, stdout, _ = run_cli("config", "show", "--table")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("backend: scaffold", stdout)
+        self.assertIn("interface: virtual", stdout)
+        self.assertIn("config file:", stdout)
+
+    def test_config_show_config_file_found_false_when_missing(self) -> None:
+        """config_file_found is False when the config file does not exist."""
+        with (
+            patch("canarchy.transport._load_user_config", return_value={}),
+            patch("canarchy.transport.Path.home", return_value=Path("/nonexistent/home")),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            exit_code, stdout, _ = run_cli("config", "show", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["data"]["config_file_found"])
+        self.assertIn("config_file", payload["data"])
+
+    def test_config_show_capture_limit_from_file(self) -> None:
+        """capture_limit set in file config shows source=file."""
+        file_cfg = {
+            "CANARCHY_CAPTURE_LIMIT": "10",
+            "CANARCHY_CAPTURE_TIMEOUT": "0.5",
+        }
+        with (
+            patch("canarchy.transport._load_user_config", return_value=file_cfg),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            exit_code, stdout, _ = run_cli("config", "show", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["capture_limit"], 10)
+        self.assertAlmostEqual(payload["data"]["capture_timeout"], 0.5)
+        sources = payload["data"]["sources"]
+        self.assertEqual(sources["capture_limit"], "file")
+        self.assertEqual(sources["capture_timeout"], "file")
+
+
 if __name__ == "__main__":
     unittest.main()

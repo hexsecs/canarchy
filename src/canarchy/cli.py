@@ -20,7 +20,7 @@ from canarchy.models import (
 )
 from canarchy.replay import build_replay_plan
 from canarchy.session import SessionError, SessionStore, build_session_context
-from canarchy.transport import LocalTransport, TransportError, generate_frames
+from canarchy.transport import LocalTransport, TransportError, config_show_payload, generate_frames
 from canarchy.tui import run_tui
 from canarchy.uds import uds_services_payload
 
@@ -34,7 +34,8 @@ DBC_COMMANDS = {"decode", "encode"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
-IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | {"replay", "gateway", "shell", "export"}
+CONFIG_COMMANDS = {"config show"}
+IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | {"replay", "gateway", "shell", "export"}
 
 
 class CliUsageError(Exception):
@@ -317,6 +318,12 @@ def build_parser() -> CanarchyArgumentParser:
     fuzz_id.add_argument("interface")
     add_output_arguments(fuzz_id)
     fuzz_id.set_defaults(command="fuzz id")
+
+    config = subparsers.add_parser("config", help="inspect CANarchy configuration")
+    config_subparsers = config.add_subparsers(dest="config_action", required=True)
+    config_show = config_subparsers.add_parser("show", help="show effective transport configuration")
+    add_output_arguments(config_show)
+    config_show.set_defaults(command="config show")
 
     shell = subparsers.add_parser("shell", help="start the interactive shell")
     shell.add_argument("--command", dest="shell_command", help="run a single shell command")
@@ -1093,6 +1100,8 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(protocol_data)
         data["events"] = protocol_events
         warnings.extend(protocol_warnings)
+    elif args.command in CONFIG_COMMANDS:
+        data.update(config_show_payload())
     else:
         data["events"] = build_events(args)
     if args.command not in IMPLEMENTED_COMMANDS:
@@ -1422,6 +1431,20 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         print(f"frames: {result.data.get('frame_count', 0)}")
         for line in format_candump_lines(result):
             print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command == "config show":
+        sources = result.data.get("sources", {})
+        print("Effective transport configuration:")
+        for field in ("backend", "interface", "capture_limit", "capture_timeout"):
+            src = sources.get(field, "?")
+            print(f"  {field}: {result.data.get(field)}  [{src}]")
+        config_file = result.data.get("config_file", "")
+        found = result.data.get("config_file_found", False)
+        status = "found" if found else "not found"
+        print(f"config file: {config_file}  [{status}]")
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return

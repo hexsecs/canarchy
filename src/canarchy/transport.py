@@ -286,6 +286,47 @@ def transport_backend_config() -> TransportBackendConfig:
     )
 
 
+def config_show_payload() -> dict[str, object]:
+    """Return a structured dict describing the effective transport configuration.
+
+    Each value is annotated with its *source*: ``"env"`` (environment variable),
+    ``"file"`` (``~/.canarchy/config.toml``), or ``"default"`` (built-in default).
+    """
+    config_path = Path.home() / ".canarchy" / "config.toml"
+    file_config = _load_user_config()
+
+    env_key_map = {
+        "backend": ("CANARCHY_TRANSPORT_BACKEND", "scaffold"),
+        "interface": ("CANARCHY_PYTHON_CAN_INTERFACE", "virtual"),
+        "capture_limit": ("CANARCHY_CAPTURE_LIMIT", "2"),
+        "capture_timeout": ("CANARCHY_CAPTURE_TIMEOUT", "0.05"),
+    }
+
+    config = transport_backend_config()
+    effective = {
+        "backend": config.backend,
+        "interface": config.python_can_interface,
+        "capture_limit": config.capture_limit,
+        "capture_timeout": config.capture_timeout,
+    }
+
+    sources: dict[str, str] = {}
+    for field_name, (env_key, _default) in env_key_map.items():
+        if os.environ.get(env_key):
+            sources[field_name] = "env"
+        elif env_key in file_config:
+            sources[field_name] = "file"
+        else:
+            sources[field_name] = "default"
+
+    return {
+        **effective,
+        "sources": sources,
+        "config_file": str(config_path),
+        "config_file_found": config_path.exists(),
+    }
+
+
 def build_live_backend(config: TransportBackendConfig | None = None) -> LiveCanBackend:
     config = config or transport_backend_config()
     if config.backend == "scaffold":

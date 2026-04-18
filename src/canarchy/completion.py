@@ -22,6 +22,7 @@ except ImportError:  # pragma: no cover — Windows without pyreadline
 # inside an interactive session anyway.
 TOP_LEVEL_COMMANDS: list[str] = [
     "capture",
+    "config",
     "decode",
     "encode",
     "export",
@@ -42,6 +43,7 @@ TOP_LEVEL_COMMANDS: list[str] = [
 
 # Group commands whose second token is a subcommand.
 SUBCOMMANDS: dict[str, list[str]] = {
+    "config": ["show"],
     "session": ["load", "save", "show"],
     "j1939": ["decode", "dm1", "monitor", "pgn", "spn", "tp"],
     "uds": ["scan", "services", "trace"],
@@ -56,6 +58,7 @@ _OUTPUT = ["--json", "--jsonl", "--raw", "--table"]
 # Keys for subcommand groups use the "group subcommand" form.
 FLAGS: dict[str, list[str]] = {
     "capture": ["--candump"] + _OUTPUT,
+    "config show": _OUTPUT,
     "decode": ["--dbc"] + _OUTPUT,
     "encode": ["--dbc"] + _OUTPUT,
     "export": _OUTPUT,
