@@ -95,11 +95,7 @@ class ScaffoldCanBackend:
 
     def capture_stream(self, interface: str) -> Iterator[CanFrame]:
         self._require_interface(interface)
-        raise TransportError(
-            "CANDUMP_LIVE_BACKEND_REQUIRED",
-            "Candump mode requires a live CAN backend.",
-            "Set `CANARCHY_TRANSPORT_BACKEND=python-can` to use live candump capture.",
-        )
+        yield from (frame.with_interface(interface) for frame in recorded_frames()[:2])
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         self._require_interface(interface)

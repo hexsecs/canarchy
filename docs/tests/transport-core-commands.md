@@ -14,9 +14,9 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 
 ## Coverage Requirements
 
-* capture JSON structure on scaffold backend
+* capture streaming output across JSON, JSONL, and candump-style formats
 * send active mode and warning behavior
-* candump live-backend requirement and live JSON/candump paths
+* scaffold and live backend capture streaming paths
 * filter matching behavior
 * stats summary behavior
 * structured transport/file errors
@@ -29,34 +29,34 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 | `REQ-TRANSPORT-02` | `TEST-TRANSPORT-02` |
 | `REQ-TRANSPORT-03` | `TEST-TRANSPORT-05`, `TEST-TRANSPORT-06` |
 | `REQ-TRANSPORT-04` | `TEST-TRANSPORT-01`, `TEST-TRANSPORT-04` |
-| `REQ-TRANSPORT-05` | `TEST-TRANSPORT-03`, `TEST-TRANSPORT-08`, `TEST-TRANSPORT-09` |
+| `REQ-TRANSPORT-05` | `TEST-TRANSPORT-01`, `TEST-TRANSPORT-03`, `TEST-TRANSPORT-04`, `TEST-TRANSPORT-08`, `TEST-TRANSPORT-09` |
 | `REQ-TRANSPORT-06` | `TEST-TRANSPORT-02` |
 | `REQ-TRANSPORT-07` | `TEST-TRANSPORT-05` |
 | `REQ-TRANSPORT-08` | `TEST-TRANSPORT-06` |
-| `REQ-TRANSPORT-09` | `TEST-TRANSPORT-03`, `TEST-TRANSPORT-07`, `TEST-TRANSPORT-10`, `TEST-TRANSPORT-11`, `TEST-TRANSPORT-12` |
+| `REQ-TRANSPORT-09` | `TEST-TRANSPORT-07`, `TEST-TRANSPORT-10`, `TEST-TRANSPORT-11`, `TEST-TRANSPORT-12` |
 
 ## Representative Test Cases
 
-### `TEST-TRANSPORT-01` Capture scaffold JSON output
+### `TEST-TRANSPORT-01` Capture scaffold JSON streaming output
 
 Action: run `canarchy capture can0 --json`.  
-Assert: output includes passive mode, scaffold backend metadata, and serialized frame events.
+Assert: output emits one serialized frame event per line from the streaming path.
 
 ### `TEST-TRANSPORT-02` Send active JSON output
 
 Action: run `canarchy send can0 0x123 11223344 --json`.  
 Assert: output includes active mode, scaffold metadata, serialized events, and the active-transmit warning.
 
-### `TEST-TRANSPORT-03` Candump requires live backend
+### `TEST-TRANSPORT-03` Candump-style scaffold streaming
 
-Action: run `canarchy capture can0 --candump --json` without enabling `python-can`.  
-Assert: exit code `2` and `errors[0].code == "CANDUMP_LIVE_BACKEND_REQUIRED"`.
+Action: run `canarchy capture can0 --candump` without enabling `python-can`.  
+Assert: fixture frames are emitted as candump-style lines.
 
-### `TEST-TRANSPORT-04` Capture uses live backend when requested
+### `TEST-TRANSPORT-04` Capture JSONL uses live backend when requested
 
 Setup: patch the `python-can` open path.  
-Action: run `capture` against the live backend.  
-Assert: output reflects `python-can` metadata and emitted frame events.
+Action: run `capture --jsonl` against the live backend.  
+Assert: output emits one serialized frame event per line from the streaming path.
 
 ### `TEST-TRANSPORT-05` Filter returns matching frames
 
@@ -105,6 +105,7 @@ Assert: exit code `2` and `errors[0].code == "CAPTURE_FORMAT_UNSUPPORTED"`.
 * `tests/fixtures/sample.candump`
 * `tests/fixtures/invalid.candump`
 * mocked `python-can` buses for live-path coverage
+* scaffold backend fixture frames for stream-path coverage
 
 ## Explicit Non-Coverage
 

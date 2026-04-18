@@ -24,7 +24,7 @@ Operators need a stable base command set that supports passive live observation,
 | `REQ-TRANSPORT-02` | The system shall provide a `send` command for intentional active transmit. |
 | `REQ-TRANSPORT-03` | The system shall provide `filter` and `stats` commands for file-backed capture analysis. |
 | `REQ-TRANSPORT-04` | `capture` and `send` shall use the deterministic scaffold backend by default and expose live backend metadata when `python-can` is selected. |
-| `REQ-TRANSPORT-05` | `capture --candump` shall require a live backend and present candump-style output. |
+| `REQ-TRANSPORT-05` | `capture` shall stream frames through the live capture path for every output format. |
 | `REQ-TRANSPORT-06` | `send` shall emit an active-transmit warning distinct from passive workflows. |
 | `REQ-TRANSPORT-07` | `filter` shall emit matching frame events from file-backed captures. |
 | `REQ-TRANSPORT-08` | `stats` shall return deterministic file-backed summary fields such as total frame count and unique arbitration ID count. |
@@ -50,7 +50,7 @@ In scope:
 
 Out of scope:
 
-* deep live capture subscriptions beyond the current backend path
+* deep live capture subscriptions beyond the current streaming backend path
 * arbitrary expression language expansion beyond the supported filter syntax
 * transport-specific vendor tooling or hardware setup guidance
 
@@ -71,7 +71,7 @@ Relevant shared fields include:
 
 ### JSON
 
-Returns the standard CANarchy command envelope with events or summary fields under `data`.
+Live `capture` emits one serialized event per line, matching JSONL semantics. Other transport commands return the standard CANarchy command envelope with events or summary fields under `data`.
 
 ### JSONL
 
@@ -79,13 +79,12 @@ Event-producing commands emit one event per line. Event-less success and error p
 
 ### Table and raw
 
-`capture --candump` uses candump-style rendering. Other commands use the standard table or raw command-result paths.
+`capture` uses candump-style rendering for table, raw, and `--candump`. Other commands use the standard table or raw command-result paths.
 
 ## Error Contracts
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|
-| `CANDUMP_LIVE_BACKEND_REQUIRED` | `capture --candump` is used without a live backend | 2 |
 | `TRANSPORT_UNAVAILABLE` | interface or backend open/send fails | 2 |
 | `FILTER_EXPRESSION_UNSUPPORTED` | `filter` receives an unsupported expression | 2 |
 | `CAPTURE_SOURCE_INVALID` | capture file cannot be parsed | 2 |

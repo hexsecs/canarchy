@@ -1308,22 +1308,49 @@ def format_candump_frame(frame: dict[str, Any]) -> str:
     return f"{frame_id}#{frame['data'].upper()}"
 
 
-def emit_live_candump(args: argparse.Namespace) -> int:
+def emit_live_capture(args: argparse.Namespace, output_format: str) -> int:
+    """Stream live capture frames until Ctrl+C, honouring *output_format*.
+
+    All formats stream continuously rather than returning a fixed batch:
+
+    * ``table`` / ``raw`` / ``candump`` — candump-style text line per frame
+    * ``json`` / ``jsonl`` — one ``json.dumps(event)`` line per frame
+    """
     transport = LocalTransport()
+    text_mode = output_format in {"table", "raw"}
     try:
         for event in transport.capture_stream_events(args.interface):
             if event.get("event_type") != "frame":
                 continue
-            frame = event["payload"]["frame"]
-            interface = frame["interface"] or args.interface
-            timestamp = event.get("timestamp")
-            timestamp_text = (
-                f"({timestamp:0.6f})" if isinstance(timestamp, (int, float)) else "(0.000000)"
-            )
-            print(f"{timestamp_text} {interface} {format_candump_frame(frame)}")
+            if text_mode:
+                frame = event["payload"]["frame"]
+                interface = frame["interface"] or args.interface
+                timestamp = event.get("timestamp")
+                timestamp_text = (
+                    f"({timestamp:0.6f})"
+                    if isinstance(timestamp, (int, float))
+                    else "(0.000000)"
+                )
+                print(f"{timestamp_text} {interface} {format_candump_frame(frame)}")
+            else:
+                print(json.dumps(event, sort_keys=True))
+    except TransportError as exc:
+        emit_result(
+            error_result(
+                "capture",
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+            output_format,
+        )
+        return EXIT_TRANSPORT_ERROR
     except KeyboardInterrupt:
         return EXIT_OK
     return EXIT_OK
+
+
+def emit_live_candump(args: argparse.Namespace) -> int:
+    """Backwards-compatible wrapper — delegates to emit_live_capture."""
+    return emit_live_capture(args, "table")
 
 
 def emit_live_gateway(args: argparse.Namespace) -> int:
@@ -1595,12 +1622,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_shell(args.shell_command)
     if args.command == "tui":
         return run_tui(execute_command, command=args.tui_command)
-    if (
-        args.command == "capture"
-        and getattr(args, "candump", False)
-        and output_format in {"table", "raw"}
-    ):
-        return emit_live_candump(args)
+    if args.command == "capture":
+        return emit_live_capture(args, output_format)
     if args.command == "gateway" and output_format in {"table", "raw"}:
         return emit_live_gateway(args)
 

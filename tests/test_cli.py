@@ -130,24 +130,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
-    def test_capture_json_output_is_structured(self, _mock_cfg) -> None:
+    def test_capture_json_output_streams_one_event_per_line(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
-        payload = json.loads(stdout)
-        self.assertTrue(payload["ok"])
-        self.assertEqual(payload["command"], "capture")
-        self.assertEqual(payload["data"]["interface"], "can0")
-        self.assertEqual(payload["data"]["display"], "structured")
-        self.assertEqual(payload["data"]["mode"], "passive")
-        self.assertEqual(payload["data"]["status"], "implemented")
-        self.assertEqual(payload["data"]["implementation"], "scaffold transport")
-        self.assertEqual(payload["data"]["transport_backend"], "scaffold")
-        self.assertEqual(len(payload["data"]["events"]), 2)
-        self.assertEqual(payload["data"]["events"][0]["event_type"], "frame")
-        self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["interface"], "can0")
-        self.assertEqual(payload["warnings"], [])
+        lines = stdout.strip().splitlines()
+        self.assertEqual(len(lines), 2)
+
+        first_event = json.loads(lines[0])
+        second_event = json.loads(lines[1])
+        self.assertEqual(first_event["event_type"], "frame")
+        self.assertEqual(first_event["payload"]["frame"]["interface"], "can0")
+        self.assertEqual(second_event["event_type"], "frame")
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_send_json_output_marks_active_mode(self, _mock_cfg) -> None:
@@ -168,20 +163,24 @@ class CliTests(unittest.TestCase):
         )
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
-    def test_capture_candump_requires_live_backend(self, _mock_cfg) -> None:
-        exit_code, stdout, stderr = run_cli("capture", "can0", "--candump", "--json")
-        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+    def test_capture_candump_streams_fixture_frames_on_scaffold(self, _mock_cfg) -> None:
+        exit_code, stdout, stderr = run_cli("capture", "can0", "--candump")
+        self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
-        payload = json.loads(stdout)
-        self.assertEqual(payload["errors"][0]["code"], "CANDUMP_LIVE_BACKEND_REQUIRED")
+        lines = stdout.strip().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("("))
+        self.assertIn(" can0 ", lines[0])
+        self.assertIn("#", lines[0])
 
-    def test_capture_candump_json_uses_live_backend_when_requested(self) -> None:
+    def test_capture_json_uses_live_backend_when_requested(self) -> None:
         fake_bus = FakeBus(
             [
                 self.fake_message(0x123, bytes.fromhex("11223344")),
                 self.fake_message(0x18FEEE31, bytes.fromhex("AABBCCDD"), is_extended_id=True),
-            ]
+            ],
+            end_exception=KeyboardInterrupt,
         )
         with patch.dict(
             os.environ,
@@ -192,14 +191,18 @@ class CliTests(unittest.TestCase):
             clear=False,
         ):
             with patch.object(PythonCanBackend, "_open_bus", return_value=fake_bus):
-                exit_code, stdout, stderr = run_cli("capture", "vcan0", "--candump", "--json")
+                exit_code, stdout, stderr = run_cli("capture", "vcan0", "--json")
 
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
-        payload = json.loads(stdout)
-        self.assertEqual(payload["data"]["display"], "candump")
-        self.assertEqual(payload["data"]["transport_backend"], "python-can")
-        self.assertEqual(payload["data"]["events"][0]["event_type"], "frame")
+        lines = stdout.strip().splitlines()
+        self.assertEqual(len(lines), 2)
+        first_event = json.loads(lines[0])
+        second_event = json.loads(lines[1])
+        self.assertEqual(first_event["payload"]["frame"]["arbitration_id"], 0x123)
+        self.assertFalse(first_event["payload"]["frame"]["is_extended_id"])
+        self.assertEqual(second_event["payload"]["frame"]["arbitration_id"], 0x18FEEE31)
+        self.assertTrue(second_event["payload"]["frame"]["is_extended_id"])
 
     def test_gateway_json_output_contains_forwarded_frame_event(self) -> None:
         src_bus = FakeBus([self.fake_message(0x123, bytes.fromhex("11223344"))])
@@ -759,7 +762,8 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, stderr = run_cli("shell", "--command", "capture can0 --raw")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
-        self.assertEqual(stdout.strip(), "capture")
+        self.assertIn(" can0 ", stdout)
+        self.assertIn("#", stdout)
 
     def test_tui_starts_and_renders_initial_shell(self) -> None:
         with patch("builtins.input", side_effect=EOFError):
@@ -813,8 +817,8 @@ class CliTests(unittest.TestCase):
             exit_code, stdout, _ = run_cli("shell")
 
         self.assertEqual(exit_code, EXIT_OK)
-        # The raw output from the second command must appear
-        self.assertIn("capture", stdout)
+        self.assertIn(" can0 ", stdout)
+        self.assertIn("#", stdout)
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_shell_survives_keyboard_interrupt_during_command(self, _mock_cfg) -> None:
@@ -859,7 +863,8 @@ class CliTests(unittest.TestCase):
             exit_code, stdout, _ = run_cli("shell")
 
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertIn("capture", stdout)
+        self.assertIn(" can0 ", stdout)
+        self.assertIn("#", stdout)
 
     def test_tui_survives_help_flag_in_command(self) -> None:
         """--help inside the TUI must not exit the session."""
@@ -1418,12 +1423,13 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
 
-    def test_capture_uses_python_can_backend_when_requested(self) -> None:
+    def test_capture_jsonl_uses_python_can_backend_when_requested(self) -> None:
         fake_bus = FakeBus(
             [
                 self.fake_message(0x123, bytes.fromhex("11223344")),
                 self.fake_message(0x18FEEE31, bytes.fromhex("AABBCCDD"), is_extended_id=True),
-            ]
+            ],
+            end_exception=KeyboardInterrupt,
         )
         with patch.dict(
             os.environ,
@@ -1435,21 +1441,17 @@ class CliTests(unittest.TestCase):
             clear=False,
         ):
             with patch.object(PythonCanBackend, "_open_bus", return_value=fake_bus):
-                exit_code, stdout, stderr = run_cli("capture", "can0", "--json")
+                exit_code, stdout, stderr = run_cli("capture", "can0", "--jsonl")
 
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
-        payload = json.loads(stdout)
-        self.assertEqual(len(payload["data"]["events"]), 2)
-        self.assertEqual(payload["data"]["transport_backend"], "python-can")
-        self.assertEqual(payload["data"]["python_can_interface"], "virtual")
-        self.assertEqual(payload["data"]["implementation"], "live transport")
-        self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["arbitration_id"], 0x123)
-        self.assertFalse(payload["data"]["events"][0]["payload"]["frame"]["is_extended_id"])
-        self.assertEqual(
-            payload["data"]["events"][1]["payload"]["frame"]["arbitration_id"], 0x18FEEE31
-        )
-        self.assertTrue(payload["data"]["events"][1]["payload"]["frame"]["is_extended_id"])
+        lines = stdout.strip().splitlines()
+        self.assertEqual(len(lines), 2)
+        payloads = [json.loads(line) for line in lines]
+        self.assertEqual(payloads[0]["payload"]["frame"]["arbitration_id"], 0x123)
+        self.assertFalse(payloads[0]["payload"]["frame"]["is_extended_id"])
+        self.assertEqual(payloads[1]["payload"]["frame"]["arbitration_id"], 0x18FEEE31)
+        self.assertTrue(payloads[1]["payload"]["frame"]["is_extended_id"])
 
     def test_capture_candump_uses_python_can_backend_when_requested(self) -> None:
         fake_bus = FakeBus(
@@ -1513,7 +1515,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(lines[1], "(0.000000) vcan0 123#R")
         self.assertEqual(lines[2], "(0.000000) vcan0 20000080#0000000000000000")
 
-    def test_python_can_backend_error_returns_backend_exit_code(self) -> None:
+    def test_capture_json_transport_error_is_structured_for_streaming_path(self) -> None:
         with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "python-can"}, clear=False):
             with patch.object(
                 PythonCanBackend,

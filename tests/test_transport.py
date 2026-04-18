@@ -14,6 +14,7 @@ from canarchy.models import CanFrame
 from canarchy.transport import (
     PythonCanBackend,
     ScaffoldCanBackend,
+    TransportBackendConfig,
     TransportError,
     build_live_backend,
     load_candump_file,
@@ -225,10 +226,18 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(config.backend, "python-can")
         self.assertEqual(config.python_can_interface, "udp_multicast")
 
-    def test_build_live_backend_defaults_to_scaffold(self) -> None:
-        with patch.dict(os.environ, {}, clear=True):
-            backend = build_live_backend()
+    def test_build_live_backend_uses_explicit_scaffold_config(self) -> None:
+        backend = build_live_backend(TransportBackendConfig(backend="scaffold"))
         self.assertIsInstance(backend, ScaffoldCanBackend)
+
+    def test_scaffold_capture_stream_yields_fixture_frames(self) -> None:
+        backend = ScaffoldCanBackend()
+
+        frames = list(backend.capture_stream("can0"))
+
+        self.assertEqual(len(frames), 2)
+        self.assertEqual(frames[0].interface, "can0")
+        self.assertEqual(frames[1].interface, "can0")
 
     def test_build_live_backend_rejects_unknown_backend(self) -> None:
         with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "unknown"}, clear=False):
