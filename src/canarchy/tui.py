@@ -39,6 +39,10 @@ def run_tui(
             line = input("canarchy-tui> ")
         except EOFError:
             return 0
+        except KeyboardInterrupt:
+            # Ctrl+C at the prompt — clear the line and re-prompt.
+            print()
+            continue
 
         stripped = line.strip()
         if not stripped:
@@ -50,7 +54,15 @@ def run_tui(
 
 def _run_tui_command(command: str, state: TuiState, execute_command: Any) -> int:
     argv = shlex.split(command)
-    exit_code, result = execute_command(argv)
+    try:
+        exit_code, result = execute_command(argv)
+    except SystemExit:
+        # --help and --version call sys.exit(); stay in the TUI.
+        return 0
+    except KeyboardInterrupt:
+        # Ctrl+C during a command — print a newline and stay in the TUI.
+        print()
+        return 0
     if result is not None:
         _update_state(state, result)
         _render(state)

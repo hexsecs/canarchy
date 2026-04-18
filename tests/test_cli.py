@@ -796,6 +796,115 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("TUI_COMMAND_UNSUPPORTED", stdout)
 
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_shell_survives_help_flag_in_command(self, _mock_cfg) -> None:
+        """--help inside the shell must not exit the session."""
+        # After one command containing --help (which raises SystemExit) the shell
+        # should stay alive and accept a second command.
+        inputs = iter(["capture --help", "capture can0 --raw", EOFError()])
+
+        def fake_input(_prompt):
+            val = next(inputs)
+            if isinstance(val, BaseException):
+                raise val
+            return val
+
+        with patch("builtins.input", side_effect=fake_input):
+            exit_code, stdout, _ = run_cli("shell")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        # The raw output from the second command must appear
+        self.assertIn("capture", stdout)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_shell_survives_keyboard_interrupt_during_command(self, _mock_cfg) -> None:
+        """Ctrl+C during a command must not exit the shell."""
+        call_count = 0
+
+        def fake_main(argv):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise KeyboardInterrupt
+            # second call succeeds normally
+            return 0
+
+        inputs = iter(["stats tests/fixtures/sample.candump", "capture can0 --raw", EOFError()])
+
+        def fake_input(_prompt):
+            val = next(inputs)
+            if isinstance(val, BaseException):
+                raise val
+            return val
+
+        with patch("builtins.input", side_effect=fake_input), \
+                patch("canarchy.cli.main", side_effect=fake_main):
+            exit_code, _, _ = run_cli("shell")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(call_count, 2)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_shell_survives_keyboard_interrupt_at_prompt(self, _mock_cfg) -> None:
+        """Ctrl+C at the input prompt must not exit the shell."""
+        inputs = iter([KeyboardInterrupt(), "capture can0 --raw", EOFError()])
+
+        def fake_input(_prompt):
+            val = next(inputs)
+            if isinstance(val, BaseException):
+                raise val
+            return val
+
+        with patch("builtins.input", side_effect=fake_input):
+            exit_code, stdout, _ = run_cli("shell")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("capture", stdout)
+
+    def test_tui_survives_help_flag_in_command(self) -> None:
+        """--help inside the TUI must not exit the session."""
+        inputs = iter(["stats --help", "quit"])
+
+        def fake_input(_prompt):
+            val = next(inputs)
+            return val
+
+        with patch("builtins.input", side_effect=fake_input):
+            exit_code, _, _ = run_cli("tui")
+
+        self.assertEqual(exit_code, EXIT_OK)
+
+    def test_tui_survives_keyboard_interrupt_during_command(self) -> None:
+        """Ctrl+C during a TUI command must not exit the session."""
+        from canarchy.tui import _run_tui_command, TuiState
+
+        state = TuiState()
+        call_count = 0
+
+        def raising_execute(_argv):
+            nonlocal call_count
+            call_count += 1
+            raise KeyboardInterrupt
+
+        result = _run_tui_command("capture can0 --raw", state, raising_execute)
+        self.assertEqual(result, 0)
+        self.assertEqual(call_count, 1)
+
+    def test_tui_survives_keyboard_interrupt_at_prompt(self) -> None:
+        """Ctrl+C at the TUI prompt must not exit the session."""
+        inputs = iter([KeyboardInterrupt(), "quit"])
+
+        def fake_input(_prompt):
+            val = next(inputs)
+            if isinstance(val, BaseException):
+                raise val
+            return val
+
+        with patch("builtins.input", side_effect=fake_input):
+            exit_code, _, _ = run_cli("tui")
+
+        self.assertEqual(exit_code, EXIT_OK)
+
     def test_usage_error_respects_json_output(self) -> None:
         exit_code, stdout, stderr = run_cli("decode", "capture.log", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)

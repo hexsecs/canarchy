@@ -1454,13 +1454,24 @@ def run_shell(shell_command: str | None) -> int:
             line = input("canarchy> ")
         except EOFError:
             return EXIT_OK
+        except KeyboardInterrupt:
+            # Ctrl+C at the prompt — clear the line and re-prompt.
+            print()
+            continue
 
         stripped = line.strip()
         if not stripped:
             continue
         if stripped in {"exit", "quit"}:
             return EXIT_OK
-        main(shlex.split(stripped))
+        try:
+            main(shlex.split(stripped))
+        except SystemExit:
+            # --help and --version call sys.exit(); stay in the shell.
+            pass
+        except KeyboardInterrupt:
+            # Ctrl+C during a command — print a newline and re-prompt.
+            print()
 
 
 def execute_command(argv: Sequence[str] | None = None) -> tuple[int, CommandResult | None]:
