@@ -26,8 +26,8 @@ Some other commands are already present in the CLI tree but still return placeho
 Important current behavior:
 
 * live transport-facing commands default to the deterministic `LocalTransport` scaffold for `capture` and `send`
-* `capture` and `send` can use a live `python-can` backend by setting `CANARCHY_TRANSPORT_BACKEND=python-can`
-* the first supported live backend target is `CANARCHY_PYTHON_CAN_INTERFACE=virtual`
+* `capture`, `send`, and `gateway` require the `python-can` backend for live transport; set `backend = "python-can"` in `~/.canarchy/config.toml` or export `CANARCHY_TRANSPORT_BACKEND=python-can`
+* the default `python-can` interface is `virtual`; set `interface` in the config file or `CANARCHY_PYTHON_CAN_INTERFACE` to change it
 * placeholder-only commands still return `status: planned` and `implementation: command surface scaffold`
 * specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
 * file-backed analysis commands currently support standard timestamped candump log files with `.candump` and `.log` suffixes
@@ -71,12 +71,12 @@ Example:
 
 ```bash
 canarchy capture can0 --json
-CANARCHY_TRANSPORT_BACKEND=python-can CANARCHY_PYTHON_CAN_INTERFACE=virtual canarchy capture vcan0 --candump
+canarchy capture vcan0 --candump
 ```
 
 Notes:
 
-* `--candump` is a live-only mode that requires `CANARCHY_TRANSPORT_BACKEND=python-can`
+* `--candump` is a live-only mode that requires the `python-can` backend (set in `~/.canarchy/config.toml` or via `CANARCHY_TRANSPORT_BACKEND=python-can`)
 * `--candump` keeps running and printing frames until interrupted
 * `--candump` changes the human-readable output path to a `candump`-style line format such as `(0.100000) vcan0 18F00431#AABBCCDD`
 * `--candump --json` and `--candump --jsonl` keep structured output for automation, but still require a live backend
@@ -151,14 +151,14 @@ canarchy gateway <src> <dst> [--src-backend <type>] [--dst-backend <type>] [--bi
 Examples:
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can canarchy gateway can0 can1 --table
-CANARCHY_TRANSPORT_BACKEND=python-can canarchy gateway can0 239.0.0.1 --dst-backend udp_multicast --count 10 --json
+canarchy gateway can0 can1 --table
+canarchy gateway can0 239.0.0.1 --dst-backend udp_multicast --count 10 --json
 ```
 
 Notes:
 
-* `gateway` requires `CANARCHY_TRANSPORT_BACKEND=python-can`
-* `--src-backend` and `--dst-backend` default to `CANARCHY_PYTHON_CAN_INTERFACE`
+* `gateway` requires the `python-can` backend (set in `~/.canarchy/config.toml` or via `CANARCHY_TRANSPORT_BACKEND=python-can`)
+* `--src-backend` and `--dst-backend` default to the configured `interface` value
 * default table and raw output use candump-style forwarded frame lines with direction labels such as `[src->dst]`
 * `--json` returns a standard command envelope; `--jsonl` emits one forwarded event per line for `gateway`
 
