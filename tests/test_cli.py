@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from canarchy.cli import EXIT_OK, EXIT_TRANSPORT_ERROR, EXIT_USER_ERROR, main
+from canarchy.models import CanFrame
 from canarchy.transport import PythonCanBackend, TransportError
 
 
@@ -526,12 +527,14 @@ class CliTests(unittest.TestCase):
         self.assertIn("spn=110/fmi=5", stdout)
 
     def test_uds_scan_returns_transaction_events(self) -> None:
-        exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--json")
+        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+            exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["implementation"], "sample/reference provider")
         self.assertEqual(payload["data"]["responder_count"], 2)
         self.assertEqual(payload["data"]["events"][0]["event_type"], "uds_transaction")
         self.assertEqual(
@@ -543,18 +546,48 @@ class CliTests(unittest.TestCase):
         )
 
     def test_uds_trace_returns_transaction_events(self) -> None:
-        exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--json")
+        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+            exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["implementation"], "sample/reference provider")
         self.assertEqual(payload["data"]["transaction_count"], 2)
         self.assertEqual(payload["data"]["events"][1]["payload"]["service"], 0x27)
         self.assertEqual(payload["data"]["events"][1]["payload"]["service_name"], "SecurityAccess")
 
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "python-can", "CANARCHY_PYTHON_CAN_INTERFACE": "virtual"})
+    @patch("canarchy.transport.LocalTransport.capture")
+    def test_uds_trace_with_python_can_backend_reports_transport_backed(self, capture_mock, _mock_cfg) -> None:
+        capture_mock.return_value = [
+            CanFrame(
+                arbitration_id=0x7E0,
+                data=bytes.fromhex("0210030000000000"),
+                interface="can0",
+                timestamp=0.0,
+            ),
+            CanFrame(
+                arbitration_id=0x7E8,
+                data=bytes.fromhex("0450030032000000"),
+                interface="can0",
+                timestamp=0.1,
+            ),
+        ]
+
+        exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["implementation"], "transport-backed")
+        self.assertEqual(payload["data"]["transport_backend"], "python-can")
+        self.assertEqual(payload["data"]["events"][0]["payload"]["service"], 0x10)
+
     def test_uds_scan_table_output_is_pretty_printed(self) -> None:
-        exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--table")
+        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+            exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--table")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("command: uds scan", stdout)
         self.assertIn("interface: can0", stdout)
@@ -566,7 +599,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("resp_id=0x7E8", stdout)
 
     def test_uds_trace_table_output_is_pretty_printed(self) -> None:
-        exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--table")
+        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+            exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--table")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("command: uds trace", stdout)
         self.assertIn("interface: can0", stdout)
@@ -606,7 +640,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stdout.strip(), "uds services")
 
     def test_uds_transport_error_returns_backend_exit_code(self) -> None:
-        exit_code, stdout, stderr = run_cli("uds", "scan", "offline0", "--json")
+        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+            exit_code, stdout, stderr = run_cli("uds", "scan", "offline0", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
         self.assertEqual(stderr, "")
 

@@ -1033,6 +1033,12 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
 
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
+    backend_metadata = transport.backend_metadata()
+    implementation = (
+        "transport-backed"
+        if backend_metadata["transport_backend"] != "scaffold"
+        else "sample/reference provider"
+    )
     if args.command == "uds scan":
         events = transport.uds_scan_events(args.interface)
         return (
@@ -1040,7 +1046,8 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "interface": args.interface,
                 "mode": "active",
                 "responder_count": len(events),
-                "implementation": "sample/reference provider",
+                **backend_metadata,
+                "implementation": implementation,
             },
             events,
             ["UDS scanning is active and should be used intentionally on a controlled bus."],
@@ -1052,7 +1059,8 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "interface": args.interface,
                 "mode": "passive",
                 "transaction_count": len(events),
-                "implementation": "sample/reference provider",
+                **backend_metadata,
+                "implementation": implementation,
             },
             events,
             [],

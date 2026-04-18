@@ -357,8 +357,9 @@ canarchy uds scan <interface> [--json|--jsonl|--table|--raw]
 
 Notes:
 
-* this command currently validates the interface through the selected transport layer and then emits explicit sample/reference UDS transaction data
-* the command is still useful for output shape and workflow validation, but it is not yet a true live diagnostic scan
+* with the `python-can` backend, this command sends a single-frame functional DiagnosticSessionControl request and summarizes any single-frame responses it captures
+* with the `scaffold` backend, this command emits explicit sample/reference UDS transaction data
+* this is an initial transport-backed step, not a full ISO-TP or ECU-specific diagnostic scan implementation
 
 ### uds trace
 
@@ -370,8 +371,9 @@ canarchy uds trace <interface> [--json|--jsonl|--table|--raw]
 
 Notes:
 
-* this command currently validates the interface through the selected transport layer and then emits explicit sample/reference UDS transaction data
-* it is not yet a true live trace path over transport traffic
+* with the `python-can` backend, this command captures raw CAN frames and infers single-frame UDS request/response transactions from common diagnostic IDs
+* with the `scaffold` backend, this command emits explicit sample/reference UDS transaction data
+* this is an initial transport-backed step, not a full ISO-TP reassembly pipeline
 
 ### uds services
 

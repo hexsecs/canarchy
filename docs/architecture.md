@@ -287,7 +287,7 @@ The current architecture is strongest in these areas:
 The architecture is intentionally ahead of some implementations. These are the main current gaps:
 
 * live transport coverage is currently limited by the `python-can` integration and configured interfaces
-* some protocol commands still rely on explicit sample/reference data providers instead of true transport-backed execution, although `j1939 monitor` can now use a real interface when one is provided
+* some protocol commands still rely on explicit sample/reference data providers instead of true transport-backed execution, although `j1939 monitor`, `uds scan`, and `uds trace` now have initial real backend paths when `python-can` is selected
 * the TUI is still a minimal text-mode shell, not yet the richer pane-driven dashboard described in [TUI plan](tui_plan.md)
 * reverse-engineering and fuzzing surfaces exist at the CLI level but are not yet a deep shared subsystem
 * plugin architecture is planned conceptually but not yet implemented as a stable extension boundary

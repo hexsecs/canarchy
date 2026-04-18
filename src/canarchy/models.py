@@ -269,6 +269,9 @@ class UdsTransactionEvent:
             timestamp=self.timestamp,
         )
 
+    def to_payload(self) -> dict[str, Any]:
+        return self.to_event().to_payload()
+
 
 @dataclass(slots=True, frozen=True)
 class AlertEvent:

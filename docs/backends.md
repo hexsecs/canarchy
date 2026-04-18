@@ -2,7 +2,7 @@
 
 CANarchy uses **python-can** as its live transport layer. This page explains how to choose and configure a transport backend, which interface types are available, and how to verify what is in effect.
 
-Important boundary: the transport backend selection applies to transport-facing commands such as `capture`, `send`, `generate`, and `gateway`, and also to protocol commands when they explicitly accept an interface, such as `j1939 monitor <interface>`. Some other protocol-oriented commands still use explicit sample/reference providers while their true live execution path is being built; those sample providers are separate from the transport backend abstraction.
+Important boundary: the transport backend selection applies to transport-facing commands such as `capture`, `send`, `generate`, and `gateway`, and also to protocol commands when they explicitly accept an interface, such as `j1939 monitor <interface>`, `uds scan <interface>`, and `uds trace <interface>`. Sample/reference providers are still used where a command does not yet have a complete live execution path or when the deterministic scaffold backend is selected.
 
 ---
 

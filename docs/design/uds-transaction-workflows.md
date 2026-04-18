@@ -41,11 +41,13 @@ In scope:
 * structured scan responder transactions
 * structured trace transactions
 * protocol-aware table rendering
+* initial single-frame transport-backed behavior through the shared transport layer when `python-can` is selected
 
 Out of scope:
 
+* full ISO-TP reassembly
 * exhaustive ECU-specific service negotiation
-* raw ISO-TP reassembly details beyond the current transaction model
+* deep ECU-specific timing and retry behavior
 
 ## Data Model
 
@@ -62,6 +64,11 @@ Both commands emit `uds_transaction` events with fields including:
 ## Output Contracts
 
 `--json` returns the standard CANarchy envelope. `--jsonl` emits one transaction event per line plus warning alerts when applicable.
+
+Current implementation note:
+
+* with the `python-can` backend, `uds scan` and `uds trace` use transport-backed single-frame heuristics
+* with the `scaffold` backend, they emit explicit sample/reference transactions
 
 ## Error Contracts
 

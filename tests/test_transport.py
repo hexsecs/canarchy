@@ -313,6 +313,57 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["event_type"], "uds_transaction")
 
+    def test_uds_trace_events_with_python_can_backend_use_transport_capture(self) -> None:
+        transport = LocalTransport(live_backend=PythonCanBackend(bus_interface="virtual"))
+
+        with patch.object(
+            transport,
+            "capture",
+            return_value=[
+                CanFrame(
+                    arbitration_id=0x7E0,
+                    data=bytes.fromhex("0210030000000000"),
+                    interface="can0",
+                    timestamp=0.0,
+                ),
+                CanFrame(
+                    arbitration_id=0x7E8,
+                    data=bytes.fromhex("0450030032000000"),
+                    interface="can0",
+                    timestamp=0.1,
+                ),
+            ],
+        ) as capture_mock:
+            events = transport.uds_trace_events("can0")
+
+        capture_mock.assert_called_once_with("can0")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "uds_transaction")
+        self.assertEqual(events[0]["payload"]["service"], 0x10)
+
+    def test_uds_scan_events_with_python_can_backend_send_request_and_capture_responses(self) -> None:
+        transport = LocalTransport(live_backend=PythonCanBackend(bus_interface="virtual"))
+
+        with patch.object(transport, "send") as send_mock, patch.object(
+            transport,
+            "capture",
+            return_value=[
+                CanFrame(
+                    arbitration_id=0x7E8,
+                    data=bytes.fromhex("0450010032000000"),
+                    interface="can0",
+                    timestamp=0.1,
+                )
+            ],
+        ) as capture_mock:
+            events = transport.uds_scan_events("can0")
+
+        send_mock.assert_called_once()
+        capture_mock.assert_called_once_with("can0")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["payload"]["request_id"], 0x7DF)
+        self.assertEqual(events[0]["payload"]["service"], 0x10)
+
     def test_build_live_backend_rejects_unknown_backend(self) -> None:
         with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "unknown"}, clear=False):
             with self.assertRaises(TransportError) as ctx:

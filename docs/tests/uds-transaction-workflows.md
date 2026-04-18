@@ -12,6 +12,8 @@
 
 Validate the structured UDS scan/trace transaction paths, protocol-aware table output, and transport failure handling.
 
+The current implementation covers both transport-backed single-frame behavior on `python-can` and explicit sample/reference behavior on the scaffold backend.
+
 ## Coverage Requirements
 
 * scan JSON output with transaction events and active warning
@@ -59,7 +61,12 @@ Assert: exit code `2` and `errors[0].code == "TRANSPORT_UNAVAILABLE"`.
 
 ## Fixtures And Environment
 
-No dedicated fixtures are required. Coverage uses the deterministic scaffold UDS transaction set.
+No dedicated fixture files are required.
+
+Coverage currently uses:
+
+* scaffold-backed sample/reference UDS transaction data for CLI-level coverage
+* targeted mocked transport coverage for initial `python-can` single-frame behavior
 
 ## Explicit Non-Coverage
 
