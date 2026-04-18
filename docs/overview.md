@@ -17,7 +17,7 @@ Implemented and exercised in the current codebase:
 * file-backed `filter`, `stats`, `decode`, `j1939 decode`, and `replay` using candump logs
 * DBC-backed decode and encode
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
-* UDS `scan` and `trace`
+* UDS `scan`, `trace`, and `services`
 * session `save`, `load`, and `show`
 * structured `export` for capture files and saved sessions
 * shell command reuse through `canarchy shell --command ...`
@@ -28,7 +28,6 @@ Implemented and exercised in the current codebase:
 
 Present in the CLI tree but still scaffolded or placeholder-only:
 
-* `uds services`
 * `re signals`, `re counters`, `re entropy`, and `re correlate`
 * `fuzz replay`, `fuzz mutate`, and `fuzz id`
 

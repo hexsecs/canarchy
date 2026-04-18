@@ -545,6 +545,37 @@ class CliTests(unittest.TestCase):
         self.assertIn("service=0x27", stdout)
         self.assertIn("name=SecurityAccess", stdout)
 
+    def test_uds_services_returns_catalog(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "services", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "uds services")
+        self.assertEqual(payload["data"]["mode"], "reference")
+        self.assertGreater(payload["data"]["service_count"], 5)
+        services = payload["data"]["services"]
+        self.assertEqual(services[0]["service"], 0x10)
+        self.assertEqual(services[0]["name"], "DiagnosticSessionControl")
+        self.assertEqual(services[0]["positive_response_service"], 0x50)
+        self.assertTrue(services[0]["requires_subfunction"])
+        self.assertEqual(services[6]["name"], "SecurityAccess")
+
+    def test_uds_services_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "services", "--table")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: uds services", stdout)
+        self.assertIn("catalog:", stdout)
+        self.assertIn("sid=0x10 name=DiagnosticSessionControl positive=0x50", stdout)
+        self.assertIn("sid=0x27 name=SecurityAccess positive=0x67", stdout)
+
+    def test_uds_services_raw_output_is_command_name(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "services", "--raw")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertEqual(stdout.strip(), "uds services")
+
     def test_uds_transport_error_returns_backend_exit_code(self) -> None:
         exit_code, stdout, stderr = run_cli("uds", "scan", "offline0", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)

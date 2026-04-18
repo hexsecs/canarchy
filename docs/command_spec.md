@@ -17,7 +17,7 @@ Implemented and verified in the current codebase:
 * session `save`, `load`, and `show`
 * shell one-shot command execution
 * initial text-mode `tui` shell over the shared command layer
-* UDS `scan` and `trace`
+* UDS `scan`, `trace`, and `services`
 * structured JSON and JSONL output
 * explicit error schema and exit codes
 
@@ -355,6 +355,19 @@ Emit structured request and response transactions for a UDS session trace.
 canarchy uds trace <interface> [--json|--jsonl|--table|--raw]
 ```
 
+### uds services
+
+Inspect the built-in UDS service catalog.
+
+```bash
+canarchy uds services [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* this is a reference command and does not require an interface
+* output includes service identifier, positive-response identifier, category, and subfunction expectations
+
 ---
 
 ## Output Modes
@@ -521,7 +534,6 @@ canarchy shell --command "capture can0 --raw"
 
 These commands are present in the CLI tree but still scaffolded or not yet implemented end to end:
 
-* `uds services`
 * `re signals|counters|entropy|correlate`
 * `fuzz replay|mutate|id`
 

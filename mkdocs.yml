@@ -55,12 +55,14 @@ nav:
           - Gateway Command: design/gateway-command.md
           - Export Command: design/export-command.md
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
+          - UDS Services Command: design/uds-services-command.md
           - TUI Shell: design/tui-shell.md
       - Test Specs:
           - Generate Command: tests/generate-command.md
           - Gateway Command: tests/gateway-command.md
           - Export Command: tests/export-command.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
+          - UDS Services Command: tests/uds-services-command.md
           - TUI Shell: tests/tui-shell.md
   - Agents:
       - Agent Guide: agents.md

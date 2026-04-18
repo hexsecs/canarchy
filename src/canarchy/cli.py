@@ -22,6 +22,7 @@ from canarchy.replay import build_replay_plan
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.transport import LocalTransport, TransportError, generate_frames
 from canarchy.tui import run_tui
+from canarchy.uds import uds_services_payload
 
 EXIT_OK = 0
 EXIT_USER_ERROR = 1
@@ -32,7 +33,7 @@ TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate"}
 DBC_COMMANDS = {"decode", "encode"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
-UDS_COMMANDS = {"uds scan", "uds trace"}
+UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | {"replay", "gateway", "shell", "export"}
 
 
@@ -895,6 +896,17 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             events,
             [],
         )
+    if args.command == "uds services":
+        services = uds_services_payload()
+        return (
+            {
+                "mode": "reference",
+                "service_count": len(services),
+                "services": services,
+            },
+            [],
+            [],
+        )
     raise AssertionError(f"unsupported uds command: {args.command}")
 
 
@@ -1193,7 +1205,26 @@ def format_j1939_table(result: CommandResult) -> list[str]:
 
 
 def format_uds_table(result: CommandResult) -> list[str]:
-    lines = [f"command: {result.command}", f"interface: {result.data.get('interface', 'unknown')}"]
+    lines = [f"command: {result.command}"]
+    if result.command == "uds services":
+        lines.append(f"services: {result.data.get('service_count', 0)}")
+        lines.append("catalog:")
+        services = result.data.get("services", [])
+        if not services:
+            lines.append("- no uds services")
+            return lines
+        for service in services:
+            lines.append(
+                "- "
+                f"sid=0x{service['service']:02X} "
+                f"name={service['name']} "
+                f"positive=0x{service['positive_response_service']:02X} "
+                f"category={service['category']} "
+                f"subfunction={service['requires_subfunction']}"
+            )
+        return lines
+
+    lines.append(f"interface: {result.data.get('interface', 'unknown')}")
     events = result.data.get("events", [])
     if result.command == "uds scan":
         lines.append(f"responders: {result.data.get('responder_count', 0)}")
