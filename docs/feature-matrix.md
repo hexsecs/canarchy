@@ -25,7 +25,9 @@ Legend:
 | Structured machine-readable output as core contract | Yes | No | Partial | No | No | No | Partial | No | No | No |
 | Pipe-friendly event stream design | Yes | Partial | Partial | Partial | No | No | No | No | No | No |
 | Live capture / monitor | Yes | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | No |
-| Frame send / generate / replay | Yes | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | No |
+| Frame send | Yes | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | No |
+| Frame generation | Yes | Yes | Partial | Partial | Partial | Yes | No | No | Partial | No |
+| Replay / playback | Yes | Yes | Yes | Partial | Yes | Yes | No | Yes | Yes | No |
 | Frame gateway / bridge workflow | Yes | Partial | No | No | Partial | No | No | No | No | No |
 | DBC decode | Yes | No | No | Yes | Yes | No | No | No | Partial | No |
 | DBC encode | Yes | No | No | Yes | Partial | No | No | No | Partial | No |
