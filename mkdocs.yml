@@ -57,6 +57,7 @@ nav:
           - Gateway Command: design/gateway-command.md
           - Export Command: design/export-command.md
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
+          - Reverse-Engineering Helpers: design/reverse-engineering-helpers.md
           - Replay Command: design/replay-command.md
           - Session Workflows: design/session-workflows.md
           - UDS Transaction Workflows: design/uds-transaction-workflows.md
@@ -70,6 +71,7 @@ nav:
           - Gateway Command: tests/gateway-command.md
           - Export Command: tests/export-command.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
+          - Reverse-Engineering Helpers: tests/reverse-engineering-helpers.md
           - Replay Command: tests/replay-command.md
           - Session Workflows: tests/session-workflows.md
           - UDS Transaction Workflows: tests/uds-transaction-workflows.md

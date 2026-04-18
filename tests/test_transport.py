@@ -289,13 +289,24 @@ class TransportBackendTests(unittest.TestCase):
         import socket
         channel = "239.0.0.1"
 
-        # Probe multicast route availability before spawning processes.
+        # Probe multicast round-trip capability before spawning processes.
+        # Simply opening a socket succeeds even without a multicast route, so we do
+        # an actual send+recv loop-back probe with a short timeout instead.
+        import can as _can
+        _multicast_ok = False
         try:
-            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            probe.connect((channel, 1))
-            probe.close()
-        except OSError:
-            self.skipTest("multicast routing unavailable on this host — add a route to 239.0.0.0/8 to enable")
+            _probe_rx = _can.Bus(channel=channel, interface="udp_multicast", receive_own_messages=True)
+            _probe_tx = _can.Bus(channel=channel, interface="udp_multicast", receive_own_messages=True)
+            import can as _can2
+            _probe_tx.send(_can2.Message(arbitration_id=0x7FF, data=b"\x00", is_extended_id=False))
+            _got = _probe_rx.recv(timeout=0.25)
+            _probe_rx.shutdown()
+            _probe_tx.shutdown()
+            _multicast_ok = _got is not None
+        except Exception:
+            pass
+        if not _multicast_ok:
+            self.skipTest("multicast round-trip unavailable on this host — add a route to 239.0.0.0/8 lo0 to enable")
 
         result: multiprocessing.Queue = multiprocessing.Queue()
         p = multiprocessing.Process(target=_capture_one_frame_subprocess, args=(channel, "udp_multicast", result))
