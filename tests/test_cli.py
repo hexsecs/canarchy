@@ -129,7 +129,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("Run `canarchy --help`", stdout)
         self.assertEqual(stderr, "")
 
-    def test_capture_json_output_is_structured(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_capture_json_output_is_structured(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -148,7 +149,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["interface"], "can0")
         self.assertEqual(payload["warnings"], [])
 
-    def test_send_json_output_marks_active_mode(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_send_json_output_marks_active_mode(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("send", "can0", "0x123", "11223344", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -165,7 +167,8 @@ class CliTests(unittest.TestCase):
             "Active transmission is intentionally distinct from passive monitoring workflows.",
         )
 
-    def test_capture_candump_requires_live_backend(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_capture_candump_requires_live_backend(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--candump", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
         self.assertEqual(stderr, "")
@@ -272,7 +275,8 @@ class CliTests(unittest.TestCase):
             {"gateway.src->dst", "gateway.dst->src"},
         )
 
-    def test_gateway_requires_live_backend(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_gateway_requires_live_backend(self, _mock_cfg) -> None:
         with patch.dict(os.environ, {}, clear=True):
             exit_code, stdout, stderr = run_cli("gateway", "src0", "dst0", "--count", "1", "--json")
 
@@ -750,7 +754,8 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "EXPORT_FORMAT_UNSUPPORTED")
 
-    def test_shell_command_reuses_cli_parser(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_shell_command_reuses_cli_parser(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("shell", "--command", "capture can0 --raw")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -838,7 +843,8 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
 
-    def test_jsonl_output_emits_one_event_per_line_for_event_commands(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_jsonl_output_emits_one_event_per_line_for_event_commands(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli("capture", "can0", "--jsonl")
         self.assertEqual(exit_code, EXIT_OK)
         lines = stdout.strip().splitlines()
@@ -908,7 +914,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["file"], str(FIXTURES / "sample.candump"))
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
 
-    def test_generate_fixed_id_and_data_returns_frame_events(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_fixed_id_and_data_returns_frame_events(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344", "--json"
         )
@@ -927,7 +934,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x123)
         self.assertEqual(frame_event["payload"]["frame"]["data"], "11223344")
 
-    def test_generate_count_produces_correct_number_of_frames(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_count_produces_correct_number_of_frames(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate",
             "can0",
@@ -952,7 +960,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_events[1]["timestamp"], 0.1)
         self.assertEqual(frame_events[2]["timestamp"], 0.2)
 
-    def test_generate_incrementing_data_produces_rolling_bytes(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_incrementing_data_produces_rolling_bytes(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x100", "--dlc", "2", "--data", "I", "--count", "2", "--json"
         )
@@ -962,14 +971,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_events[0]["payload"]["frame"]["data"], "0001")
         self.assertEqual(frame_events[1]["payload"]["frame"]["data"], "0203")
 
-    def test_generate_random_produces_frame_events(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_random_produces_frame_events(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--count", "5", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
         frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
         self.assertEqual(len(frame_events), 5)
 
-    def test_generate_table_output_is_pretty_printed(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_table_output_is_pretty_printed(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "AABBCCDD", "--count", "2", "--table"
         )
@@ -979,7 +990,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("frames: 2", stdout)
         self.assertIn("123#AABBCCDD", stdout)
 
-    def test_generate_extended_flag_sets_29bit_id(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_extended_flag_sets_29bit_id(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x100", "--dlc", "0", "--data", "R", "--extended", "--json"
         )
@@ -987,6 +999,255 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         frame_event = payload["data"]["events"][1]
         self.assertTrue(frame_event["payload"]["frame"]["is_extended_id"])
+
+    # --- Gap option tests ---
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_default_gap_is_200ms(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["gap_ms"], 200.0)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_gap_zero_gives_zero_timestamps(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
+            "--count", "3", "--gap", "0", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 3)
+        for evt in frame_events:
+            self.assertEqual(evt["timestamp"], 0.0)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_gap_sets_timestamp_spacing(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
+            "--count", "4", "--gap", "500", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 4)
+        self.assertAlmostEqual(frame_events[0]["timestamp"], 0.0)
+        self.assertAlmostEqual(frame_events[1]["timestamp"], 0.5)
+        self.assertAlmostEqual(frame_events[2]["timestamp"], 1.0)
+        self.assertAlmostEqual(frame_events[3]["timestamp"], 1.5)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_gap_reflects_in_data_field(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
+            "--count", "2", "--gap", "750", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["gap_ms"], 750.0)
+        self.assertEqual(payload["data"]["gap"], 750.0)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_fractional_gap_spacing(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
+            "--count", "3", "--gap", "50.5", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertAlmostEqual(frame_events[0]["timestamp"], 0.0, places=5)
+        self.assertAlmostEqual(frame_events[1]["timestamp"], 0.0505, places=5)
+        self.assertAlmostEqual(frame_events[2]["timestamp"], 0.101, places=5)
+
+    # --- ID option tests ---
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_id_without_0x_prefix(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "7DF", "--dlc", "2", "--data", "1234", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x7DF)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_id_r_default_produces_random_ids(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--count", "3", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 3)
+        for evt in frame_events:
+            arb_id = evt["payload"]["frame"]["arbitration_id"]
+            self.assertGreaterEqual(arb_id, 0)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_large_id_forces_extended(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x18FEEE31", "--dlc", "8", "--data", "AABBCCDDEEFF0011", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x18FEEE31)
+        self.assertTrue(frame_event["payload"]["frame"]["is_extended_id"])
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_id_zero(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x0", "--dlc", "1", "--data", "FF", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_id_max_standard(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x7FF", "--dlc", "1", "--data", "00", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x7FF)
+        self.assertFalse(frame_event["payload"]["frame"]["is_extended_id"])
+
+    # --- DLC option tests ---
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_dlc_zero_produces_empty_data(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "0", "--data", "R", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        self.assertEqual(frame_event["payload"]["frame"]["data"], "")
+        self.assertEqual(frame_event["payload"]["frame"]["dlc"], 0)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_dlc_eight_produces_eight_byte_frame(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "8", "--data", "R", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        self.assertEqual(frame_event["payload"]["frame"]["dlc"], 8)
+        self.assertEqual(len(frame_event["payload"]["frame"]["data"]), 16)  # 8 bytes = 16 hex chars
+
+    # --- Data option tests ---
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_data_r_produces_hex_payload(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "R", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        data_hex = frame_event["payload"]["frame"]["data"]
+        self.assertEqual(len(data_hex), 8)  # 4 bytes = 8 hex chars
+        int(data_hex, 16)  # must be valid hex
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_data_uppercase_hex_accepted(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "DEADBEEF", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_event = payload["data"]["events"][1]
+        self.assertEqual(frame_event["payload"]["frame"]["data"].upper(), "DEADBEEF")
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_incrementing_data_rolls_across_frames(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "I", "--count", "3", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(frame_events[0]["payload"]["frame"]["data"], "00010203")
+        self.assertEqual(frame_events[1]["payload"]["frame"]["data"], "04050607")
+        self.assertEqual(frame_events[2]["payload"]["frame"]["data"], "08090a0b")
+
+    # --- Count option tests ---
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_default_count_is_one(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["frame_count"], 1)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 1)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_count_ten(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--count", "10", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["frame_count"], 10)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 10)
+
+    # --- Output mode tests ---
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_jsonl_output_emits_one_event_per_line(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--count", "2", "--jsonl"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        lines = [l for l in stdout.strip().splitlines() if l.strip()]
+        # alert event + 2 frame events
+        self.assertGreaterEqual(len(lines), 3)
+        for line in lines:
+            json.loads(line)  # each line must be valid JSON
+        event_types = [json.loads(l)["event_type"] for l in lines]
+        self.assertIn("alert", event_types)
+        self.assertEqual(event_types.count("frame"), 2)
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_raw_output_emits_command_name(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--raw"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("generate", stdout.strip())
+
+    # --- Result data fields ---
+
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_generate_result_data_contains_expected_fields(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344",
+            "--count", "2", "--gap", "300", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        data = payload["data"]
+        self.assertEqual(data["interface"], "can0")
+        self.assertEqual(data["mode"], "active")
+        self.assertEqual(data["frame_count"], 2)
+        self.assertEqual(data["gap_ms"], 300.0)
+        self.assertEqual(data["transport_backend"], "scaffold")
+        self.assertFalse(data["extended"])
+        self.assertEqual(data["id"], "0x123")
+        self.assertEqual(data["dlc"], "4")
 
     def test_generate_invalid_id_returns_user_error(self) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--id", "ZZZZ", "--json")
