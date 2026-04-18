@@ -10,9 +10,9 @@ Current repository status:
 
 * the CLI contract is implemented and covered by unit tests
 * the core model includes typed frame, replay, J1939, UDS, and alert events
-* transport-backed commands default to a deterministic local scaffold, with an opt-in `python-can` live backend for `capture` and `send`
+* transport-backed commands default to a deterministic local scaffold, with an opt-in `python-can` live backend for `capture`, `send`, and `gateway`
 * the shell exists today as parser reuse plus a basic interactive loop
-* the TUI is planned but not implemented yet
+* the TUI exists today as an initial text-mode shell over the shared command layer
 
 ### 1. Core Engine
 
@@ -39,9 +39,9 @@ Responsible for:
 
 * CLI (non-interactive)
 * shell scaffolding (interactive loop plus one-shot parser reuse)
-* TUI (visual dashboard)
+* TUI (initial text-mode shell with a path toward a richer dashboard)
 
-The CLI is the only front end implemented end to end today. The shell is partially implemented. The TUI is still design-only.
+The CLI is implemented end to end. The shell is implemented as parser reuse plus a simple loop. The TUI now has an initial shell that reuses the shared command path, but richer live subscriptions and pane behavior remain future work.
 
 The current TUI direction and initial pane plan are documented in [TUI plan](tui_plan.md).
 
@@ -67,7 +67,7 @@ These events power:
 
 * CLI output
 * shell command reuse and interactive shell output
-* planned TUI rendering
+* TUI rendering in the initial text-mode shell
 
 ---
 
@@ -84,10 +84,9 @@ Transport -> Frame -> Decode -> Protocol -> Analysis -> Event Stream
 These architectural pieces are not implemented end to end yet:
 
 * broader real transport coverage beyond the initial `python-can` virtual-backed path
-* export workflows
 * reverse engineering helpers beyond the CLI surface
 * fuzzing workflows beyond the CLI surface
-* the TUI runtime
+* richer TUI live subscriptions and pane behavior beyond the initial shell
 
 ## Plugin Model (future)
 

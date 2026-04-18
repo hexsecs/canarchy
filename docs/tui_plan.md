@@ -1,6 +1,8 @@
 # TUI Plan
 
-Current status: the `canarchy tui` command exists in the CLI tree as a placeholder, but there is no TUI runtime yet.
+Current status: `canarchy tui` now starts an initial text-mode shell with bus status, live traffic, alerts, and command entry routed through the shared command layer.
+
+This document remains the forward-looking plan for taking that initial shell toward the richer pane model described below.
 
 ## Goal
 
@@ -205,12 +207,12 @@ Do not add these in the first pass:
 
 ## Suggested Implementation Order
 
-1. Define the event subscription boundary used by CLI, REPL, and TUI.
-2. Implement a minimal TUI shell with bus status, live traffic, and alerts.
+1. Expand the event subscription boundary used by CLI, REPL, and TUI for background live updates.
+2. Build on the shipped TUI shell with richer bus status, live traffic, and alerts presentation.
 3. Add decoded signal and J1939 panes.
 4. Add the UDS transaction pane.
-5. Add command entry routed through the existing command parser.
-6. Add pane-level filtering, focus handling, and session-aware context display.
+5. Extend command entry with better session-aware context display.
+6. Add pane-level filtering, focus handling, and backlog/window controls.
 
 ---
 
@@ -220,4 +222,4 @@ This plan satisfies the issue goals by making these points explicit:
 
 * the TUI scope and constraints are documented
 * the initial pane list and event dependencies are clear
-* implementation can proceed without inventing separate domain logic
+* follow-on implementation can proceed without inventing separate domain logic

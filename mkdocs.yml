@@ -50,6 +50,17 @@ nav:
       - Architecture: architecture.md
       - Docs Workflow: docs_site.md
       - TUI Plan: tui_plan.md
+      - Design Specs:
+          - Generate Command: design/generate-command.md
+          - Gateway Command: design/gateway-command.md
+          - Export Command: design/export-command.md
+          - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
+          - TUI Shell: design/tui-shell.md
+      - Test Specs:
+          - Gateway Command: tests/gateway-command.md
+          - Export Command: tests/export-command.md
+          - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
+          - TUI Shell: tests/tui-shell.md
   - Agents:
       - Agent Guide: agents.md
 
