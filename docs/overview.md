@@ -28,7 +28,7 @@ Some protocol-oriented commands still use explicit sample/reference providers ra
 
 ## Current Gaps
 
-Present in the CLI tree but still scaffolded or placeholder-only:
+Present in the CLI tree but not yet implemented end to end:
 
 * `re signals`, `re counters`, `re entropy`, and `re correlate`
 * `fuzz replay`, `fuzz mutate`, and `fuzz id`

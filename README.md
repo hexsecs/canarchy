@@ -31,8 +31,8 @@ Fully implemented and tested:
 * `gateway` — bridge frames between two interfaces (unidirectional and bidirectional)
 * `replay` — deterministic replay planning from candump files
 * `decode`, `encode` — DBC-backed signal decode and encode
-* `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1` — full J1939 protocol workflow suite
-* `uds scan`, `trace`, `services` — UDS diagnostic workflows and service catalog
+* `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1` — J1939 operator workflows across live, file-backed, and decoded views
+* `uds scan`, `trace`, `services` — UDS diagnostic workflows and service catalog, including initial transport-backed scan/trace heuristics
 * `session save`, `load`, `show` — session management
 * `export` — structured artifact export
 * `shell` — interactive REPL and `--command` scripting mode

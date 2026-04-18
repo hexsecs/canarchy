@@ -555,12 +555,12 @@ canarchy shell --command "capture can0 --raw"
 
 ## Current Gaps
 
-These commands are present in the CLI tree but still scaffolded or not yet implemented end to end:
+These commands are present in the CLI tree but not yet implemented end to end:
 
 * `re signals|counters|entropy|correlate`
 * `fuzz replay|mutate|id`
 
 These deeper capabilities are also not implemented yet even where the command surface exists:
 
-* live transport integration beyond the initial `python-can` `virtual` backend path
+* deeper live transport integration beyond the current `python-can` transport path
 * pretty-print output tailored for UDS commands
