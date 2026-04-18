@@ -10,13 +10,13 @@
 
 ## Test Objectives
 
-Validate the shipped passive, active, and file-backed transport workflows, including scaffold/live backend behavior and structured error handling.
+Validate the shipped passive, active, and file-backed transport workflows, including default `python-can` and deterministic scaffold behavior plus structured error handling.
 
 ## Coverage Requirements
 
 * capture streaming output across JSON, JSONL, and candump-style formats
 * send active mode and warning behavior
-* scaffold and live backend capture streaming paths
+* default `python-can` and scaffold capture streaming paths
 * filter matching behavior
 * stats summary behavior
 * structured transport/file errors
@@ -105,7 +105,7 @@ Assert: exit code `2` and `errors[0].code == "CAPTURE_FORMAT_UNSUPPORTED"`.
 * `tests/fixtures/sample.candump`
 * `tests/fixtures/invalid.candump`
 * mocked `python-can` buses for live-path coverage
-* scaffold backend fixture frames for stream-path coverage
+* scaffold backend fixture frames for deterministic transport coverage
 
 ## Explicit Non-Coverage
 

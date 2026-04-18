@@ -64,7 +64,7 @@ Assert: forwarding stops after exactly two total forwarded frames.
 
 ### `TEST-GATEWAY-05` Backend requirement
 
-Setup: default scaffold backend with no `CANARCHY_TRANSPORT_BACKEND` override.  
+Setup: scaffold backend selected explicitly through `CANARCHY_TRANSPORT_BACKEND=scaffold`.  
 Action: run `canarchy gateway src dst --json`.  
 Assert: exit code `2` and `errors[0].code == "GATEWAY_LIVE_BACKEND_REQUIRED"`.
 

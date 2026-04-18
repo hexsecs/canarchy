@@ -91,7 +91,7 @@ Emitted by: `capture`, `send`, `generate`, `gateway`, `filter`, `replay`
 
 | Source | Context |
 |--------|---------|
-| `transport.capture` | Live or scaffolded capture |
+| `transport.capture` | Capture via the selected transport backend (`python-can` or scaffold) |
 | `transport.send` | Active frame transmission |
 | `transport.generate` | Frame generation (`canarchy generate`) |
 | `transport.filter` | File-backed filter result |

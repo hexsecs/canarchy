@@ -23,7 +23,7 @@ Operators need a stable base command set that supports passive live observation,
 | `REQ-TRANSPORT-01` | The system shall provide a `capture` command for passive transport observation. |
 | `REQ-TRANSPORT-02` | The system shall provide a `send` command for intentional active transmit. |
 | `REQ-TRANSPORT-03` | The system shall provide `filter` and `stats` commands for file-backed capture analysis. |
-| `REQ-TRANSPORT-04` | `capture` and `send` shall use the deterministic scaffold backend by default and expose live backend metadata when `python-can` is selected. |
+| `REQ-TRANSPORT-04` | `capture` and `send` shall use the selected transport backend, default to `python-can`, and expose effective backend metadata. |
 | `REQ-TRANSPORT-05` | `capture` shall stream frames through the live capture path for every output format. |
 | `REQ-TRANSPORT-06` | `send` shall emit an active-transmit warning distinct from passive workflows. |
 | `REQ-TRANSPORT-07` | `filter` shall emit matching frame events from file-backed captures. |
@@ -43,7 +43,7 @@ canarchy stats <file> [--json] [--jsonl] [--table] [--raw]
 
 In scope:
 
-* passive capture through scaffold or live backend selection
+* passive capture through selected backend resolution
 * intentional active transmit through `send`
 * file-backed filtering by simple expressions
 * file-backed capture summary statistics
@@ -66,6 +66,11 @@ Relevant shared fields include:
 * `python_can_interface` when applicable
 * `status`
 * `implementation`
+
+Current backend note:
+
+* the effective backend defaults to `python-can`
+* the deterministic scaffold backend remains available for offline tests, CI, and demos
 
 ## Output Contracts
 

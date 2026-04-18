@@ -26,7 +26,7 @@ The [event schema](docs/event-schema.md) is the stable contract. The CLI wraps i
 
 Fully implemented and tested:
 
-* `capture`, `send`, `filter`, `stats` — transport workflows with scaffold and live `python-can` backends
+* `capture`, `send`, `filter`, `stats` — transport workflows with live `python-can` and deterministic scaffold backends
 * `generate` — cangen-style frame generation (fixed, random, incrementing modes)
 * `gateway` — bridge frames between two interfaces (unidirectional and bidirectional)
 * `replay` — deterministic replay planning from candump files
@@ -43,7 +43,7 @@ Present in the CLI surface but not yet fully implemented:
 * `re signals`, `re counters`, `re entropy`, `re correlate` — reverse-engineering helpers (planned)
 * `fuzz replay`, `fuzz mutate`, `fuzz id` — active fuzzing (planned)
 
-Default transport backend is the deterministic scaffold; set `CANARCHY_TRANSPORT_BACKEND=python-can` for live hardware.
+Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
 
 ### Documentation
 
@@ -125,7 +125,7 @@ canarchy replay trace.candump --rate 2.0 --json
 
 Use `--candump` for a human-oriented live view. Use `--jsonl` when feeding output to scripts or agents — every line is a typed event from the [canonical schema](docs/event-schema.md).
 
-Set `CANARCHY_TRANSPORT_BACKEND=python-can` to use live CAN hardware or the UDP multicast loopback backend.
+Live transport uses `python-can` by default. Set `CANARCHY_PYTHON_CAN_INTERFACE` to choose an interface type, or set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
 
 Current file support:
 
