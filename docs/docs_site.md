@@ -33,6 +33,21 @@ The docs site pulls from these in-repo sources:
 
 This keeps the hosted docs aligned with the current repository state while avoiding a second docs-only repo.
 
+## Mermaid Diagrams
+
+The docs site supports Mermaid code fences for architecture and flow diagrams.
+
+Use standard Mermaid fenced blocks:
+
+```text
+```mermaid
+flowchart TD
+  A[Source] --> B[Target]
+```
+```
+
+Mermaid rendering is configured in `mkdocs.yml` and initialized by `docs/javascripts/mermaid.js`.
+
 ## GitHub Pages
 
 The GitHub Pages workflow builds the MkDocs site on pushes to `main` and deploys the generated `site/` artifact through GitHub Pages.

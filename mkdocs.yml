@@ -23,6 +23,10 @@ theme:
       primary: black
       accent: lime
 
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - javascripts/mermaid.js
+
 markdown_extensions:
   - admonition
   - attr_list
@@ -34,7 +38,11 @@ markdown_extensions:
   - pymdownx.snippets:
       base_path:
         - .
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - tables
   - toc:
       permalink: true
