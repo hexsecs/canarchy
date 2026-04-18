@@ -17,6 +17,8 @@ The codebase is organized around four practical layers:
 
 Important current-state note: live bus integration currently builds on `python-can`. CANarchy does not try to replace hardware abstraction itself; it adds a higher-level workflow, protocol, and structured-output layer on top.
 
+Important boundary note: the deterministic `scaffold` backend is a transport backend for tests, CI, and offline demos. It is now distinct from explicit sample/reference protocol providers used by commands that are not yet truly transport-backed.
+
 ## System View
 
 ```mermaid
@@ -38,12 +40,14 @@ flowchart TD
 
     TP --> PY[python-can live backend]
     TP --> SC[Deterministic scaffold backend]
+    CMD --> REF[Sample / reference providers]
 
     DBC --> EV[Structured event model]
     J --> EV
     UDS --> EV
     TP --> EV
     REP --> EV
+    REF --> EV
 
     EV --> OUT[JSON / JSONL / table / raw output]
 ```
@@ -94,6 +98,8 @@ Current backend model:
 
 * `python-can` backend for live bus access
 * scaffold backend for deterministic development and testing flows
+
+Separate sample/reference providers currently exist for some protocol-oriented commands whose behavior is not yet fully transport-backed.
 
 ### 3. Command Layer
 
@@ -182,7 +188,8 @@ Why this matters:
 
 * CANarchy can stay focused on workflows and structured output
 * live hardware support can grow through `python-can` without forcing CANarchy to own every device integration directly
-* deterministic behavior remains available through the scaffold backend when tests or demos should not depend on live hardware
+* deterministic transport behavior remains available through the scaffold backend when tests or demos should not depend on live hardware
+* sample/reference protocol data can stay explicit rather than hiding behind the transport backend abstraction
 
 ## Event Model
 
@@ -280,6 +287,7 @@ The current architecture is strongest in these areas:
 The architecture is intentionally ahead of some implementations. These are the main current gaps:
 
 * live transport coverage is currently limited by the `python-can` integration and configured interfaces
+* some protocol commands still rely on explicit sample/reference data providers instead of true transport-backed execution
 * the TUI is still a minimal text-mode shell, not yet the richer pane-driven dashboard described in [TUI plan](tui_plan.md)
 * reverse-engineering and fuzzing surfaces exist at the CLI level but are not yet a deep shared subsystem
 * plugin architecture is planned conceptually but not yet implemented as a stable extension boundary
@@ -304,6 +312,7 @@ Non-goal:
 The architecture is best understood as:
 
 * `python-can` plus scaffold backend for transport access
+* explicit sample/reference providers for commands that are not yet truly transport-backed
 * typed frames and events as the internal contract
 * one command layer as the behavioral contract
 * shell and TUI as reusable views over that same contract

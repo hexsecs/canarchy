@@ -10,8 +10,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from canarchy.models import CanFrame
+from canarchy.models import CanFrame, UdsTransactionEvent
 from canarchy.transport import (
+    LocalTransport,
     PythonCanBackend,
     ScaffoldCanBackend,
     TransportBackendConfig,
@@ -238,6 +239,50 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(len(frames), 2)
         self.assertEqual(frames[0].interface, "can0")
         self.assertEqual(frames[1].interface, "can0")
+
+    def test_j1939_monitor_events_use_explicit_sample_provider(self) -> None:
+        transport = LocalTransport(live_backend=ScaffoldCanBackend())
+
+        with patch("canarchy.transport.sample_j1939_monitor_frames") as sample_provider:
+            sample_provider.return_value = [
+                CanFrame(
+                    arbitration_id=0x18FEEE31,
+                    data=bytes.fromhex("11223344"),
+                    is_extended_id=True,
+                    interface="can0",
+                    timestamp=0.0,
+                )
+            ]
+
+            events = transport.j1939_monitor_events()
+
+        sample_provider.assert_called_once_with()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "j1939_pgn")
+
+    def test_uds_scan_events_use_explicit_sample_provider(self) -> None:
+        transport = LocalTransport(live_backend=ScaffoldCanBackend())
+
+        with patch("canarchy.transport.sample_uds_scan_transactions") as sample_provider:
+            sample_provider.return_value = [
+                UdsTransactionEvent(
+                    request_id=0x7DF,
+                    response_id=0x7E8,
+                    service=0x10,
+                    service_name="DiagnosticSessionControl",
+                    request_data=bytes.fromhex("1001"),
+                    response_data=bytes.fromhex("5001"),
+                    ecu_address=0x7E8,
+                    source="transport.uds.scan",
+                    timestamp=0.0,
+                )
+            ]
+
+            events = transport.uds_scan_events("can0")
+
+        sample_provider.assert_called_once_with()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "uds_transaction")
 
     def test_build_live_backend_rejects_unknown_backend(self) -> None:
         with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "unknown"}, clear=False):

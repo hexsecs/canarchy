@@ -1,6 +1,8 @@
 # Backends & Interfaces
 
-CANarchy uses **python-can** as its live transport layer. This page explains how to choose and configure a backend, which interface types are available, and how to verify what is in effect.
+CANarchy uses **python-can** as its live transport layer. This page explains how to choose and configure a transport backend, which interface types are available, and how to verify what is in effect.
+
+Important boundary: the transport backend selection applies to transport-facing commands such as `capture`, `send`, `generate`, and `gateway`. Some protocol-oriented commands still use explicit sample/reference providers while their true live execution path is being built; those sample providers are separate from the transport backend abstraction.
 
 ---
 
@@ -9,7 +11,7 @@ CANarchy uses **python-can** as its live transport layer. This page explains how
 | Backend | What it does | When to use it |
 |---|---|---|
 | `python-can` | Opens a real (or virtual) CAN bus via python-can | **Default** — live capture, transmit, and gateway |
-| `scaffold` | Returns pre-recorded fixture frames; never touches hardware | Offline demos, testing, CI |
+| `scaffold` | Returns deterministic fixture transport frames; never touches hardware | Offline demos, testing, CI |
 
 The default interface type is `socketcan`. On Linux with a configured `can0`, capture works immediately with no config file.
 

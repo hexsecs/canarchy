@@ -13,7 +13,7 @@ Core principles:
 
 Implemented and exercised in the current codebase:
 
-* scaffolded and opt-in live transport workflows for `capture` and `send`
+* `python-can`-backed live transport workflows plus deterministic scaffold transport for `capture` and `send`
 * file-backed `filter`, `stats`, `decode`, `j1939 decode`, and `replay` using candump logs
 * DBC-backed decode and encode
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
@@ -23,6 +23,8 @@ Implemented and exercised in the current codebase:
 * shell command reuse through `canarchy shell --command ...`
 * initial text-mode `tui` shell over the shared command layer
 * structured `--json`, `--jsonl`, `--table`, and `--raw` output modes
+
+Some protocol-oriented commands still use explicit sample/reference providers rather than true transport-backed execution. See [Architecture](architecture.md) and [Command Spec](command_spec.md) for the current boundary.
 
 ## Current Gaps
 

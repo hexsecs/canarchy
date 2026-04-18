@@ -6,9 +6,9 @@ This document describes the current implemented CLI contract.
 
 Implemented and verified in the current codebase:
 
-* scaffolded transport workflows for `capture` and `send`
+* live and deterministic transport workflows for `capture` and `send`
 * file-backed `filter` and `stats` over candump capture logs
-* opt-in live `python-can` support for `capture` and `send`
+* default `python-can` support for `capture` and `send`
 * deterministic `replay`
 * live `gateway` bridging between CAN interfaces via `python-can`
 * structured `export` for capture files and saved sessions
@@ -25,10 +25,11 @@ Some other commands are already present in the CLI tree but still return placeho
 
 Important current behavior:
 
-* live transport-facing commands default to the deterministic `LocalTransport` scaffold for `capture` and `send`
-* `capture`, `send`, and `gateway` require the `python-can` backend for live transport; set `backend = "python-can"` in `~/.canarchy/config.toml` or export `CANARCHY_TRANSPORT_BACKEND=python-can`
-* the default `python-can` interface is `virtual`; set `interface` in the config file or `CANARCHY_PYTHON_CAN_INTERFACE` to change it
+* live transport-facing commands default to the `python-can` backend; set `backend = "scaffold"` in `~/.canarchy/config.toml` or export `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior
+* `capture`, `send`, and `gateway` use the selected transport backend, but `gateway` specifically requires `python-can`
+* the default `python-can` interface is `socketcan`; set `interface` in the config file or `CANARCHY_PYTHON_CAN_INTERFACE` to change it
 * placeholder-only commands still return `status: planned` and `implementation: command surface scaffold`
+* some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
 * specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
 * file-backed analysis commands currently support standard timestamped candump log files with `.candump` and `.log` suffixes
 
@@ -61,7 +62,7 @@ Examples:
 
 ### capture
 
-Capture traffic from a local interface. Structured capture works with the default scaffold backend or the opt-in `python-can` live backend. `--candump` is a live-only mode.
+Capture traffic from a local interface. Structured capture uses the selected transport backend. `--candump` is a live-only mode.
 
 ```bash
 canarchy capture <interface> [--candump] [--json|--jsonl|--table|--raw]
@@ -247,7 +248,7 @@ canarchy shell [--command "capture can0 --raw"] [--json|--jsonl|--table|--raw]
 
 ### j1939 monitor
 
-Monitor J1939 traffic and emit PGN-oriented structured events.
+Inspect representative J1939 traffic and emit PGN-oriented structured events.
 
 ```bash
 canarchy j1939 monitor [--pgn <id>] [--json|--jsonl|--table|--raw]
@@ -258,6 +259,11 @@ Example:
 ```bash
 canarchy j1939 monitor --pgn 65262 --json
 ```
+
+Notes:
+
+* this command currently uses an explicit sample/reference provider rather than a live transport stream
+* `j1939 decode`, `j1939 spn`, `j1939 tp`, and `j1939 dm1` remain file-backed
 
 ### j1939 decode
 
@@ -341,19 +347,29 @@ Notes:
 
 ### uds scan
 
-Scan for UDS responders through the transport scaffold.
+Inspect representative UDS responder discovery transactions.
 
 ```bash
 canarchy uds scan <interface> [--json|--jsonl|--table|--raw]
 ```
 
+Notes:
+
+* this command currently validates the interface through the selected transport layer and then emits explicit sample/reference UDS transaction data
+* the command is still useful for output shape and workflow validation, but it is not yet a true live diagnostic scan
+
 ### uds trace
 
-Emit structured request and response transactions for a UDS session trace.
+Inspect representative UDS request and response transactions.
 
 ```bash
 canarchy uds trace <interface> [--json|--jsonl|--table|--raw]
 ```
+
+Notes:
+
+* this command currently validates the interface through the selected transport layer and then emits explicit sample/reference UDS transaction data
+* it is not yet a true live trace path over transport traffic
 
 ### uds services
 

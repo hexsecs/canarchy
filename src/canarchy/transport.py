@@ -23,8 +23,13 @@ from canarchy.models import (
     CanFrame,
     FrameEvent,
     J1939ObservationEvent,
-    UdsTransactionEvent,
     serialize_events,
+)
+from canarchy.sample_data import (
+    sample_j1939_monitor_frames,
+    sample_uds_scan_transactions,
+    sample_uds_trace_transactions,
+    scaffold_transport_frames,
 )
 
 
@@ -91,11 +96,11 @@ class ScaffoldCanBackend:
 
     def capture(self, interface: str) -> list[CanFrame]:
         self._require_interface(interface)
-        return [frame.with_interface(interface) for frame in recorded_frames()[:2]]
+        return [frame.with_interface(interface) for frame in scaffold_transport_frames()[:2]]
 
     def capture_stream(self, interface: str) -> Iterator[CanFrame]:
         self._require_interface(interface)
-        yield from (frame.with_interface(interface) for frame in recorded_frames()[:2])
+        yield from (frame.with_interface(interface) for frame in scaffold_transport_frames()[:2])
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         self._require_interface(interface)
@@ -340,35 +345,6 @@ def build_live_backend(config: TransportBackendConfig | None = None) -> LiveCanB
     )
 
 
-def recorded_frames() -> list[CanFrame]:
-    return [
-        CanFrame(
-            arbitration_id=0x18FEEE31,
-            data=bytes.fromhex("11223344"),
-            frame_format="can",
-            interface="can0",
-            is_extended_id=True,
-            timestamp=0.0,
-        ),
-        CanFrame(
-            arbitration_id=0x18F00431,
-            data=bytes.fromhex("AABBCCDD"),
-            frame_format="can",
-            interface="can0",
-            is_extended_id=True,
-            timestamp=0.1,
-        ),
-        CanFrame(
-            arbitration_id=0x18FEF100,
-            data=bytes.fromhex("0102030405060708"),
-            frame_format="can",
-            interface="can1",
-            is_extended_id=True,
-            timestamp=0.2,
-        ),
-    ]
-
-
 class LocalTransport:
     """Local transport facade that selects a live CAN backend when available."""
 
@@ -526,7 +502,7 @@ class LocalTransport:
         )
 
     def j1939_monitor_events(self, pgn: int | None = None) -> list[dict[str, object]]:
-        frames = [frame for frame in recorded_frames() if frame.is_extended_id]
+        frames = sample_j1939_monitor_frames()
         return serialize_events(
             [
                 event.to_event()
@@ -547,59 +523,11 @@ class LocalTransport:
 
     def uds_scan_events(self, interface: str) -> list[dict[str, object]]:
         self._require_interface(interface)
-        events = [
-            UdsTransactionEvent(
-                request_id=0x7DF,
-                response_id=0x7E8,
-                service=0x10,
-                service_name="DiagnosticSessionControl",
-                request_data=bytes.fromhex("1001"),
-                response_data=bytes.fromhex("5001003201F4"),
-                ecu_address=0x7E8,
-                source="transport.uds.scan",
-                timestamp=0.0,
-            ).to_event(),
-            UdsTransactionEvent(
-                request_id=0x7DF,
-                response_id=0x7E9,
-                service=0x22,
-                service_name="ReadDataByIdentifier",
-                request_data=bytes.fromhex("22F190"),
-                response_data=bytes.fromhex("62F19056494E313233"),
-                ecu_address=0x7E9,
-                source="transport.uds.scan",
-                timestamp=0.1,
-            ).to_event(),
-        ]
-        return serialize_events(events)
+        return serialize_events([event.to_event() for event in sample_uds_scan_transactions()])
 
     def uds_trace_events(self, interface: str) -> list[dict[str, object]]:
         self._require_interface(interface)
-        events = [
-            UdsTransactionEvent(
-                request_id=0x7E0,
-                response_id=0x7E8,
-                service=0x10,
-                service_name="DiagnosticSessionControl",
-                request_data=bytes.fromhex("1003"),
-                response_data=bytes.fromhex("5003003201F4"),
-                ecu_address=0x7E8,
-                source="transport.uds.trace",
-                timestamp=0.0,
-            ).to_event(),
-            UdsTransactionEvent(
-                request_id=0x7E0,
-                response_id=0x7E8,
-                service=0x27,
-                service_name="SecurityAccess",
-                request_data=bytes.fromhex("2701"),
-                response_data=bytes.fromhex("670112345678"),
-                ecu_address=0x7E8,
-                source="transport.uds.trace",
-                timestamp=0.2,
-            ).to_event(),
-        ]
-        return serialize_events(events)
+        return serialize_events([event.to_event() for event in sample_uds_trace_transactions()])
 
     def generate_events(
         self, interface: str, frames: list[CanFrame], *, gap_ms: float = 0.0

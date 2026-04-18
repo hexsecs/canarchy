@@ -888,7 +888,11 @@ def j1939_payload(
     transport = LocalTransport()
     if args.command == "j1939 monitor":
         return (
-            {"mode": "passive", "pgn_filter": args.pgn},
+            {
+                "mode": "passive",
+                "pgn_filter": args.pgn,
+                "implementation": "sample/reference provider",
+            },
             transport.j1939_monitor_events(args.pgn),
             [],
         )
@@ -1033,6 +1037,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "interface": args.interface,
                 "mode": "active",
                 "responder_count": len(events),
+                "implementation": "sample/reference provider",
             },
             events,
             ["UDS scanning is active and should be used intentionally on a controlled bus."],
@@ -1044,6 +1049,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "interface": args.interface,
                 "mode": "passive",
                 "transaction_count": len(events),
+                "implementation": "sample/reference provider",
             },
             events,
             [],
