@@ -5,6 +5,17 @@ This demo shows how to use `canarchy generate` to produce test CAN traffic and
 
 You need two terminals.
 
+## Set the backend once
+
+Run this in **both** terminals before anything else:
+
+```bash
+export CANARCHY_TRANSPORT_BACKEND=python-can
+export CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast
+```
+
+All subsequent `canarchy` calls in that shell will use these values automatically.
+
 ## Backend choice matters
 
 Two backends are available for software-only loopback:
@@ -26,8 +37,6 @@ sent in one process are invisible to a capture running in a separate terminal. U
 ## Terminal 1 — Start the Candump Capture
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy capture 239.0.0.1 --candump
 ```
 
@@ -38,8 +47,6 @@ The terminal blocks and waits. Each arriving frame prints as a `candump`-style l
 ### Random frames
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy generate 239.0.0.1 --count 5
 ```
 
@@ -56,8 +63,6 @@ Terminal 1 prints something like:
 ### Fixed ID and payload
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy generate 239.0.0.1 --id 0x7DF --dlc 3 --data DEADBE --count 3
 ```
 
@@ -74,8 +79,6 @@ Terminal 1 prints:
 `--data I` produces a rolling byte pattern useful for spotting dropped or out-of-order frames:
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy generate 239.0.0.1 --id 0x100 --dlc 4 --data I --count 4
 ```
 
@@ -91,8 +94,6 @@ Terminal 1 prints:
 ### Extended (29-bit) IDs
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy generate 239.0.0.1 --id 0x18FEEE31 --dlc 8 --data R --extended
 ```
 
@@ -101,8 +102,6 @@ uv run canarchy generate 239.0.0.1 --id 0x18FEEE31 --dlc 8 --data R --extended
 `--gap` sets the inter-frame delay in milliseconds (default 200 ms):
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy generate 239.0.0.1 --count 10 --gap 50
 ```
 
@@ -111,8 +110,6 @@ uv run canarchy generate 239.0.0.1 --count 10 --gap 50
 Use `--json` instead of `--candump` to get machine-readable output:
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy generate 239.0.0.1 --id 0x123 --dlc 4 --data 11223344 --count 2 --json
 ```
 
