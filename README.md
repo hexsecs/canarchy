@@ -2,58 +2,55 @@
 
 ## CANarchy
 
-CANarchy is a CLI-first CAN security research toolkit for reproducible, protocol-aware, automation-friendly workflows.
+CANarchy is a stream-first CAN analysis and manipulation runtime designed for automation, security research, and agent-driven workflows.
 
 The project is implemented in Python and uses `uv` for environment, dependency, and packaging workflows.
 
-Today the repository combines:
+Every command emits a [canonical event stream](docs/event-schema.md) — structured, pipeable, and machine-readable. The CLI is the interface. JSONL is the wire format. J1939 is a first-class citizen, not an afterthought.
 
-* a stable command surface for analysts, scripts, and coding agents
-* J1939-first heavy vehicle workflows alongside broader CAN analysis
-* structured output for pipelines, replayable research, and machine parsing
-* a shared Python core used by the CLI, session workflows, and shell scaffolding
+Today the repository delivers:
+
+* a stable CLI surface for analysts, scripts, and coding agents
+* J1939-first heavy vehicle workflows: PGN decoding, SPN extraction, TP session reassembly, DM1 fault parsing
+* structured output (`--json`, `--jsonl`, `--table`, `--raw`) on every command
+* live CAN transport via `python-can` with support for socketcan, virtual bus, and UDP multicast
+* UDS scan and trace, DBC decode/encode, capture/filter/replay, and an interactive shell
 
 ### Why CANarchy?
 
-Most CAN tools force the wrong tradeoff: interactive but hard to automate, scriptable but too raw, protocol-aware but inconsistent across interfaces, or just poorly documented.
+Most CAN tools force the wrong tradeoff: interactive but hard to automate, scriptable but too raw, protocol-aware but inconsistent across interfaces. CANarchy is built around the opposite constraint: every output is a stream of typed events you can parse, pipe, or forward to an agent.
 
-CANarchy is built differently. The CLI is the contract. Structured output is a first-class feature. J1939 is treated as a primary workflow, not an afterthought. The current codebase focuses on making that CLI contract testable while adding a first real live-transport path through `python-can`.
-
-The project is centered on CAN security research, with strong support for heavy vehicle and J1939 workflows and broader CAN analysis through a security-first lens.
+The [event schema](docs/event-schema.md) is the stable contract. The CLI wraps it. J1939 heavy vehicle analysis is the initial focus for protocol-aware workflows, with a security-research lens throughout.
 
 ### Current State
 
-Implemented and exercised in tests:
+Fully implemented and tested:
 
-* scaffolded transport workflows for `capture`, `send`, `filter`, and `stats`
-* optional live `python-can` transport for `capture` and `send`, with the virtual CAN interface as the first supported backend
-* deterministic `replay` planning from sample capture data
-* DBC-backed `decode` and `encode`
-* J1939 `monitor`, `decode`, and `pgn`
-* UDS `scan` and `trace`
-* session `save`, `load`, and `show`
-* structured `--json`, `--jsonl`, `--table`, and `--raw` output modes
-* shell command reuse through `canarchy shell --command ...`
+* `capture`, `send`, `filter`, `stats` — transport workflows with scaffold and live `python-can` backends
+* `generate` — cangen-style frame generation (fixed, random, incrementing modes)
+* `gateway` — bridge frames between two interfaces (unidirectional and bidirectional)
+* `replay` — deterministic replay planning from candump files
+* `decode`, `encode` — DBC-backed signal decode and encode
+* `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1` — full J1939 protocol workflow suite
+* `uds scan`, `trace`, `services` — UDS diagnostic workflows and service catalog
+* `session save`, `load`, `show` — session management
+* `export` — structured artifact export
+* `shell` — interactive REPL and `--command` scripting mode
+* `tui` — terminal UI front end
 
-Present in the CLI tree but still scaffolded or placeholder-only:
+Present in the CLI surface but not yet fully implemented:
 
-* `export`
-* `j1939 spn`, `j1939 tp`, and `j1939 dm1`
-* `uds services`
-* `re signals`, `re counters`, `re entropy`, and `re correlate`
-* `fuzz replay`, `fuzz mutate`, and `fuzz id`
-* `tui`
+* `re signals`, `re counters`, `re entropy`, `re correlate` — reverse-engineering helpers (planned)
+* `fuzz replay`, `fuzz mutate`, `fuzz id` — active fuzzing (planned)
 
-Current implementation note:
-
-* `capture` and `send` default to the deterministic scaffold backend, with an opt-in `python-can` backend for live transport work
-* successful command payloads currently include `status: planned` and `implementation: command surface scaffold`
+Default transport backend is the deterministic scaffold; set `CANARCHY_TRANSPORT_BACKEND=python-can` for live hardware.
 
 ### Documentation
 
+* [Event Schema](docs/event-schema.md) — canonical event envelope for all structured output
 * [Command spec](docs/command_spec.md)
 * [Architecture](docs/architecture.md)
-* [TUI plan](docs/tui_plan.md)
+* [J1939 Heavy Vehicle Demo](docs/demo_j1939_heavy_vehicle.md)
 
 ### Installation
 
@@ -98,17 +95,29 @@ uv run canarchy --help
 ### Example Usage
 
 ```bash
-canarchy capture can0 --json
+# Capture and decode
 canarchy capture can0 --candump
-canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
-canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 OilTemp=65 Load=40 LampState=1 --json
-canarchy j1939 monitor --pgn 65262
-canarchy replay tests/fixtures/sample.candump --rate 0.5 --json
+canarchy capture can0 --jsonl
+canarchy decode trace.candump --dbc vehicle.dbc --jsonl
+
+# J1939 heavy vehicle analysis
+canarchy j1939 decode trace.candump --table
+canarchy j1939 spn 110 --file trace.candump --table   # Engine Coolant Temp
+canarchy j1939 dm1 trace.candump --table               # Active fault codes
+
+# Pipe events into downstream tools
+canarchy j1939 spn 110 --file trace.candump --jsonl \
+  | jq '[.payload.value, .payload.units, .payload.timestamp]'
+
+# Active workflows
+canarchy generate can0 --count 10 --gap 50 --id 7DF --jsonl
+canarchy gateway can0 239.0.0.1 --count 100
+canarchy replay trace.candump --rate 2.0 --json
 ```
 
-These examples use the scaffolded live transport for `capture` by default and real candump log input for file-backed workflows. Set `CANARCHY_TRANSPORT_BACKEND=python-can` to exercise the live `capture` and `send` path through `python-can`.
+Use `--candump` for a human-oriented live view. Use `--jsonl` when feeding output to scripts or agents — every line is a typed event from the [canonical schema](docs/event-schema.md).
 
-Use `canarchy capture <interface> --candump` when you want a familiar human-oriented live dump view. Use `--json` or `--jsonl` when you need stable machine-readable output.
+Set `CANARCHY_TRANSPORT_BACKEND=python-can` to use live CAN hardware or the UDP multicast loopback backend.
 
 Current file support:
 
