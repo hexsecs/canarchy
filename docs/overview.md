@@ -21,6 +21,7 @@ Implemented and exercised in the current codebase:
 * session `save`, `load`, and `show`
 * structured `export` for capture files and saved sessions
 * shell command reuse through `canarchy shell --command ...`
+* initial text-mode `tui` shell over the shared command layer
 * structured `--json`, `--jsonl`, `--table`, and `--raw` output modes
 
 ## Current Gaps
@@ -30,7 +31,6 @@ Present in the CLI tree but still scaffolded or placeholder-only:
 * `uds services`
 * `re signals`, `re counters`, `re entropy`, and `re correlate`
 * `fuzz replay`, `fuzz mutate`, and `fuzz id`
-* `tui`
 
 ## Recommended Reading
 

@@ -21,6 +21,7 @@ from canarchy.models import (
 from canarchy.replay import build_replay_plan
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.transport import LocalTransport, TransportError, generate_frames
+from canarchy.tui import run_tui
 
 EXIT_OK = 0
 EXIT_USER_ERROR = 1
@@ -322,6 +323,7 @@ def build_parser() -> CanarchyArgumentParser:
     shell.set_defaults(command="shell")
 
     tui = subparsers.add_parser("tui", help="start the TUI")
+    tui.add_argument("--command", dest="tui_command", help="run a single TUI command and exit")
     add_output_arguments(tui)
     tui.set_defaults(command="tui")
 
@@ -1407,9 +1409,84 @@ def run_shell(shell_command: str | None) -> int:
         main(shlex.split(stripped))
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def execute_command(argv: Sequence[str] | None = None) -> tuple[int, CommandResult | None]:
     parser = build_parser()
+    try:
+        args = parser.parse_args(argv)
+    except CliUsageError as exc:
+        return (
+            EXIT_USER_ERROR,
+            error_result(
+                "cli",
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_ARGUMENTS",
+                        message=str(exc),
+                        hint="Run `canarchy --help` to inspect the available commands and flags.",
+                    )
+                ],
+            ),
+        )
+
+    try:
+        validate_args(args)
+        if args.command in {"shell", "tui"}:
+            return (
+                EXIT_USER_ERROR,
+                error_result(
+                    args.command,
+                    errors=[
+                        ErrorDetail(
+                            code="TUI_COMMAND_UNSUPPORTED",
+                            message="The TUI command entry does not support nested interactive front ends.",
+                            hint="Run domain commands like `capture`, `decode`, or `j1939 monitor` from the TUI.",
+                        )
+                    ],
+                ),
+            )
+        return EXIT_OK, build_result(args)
+    except SessionError as exc:
+        return (
+            EXIT_USER_ERROR,
+            error_result(
+                args.command,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+        )
+    except DbcError as exc:
+        return (
+            EXIT_DECODE_ERROR,
+            error_result(
+                args.command,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+        )
+    except TransportError as exc:
+        return (
+            EXIT_TRANSPORT_ERROR,
+            error_result(
+                args.command,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+        )
+    except ExportError as exc:
+        return (
+            EXIT_USER_ERROR,
+            error_result(
+                args.command,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+        )
+    except CommandError as exc:
+        return (
+            exc.exit_code,
+            error_result(exc.command, errors=exc.errors, data=exc.data, warnings=exc.warnings),
+        )
+
+
+def main(argv: Sequence[str] | None = None) -> int:
     output_format = requested_output_format(argv)
+    parser = build_parser()
     try:
         args = parser.parse_args(argv)
     except CliUsageError as exc:
@@ -1425,84 +1502,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         emit_result(result, output_format)
         return EXIT_USER_ERROR
-
     output_format = format_name(args)
-    try:
-        validate_args(args)
-        if args.command == "shell":
-            return run_shell(args.shell_command)
-        if (
-            args.command == "capture"
-            and getattr(args, "candump", False)
-            and output_format in {"table", "raw"}
-        ):
-            return emit_live_candump(args)
-        if args.command == "gateway" and output_format in {"table", "raw"}:
-            return emit_live_gateway(args)
-        result = build_result(args)
+    if args.command == "shell":
+        return run_shell(args.shell_command)
+    if args.command == "tui":
+        return run_tui(execute_command, command=args.tui_command)
+    if (
+        args.command == "capture"
+        and getattr(args, "candump", False)
+        and output_format in {"table", "raw"}
+    ):
+        return emit_live_candump(args)
+    if args.command == "gateway" and output_format in {"table", "raw"}:
+        return emit_live_gateway(args)
+
+    exit_code, result = execute_command(argv)
+    if result is not None:
         emit_result(result, output_format)
-        return EXIT_OK
-    except SessionError as exc:
-        result = error_result(
-            args.command,
-            errors=[
-                ErrorDetail(
-                    code=exc.code,
-                    message=exc.message,
-                    hint=exc.hint,
-                )
-            ],
-        )
-        emit_result(result, output_format)
-        return EXIT_USER_ERROR
-    except DbcError as exc:
-        result = error_result(
-            args.command,
-            errors=[
-                ErrorDetail(
-                    code=exc.code,
-                    message=exc.message,
-                    hint=exc.hint,
-                )
-            ],
-        )
-        emit_result(result, output_format)
-        return EXIT_DECODE_ERROR
-    except TransportError as exc:
-        result = error_result(
-            args.command,
-            errors=[
-                ErrorDetail(
-                    code=exc.code,
-                    message=exc.message,
-                    hint=exc.hint,
-                )
-            ],
-        )
-        emit_result(result, output_format)
-        return EXIT_TRANSPORT_ERROR
-    except ExportError as exc:
-        result = error_result(
-            args.command,
-            errors=[
-                ErrorDetail(
-                    code=exc.code,
-                    message=exc.message,
-                    hint=exc.hint,
-                )
-            ],
-        )
-        emit_result(result, output_format)
-        return EXIT_USER_ERROR
-    except CommandError as exc:
-        result = error_result(
-            exc.command,
-            errors=exc.errors,
-            data=exc.data,
-            warnings=exc.warnings,
-        )
-        emit_result(result, output_format)
-        return exc.exit_code
+    return exit_code
 
 
 if __name__ == "__main__":

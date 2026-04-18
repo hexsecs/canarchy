@@ -725,6 +725,41 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertEqual(stdout.strip(), "capture")
 
+    def test_tui_starts_and_renders_initial_shell(self) -> None:
+        with patch("builtins.input", side_effect=EOFError):
+            exit_code, stdout, stderr = run_cli("tui")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("== CANarchy TUI ==", stdout)
+        self.assertIn("[Bus Status]", stdout)
+        self.assertIn("[Live Traffic]", stdout)
+        self.assertIn("[Alerts]", stdout)
+        self.assertIn("[Command Entry]", stdout)
+
+    def test_tui_command_executes_shared_command_path(self) -> None:
+        exit_code, stdout, stderr = run_cli("tui", "--command", "j1939 monitor --pgn 65262")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 monitor", stdout)
+        self.assertIn("mode: passive", stdout)
+        self.assertIn("j1939 pgn=65262", stdout)
+
+    def test_tui_command_surfaces_shared_errors(self) -> None:
+        exit_code, stdout, stderr = run_cli("tui", "--command", "j1939 pgn 300000")
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        self.assertIn("error: INVALID_PGN: J1939 PGN must be between 0 and 262143.", stdout)
+
+    def test_tui_command_rejects_nested_frontends(self) -> None:
+        exit_code, stdout, stderr = run_cli("tui", "--command", "shell --command 'capture can0 --raw'")
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        self.assertIn("TUI_COMMAND_UNSUPPORTED", stdout)
+
     def test_usage_error_respects_json_output(self) -> None:
         exit_code, stdout, stderr = run_cli("decode", "capture.log", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)

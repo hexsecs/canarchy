@@ -16,6 +16,7 @@ Implemented and verified in the current codebase:
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
 * session `save`, `load`, and `show`
 * shell one-shot command execution
+* initial text-mode `tui` shell over the shared command layer
 * UDS `scan` and `trace`
 * structured JSON and JSONL output
 * explicit error schema and exit codes
@@ -323,6 +324,21 @@ Inspect DM1 fault traffic from direct J1939 frames and TP-reassembled payloads.
 canarchy j1939 dm1 <file> [--json|--jsonl|--table|--raw]
 ```
 
+### tui
+
+Start the initial text-mode TUI shell.
+
+```bash
+canarchy tui [--command "<existing canarchy command>"]
+```
+
+Notes:
+
+* the first implementation is a thin text-mode shell, not a full-screen terminal UI
+* panes include bus status, live traffic, alerts, and command entry help
+* command entry runs existing CANarchy commands through the shared parser and result path
+* nested interactive front ends like `shell` or `tui` are rejected from TUI command entry
+
 ### uds scan
 
 Scan for UDS responders through the transport scaffold.
@@ -508,7 +524,6 @@ These commands are present in the CLI tree but still scaffolded or not yet imple
 * `uds services`
 * `re signals|counters|entropy|correlate`
 * `fuzz replay|mutate|id`
-* `tui`
 
 These deeper capabilities are also not implemented yet even where the command surface exists:
 
