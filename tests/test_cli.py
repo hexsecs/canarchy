@@ -919,6 +919,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["mode"], "active")
         self.assertEqual(payload["data"]["frame_count"], 1)
         self.assertEqual(payload["data"]["transport_backend"], "scaffold")
+        alert_event = payload["data"]["events"][0]
+        self.assertEqual(alert_event["event_type"], "alert")
+        self.assertEqual(alert_event["payload"]["code"], "ACTIVE_TRANSMIT")
         frame_event = payload["data"]["events"][1]
         self.assertEqual(frame_event["event_type"], "frame")
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x123)
@@ -926,13 +929,28 @@ class CliTests(unittest.TestCase):
 
     def test_generate_count_produces_correct_number_of_frames(self) -> None:
         exit_code, stdout, stderr = run_cli(
-            "generate", "can0", "--id", "0x7DF", "--dlc", "2", "--data", "I", "--count", "3", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x7DF",
+            "--dlc",
+            "2",
+            "--data",
+            "I",
+            "--count",
+            "3",
+            "--gap",
+            "100",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["frame_count"], 3)
         frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
         self.assertEqual(len(frame_events), 3)
+        self.assertEqual(frame_events[0]["timestamp"], 0.0)
+        self.assertEqual(frame_events[1]["timestamp"], 0.1)
+        self.assertEqual(frame_events[2]["timestamp"], 0.2)
 
     def test_generate_incrementing_data_produces_rolling_bytes(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -981,6 +999,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_DLC")
+
+    def test_generate_invalid_payload_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli("generate", "can0", "--data", "XYZ", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_FRAME_DATA")
 
     def test_generate_invalid_count_returns_user_error(self) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--count", "0", "--json")

@@ -51,18 +51,30 @@ nav:
       - Docs Workflow: docs_site.md
       - TUI Plan: tui_plan.md
       - Design Specs:
+          - Transport Core Commands: design/transport-core-commands.md
+          - DBC Command Workflows: design/dbc-command-workflows.md
           - Generate Command: design/generate-command.md
           - Gateway Command: design/gateway-command.md
           - Export Command: design/export-command.md
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
+          - Replay Command: design/replay-command.md
+          - Session Workflows: design/session-workflows.md
+          - UDS Transaction Workflows: design/uds-transaction-workflows.md
           - UDS Services Command: design/uds-services-command.md
+          - Shell Command: design/shell-command.md
           - TUI Shell: design/tui-shell.md
       - Test Specs:
+          - Transport Core Commands: tests/transport-core-commands.md
+          - DBC Command Workflows: tests/dbc-command-workflows.md
           - Generate Command: tests/generate-command.md
           - Gateway Command: tests/gateway-command.md
           - Export Command: tests/export-command.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
+          - Replay Command: tests/replay-command.md
+          - Session Workflows: tests/session-workflows.md
+          - UDS Transaction Workflows: tests/uds-transaction-workflows.md
           - UDS Services Command: tests/uds-services-command.md
+          - Shell Command: tests/shell-command.md
           - TUI Shell: tests/tui-shell.md
   - Agents:
       - Agent Guide: agents.md
