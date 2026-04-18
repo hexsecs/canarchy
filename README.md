@@ -71,6 +71,13 @@ uv sync
 uv run canarchy --help
 ```
 
+6. Optionally install `canarchy` on your PATH so you don't need `uv run` every time:
+
+```bash
+uv tool install --editable .
+canarchy --help
+```
+
 If you want to verify the local environment end to end, run:
 
 ```bash
@@ -81,15 +88,15 @@ Notes:
 
 * `uv sync` creates the local virtual environment and installs the package from the current checkout.
 * The checked-in `uv.lock` file should be used for reproducible dependency resolution.
-* Live transport support currently uses `python-can`; set `CANARCHY_TRANSPORT_BACKEND=python-can` to enable it.
-* The initial real backend focus is the `python-can` `virtual` interface, which is also the default `CANARCHY_PYTHON_CAN_INTERFACE` value.
-* The scaffold backend remains the default, so transport workflows can still be exercised locally without a live CAN interface.
+* `uv tool install --editable .` puts `canarchy` on your PATH permanently; edits take effect without reinstalling.
+* Live transport support currently uses `python-can`; persist backend settings in `~/.canarchy/config.toml` (see [Getting Started](docs/getting_started.md)).
 
 ### Development
 
 ```bash
 uv sync
-uv run canarchy --help
+uv tool install --editable .
+canarchy --help
 ```
 
 ### Example Usage

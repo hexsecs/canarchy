@@ -10,11 +10,41 @@ Install project dependencies:
 uv sync
 ```
 
-Confirm the CLI is available:
+## Making `canarchy` Available Directly
+
+By default you invoke the CLI as `canarchy`. Two options let you drop the `uv run` prefix.
+
+### Option A — Install as a global tool (recommended)
+
+Installs `canarchy` on your PATH permanently. Works in any directory, any terminal, no activation step:
 
 ```bash
-uv run canarchy --help
+uv tool install --editable .
 ```
+
+The `--editable` flag means source changes take effect immediately without reinstalling. Verify it worked:
+
+```bash
+which canarchy
+canarchy --version
+```
+
+To uninstall later: `uv tool uninstall canarchy`
+
+### Option B — Activate the project virtualenv
+
+Activates `.venv` for the current shell session. `canarchy` is on PATH until you close the terminal or run `deactivate`:
+
+```bash
+source .venv/bin/activate
+canarchy --version
+```
+
+Useful if you want the venv active for other tools in the same session. Pair with [direnv](https://direnv.net/) to activate automatically on `cd` into the project directory.
+
+---
+
+The rest of this guide assumes `canarchy` is available directly. Prefix commands with `uv run` if you have not done either step above.
 
 ## Live Candump with Software Loopback
 
@@ -54,7 +84,7 @@ export CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast
 In one terminal, start a live candump capture:
 
 ```bash
-uv run canarchy capture 239.0.0.1 --candump
+canarchy capture 239.0.0.1 --candump
 ```
 
 This command stays open and keeps printing frames until you interrupt it with `Ctrl+C`.
@@ -62,7 +92,7 @@ This command stays open and keeps printing frames until you interrupt it with `C
 In another terminal, send a frame:
 
 ```bash
-uv run canarchy send 239.0.0.1 0x123 11223344 --json
+canarchy send 239.0.0.1 0x123 11223344 --json
 ```
 
 The capture terminal should print a line like:
@@ -76,7 +106,7 @@ The capture terminal should print a line like:
 If you want machine-readable output instead of a terminal-oriented dump view, use JSON.
 
 ```bash
-uv run canarchy capture can0 --json
+canarchy capture can0 --json
 ```
 
 Use `--candump` for operator-friendly live traffic watching on a real backend. Use `--json` or `--jsonl` for scripting and automation.
@@ -88,19 +118,19 @@ CANarchy can operate on standard timestamped candump log files.
 Summarize a capture:
 
 ```bash
-uv run canarchy stats tests/fixtures/sample.candump --json
+canarchy stats tests/fixtures/sample.candump --json
 ```
 
 Filter for a specific arbitration ID:
 
 ```bash
-uv run canarchy filter tests/fixtures/sample.candump 'id==0x18FEEE31' --json
+canarchy filter tests/fixtures/sample.candump 'id==0x18FEEE31' --json
 ```
 
 Replay a capture with deterministic timing:
 
 ```bash
-uv run canarchy replay tests/fixtures/sample.candump --rate 1.0 --json
+canarchy replay tests/fixtures/sample.candump --rate 1.0 --json
 ```
 
 ## Supported Candump Forms
