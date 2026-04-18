@@ -25,25 +25,39 @@ The project is focused on:
 
 GitHub Issues are the source of truth for project planning and task tracking.
 
-Agents should follow these rules:
+### Every change must be associated with an issue
 
-* use GitHub Issues to track planned work rather than ad hoc task lists in docs
-* when starting or completing work that relates to an issue, update the issue with progress or implementation notes
-* commit and push the relevant code changes before closing an issue so the issue state matches the remote repository state
-* close an issue when its scope and acceptance criteria have been satisfied
-* when creating a new issue, always include explicit acceptance criteria that define what must be true to close it
-* if code changes only partially satisfy an issue, leave the issue open and note the remaining work
-* if work for an issue is complete locally but has not yet been committed and pushed, explicitly offer to the user to commit and push the changes and then close or update the issue
-* after completing issue-scoped work, summarize what was implemented, recommend the most sensible next steps, and present those next steps as a concise multiple-choice menu the user can select from
+**This is a hard rule, not a suggestion.**
 
-Recommended completion handoff when issue-scoped work is done locally:
+* Before starting any new feature, bug fix, or non-trivial refactor, check whether an open issue already covers it.
+* If no issue exists, create one with a clear title, description, and acceptance criteria before writing code.
+* Every commit that implements or fixes something must reference the relevant issue number using `closes #N`, `fixes #N`, or `refs #N` in the commit message.
+* Do not merge or push code changes that have no associated issue.
+* Bug fixes discovered incidentally (e.g. while working on a different issue) get their own issue opened first, then fixed.
 
-1. state that the issue work is complete locally
-2. summarize the shipped changes and verification results
-3. offer to commit and push the changes if that has not happened yet
-4. if commit/push is already done, offer to close or update the issue if still needed
-5. recommend the next 2-4 highest-value follow-up tasks
-6. present the next steps as a multiple-choice menu, for example:
+The only exceptions are:
+* typo/whitespace-only changes in docs or comments
+* changes to `.gitignore` or other non-functional config
+
+### Other issue rules
+
+* Use GitHub Issues to track planned work rather than ad hoc task lists in docs.
+* When starting or completing work that relates to an issue, update the issue with progress or implementation notes.
+* Commit and push the relevant code changes before closing an issue so the issue state matches the remote repository state.
+* Close an issue when its scope and acceptance criteria have been satisfied.
+* When creating a new issue, always include explicit acceptance criteria that define what must be true to close it.
+* If code changes only partially satisfy an issue, leave the issue open and note the remaining work.
+* If work for an issue is complete locally but has not yet been committed and pushed, explicitly offer to the user to commit and push the changes and then close or update the issue.
+* After completing issue-scoped work, summarize what was implemented, recommend the most sensible next steps, and present those next steps as a concise multiple-choice menu the user can select from.
+
+### Recommended completion handoff when issue-scoped work is done locally
+
+1. State that the issue work is complete locally.
+2. Summarize the shipped changes and verification results.
+3. Offer to commit and push the changes if that has not happened yet.
+4. If commit/push is already done, offer to close or update the issue if still needed.
+5. Recommend the next 2–4 highest-value follow-up tasks.
+6. Present the next steps as a multiple-choice menu, for example:
 
    A. commit, push, and close the issue
    B. start the next recommended issue
