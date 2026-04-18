@@ -220,13 +220,64 @@ class PythonCanBackend:
         )
 
 
+def _load_user_config() -> dict[str, str]:
+    """Load ~/.canarchy/config.toml and return env-var-style overrides.
+
+    Missing files and parse errors are silently ignored — the caller falls
+    back to environment variables and hardcoded defaults.
+
+    Config file format::
+
+        [transport]
+        backend = "python-can"
+        interface = "udp_multicast"
+        # capture_limit = 2
+        # capture_timeout = 0.05
+
+    Supported keys under ``[transport]``:
+
+    * ``backend``        → ``CANARCHY_TRANSPORT_BACKEND``
+    * ``interface``      → ``CANARCHY_PYTHON_CAN_INTERFACE``
+    * ``capture_limit``  → ``CANARCHY_CAPTURE_LIMIT``
+    * ``capture_timeout``→ ``CANARCHY_CAPTURE_TIMEOUT``
+    """
+    import tomllib
+
+    config_path = Path.home() / ".canarchy" / "config.toml"
+    if not config_path.exists():
+        return {}
+    try:
+        with config_path.open("rb") as f:
+            raw = tomllib.load(f)
+    except Exception:
+        return {}
+
+    transport = raw.get("transport", {})
+    key_map = {
+        "backend": "CANARCHY_TRANSPORT_BACKEND",
+        "interface": "CANARCHY_PYTHON_CAN_INTERFACE",
+        "capture_limit": "CANARCHY_CAPTURE_LIMIT",
+        "capture_timeout": "CANARCHY_CAPTURE_TIMEOUT",
+    }
+    return {
+        env_key: str(transport[toml_key])
+        for toml_key, env_key in key_map.items()
+        if toml_key in transport
+    }
+
+
 def transport_backend_config() -> TransportBackendConfig:
-    backend = os.environ.get("CANARCHY_TRANSPORT_BACKEND", "scaffold").strip().lower() or "scaffold"
+    file_config = _load_user_config()
+
+    def _get(env_key: str, default: str) -> str:
+        return os.environ.get(env_key) or file_config.get(env_key) or default
+
+    backend = _get("CANARCHY_TRANSPORT_BACKEND", "scaffold").strip().lower() or "scaffold"
     python_can_interface = (
-        os.environ.get("CANARCHY_PYTHON_CAN_INTERFACE", "virtual").strip().lower() or "virtual"
+        _get("CANARCHY_PYTHON_CAN_INTERFACE", "virtual").strip().lower() or "virtual"
     )
-    capture_limit = int(os.environ.get("CANARCHY_CAPTURE_LIMIT", "2"))
-    capture_timeout = float(os.environ.get("CANARCHY_CAPTURE_TIMEOUT", "0.05"))
+    capture_limit = int(_get("CANARCHY_CAPTURE_LIMIT", "2"))
+    capture_timeout = float(_get("CANARCHY_CAPTURE_TIMEOUT", "0.05"))
     return TransportBackendConfig(
         backend=backend,
         python_can_interface=python_can_interface,

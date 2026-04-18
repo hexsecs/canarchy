@@ -7,14 +7,22 @@ You need two terminals.
 
 ## Set the backend once
 
-Run this in **both** terminals before anything else:
+The cleanest option is a persistent user config file. Create `~/.canarchy/config.toml`:
+
+```toml
+[transport]
+backend = "python-can"
+interface = "udp_multicast"
+```
+
+Every `canarchy` command in any terminal will pick this up automatically — no per-session setup needed.
+
+If you prefer environment variables instead, export them at the top of each terminal:
 
 ```bash
 export CANARCHY_TRANSPORT_BACKEND=python-can
 export CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast
 ```
-
-All subsequent `canarchy` calls in that shell will use these values automatically.
 
 ## Backend choice matters
 

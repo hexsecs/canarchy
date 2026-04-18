@@ -153,6 +153,78 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "CAPTURE_SOURCE_INVALID")
         self.assertIn("unsupported CAN FD flags", ctx.exception.message)
 
+    def test_user_config_file_sets_backend(self) -> None:
+        import tempfile
+        from canarchy.transport import _load_user_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / ".canarchy"
+            config_dir.mkdir()
+            (config_dir / "config.toml").write_text(
+                '[transport]\nbackend = "python-can"\ninterface = "udp_multicast"\n'
+            )
+            with patch("pathlib.Path.home", return_value=Path(tmp)):
+                result = _load_user_config()
+
+        self.assertEqual(result["CANARCHY_TRANSPORT_BACKEND"], "python-can")
+        self.assertEqual(result["CANARCHY_PYTHON_CAN_INTERFACE"], "udp_multicast")
+
+    def test_user_config_file_missing_returns_empty(self) -> None:
+        import tempfile
+        from canarchy.transport import _load_user_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("pathlib.Path.home", return_value=Path(tmp)):
+                result = _load_user_config()
+
+        self.assertEqual(result, {})
+
+    def test_user_config_file_invalid_toml_returns_empty(self) -> None:
+        import tempfile
+        from canarchy.transport import _load_user_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / ".canarchy"
+            config_dir.mkdir()
+            (config_dir / "config.toml").write_text("not valid toml ][[\n")
+            with patch("pathlib.Path.home", return_value=Path(tmp)):
+                result = _load_user_config()
+
+        self.assertEqual(result, {})
+
+    def test_env_var_overrides_config_file(self) -> None:
+        import tempfile
+        from canarchy.transport import transport_backend_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / ".canarchy"
+            config_dir.mkdir()
+            (config_dir / "config.toml").write_text('[transport]\nbackend = "python-can"\n')
+            with patch("pathlib.Path.home", return_value=Path(tmp)):
+                with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "scaffold"}, clear=False):
+                    config = transport_backend_config()
+
+        self.assertEqual(config.backend, "scaffold")
+
+    def test_config_file_used_when_no_env_var(self) -> None:
+        import tempfile
+        from canarchy.transport import transport_backend_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / ".canarchy"
+            config_dir.mkdir()
+            (config_dir / "config.toml").write_text(
+                '[transport]\nbackend = "python-can"\ninterface = "udp_multicast"\n'
+            )
+            env = {k: v for k, v in os.environ.items()
+                   if k not in {"CANARCHY_TRANSPORT_BACKEND", "CANARCHY_PYTHON_CAN_INTERFACE"}}
+            with patch("pathlib.Path.home", return_value=Path(tmp)):
+                with patch.dict(os.environ, env, clear=True):
+                    config = transport_backend_config()
+
+        self.assertEqual(config.backend, "python-can")
+        self.assertEqual(config.python_can_interface, "udp_multicast")
+
     def test_build_live_backend_defaults_to_scaffold(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             backend = build_live_backend()

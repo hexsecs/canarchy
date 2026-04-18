@@ -28,11 +28,32 @@ On macOS you may need to add a multicast route first:
 sudo route add -net 239.0.0.0/8 -interface lo0
 ```
 
+### Persistent config (recommended)
+
+Create `~/.canarchy/config.toml` so you never need to repeat the backend settings:
+
+```toml
+[transport]
+backend = "python-can"
+interface = "udp_multicast"
+```
+
+Then every `canarchy` command in any terminal picks up these settings automatically.
+
+### Per-session config
+
+If you prefer not to write a config file, export the variables at the top of each terminal session:
+
+```bash
+export CANARCHY_TRANSPORT_BACKEND=python-can
+export CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast
+```
+
+### Run the demo
+
 In one terminal, start a live candump capture:
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy capture 239.0.0.1 --candump
 ```
 
@@ -41,8 +62,6 @@ This command stays open and keeps printing frames until you interrupt it with `C
 In another terminal, send a frame:
 
 ```bash
-CANARCHY_TRANSPORT_BACKEND=python-can \
-CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast \
 uv run canarchy send 239.0.0.1 0x123 11223344 --json
 ```
 
