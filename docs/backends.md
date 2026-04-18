@@ -8,22 +8,29 @@ CANarchy uses **python-can** as its live transport layer. This page explains how
 
 | Backend | What it does | When to use it |
 |---|---|---|
-| `scaffold` | Returns pre-recorded fixture frames; never touches hardware | Default — safe for demos, testing, and CI |
-| `python-can` | Opens a real (or virtual) CAN bus via python-can | Any live capture, transmit, or gateway work |
+| `python-can` | Opens a real (or virtual) CAN bus via python-can | **Default** — live capture, transmit, and gateway |
+| `scaffold` | Returns pre-recorded fixture frames; never touches hardware | Offline demos, testing, CI |
 
-Set the backend in `~/.canarchy/config.toml` (persistent, all terminals):
+The default interface type is `socketcan`. On Linux with a configured `can0`, capture works immediately with no config file.
+
+To switch to a different interface type, set it in `~/.canarchy/config.toml`:
 
 ```toml
 [transport]
 backend = "python-can"
-interface = "socketcan"
+interface = "udp_multicast"
 ```
 
 Or via environment variable (current session only):
 
 ```bash
-export CANARCHY_TRANSPORT_BACKEND=python-can
-export CANARCHY_PYTHON_CAN_INTERFACE=socketcan
+export CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast
+```
+
+To use the offline scaffold backend:
+
+```bash
+export CANARCHY_TRANSPORT_BACKEND=scaffold
 ```
 
 To confirm what is actually in effect, run:
@@ -168,11 +175,11 @@ Output shows each value and its source (`[env]`, `[file]`, or `[default]`):
 
 ```
 Effective transport configuration:
-  backend: python-can  [file]
-  interface: socketcan  [file]
+  backend: python-can  [default]
+  interface: socketcan  [default]
   capture_limit: 2  [default]
   capture_timeout: 0.05  [default]
-config file: /Users/you/.canarchy/config.toml  [found]
+config file: /Users/you/.canarchy/config.toml  [not found]
 ```
 
 Use `--json` for scripted inspection:

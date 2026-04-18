@@ -272,9 +272,9 @@ def transport_backend_config() -> TransportBackendConfig:
     def _get(env_key: str, default: str) -> str:
         return os.environ.get(env_key) or file_config.get(env_key) or default
 
-    backend = _get("CANARCHY_TRANSPORT_BACKEND", "scaffold").strip().lower() or "scaffold"
+    backend = _get("CANARCHY_TRANSPORT_BACKEND", "python-can").strip().lower() or "python-can"
     python_can_interface = (
-        _get("CANARCHY_PYTHON_CAN_INTERFACE", "virtual").strip().lower() or "virtual"
+        _get("CANARCHY_PYTHON_CAN_INTERFACE", "socketcan").strip().lower() or "socketcan"
     )
     capture_limit = int(_get("CANARCHY_CAPTURE_LIMIT", "2"))
     capture_timeout = float(_get("CANARCHY_CAPTURE_TIMEOUT", "0.05"))

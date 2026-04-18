@@ -129,7 +129,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Run `canarchy --help`", stdout)
         self.assertEqual(stderr, "")
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_capture_json_output_is_structured(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
@@ -149,7 +149,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["interface"], "can0")
         self.assertEqual(payload["warnings"], [])
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_send_json_output_marks_active_mode(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("send", "can0", "0x123", "11223344", "--json")
         self.assertEqual(exit_code, EXIT_OK)
@@ -167,7 +167,7 @@ class CliTests(unittest.TestCase):
             "Active transmission is intentionally distinct from passive monitoring workflows.",
         )
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_capture_candump_requires_live_backend(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--candump", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
@@ -275,7 +275,7 @@ class CliTests(unittest.TestCase):
             {"gateway.src->dst", "gateway.dst->src"},
         )
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_gateway_requires_live_backend(self, _mock_cfg) -> None:
         with patch.dict(os.environ, {}, clear=True):
             exit_code, stdout, stderr = run_cli("gateway", "src0", "dst0", "--count", "1", "--json")
@@ -754,7 +754,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "EXPORT_FORMAT_UNSUPPORTED")
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_shell_command_reuses_cli_parser(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("shell", "--command", "capture can0 --raw")
         self.assertEqual(exit_code, EXIT_OK)
@@ -796,7 +796,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("TUI_COMMAND_UNSUPPORTED", stdout)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_shell_survives_help_flag_in_command(self, _mock_cfg) -> None:
         """--help inside the shell must not exit the session."""
         # After one command containing --help (which raises SystemExit) the shell
@@ -816,7 +816,7 @@ class CliTests(unittest.TestCase):
         # The raw output from the second command must appear
         self.assertIn("capture", stdout)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_shell_survives_keyboard_interrupt_during_command(self, _mock_cfg) -> None:
         """Ctrl+C during a command must not exit the shell."""
         call_count = 0
@@ -844,7 +844,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(call_count, 2)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_shell_survives_keyboard_interrupt_at_prompt(self, _mock_cfg) -> None:
         """Ctrl+C at the input prompt must not exit the shell."""
         inputs = iter([KeyboardInterrupt(), "capture can0 --raw", EOFError()])
@@ -952,7 +952,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_jsonl_output_emits_one_event_per_line_for_event_commands(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli("capture", "can0", "--jsonl")
         self.assertEqual(exit_code, EXIT_OK)
@@ -1023,7 +1023,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["file"], str(FIXTURES / "sample.candump"))
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_fixed_id_and_data_returns_frame_events(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344", "--json"
@@ -1044,7 +1044,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["data"], "11223344")
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_count_produces_correct_number_of_frames(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate",
@@ -1073,7 +1073,7 @@ class CliTests(unittest.TestCase):
         mock_sleep.assert_called_with(0.1)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_incrementing_data_produces_rolling_bytes(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x100", "--dlc", "2", "--data", "I", "--count", "2", "--json"
@@ -1085,7 +1085,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_events[1]["payload"]["frame"]["data"], "0203")
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_random_produces_frame_events(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--count", "5", "--json")
         self.assertEqual(exit_code, EXIT_OK)
@@ -1094,7 +1094,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(frame_events), 5)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_table_output_is_pretty_printed(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "AABBCCDD", "--count", "2", "--table"
@@ -1105,7 +1105,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("frames: 2", stdout)
         self.assertIn("123#AABBCCDD", stdout)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_extended_flag_sets_29bit_id(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x100", "--dlc", "0", "--data", "R", "--extended", "--json"
@@ -1117,7 +1117,7 @@ class CliTests(unittest.TestCase):
 
     # --- Gap option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_default_gap_is_200ms(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
@@ -1126,7 +1126,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["gap_ms"], 200.0)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_gap_zero_gives_zero_timestamps(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
@@ -1140,7 +1140,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(evt["timestamp"], 0.0)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_gap_sets_timestamp_spacing(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
@@ -1158,7 +1158,7 @@ class CliTests(unittest.TestCase):
         mock_sleep.assert_called_with(0.5)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_gap_reflects_in_data_field(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
@@ -1172,7 +1172,7 @@ class CliTests(unittest.TestCase):
         mock_sleep.assert_called_with(0.75)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_fractional_gap_spacing(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
@@ -1189,7 +1189,7 @@ class CliTests(unittest.TestCase):
 
     # --- ID option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_id_without_0x_prefix(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "7DF", "--dlc", "2", "--data", "1234", "--json"
@@ -1200,7 +1200,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x7DF)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_id_r_default_produces_random_ids(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--count", "3", "--json"
@@ -1213,7 +1213,7 @@ class CliTests(unittest.TestCase):
             arb_id = evt["payload"]["frame"]["arbitration_id"]
             self.assertGreaterEqual(arb_id, 0)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_large_id_forces_extended(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x18FEEE31", "--dlc", "8", "--data", "AABBCCDDEEFF0011", "--json"
@@ -1224,7 +1224,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x18FEEE31)
         self.assertTrue(frame_event["payload"]["frame"]["is_extended_id"])
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_id_zero(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x0", "--dlc", "1", "--data", "FF", "--json"
@@ -1234,7 +1234,7 @@ class CliTests(unittest.TestCase):
         frame_event = payload["data"]["events"][1]
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_id_max_standard(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x7FF", "--dlc", "1", "--data", "00", "--json"
@@ -1247,7 +1247,7 @@ class CliTests(unittest.TestCase):
 
     # --- DLC option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_dlc_zero_produces_empty_data(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "0", "--data", "R", "--json"
@@ -1258,7 +1258,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["data"], "")
         self.assertEqual(frame_event["payload"]["frame"]["dlc"], 0)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_dlc_eight_produces_eight_byte_frame(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "8", "--data", "R", "--json"
@@ -1271,7 +1271,7 @@ class CliTests(unittest.TestCase):
 
     # --- Data option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_data_r_produces_hex_payload(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "R", "--json"
@@ -1283,7 +1283,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(data_hex), 8)  # 4 bytes = 8 hex chars
         int(data_hex, 16)  # must be valid hex
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_data_uppercase_hex_accepted(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "DEADBEEF", "--json"
@@ -1294,7 +1294,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["data"].upper(), "DEADBEEF")
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_incrementing_data_rolls_across_frames(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "I", "--count", "3", "--json"
@@ -1308,7 +1308,7 @@ class CliTests(unittest.TestCase):
 
     # --- Count option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_default_count_is_one(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
@@ -1320,7 +1320,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(frame_events), 1)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_count_ten(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--count", "10", "--json"
@@ -1335,7 +1335,7 @@ class CliTests(unittest.TestCase):
     # --- Output mode tests ---
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_jsonl_output_emits_one_event_per_line(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--count", "2", "--jsonl"
@@ -1350,7 +1350,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("alert", event_types)
         self.assertEqual(event_types.count("frame"), 2)
 
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_raw_output_emits_command_name(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--raw"
@@ -1361,7 +1361,7 @@ class CliTests(unittest.TestCase):
     # --- Result data fields ---
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={})
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_result_data_contains_expected_fields(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344",
@@ -1770,7 +1770,7 @@ class ConfigShowTests(unittest.TestCase):
     """Tests for `canarchy config show`."""
 
     def test_config_show_defaults_json(self) -> None:
-        """All-default config returns scaffold backend with source=default for every field."""
+        """All-default config returns python-can/socketcan with source=default for every field."""
         with (
             patch("canarchy.transport._load_user_config", return_value={}),
             patch.dict(os.environ, {}, clear=True),
@@ -1779,8 +1779,8 @@ class ConfigShowTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["data"]["backend"], "scaffold")
-        self.assertEqual(payload["data"]["interface"], "virtual")
+        self.assertEqual(payload["data"]["backend"], "python-can")
+        self.assertEqual(payload["data"]["interface"], "socketcan")
         self.assertEqual(payload["data"]["capture_limit"], 2)
         sources = payload["data"]["sources"]
         self.assertEqual(sources["backend"], "default")
@@ -1841,8 +1841,8 @@ class ConfigShowTests(unittest.TestCase):
         ):
             exit_code, stdout, _ = run_cli("config", "show", "--table")
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertIn("backend: scaffold", stdout)
-        self.assertIn("interface: virtual", stdout)
+        self.assertIn("backend: python-can", stdout)
+        self.assertIn("interface: socketcan", stdout)
         self.assertIn("config file:", stdout)
 
     def test_config_show_config_file_found_false_when_missing(self) -> None:

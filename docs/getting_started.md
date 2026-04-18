@@ -46,11 +46,37 @@ Useful if you want the venv active for other tools in the same session. Pair wit
 
 The rest of this guide assumes `canarchy` is available directly. Prefix commands with `uv run` if you have not done either step above.
 
-## Live Candump with Software Loopback
+## Live Capture
 
-For a local send-and-receive loop across two terminals, use the `python-can` backend with
-`udp_multicast`. The `virtual` interface is in-process only and will not deliver frames
-between separate terminal sessions.
+CANarchy defaults to the **python-can** backend with **SocketCAN**, so on Linux with a configured CAN interface you can start capturing immediately — no config file needed:
+
+```bash
+canarchy capture can0 --candump
+```
+
+This command stays open and prints frames in candump format until you interrupt it with `Ctrl+C`.
+
+Use `--json` or `--jsonl` for machine-readable output:
+
+```bash
+canarchy capture can0 --jsonl
+```
+
+### Verify your active configuration
+
+```bash
+canarchy config show
+```
+
+This prints each setting along with whether it came from a config file, an environment variable, or the built-in default.
+
+---
+
+## Software Loopback (No Hardware)
+
+For a local send-and-receive loop across two terminals without real hardware, use the
+`udp_multicast` interface. The `virtual` interface is in-process only and will not deliver
+frames between separate terminal sessions.
 
 On macOS you may need to add a multicast route first:
 
@@ -58,9 +84,7 @@ On macOS you may need to add a multicast route first:
 sudo route add -net 239.0.0.0/8 -interface lo0
 ```
 
-### Persistent config (recommended)
-
-Create `~/.canarchy/config.toml` so you never need to repeat the backend settings:
+Set `udp_multicast` in `~/.canarchy/config.toml`:
 
 ```toml
 [transport]
@@ -68,26 +92,17 @@ backend = "python-can"
 interface = "udp_multicast"
 ```
 
-Then every `canarchy` command in any terminal picks up these settings automatically.
-
-### Per-session config
-
-If you prefer not to write a config file, export the variables at the top of each terminal session:
+Or export for the current session only:
 
 ```bash
-export CANARCHY_TRANSPORT_BACKEND=python-can
 export CANARCHY_PYTHON_CAN_INTERFACE=udp_multicast
 ```
-
-### Run the demo
 
 In one terminal, start a live candump capture:
 
 ```bash
 canarchy capture 239.0.0.1 --candump
 ```
-
-This command stays open and keeps printing frames until you interrupt it with `Ctrl+C`.
 
 In another terminal, send a frame:
 
@@ -101,15 +116,21 @@ The capture terminal should print a line like:
 (1713369600.000000) 239.0.0.1 123#11223344
 ```
 
-## Structured Capture Output
+### Offline / scaffold mode
 
-If you want machine-readable output instead of a terminal-oriented dump view, use JSON.
+To run CANarchy without any CAN interface (for demos, testing, or CI), force the scaffold backend:
 
 ```bash
-canarchy capture can0 --json
+export CANARCHY_TRANSPORT_BACKEND=scaffold
+canarchy capture can0 --json   # returns pre-recorded fixture frames
 ```
 
-Use `--candump` for operator-friendly live traffic watching on a real backend. Use `--json` or `--jsonl` for scripting and automation.
+Or set it persistently in `~/.canarchy/config.toml`:
+
+```toml
+[transport]
+backend = "scaffold"
+```
 
 ## Read an Existing Candump File
 
