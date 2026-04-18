@@ -49,6 +49,7 @@ Default transport backend is the deterministic scaffold; set `CANARCHY_TRANSPORT
 
 * [Event Schema](docs/event-schema.md) — canonical event envelope for all structured output
 * [Command spec](docs/command_spec.md)
+* [CAN Tool Feature Matrix](docs/feature-matrix.md) — high-level comparison to other OSS CAN tools
 * [Architecture](docs/architecture.md)
 * [J1939 Heavy Vehicle Demo](docs/demo_j1939_heavy_vehicle.md)
 
