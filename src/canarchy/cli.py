@@ -1446,6 +1446,9 @@ def run_shell(shell_command: str | None) -> int:
     if shell_command is not None:
         return main(shlex.split(shell_command))
 
+    from canarchy.completion import install_completion
+    install_completion()
+
     while True:
         try:
             line = input("canarchy> ")

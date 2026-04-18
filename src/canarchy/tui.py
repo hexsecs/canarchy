@@ -6,6 +6,8 @@ import shlex
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from canarchy.completion import install_completion
+
 if TYPE_CHECKING:
     from canarchy.cli import CommandResult
 
@@ -29,6 +31,8 @@ def run_tui(
 
     if command is not None:
         return _run_tui_command(command, state, execute_command)
+
+    install_completion()
 
     while True:
         try:

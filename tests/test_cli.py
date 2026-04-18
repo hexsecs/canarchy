@@ -1450,5 +1450,212 @@ class CliTests(unittest.TestCase):
         self.assertIn("unsupported file format", payload["errors"][0]["message"])
 
 
+class CompletionTests(unittest.TestCase):
+    """Tests for tab completion in the shell and TUI."""
+
+    def _completions(self, line: str, text: str = "") -> list[str]:
+        """Run the completer against *line* and return all candidate strings."""
+        from canarchy.completion import CanarchyCompleter
+
+        completer = CanarchyCompleter()
+
+        with patch("canarchy.completion.readline") as mock_rl:
+            mock_rl.get_line_buffer.return_value = line
+            results = []
+            state = 0
+            while True:
+                candidate = completer.complete(text, state)
+                if candidate is None:
+                    break
+                results.append(candidate)
+                state += 1
+        return results
+
+    # ── First token: top-level commands ──────────────────────────────────────
+
+    def test_empty_line_offers_all_top_level_commands(self) -> None:
+        results = self._completions("", "")
+        # Strip trailing spaces for comparison
+        names = [r.strip() for r in results]
+        self.assertIn("capture", names)
+        self.assertIn("j1939", names)
+        self.assertIn("uds", names)
+        self.assertIn("generate", names)
+        self.assertIn("exit", names)
+        # shell and tui must NOT appear in the interactive prompt completions
+        self.assertNotIn("shell", names)
+        self.assertNotIn("tui", names)
+
+    def test_partial_command_filters_correctly(self) -> None:
+        results = self._completions("ca", "ca")
+        names = [r.strip() for r in results]
+        self.assertIn("capture", names)
+        self.assertNotIn("generate", names)
+        self.assertNotIn("send", names)
+
+    def test_j_prefix_returns_j1939(self) -> None:
+        results = self._completions("j", "j")
+        names = [r.strip() for r in results]
+        self.assertIn("j1939", names)
+        self.assertNotIn("capture", names)
+
+    def test_exit_and_quit_appear_in_completions(self) -> None:
+        results = self._completions("", "")
+        names = [r.strip() for r in results]
+        self.assertIn("exit", names)
+        self.assertIn("quit", names)
+
+    # ── Subcommand completion ─────────────────────────────────────────────────
+
+    def test_j1939_space_offers_subcommands(self) -> None:
+        results = self._completions("j1939 ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("monitor", names)
+        self.assertIn("decode", names)
+        self.assertIn("pgn", names)
+        self.assertIn("spn", names)
+        self.assertIn("tp", names)
+        self.assertIn("dm1", names)
+
+    def test_j1939_partial_subcommand_filters(self) -> None:
+        results = self._completions("j1939 m", "m")
+        names = [r.strip() for r in results]
+        self.assertIn("monitor", names)
+        self.assertNotIn("decode", names)
+
+    def test_session_subcommands(self) -> None:
+        results = self._completions("session ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("save", names)
+        self.assertIn("load", names)
+        self.assertIn("show", names)
+
+    def test_uds_subcommands(self) -> None:
+        results = self._completions("uds ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("scan", names)
+        self.assertIn("trace", names)
+        self.assertIn("services", names)
+
+    # ── Flag completion ───────────────────────────────────────────────────────
+
+    def test_capture_flags_include_candump_and_output_modes(self) -> None:
+        results = self._completions("capture can0 ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--candump", names)
+        self.assertIn("--json", names)
+        self.assertIn("--jsonl", names)
+        self.assertIn("--table", names)
+        self.assertIn("--raw", names)
+
+    def test_generate_flags_include_gap_and_count(self) -> None:
+        results = self._completions("generate can0 ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--gap", names)
+        self.assertIn("--count", names)
+        self.assertIn("--id", names)
+        self.assertIn("--dlc", names)
+        self.assertIn("--data", names)
+        self.assertIn("--extended", names)
+
+    def test_decode_flags_include_dbc(self) -> None:
+        results = self._completions("decode trace.candump ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--dbc", names)
+        self.assertIn("--json", names)
+
+    def test_j1939_monitor_flags_include_pgn(self) -> None:
+        results = self._completions("j1939 monitor ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--pgn", names)
+        self.assertIn("--json", names)
+
+    def test_j1939_pgn_flags_include_file(self) -> None:
+        results = self._completions("j1939 pgn 65262 ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--file", names)
+
+    def test_session_save_flags_include_interface_and_dbc(self) -> None:
+        results = self._completions("session save mylab ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--interface", names)
+        self.assertIn("--dbc", names)
+        self.assertIn("--capture", names)
+
+    def test_partial_flag_filters_correctly(self) -> None:
+        results = self._completions("capture can0 --j", "--j")
+        names = [r.strip() for r in results]
+        self.assertIn("--json", names)
+        self.assertIn("--jsonl", names)
+        self.assertNotIn("--table", names)
+        self.assertNotIn("--candump", names)
+
+    def test_flags_not_offered_for_unknown_command(self) -> None:
+        # Unknown command falls back to output-mode flags only
+        results = self._completions("unknowncmd ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--json", names)
+
+    # ── File path completion after file-expecting flags ───────────────────────
+
+    def test_completion_after_dbc_flag_uses_path_completion(self) -> None:
+        """After --dbc, completions should come from the filesystem, not flags."""
+        from canarchy.completion import CanarchyCompleter
+
+        completer = CanarchyCompleter()
+        with patch("canarchy.completion.readline") as mock_rl:
+            mock_rl.get_line_buffer.return_value = "decode trace.candump --dbc "
+            with patch("canarchy.completion.glob.glob", return_value=["tests/fixtures/sample.dbc"]):
+                candidate = completer.complete("tests/", 0)
+        self.assertIsNotNone(candidate)
+        self.assertIn("sample.dbc", candidate)
+
+    def test_completion_after_file_flag_uses_path_completion(self) -> None:
+        from canarchy.completion import CanarchyCompleter
+
+        completer = CanarchyCompleter()
+        with patch("canarchy.completion.readline") as mock_rl:
+            mock_rl.get_line_buffer.return_value = "j1939 pgn 65262 --file "
+            with patch("canarchy.completion.glob.glob", return_value=["tests/fixtures/sample.candump"]):
+                candidate = completer.complete("tests/", 0)
+        self.assertIsNotNone(candidate)
+        self.assertIn("sample.candump", candidate)
+
+    # ── install_completion smoke test ─────────────────────────────────────────
+
+    def test_install_completion_registers_completer(self) -> None:
+        """install_completion should call readline.set_completer without raising."""
+        from canarchy.completion import install_completion
+
+        with patch("canarchy.completion.readline") as mock_rl, \
+                patch("canarchy.completion.atexit"):
+            mock_rl.__doc__ = "GNU readline"
+            mock_rl.read_history_file.side_effect = FileNotFoundError
+            install_completion()
+            mock_rl.set_completer.assert_called_once()
+            mock_rl.parse_and_bind.assert_called_once_with("tab: complete")
+
+    def test_install_completion_uses_libedit_binding_on_macos(self) -> None:
+        from canarchy.completion import install_completion
+
+        with patch("canarchy.completion.readline") as mock_rl, \
+                patch("canarchy.completion.atexit"):
+            mock_rl.__doc__ = "libedit-based readline"
+            mock_rl.read_history_file.side_effect = FileNotFoundError
+            install_completion()
+            mock_rl.parse_and_bind.assert_called_once_with("bind ^I rl_complete")
+
+    def test_install_completion_is_silent_when_readline_unavailable(self) -> None:
+        """Should not raise if readline is None (unavailable platform)."""
+        import canarchy.completion as completion_mod
+        original = completion_mod.readline
+        try:
+            completion_mod.readline = None  # type: ignore[assignment]
+            # Should not raise
+            completion_mod.install_completion()
+        finally:
+            completion_mod.readline = original
+
+
 if __name__ == "__main__":
     unittest.main()
