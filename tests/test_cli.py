@@ -409,6 +409,93 @@ class CliTests(unittest.TestCase):
         self.assertIn("pgn=61444", stdout)
         self.assertIn("sa=0x31", stdout)
 
+    def test_j1939_spn_requires_capture_file(self) -> None:
+        exit_code, stdout, stderr = run_cli("j1939", "spn", "110", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_FILE_REQUIRED")
+
+    def test_j1939_spn_returns_structured_observations(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "spn",
+            "110",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["decoder"], "curated_spn_map")
+        self.assertEqual(payload["data"]["observation_count"], 1)
+        observation = payload["data"]["observations"][0]
+        self.assertEqual(observation["spn"], 110)
+        self.assertEqual(observation["pgn"], 65262)
+        self.assertEqual(observation["source_address"], 0x31)
+        self.assertEqual(observation["value"], -23.0)
+        self.assertEqual(observation["units"], "degC")
+
+    def test_j1939_tp_returns_bam_session_summary(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["session_count"], 1)
+        session = payload["data"]["sessions"][0]
+        self.assertEqual(session["session_type"], "bam")
+        self.assertEqual(session["transfer_pgn"], 65226)
+        self.assertEqual(session["source_address"], 0x31)
+        self.assertTrue(session["complete"])
+        self.assertEqual(session["packet_count"], 2)
+        self.assertEqual(session["reassembled_data"], "000000006e000501be000702")
+
+    def test_j1939_dm1_returns_direct_and_transport_messages(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "dm1",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["message_count"], 2)
+        self.assertEqual(payload["data"]["source_count"], 2)
+        direct_message = payload["data"]["messages"][1]
+        tp_message = payload["data"]["messages"][0]
+        self.assertEqual(tp_message["transport"], "tp")
+        self.assertEqual(tp_message["active_dtc_count"], 2)
+        self.assertEqual(tp_message["dtcs"][0]["spn"], 110)
+        self.assertEqual(tp_message["dtcs"][1]["spn"], 190)
+        self.assertEqual(direct_message["transport"], "direct")
+        self.assertEqual(direct_message["source_address"], 0x22)
+        self.assertEqual(direct_message["dtcs"][0]["fmi"], 3)
+
+    def test_j1939_dm1_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "dm1",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 dm1", stdout)
+        self.assertIn("messages:", stdout)
+        self.assertIn("transport=tp", stdout)
+        self.assertIn("spn=110/fmi=5", stdout)
+
     def test_uds_scan_returns_transaction_events(self) -> None:
         exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)

@@ -13,7 +13,7 @@ Implemented and verified in the current codebase:
 * live `gateway` bridging between CAN interfaces via `python-can`
 * structured `export` for capture files and saved sessions
 * DBC-backed `decode` and `encode`
-* J1939 `monitor`, `decode`, and `pgn`
+* J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
 * session `save`, `load`, and `show`
 * shell one-shot command execution
 * UDS `scan` and `trace`
@@ -284,6 +284,45 @@ canarchy j1939 pgn 65262 --file tests/fixtures/sample.candump --json
 canarchy j1939 pgn <id> [--json|--jsonl|--table|--raw]
 ```
 
+### j1939 spn
+
+Inspect a curated SPN decoder over recorded J1939 traffic.
+
+```bash
+canarchy j1939 spn <spn> --file <file> [--json|--jsonl|--table|--raw]
+```
+
+Example:
+
+```bash
+canarchy j1939 spn 110 --file tests/fixtures/sample.candump --json
+```
+
+Notes:
+
+* the first implementation supports a curated SPN decoder set rather than a full J1939 database
+* unsupported SPNs return a structured `J1939_SPN_UNSUPPORTED` error
+
+### j1939 tp
+
+Summarize J1939 transport-protocol sessions from a capture file.
+
+```bash
+canarchy j1939 tp <file> [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* the first implementation focuses on BAM-style TP sessions and packet reassembly
+
+### j1939 dm1
+
+Inspect DM1 fault traffic from direct J1939 frames and TP-reassembled payloads.
+
+```bash
+canarchy j1939 dm1 <file> [--json|--jsonl|--table|--raw]
+```
+
 ### uds scan
 
 Scan for UDS responders through the transport scaffold.
@@ -466,7 +505,6 @@ canarchy shell --command "capture can0 --raw"
 
 These commands are present in the CLI tree but still scaffolded or not yet implemented end to end:
 
-* `j1939 spn|tp|dm1`
 * `uds services`
 * `re signals|counters|entropy|correlate`
 * `fuzz replay|mutate|id`

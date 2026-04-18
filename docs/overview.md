@@ -16,7 +16,7 @@ Implemented and exercised in the current codebase:
 * scaffolded and opt-in live transport workflows for `capture` and `send`
 * file-backed `filter`, `stats`, `decode`, `j1939 decode`, and `replay` using candump logs
 * DBC-backed decode and encode
-* J1939 `monitor`, `decode`, and `pgn`
+* J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
 * UDS `scan` and `trace`
 * session `save`, `load`, and `show`
 * structured `export` for capture files and saved sessions
@@ -27,7 +27,6 @@ Implemented and exercised in the current codebase:
 
 Present in the CLI tree but still scaffolded or placeholder-only:
 
-* `j1939 spn`, `j1939 tp`, and `j1939 dm1`
 * `uds services`
 * `re signals`, `re counters`, `re entropy`, and `re correlate`
 * `fuzz replay`, `fuzz mutate`, and `fuzz id`

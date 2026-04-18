@@ -11,6 +11,7 @@ from typing import Any
 
 from canarchy.dbc import DbcError, decode_frames, encode_message
 from canarchy.exporter import ExportError, export_artifact
+from canarchy.j1939 import SUPPORTED_SPN_DEFINITIONS, dm1_messages, spn_observations, transport_protocol_sessions
 from canarchy.models import (
     AlertEvent,
     CanFrame,
@@ -28,7 +29,7 @@ EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate"}
 DBC_COMMANDS = {"decode", "encode"}
-J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn"}
+J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace"}
 IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | {"replay", "gateway", "shell", "export"}
@@ -243,14 +244,17 @@ def build_parser() -> CanarchyArgumentParser:
 
     j1939_spn = j1939_subparsers.add_parser("spn", help="inspect a J1939 SPN")
     j1939_spn.add_argument("spn", type=int)
+    j1939_spn.add_argument("--file", help="inspect the SPN within a capture file")
     add_output_arguments(j1939_spn)
     j1939_spn.set_defaults(command="j1939 spn")
 
     j1939_tp = j1939_subparsers.add_parser("tp", help="inspect J1939 transport protocol")
+    j1939_tp.add_argument("file")
     add_output_arguments(j1939_tp)
     j1939_tp.set_defaults(command="j1939 tp")
 
     j1939_dm1 = j1939_subparsers.add_parser("dm1", help="inspect J1939 DM1 traffic")
+    j1939_dm1.add_argument("file")
     add_output_arguments(j1939_dm1)
     j1939_dm1.set_defaults(command="j1939 dm1")
 
@@ -524,6 +528,34 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
+    if args.command == "j1939 spn" and not getattr(args, "file", None):
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="CAPTURE_FILE_REQUIRED",
+                    message="J1939 SPN inspection requires a capture file.",
+                    hint="Pass `--file <capture.candump>` to inspect SPN values in recorded traffic.",
+                )
+            ],
+            data={"spn": args.spn},
+        )
+
+    if args.command == "j1939 spn" and args.spn not in SUPPORTED_SPN_DEFINITIONS:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="J1939_SPN_UNSUPPORTED",
+                    message=f"J1939 SPN {args.spn} is not supported by the current decoder set.",
+                    hint="Use one of the currently supported SPNs or extend the curated decoder map.",
+                )
+            ],
+            data={"spn": args.spn},
+        )
+
     if args.command == "encode":
         for assignment in args.signals:
             if "=" not in assignment:
@@ -745,6 +777,54 @@ def j1939_payload(
             {"mode": "passive", "pgn": args.pgn, "file": args.file},
             transport.j1939_decode_events(args.file, args.pgn),
             [],
+        )
+    if args.command == "j1939 spn":
+        observations = spn_observations(transport.frames_from_file(args.file), args.spn)
+        warnings = []
+        if not observations:
+            warnings.append("No observations for the selected SPN were found in the capture.")
+        return (
+            {
+                "mode": "passive",
+                "spn": args.spn,
+                "file": args.file,
+                "decoder": "curated_spn_map",
+                "observation_count": len(observations),
+                "observations": observations,
+            },
+            [],
+            warnings,
+        )
+    if args.command == "j1939 tp":
+        sessions = transport_protocol_sessions(transport.frames_from_file(args.file))
+        warnings = []
+        if not sessions:
+            warnings.append("No J1939 transport protocol sessions were found in the capture.")
+        return (
+            {
+                "mode": "passive",
+                "file": args.file,
+                "session_count": len(sessions),
+                "sessions": sessions,
+            },
+            [],
+            warnings,
+        )
+    if args.command == "j1939 dm1":
+        messages = dm1_messages(transport.frames_from_file(args.file))
+        warnings = []
+        if not messages:
+            warnings.append("No J1939 DM1 messages were found in the capture.")
+        return (
+            {
+                "mode": "passive",
+                "file": args.file,
+                "message_count": len(messages),
+                "messages": messages,
+                "source_count": len({message["source_address"] for message in messages}),
+            },
+            [],
+            warnings,
         )
     raise AssertionError(f"unsupported j1939 command: {args.command}")
 
@@ -1020,6 +1100,73 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         lines.append(f"file: {result.data['file']}")
     if result.command == "j1939 pgn":
         lines.append(f"pgn: {result.data['pgn']}")
+
+    if result.command == "j1939 spn":
+        lines.append(f"spn: {result.data['spn']}")
+        lines.append(f"file: {result.data['file']}")
+        lines.append("observations:")
+        observations = result.data.get("observations", [])
+        if not observations:
+            lines.append("- no spn observations")
+            return lines
+        for observation in observations:
+            destination = observation["destination_address"]
+            destination_text = f"0x{destination:02X}" if destination is not None else "broadcast"
+            lines.append(
+                "- "
+                f"spn={observation['spn']} "
+                f"name={observation['name']} "
+                f"value={observation['value']} "
+                f"units={observation['units']} "
+                f"pgn={observation['pgn']} "
+                f"sa=0x{observation['source_address']:02X} "
+                f"da={destination_text}"
+            )
+        return lines
+
+    if result.command == "j1939 tp":
+        lines.append(f"file: {result.data['file']}")
+        lines.append("sessions:")
+        sessions = result.data.get("sessions", [])
+        if not sessions:
+            lines.append("- no transport sessions")
+            return lines
+        for session in sessions:
+            destination = session["destination_address"]
+            destination_text = f"0x{destination:02X}" if destination is not None else "broadcast"
+            lines.append(
+                "- "
+                f"type={session['session_type']} "
+                f"pgn={session['transfer_pgn']} "
+                f"sa=0x{session['source_address']:02X} "
+                f"da={destination_text} "
+                f"bytes={session['total_bytes']} "
+                f"packets={session['packet_count']}/{session['total_packets']} "
+                f"complete={session['complete']}"
+            )
+        return lines
+
+    if result.command == "j1939 dm1":
+        lines.append(f"file: {result.data['file']}")
+        lines.append("messages:")
+        messages = result.data.get("messages", [])
+        if not messages:
+            lines.append("- no dm1 messages")
+            return lines
+        for message in messages:
+            dtc_text = ",".join(
+                f"spn={dtc['spn']}/fmi={dtc['fmi']}" for dtc in message["dtcs"]
+            ) or "none"
+            lines.append(
+                "- "
+                f"sa=0x{message['source_address']:02X} "
+                f"transport={message['transport']} "
+                f"dtcs={message['active_dtc_count']} "
+                f"mil={message['lamp_status']['mil']} "
+                f"amber={message['lamp_status']['amber_warning']} "
+                f"codes={dtc_text}"
+            )
+        return lines
 
     lines.append("observations:")
     if not events:
