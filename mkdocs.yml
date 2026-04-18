@@ -43,6 +43,7 @@ nav:
   - Home: index.md
   - Operators:
       - Getting Started: getting_started.md
+      - Backends & Interfaces: backends.md
       - Project Overview: overview.md
       - Command Spec: command_spec.md
       - Event Schema: event-schema.md

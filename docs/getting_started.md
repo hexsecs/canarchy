@@ -143,3 +143,5 @@ Current supported candump text forms include:
 * error frames using a CAN error-flagged identifier such as `20000080#0000000000000000`
 
 For the full current command surface, see the [Command Spec](command_spec.md).
+
+For a complete list of supported python-can interface types and per-adapter setup instructions, see [Backends & Interfaces](backends.md).
