@@ -1,35 +1,62 @@
 # Design Spec: Initial TUI Shell
 
+## Document Control
+
+| Field | Value |
+|-------|-------|
+| Status | Implemented |
+| Command surface | `canarchy tui` |
+| Primary area | Front end |
+
 ## Goal
 
 Provide the first usable `canarchy tui` experience as a thin text-mode presentation layer over the existing command system.
 
-## Scope
+## User-Facing Motivation
 
-The initial implementation is intentionally minimal:
+Operators need a compact interactive view that can surface recent traffic, command context, and alerts without introducing TUI-only protocol or transport behavior.
 
-* a text-mode TUI shell starts from `canarchy tui`
-* panes render bus status, live traffic, alerts, and command entry help
-* command entry executes existing CANarchy commands through the shared parser and result builder
-* no separate transport, protocol, or session logic is introduced
+## Requirements
 
-## Command surface
+| ID | Requirement |
+|----|-------------|
+| `REQ-TUI-01` | The system shall provide a `canarchy tui` command that starts the initial text-mode shell. |
+| `REQ-TUI-02` | The initial TUI shall render bus status, live traffic, alerts, and command-entry sections. |
+| `REQ-TUI-03` | TUI command entry shall execute existing CANarchy commands through the shared parser and result path. |
+| `REQ-TUI-04` | The TUI shall not introduce separate transport, protocol, or session logic. |
+| `REQ-TUI-05` | The TUI shall reject nested interactive front ends from command entry with a structured error. |
+
+## Command Surface
 
 ```text
 canarchy tui [--command "<existing canarchy command>"]
 ```
 
-`--command` runs a single command through the TUI command-entry path and exits. This keeps the TUI testable without introducing a separate automation API.
+`--command` runs one command through the TUI command-entry path and exits, which keeps the TUI testable and automation-friendly.
 
-## Pane model
+## Responsibilities And Boundaries
+
+In scope:
+
+* text-mode TUI startup from `canarchy tui`
+* panes for bus status, live traffic, alerts, and command-entry help
+* shared command execution path reused from the CLI
+
+Out of scope:
+
+* full-screen terminal rendering
+* background live subscriptions
+* richer pane selection, filtering, or focus behavior
+
+## Pane Model
 
 ### Bus Status
 
-Shows the current command context and interface or file source when available.
+Shows the current command context plus interface or file source when available.
 
 ### Live Traffic
 
-Shows a compact summary of recent command-derived traffic or protocol activity.
+Shows a compact summary of recent frame or protocol activity derived from shared command results.
 
 ### Alerts
 
@@ -39,13 +66,28 @@ Shows warnings and structured errors from shared command results.
 
 Accepts existing CANarchy commands and routes them through the shared parser and result-building path.
 
-## Shared-command rule
+## Shared Command Rule
 
-The TUI uses the same command execution path as the CLI for non-interactive commands. Nested interactive front ends such as `shell` or `tui` are rejected from TUI command entry with a structured error.
+The TUI uses the same command execution path as the CLI for non-interactive commands. Nested interactive front ends such as `shell` or `tui` are rejected from TUI command entry.
 
-## Deferred
+## Output Contract
+
+The TUI renders a text-mode shell with the following sections in order:
+
+* shell header
+* bus status
+* live traffic
+* alerts
+* command-entry help
+
+## Error Contracts
+
+| Code | Trigger | Exit code |
+|------|---------|-----------|
+| `TUI_COMMAND_UNSUPPORTED` | TUI command entry attempts to launch `shell` or `tui` | 1 |
+
+## Deferred Decisions
 
 * curses or full-screen terminal rendering
-* live background capture subscriptions
-* richer pane selection, focus, or filtering state
-* decoded-signal and UDS-specific dedicated panes beyond the compact summary list
+* background live capture subscriptions
+* dedicated decoded-signal and UDS panes beyond the compact summary list

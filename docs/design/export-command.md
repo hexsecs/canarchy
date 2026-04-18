@@ -1,33 +1,47 @@
 # Design Spec: `export` Command
 
+## Document Control
+
+| Field | Value |
+|-------|-------|
+| Status | Implemented |
+| Command surface | `canarchy export` |
+| Primary area | CLI, artifacts |
+
 ## Goal
 
 Preserve structured CANarchy artifacts on disk so operators and coding agents can save event streams and session state for later analysis without scraping table output.
 
-## First supported sources
+## User-Facing Motivation
 
-The initial implementation supports two explicit source kinds:
+Operators need a deterministic way to persist machine-readable results from current workflows while keeping exports aligned with the existing command and event schemas.
 
-* capture files using `.candump` or `.log` paths
-* saved sessions using the `session:<name>` source form
+## Requirements
 
-This keeps the first export shape narrow and deterministic while covering the current file-backed workflows and session persistence model.
+| ID | Requirement |
+|----|-------------|
+| `REQ-EXPORT-01` | The system shall provide a `canarchy export <source> <destination>` command. |
+| `REQ-EXPORT-02` | The command shall support capture-file sources and saved-session sources. |
+| `REQ-EXPORT-03` | The command shall support `.json` artifact output that preserves the command-style envelope. |
+| `REQ-EXPORT-04` | The command shall support `.jsonl` output for event-capable sources. |
+| `REQ-EXPORT-05` | The command shall return structured errors for unsupported sources, unsupported destination formats, and unsupported `.jsonl` requests. |
+| `REQ-EXPORT-06` | The command result shall describe the artifact written using stable metadata fields. |
 
-## Command surface
+## Command Surface
 
 ```text
 canarchy export <source> <destination>
                  [--json] [--jsonl] [--table] [--raw]
 ```
 
-### Source forms
+### Supported source forms
 
 | Source form | Meaning |
 |-------------|---------|
-| `tests/fixtures/sample.candump` | export a structured event stream artifact from a capture file |
+| `tests/fixtures/sample.candump` | export a structured event-stream artifact from a capture file |
 | `session:lab-a` | export a saved session record |
 
-### Destination formats
+### Supported destination formats
 
 | Suffix | Shape |
 |--------|-------|
@@ -36,7 +50,22 @@ canarchy export <source> <destination>
 
 `.jsonl` is only supported for sources that produce `events`.
 
-## Artifact shapes
+## Responsibilities And Boundaries
+
+In scope:
+
+* export of capture-file event streams
+* export of saved session records
+* envelope-preserving `.json` output
+* event-only `.jsonl` output for event-capable sources
+
+Out of scope:
+
+* direct export of arbitrary command invocations
+* archive formats such as SQLite or msgpack
+* multi-artifact bundle generation
+
+## Artifact Model
 
 ### Capture file to `.json`
 
@@ -59,8 +88,6 @@ Writes a full command-style envelope:
 }
 ```
 
-The `events` array uses the same serialized event schema already emitted by CLI JSON output.
-
 ### Capture file to `.jsonl`
 
 Writes each serialized event as one JSON line. No outer envelope is written.
@@ -69,9 +96,11 @@ Writes each serialized event as one JSON line. No outer envelope is written.
 
 Writes a full command-style envelope with a `session` payload and no `events` list.
 
-## CLI result shape
+## Command Result Contract
 
-The `export` command itself returns a normal CANarchy command result describing what was written:
+The `export` command itself returns a standard CANarchy result describing the write operation.
+
+Returned fields include:
 
 * `source`
 * `destination`
@@ -80,7 +109,17 @@ The `export` command itself returns a normal CANarchy command result describing 
 * `export_format`
 * `exported_events`
 
-## Error cases
+## Output Contracts
+
+### JSON and JSONL
+
+The command result uses the existing CANarchy envelope shape. The written artifact depends on the destination suffix.
+
+### Table and raw
+
+Table and raw remain command-result views and do not change the artifact shape written to disk.
+
+## Error Contracts
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|
@@ -89,8 +128,8 @@ The `export` command itself returns a normal CANarchy command result describing 
 | `EXPORT_EVENTS_UNAVAILABLE` | `.jsonl` requested for a source without events | 1 |
 | `EXPORT_WRITE_FAILED` | destination file cannot be written | 1 |
 
-## Deferred
+## Deferred Decisions
 
-* exporting direct command invocations beyond capture-file and session sources
-* archive formats such as SQLite or msgpack
+* exporting direct command invocations beyond capture files and saved sessions
+* additional artifact formats
 * multi-artifact bundle output

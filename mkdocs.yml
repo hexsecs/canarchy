@@ -57,6 +57,7 @@ nav:
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
           - TUI Shell: design/tui-shell.md
       - Test Specs:
+          - Generate Command: tests/generate-command.md
           - Gateway Command: tests/gateway-command.md
           - Export Command: tests/export-command.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md

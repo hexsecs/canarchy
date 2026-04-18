@@ -1,67 +1,101 @@
 # Test Spec: `gateway` Command
 
-## Coverage goals
+## Document Control
 
-- Unidirectional frame forwarding (src → dst)
-- Bidirectional frame forwarding (src ↔ dst)
-- `--count` terminates the stream after N total forwarded frames
-- `--src-backend` and `--dst-backend` are passed to the correct buses
-- Scaffold backend raises `GATEWAY_LIVE_BACKEND_REQUIRED`
-- Unreachable channel raises `TRANSPORT_UNAVAILABLE`
-- `--count 0` returns a structured user error
-- JSON output contains frame events with correct `source` direction label
-- Table output prints a gateway header and candump-style frame lines
+| Field | Value |
+|-------|-------|
+| Status | Implemented |
+| Related design spec | `docs/design/gateway-command.md` |
+| Primary test area | CLI, transport |
 
-## Test cases
+## Test Objectives
 
-### Unidirectional forward
+Validate that `gateway` forwards frames correctly, preserves structured direction metadata, and returns the expected transport and validation errors.
 
-**Setup:** Two in-process virtual buses on the same channel using threads.  
-**Action:** Send 2 frames on the source bus.  
-**Assert:** Both frames arrive on the destination bus with correct arbitration IDs and data.
+## Coverage Requirements
 
-### Bidirectional forward
+* unidirectional frame forwarding
+* bidirectional frame forwarding
+* `--count` terminates after `N` total forwarded frames
+* `--src-backend` and `--dst-backend` reach the correct bus open path
+* scaffold backend raises `GATEWAY_LIVE_BACKEND_REQUIRED`
+* unreachable channel raises `TRANSPORT_UNAVAILABLE`
+* `--count 0` returns a structured user error
+* JSON output includes the correct direction label
+* table output includes the gateway header and candump-style frame lines
 
-**Setup:** Two in-process virtual buses on distinct channels.  
-**Action:** Send 1 frame src→dst and 1 frame dst→src.  
-**Assert:** Both frames are forwarded; events carry the correct direction label.
+## Requirement Traceability
 
-### Count limit stops forwarding
+| Requirement ID | Covered by test IDs |
+|----------------|---------------------|
+| `REQ-GATEWAY-01` | `TEST-GATEWAY-01`, `TEST-GATEWAY-02` |
+| `REQ-GATEWAY-02` | `TEST-GATEWAY-03` |
+| `REQ-GATEWAY-03` | `TEST-GATEWAY-02` |
+| `REQ-GATEWAY-04` | `TEST-GATEWAY-04`, `TEST-GATEWAY-06` |
+| `REQ-GATEWAY-05` | `TEST-GATEWAY-07` |
+| `REQ-GATEWAY-06` | `TEST-GATEWAY-05` |
+| `REQ-GATEWAY-07` | `TEST-GATEWAY-08` |
 
-**Setup:** Virtual buses; more frames available than `--count`.  
-**Action:** Run gateway with `--count 2`; send 5 frames on the source.  
-**Assert:** Gateway stops after exactly 2 forwarded frames and exits cleanly.
+## Representative Test Cases
 
-### Scaffold backend error
+### `TEST-GATEWAY-01` Unidirectional forwarding
 
-**Setup:** Default scaffold backend (no `CANARCHY_TRANSPORT_BACKEND` env var).  
-**Action:** Run `canarchy gateway src dst --json`.  
-**Assert:** Exit code 2; `errors[0].code == "GATEWAY_LIVE_BACKEND_REQUIRED"`.
+Setup: two in-process virtual buses on the same channel using threads.  
+Action: send two frames on the source bus.  
+Assert: both frames arrive on the destination bus with the expected arbitration IDs and payloads.
 
-### Invalid count
+### `TEST-GATEWAY-02` Bidirectional forwarding
 
-**Setup:** python-can backend.  
-**Action:** Run `canarchy gateway src dst --count 0 --json`.  
-**Assert:** Exit code 1; `errors[0].code == "INVALID_COUNT"`.
+Setup: two in-process virtual buses on distinct channels.  
+Action: send one frame `src->dst` and one frame `dst->src`.  
+Assert: both frames are forwarded and the emitted events carry the correct direction label.
 
-### JSON output structure
+### `TEST-GATEWAY-03` Backend selection
 
-**Setup:** Virtual buses; `--count 1`.  
-**Action:** Forward one frame with `--json`.  
-**Assert:** Payload contains `ok: true`, `command: "gateway"`, `events` list with one frame event, `source` field is `"gateway.src->dst"`.
+Setup: source and destination backends are provided explicitly.  
+Action: run gateway with `--src-backend` and `--dst-backend`.  
+Assert: the correct backend values are passed to the source and destination bus open path.
 
-### Table output header
+### `TEST-GATEWAY-04` Count limit
 
-**Setup:** Virtual buses; `--count 1`.  
-**Action:** Forward one frame with `--table`.  
-**Assert:** Output contains `gateway:` header line with src and dst channels; at least one candump-style frame line.
+Setup: more frames are available than `--count`.  
+Action: run gateway with `--count 2`.  
+Assert: forwarding stops after exactly two total forwarded frames.
 
-## Fixtures
+### `TEST-GATEWAY-05` Backend requirement
 
-No new fixture files are required. Tests use in-process python-can virtual buses.
+Setup: default scaffold backend with no `CANARCHY_TRANSPORT_BACKEND` override.  
+Action: run `canarchy gateway src dst --json`.  
+Assert: exit code `2` and `errors[0].code == "GATEWAY_LIVE_BACKEND_REQUIRED"`.
 
-## What is not tested
+### `TEST-GATEWAY-06` Invalid count
 
-- Physical hardware adapters (pcan, slcan, socketcan) — environment-dependent.
-- Cross-process gateway validation — covered by the `test_virtual_bus_is_process_local` and `test_udp_multicast_backend_round_trips_frame_across_processes` tests in `test_transport.py`.
-- Indefinite streaming (no `--count`) — not suitable for unit tests; covered by the demo docs.
+Setup: request `--count 0`.  
+Action: run `canarchy gateway src dst --count 0 --json`.  
+Assert: exit code `1` and `errors[0].code == "INVALID_COUNT"`.
+
+### `TEST-GATEWAY-07` JSON output structure
+
+Setup: forward one frame with `--count 1`.  
+Action: run with `--json`.  
+Assert: payload contains one frame event whose `source` is `gateway.src->dst`.
+
+### `TEST-GATEWAY-08` Table output
+
+Setup: forward one frame with `--count 1`.  
+Action: run with `--table`.  
+Assert: output contains a `gateway:` header plus at least one candump-style frame line.
+
+## Fixtures And Environment
+
+No fixture files are required. Tests use in-process `python-can` virtual buses and mocking around the backend open path.
+
+## Explicit Non-Coverage
+
+* physical hardware adapters such as PCAN, SLCAN, and SocketCAN
+* cross-process validation beyond the dedicated transport tests
+* indefinite streaming without `--count`
+
+## Traceability
+
+This spec maps to the gateway acceptance criteria around forwarding behavior, structured output, and transport/user error handling.

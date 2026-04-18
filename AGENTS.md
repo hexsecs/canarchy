@@ -504,7 +504,9 @@ Describe the overall structure and module responsibilities. Each document should
 
 Describe the intended behavior of a specific feature or subsystem before or during implementation. Each spec should include:
 
+* document control metadata including current status and affected command surface
 * the goal and user-facing motivation
+* explicit requirement IDs in a stable format such as `REQ-<AREA>-NN`
 * the proposed command surface or API shape
 * data models and event types involved
 * output format definitions (JSON schema or representative examples)
@@ -515,7 +517,10 @@ Describe the intended behavior of a specific feature or subsystem before or duri
 
 Describe the test strategy and coverage expectations for a component or feature. Each test spec should include:
 
+* document control metadata including the related design spec
+* explicit test case IDs in a stable format such as `TEST-<AREA>-NN`
 * what behaviors must be covered
+* requirement-to-test traceability mapping back to the design spec requirement IDs
 * representative test cases including happy path, edge cases, and failure modes
 * fixture requirements
 * what is explicitly not tested and why
@@ -523,9 +528,9 @@ Describe the test strategy and coverage expectations for a component or feature.
 ### Rules for agents
 
 * When implementing a new feature or command, check `docs/design/` for an existing spec before writing code. If a spec exists, implement against it. If it conflicts with the code, flag the conflict rather than silently diverging.
-* When no spec exists for a significant new feature, create one in `docs/design/` before or alongside the implementation.
+* When no spec exists for a significant new feature, create one in `docs/design/` before or alongside the implementation, using requirement IDs and the current formal structure.
 * When adding new protocol logic, transport backends, or output formats, update or create the relevant architecture document in `docs/architecture/`.
-* After implementing a feature, verify the test spec in `docs/tests/` matches what was actually tested. Update it if coverage changed.
+* After implementing a feature, verify the test spec in `docs/tests/` matches what was actually tested, includes test IDs, and traces back to the design-spec requirement IDs. Update it if coverage changed.
 * Specs are living documents. Update them when the implementation changes rather than letting them drift.
 * Do not create specs for trivial changes (single-function fixes, minor output tweaks). Reserve them for features that affect the command surface, data model, or module boundaries.
 
