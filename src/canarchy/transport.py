@@ -462,8 +462,9 @@ class LocalTransport:
             metadata["capture_timeout"] = self.live_backend.capture_timeout
         return metadata
 
-    def filter(self, file_name: str, expression: str) -> list[CanFrame]:
-        frames = self._frames_for_file(file_name)
+    def filter(self, file_name: str, expression: str, frames: list[CanFrame] | None = None) -> list[CanFrame]:
+        if frames is None:
+            frames = self._frames_for_file(file_name)
         normalized = expression.strip().lower()
         if normalized.startswith("id=="):
             wanted_id = int(normalized.split("==", 1)[1], 0)
@@ -515,8 +516,11 @@ class LocalTransport:
         ]
         return serialize_events(events)
 
-    def filter_events(self, file_name: str, expression: str) -> list[dict[str, object]]:
-        frames = self.filter(file_name, expression)
+    def filter_events(self, file_name: str, expression: str, frames: list[CanFrame] | None = None) -> list[dict[str, object]]:
+        if frames is None:
+            frames = self.filter(file_name, expression)
+        else:
+            frames = self.filter(file_name, expression, frames)
         return serialize_events(
             [FrameEvent(frame=frame, source="transport.filter").to_event() for frame in frames]
         )

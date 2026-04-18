@@ -16,11 +16,22 @@ from canarchy.transport import PythonCanBackend, TransportError
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def run_cli(*argv: str) -> tuple[int, str, str]:
+def run_cli(*argv: str, input: str | None = None) -> tuple[int, str, str]:
     stdout = io.StringIO()
     stderr = io.StringIO()
+    stdin_stub = io.StringIO(input) if input is not None else None
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-        exit_code = main(argv)
+        if stdin_stub is not None:
+            # Patch sys.stdin for this call
+            import sys
+            original_stdin = sys.stdin
+            try:
+                sys.stdin = stdin_stub
+                exit_code = main(argv)
+            finally:
+                sys.stdin = original_stdin
+        else:
+            exit_code = main(argv)
     return exit_code, stdout.getvalue(), stderr.getvalue()
 
 
@@ -1191,6 +1202,135 @@ class CliTests(unittest.TestCase):
         self.assertAlmostEqual(frame_events[2]["timestamp"], 0.101, places=5)
         self.assertEqual(mock_sleep.call_count, 2)
         mock_sleep.assert_called_with(0.0505)
+
+    # --- stdin composition tests ---
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_decode_stdin_jsonl_composition(self, _mock_cfg):
+        """Test that decode can read JSONL FrameEvents from stdin and decode them."""
+        # Generate a frame that matches a signal in the sample DBC
+        frame_json = ('{"event_type": "frame", "payload": {"frame": '
+                      '{"arbitration_id": 419360305, "data": "11223344", '
+                      '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
+                      '"source": "test"}')
+        
+        exit_code, stdout, _ = run_cli(
+            "decode", "--stdin", "--dbc", str(FIXTURES / "sample.dbc"), "--jsonl",
+            input=frame_json
+        )
+        
+        self.assertEqual(exit_code, EXIT_OK)
+        lines = stdout.strip().splitlines()
+        # Should have decoded_message event plus signal events
+        self.assertGreater(len(lines), 1)
+        
+        # First line should be decoded_message
+        decoded_event = json.loads(lines[0])
+        self.assertEqual(decoded_event["event_type"], "decoded_message")
+        self.assertEqual(decoded_event["payload"]["message_name"], "EngineStatus1")
+        self.assertIn("CoolantTemp", decoded_event["payload"]["signals"])
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_filter_stdin_jsonl_composition(self, _mock_cfg):
+        """Test that filter can read JSONL FrameEvents from stdin and filter them."""
+        # Generate two frames - one matching filter, one not
+        frame1_json = ('{"event_type": "frame", "payload": {"frame": '
+                      '{"arbitration_id": 419360305, "data": "11223344", '
+                      '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
+                      '"source": "test"}')
+        frame2_json = ('{"event_type": "frame", "payload": {"frame": '
+                      '{"arbitration_id": 123, "data": "deadbeef", '
+                      '"is_extended_id": false, "timestamp": 0.1, "interface": "can0"}}, '
+                      '"source": "test"}')
+        input_data = frame1_json + "\n" + frame2_json + "\n"
+        
+        exit_code, stdout, _ = run_cli(
+            "filter", "--stdin", "id==0x18FEEE31", "--jsonl",
+            input=input_data
+        )
+        
+        self.assertEqual(exit_code, EXIT_OK)
+        lines = stdout.strip().splitlines()
+        # Should only get the matching frame back
+        self.assertEqual(len(lines), 1)
+        
+        frame_event = json.loads(lines[0])
+        self.assertEqual(frame_event["event_type"], "frame")
+        self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 419360305)
+        self.assertEqual(frame_event["payload"]["frame"]["data"], "11223344")
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_j1939_decode_stdin_jsonl_composition(self, _mock_cfg):
+        """Test that j1939 decode can read JSONL FrameEvents from stdin and decode them."""
+        # Generate a J1939 frame
+        frame_json = ('{"event_type": "frame", "payload": {"frame": '
+                      '{"arbitration_id": 419360305, "data": "11223344", '
+                      '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
+                      '"source": "test"}')
+        
+        exit_code, stdout, _ = run_cli(
+            "j1939", "decode", "--stdin", "--jsonl",
+            input=frame_json
+        )
+        
+        self.assertEqual(exit_code, EXIT_OK)
+        lines = stdout.strip().splitlines()
+        # Should have J1939 observation event
+        self.assertEqual(len(lines), 1)
+        
+        observation_event = json.loads(lines[0])
+        self.assertEqual(observation_event["event_type"], "j1939_pgn")
+        self.assertEqual(observation_event["payload"]["pgn"], 65262)
+        self.assertEqual(observation_event["payload"]["source_address"], 49)
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_stdin_validation_invalid_json(self, _mock_cfg):
+        """Test that invalid JSON in stdin produces appropriate error."""
+        exit_code, stdout, _ = run_cli(
+            "decode", "--stdin", "--dbc", str(FIXTURES / "sample.dbc"), "--json",
+            input="not json at all\n"
+        )
+        
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_STREAM_EVENT")
+        self.assertIn("Invalid JSON", payload["errors"][0]["message"])
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_stdin_validation_wrong_event_type(self, _mock_cfg):
+        """Test that non-frame events in stdin produce appropriate error."""
+        exit_code, stdout, _ = run_cli(
+            "decode", "--stdin", "--dbc", str(FIXTURES / "sample.dbc"), "--json",
+            input='{"event_type": "alert", "payload": {"message": "test"}}\n'
+        )
+        
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_STREAM_EVENT")
+        self.assertIn("Expected frame event", payload["errors"][0]["message"])
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_stdin_mutually_exclusive_with_file(self, _mock_cfg):
+        """Test that specifying both --stdin and a file produces an error."""
+        exit_code, stdout, _ = run_cli(
+            "decode", "--stdin", str(FIXTURES / "sample.candump"),
+            "--dbc", str(FIXTURES / "sample.dbc"), "--json"
+        )
+        
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "STDIN_AND_FILE_SPECIFIED")
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_stdin_required_when_no_file(self, _mock_cfg):
+        """Test that specifying neither --stdin nor a file produces an error."""
+        exit_code, stdout, _ = run_cli(
+            "decode", "--dbc", str(FIXTURES / "sample.dbc"), "--json"
+        )
+        
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "MISSING_INPUT")
 
     # --- ID option tests ---
 

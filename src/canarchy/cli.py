@@ -5,16 +5,18 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from canarchy.dbc import DbcError, decode_frames, encode_message
 from canarchy.exporter import ExportError, export_artifact
-from canarchy.j1939 import SUPPORTED_SPN_DEFINITIONS, dm1_messages, spn_observations, transport_protocol_sessions
+from canarchy.j1939 import SUPPORTED_SPN_DEFINITIONS, dm1_messages, spn_observations, transport_protocol_sessions, decompose_arbitration_id
 from canarchy.models import (
     AlertEvent,
     CanFrame,
+    J1939ObservationEvent,
     ReplayActionEvent,
     serialize_events,
 )
@@ -177,7 +179,8 @@ def build_parser() -> CanarchyArgumentParser:
     replay.set_defaults(command="replay")
 
     filter_parser = subparsers.add_parser("filter", help="filter recorded traffic")
-    filter_parser.add_argument("file")
+    filter_parser.add_argument("file", nargs="?", default=None)
+    filter_parser.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
     filter_parser.add_argument("expression")
     add_output_arguments(filter_parser)
     filter_parser.set_defaults(command="filter")
@@ -188,7 +191,8 @@ def build_parser() -> CanarchyArgumentParser:
     stats.set_defaults(command="stats")
 
     decode = subparsers.add_parser("decode", help="decode traffic using DBC")
-    decode.add_argument("file")
+    decode.add_argument("file", nargs="?", default=None)
+    decode.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
     decode.add_argument("--dbc", required=True)
     add_output_arguments(decode)
     decode.set_defaults(command="decode")
@@ -235,7 +239,8 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_monitor.set_defaults(command="j1939 monitor")
 
     j1939_decode = j1939_subparsers.add_parser("decode", help="decode J1939 traffic")
-    j1939_decode.add_argument("file")
+    j1939_decode.add_argument("file", nargs="?", default=None)
+    j1939_decode.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
     add_output_arguments(j1939_decode)
     j1939_decode.set_defaults(command="j1939 decode")
 
@@ -369,6 +374,36 @@ def validate_args(args: argparse.Namespace) -> None:
             ],
             data={"rate": args.rate},
         )
+
+    # Validate stdin usage for commands that support it
+    stdin_commands = {"decode", "filter", "j1939 decode"}
+    if args.command in stdin_commands:
+        if getattr(args, "stdin", False):
+            if getattr(args, "file", None) is not None:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="STDIN_AND_FILE_SPECIFIED",
+                            message="Cannot specify both --stdin and a capture file",
+                            hint="Use either --stdin to read from pipe or provide a capture file.",
+                        )
+                    ],
+                )
+        else:
+            if getattr(args, "file", None) is None:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="MISSING_INPUT",
+                            message="Either a capture file or --stdin must be specified",
+                            hint="Provide a capture file path or use --stdin to read from pipe.",
+                        )
+                    ],
+                )
 
     if args.command == "send":
         try:
@@ -595,7 +630,86 @@ def validate_args(args: argparse.Namespace) -> None:
                     )
                 ],
                 data={"name": args.name},
-            )
+                )
+
+
+def frame_from_stream_event(event: dict[str, Any], *, command: str, line_num: int) -> CanFrame:
+    if event.get("event_type") != "frame":
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_STREAM_EVENT",
+                    message=f"Expected frame event, got {event.get('event_type')} at line {line_num}",
+                    hint="Input stream must contain JSONL FrameEvents.",
+                )
+            ],
+        )
+
+    try:
+        frame_data = event["payload"]["frame"]
+        return CanFrame(
+            arbitration_id=frame_data["arbitration_id"],
+            data=bytes.fromhex(frame_data["data"]),
+            timestamp=frame_data.get("timestamp"),
+            interface=frame_data.get("interface"),
+            is_extended_id=frame_data.get("is_extended_id", False),
+            is_remote_frame=frame_data.get("is_remote_frame", False),
+            is_error_frame=frame_data.get("is_error_frame", False),
+            bitrate_switch=frame_data.get("bitrate_switch", False),
+            error_state_indicator=frame_data.get("error_state_indicator", False),
+            frame_format=frame_data.get("frame_format", "can"),
+        )
+    except (KeyError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_STREAM_EVENT",
+                    message=f"Invalid frame event at line {line_num}: {str(exc)}",
+                    hint="Frame event must have valid frame payload.",
+                )
+            ],
+        ) from exc
+
+
+def frames_from_stdin(*, command: str) -> list[CanFrame]:
+    frames: list[CanFrame] = []
+    for line_num, line in enumerate(sys.stdin, 1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_STREAM_EVENT",
+                        message=f"Invalid JSON at line {line_num}: {str(exc)}",
+                        hint="Each line must be a valid JSON object.",
+                    )
+                ],
+            ) from exc
+        frames.append(frame_from_stream_event(event, command=command, line_num=line_num))
+
+    if not frames:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="NO_STREAM_EVENTS",
+                    message="No valid frame events found in stdin",
+                    hint="Provide JSONL FrameEvents via stdin or use a capture file.",
+                )
+            ],
+        )
+    return frames
 
 
 def sample_frame(*, interface: str | None = None, frame_format: str = "can") -> CanFrame:
@@ -739,6 +853,7 @@ def transport_payload(
             ["Frame generation is an active transmission workflow; use intentionally on a controlled bus."],
         )
     if args.command == "filter":
+        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)
         return (
             {
                 "mode": "passive",
@@ -746,8 +861,9 @@ def transport_payload(
                 "expression": args.expression,
                 "status": "implemented",
                 "implementation": "file-backed analysis",
+                "input": "stdin" if args.stdin else "file",
             },
-            transport.filter_events(args.file, args.expression),
+            transport.filter_events(args.file if not args.stdin else "<stdin>", args.expression, frames=frames),
             [],
         )
     if args.command == "stats":
@@ -777,10 +893,37 @@ def j1939_payload(
             [],
         )
     if args.command == "j1939 decode":
+        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)
+
+        # Filter to only extended ID frames for J1939
+        j1939_frames = [frame for frame in frames if frame.is_extended_id]
+        
+        # Build J1939 events from our frames
+        events = []
+        for frame in j1939_frames:
+            identifier = decompose_arbitration_id(frame.arbitration_id)
+            events.append(
+                J1939ObservationEvent(
+                    pgn=identifier.pgn,
+                    source_address=identifier.source_address,
+                    destination_address=identifier.destination_address,
+                    priority=identifier.priority,
+                    frame=frame,
+                    source="transport.j1939.decode",
+                )
+            )
+        
+        warnings = []
+        if not events:
+            warnings.append("No J1939 extended ID frames were found in the input.")
         return (
-            {"mode": "passive", "file": args.file},
-            transport.j1939_decode_events(args.file),
-            [],
+            {
+                "mode": "passive",
+                "file": args.file,
+                "input": "stdin" if args.stdin else "file",
+            },
+            serialize_events(events),
+            warnings,
         )
     if args.command == "j1939 pgn":
         return (
@@ -842,7 +985,8 @@ def j1939_payload(
 def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
     if args.command == "decode":
-        frames = transport.frames_from_file(args.file)
+        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)
+        
         events = decode_frames(frames, args.dbc)
         warnings = []
         if not events:
@@ -856,6 +1000,7 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "file": args.file,
                 "matched_messages": matched_messages,
                 "mode": "passive",
+                "input": "stdin" if args.stdin else "file",
             },
             events,
             warnings,
