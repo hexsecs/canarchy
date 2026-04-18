@@ -4,6 +4,8 @@ This page compares CANarchy to several widely used open-source CAN tools.
 
 The goal is not to rank projects. These tools solve different problems well. The matrix is here to help readers quickly understand where CANarchy fits.
 
+Important context: CANarchy currently uses `python-can` for its live transport/backend integration. In other words, `python-can` is part of CANarchy's implementation stack, while CANarchy adds a higher-level CLI, protocol workflow, and structured-output layer on top.
+
 Comparison scope:
 
 * focuses on current, documented OSS capabilities
@@ -108,7 +110,7 @@ If your primary need is one of the following, these tools are often stronger fit
 
 ### CANarchy
 
-CANarchy is aimed at users who want a stable CLI contract, structured outputs, and protocol-aware workflows that compose well in scripts and agent-driven pipelines. It is strongest where reproducibility, JSON and JSONL output, J1939 workflows, and command composition matter.
+CANarchy is aimed at users who want a stable CLI contract, structured outputs, and protocol-aware workflows that compose well in scripts and agent-driven pipelines. It is strongest where reproducibility, JSON and JSONL output, J1939 workflows, and command composition matter. For live bus access, CANarchy currently builds on `python-can` rather than reimplementing hardware abstraction itself.
 
 ### can-utils
 
@@ -174,6 +176,7 @@ In practice, many users will still pair CANarchy with other tools:
 
 * This matrix is intentionally high-level and not exhaustive.
 * "No" does not mean impossible through scripting, extension, or external composition; it means the capability is not a primary documented strength of that project.
+* CANarchy and `python-can` are partly complementary rather than purely competing tools because CANarchy currently uses `python-can` for live transport/backend integration.
 * Documentation quality reflects public discoverability and usability, not just whether information exists somewhere.
 * Tool capabilities evolve. If this page drifts, update it with links to upstream documentation rather than relying on memory.
 
