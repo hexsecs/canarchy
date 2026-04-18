@@ -649,6 +649,103 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
 
+    def test_re_counters_returns_ranked_candidates(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "counters",
+            str(FIXTURES / "re_counter_nibble.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["analysis"], "counter_detection")
+        self.assertGreater(payload["data"]["candidate_count"], 0)
+        best = payload["data"]["candidates"][0]
+        self.assertEqual(best["arbitration_id"], 0x123)
+        self.assertEqual(best["start_bit"], 0)
+        self.assertEqual(best["bit_length"], 4)
+        self.assertIn("adjacent samples increment", best["rationale"])
+
+    def test_re_counters_detects_rollover(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "counters",
+            str(FIXTURES / "re_counter_rollover.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        rollover_candidate = next(
+            candidate
+            for candidate in payload["data"]["candidates"]
+            if candidate["arbitration_id"] == 0x200
+            and candidate["start_bit"] == 8
+            and candidate["bit_length"] == 8
+        )
+        self.assertTrue(rollover_candidate["rollover_detected"])
+
+    def test_re_counters_non_counter_returns_empty_candidates(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "counters",
+            str(FIXTURES / "re_non_counter.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["candidate_count"], 0)
+        self.assertEqual(payload["data"]["candidates"], [])
+        self.assertEqual(payload["warnings"][0], "No likely counters met the current heuristic threshold.")
+
+    def test_re_counters_low_sample_returns_empty_candidates(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "counters",
+            str(FIXTURES / "re_low_sample.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["candidate_count"], 0)
+        self.assertEqual(payload["data"]["candidates"], [])
+
+    def test_re_counters_table_output_is_ranked(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "counters",
+            str(FIXTURES / "re_counter_nibble.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: re counters", stdout)
+        self.assertIn("analysis: counter_detection", stdout)
+        self.assertIn("candidate_count:", stdout)
+        self.assertIn("id=0x123", stdout)
+        self.assertIn("start=0", stdout)
+        self.assertIn("len=4", stdout)
+
+    def test_re_counters_missing_capture_returns_transport_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "counters",
+            str(FIXTURES / "missing-re-file.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
+
     def test_session_save_load_and_show_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             with working_directory(temp_dir):

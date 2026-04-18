@@ -33,6 +33,7 @@ Fully implemented and tested:
 * `decode`, `encode` — DBC-backed signal decode and encode
 * `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1` — J1939 operator workflows across live, file-backed, and decoded views
 * `uds scan`, `trace`, `services` — UDS diagnostic workflows and service catalog, including initial transport-backed scan/trace heuristics
+* `re counters` — file-backed counter-candidate detection for reverse-engineering workflows
 * `session save`, `load`, `show` — session management
 * `export` — structured artifact export
 * `shell` — interactive REPL and `--command` scripting mode
@@ -40,7 +41,7 @@ Fully implemented and tested:
 
 Present in the CLI surface but not yet fully implemented:
 
-* `re signals`, `re counters`, `re entropy`, `re correlate` — reverse-engineering helpers (planned)
+* `re signals`, `re entropy`, `re correlate` — reverse-engineering helpers (planned)
 * `fuzz replay`, `fuzz mutate`, `fuzz id` — active fuzzing (planned)
 
 Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.

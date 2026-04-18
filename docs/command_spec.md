@@ -388,6 +388,20 @@ Notes:
 * this is a reference command and does not require an interface
 * output includes service identifier, positive-response identifier, category, and subfunction expectations
 
+### re counters
+
+Rank likely counter fields from recorded CAN traffic.
+
+```bash
+canarchy re counters <file> [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* this command is passive and file-backed
+* the current implementation inspects nibble- and byte-sized candidate fields on recorded arbitration IDs
+* candidates are ranked by monotonicity evidence and explicit rollover detection
+
 ---
 
 ## Output Modes
@@ -557,7 +571,7 @@ canarchy shell --command "capture can0 --raw"
 
 These commands are present in the CLI tree but not yet implemented end to end:
 
-* `re signals|counters|entropy|correlate`
+* `re signals|entropy|correlate`
 * `fuzz replay|mutate|id`
 
 These deeper capabilities are also not implemented yet even where the command surface exists:

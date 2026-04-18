@@ -4,13 +4,13 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Planned |
+| Status | Partial |
 | Related design spec | `docs/design/reverse-engineering-helpers.md` |
 | Primary test area | CLI, analysis |
 
 ## Test Objectives
 
-Define the expected coverage for the reverse-engineering helper family so future implementation work remains traceable to the planned command contracts and heuristic-output expectations.
+Define the expected coverage for the reverse-engineering helper family so shipped and future implementation work remains traceable to the command contracts and heuristic-output expectations.
 
 ## Coverage Requirements
 
@@ -99,6 +99,10 @@ Planned fixtures should include:
 * captures with likely analog-like signals
 * captures plus `.json` and `.jsonl` reference-series fixtures for correlation
 * malformed and low-sample fixtures
+
+Current implementation note:
+
+* `re counters` is covered with fixtures for nibble counters, rollover counters, non-counter noise, and low-sample captures
 
 ## Explicit Non-Coverage
 

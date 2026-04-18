@@ -21,6 +21,7 @@ from canarchy.models import (
     serialize_events,
 )
 from canarchy.replay import build_replay_plan
+from canarchy.reverse_engineering import counter_candidates
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.transport import LocalTransport, TransportError, config_show_payload, generate_frames
 from canarchy.tui import run_tui
@@ -37,7 +38,8 @@ J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
-IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | {"replay", "gateway", "shell", "export"}
+RE_COMMANDS = {"re counters"}
+IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"replay", "gateway", "shell", "export"}
 
 
 class CliUsageError(Exception):
@@ -1175,6 +1177,31 @@ def session_payload(
     raise AssertionError(f"unsupported session command: {args.command}")
 
 
+def reverse_engineering_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    transport = LocalTransport()
+    if args.command == "re counters":
+        frames = transport.frames_from_file(args.file)
+        candidates = counter_candidates(frames)
+        warnings: list[str] = []
+        if not candidates:
+            warnings.append("No likely counters met the current heuristic threshold.")
+        return (
+            {
+                "mode": "passive",
+                "file": args.file,
+                "analysis": "counter_detection",
+                "candidate_count": len(candidates),
+                "candidates": candidates,
+                "implementation": "file-backed heuristic analysis",
+            },
+            [],
+            warnings,
+        )
+    raise AssertionError(f"unsupported reverse-engineering command: {args.command}")
+
+
 def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in TRANSPORT_COMMANDS:
         _, events, _ = transport_payload(args)
@@ -1190,6 +1217,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
         return events
     if args.command in UDS_COMMANDS:
         _, events, _ = uds_payload(args)
+        return events
+    if args.command in RE_COMMANDS:
+        _, events, _ = reverse_engineering_payload(args)
         return events
     if args.command == "export":
         _, events, _ = export_payload(args)
@@ -1247,6 +1277,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(uds_data)
         data["events"] = uds_events
         warnings.extend(uds_warnings)
+    elif args.command in RE_COMMANDS:
+        re_data, re_events, re_warnings = reverse_engineering_payload(args)
+        data.update(re_data)
+        data["events"] = re_events
+        warnings.extend(re_warnings)
     elif args.command == "export":
         export_data, export_events, export_warnings = export_payload(args)
         data.update(export_data)
@@ -1420,6 +1455,33 @@ def format_uds_table(result: CommandResult) -> list[str]:
             f"resp_id=0x{payload['response_id']:03X} "
             f"req={payload['request_data']} "
             f"resp={payload['response_data']}"
+        )
+    return lines
+
+
+def format_re_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    lines.append(f"file: {result.data.get('file')}")
+    lines.append(f"analysis: {result.data.get('analysis')}")
+    lines.append(f"candidate_count: {result.data.get('candidate_count', 0)}")
+    lines.append("candidates:")
+    candidates = result.data.get("candidates", [])
+    if not candidates:
+        lines.append("- no likely counters")
+        return lines
+
+    for candidate in candidates:
+        lines.append(
+            "- "
+            f"id=0x{candidate['arbitration_id']:X} "
+            f"start={candidate['start_bit']} "
+            f"len={candidate['bit_length']} "
+            f"score={candidate['score']} "
+            f"ratio={candidate['monotonicity_ratio']} "
+            f"rollover={candidate['rollover_detected']} "
+            f"samples={candidate['sample_count']} "
+            f"range={candidate['observed_min']}..{candidate['observed_max']} "
+            f"why={candidate['rationale']}"
         )
     return lines
 
@@ -1609,6 +1671,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "table" and result.ok and result.command in UDS_COMMANDS:
         for line in format_uds_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command in RE_COMMANDS:
+        for line in format_re_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

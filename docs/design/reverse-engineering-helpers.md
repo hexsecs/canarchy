@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Planned |
+| Status | Partial |
 | Command surface | `canarchy re signals`, `re counters`, `re entropy`, `re correlate` |
 | Primary area | CLI, analysis |
 
@@ -95,6 +95,12 @@ Counter candidates should include:
 * `bit_length`
 * `rollover_detected`
 * `monotonicity_ratio`
+
+Current implementation note:
+
+* `re counters` is implemented as a deterministic file-backed helper
+* the initial heuristic scans nibble- and byte-sized candidate fields at nibble-aligned start bits
+* current scoring is based on adjacent monotonic increments, explicit rollover detection, and observed value spread
 
 ### `re entropy`
 
