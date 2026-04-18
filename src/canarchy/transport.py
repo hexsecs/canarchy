@@ -501,8 +501,13 @@ class LocalTransport:
             [FrameEvent(frame=frame, source="transport.filter").to_event() for frame in frames]
         )
 
-    def j1939_monitor_events(self, pgn: int | None = None) -> list[dict[str, object]]:
-        frames = sample_j1939_monitor_frames()
+    def j1939_monitor_events(
+        self, pgn: int | None = None, *, interface: str | None = None
+    ) -> list[dict[str, object]]:
+        if interface is None:
+            frames = sample_j1939_monitor_frames()
+        else:
+            frames = [frame for frame in self.capture(interface) if frame.is_extended_id]
         return serialize_events(
             [
                 event.to_event()

@@ -260,6 +260,35 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["event_type"], "j1939_pgn")
 
+    def test_j1939_monitor_events_with_interface_use_transport_capture(self) -> None:
+        transport = LocalTransport(live_backend=ScaffoldCanBackend())
+
+        with patch.object(
+            transport,
+            "capture",
+            return_value=[
+                CanFrame(
+                    arbitration_id=0x18FEEE31,
+                    data=bytes.fromhex("11223344"),
+                    is_extended_id=True,
+                    interface="can0",
+                    timestamp=0.0,
+                ),
+                CanFrame(
+                    arbitration_id=0x123,
+                    data=bytes.fromhex("AA"),
+                    is_extended_id=False,
+                    interface="can0",
+                    timestamp=0.1,
+                ),
+            ],
+        ) as capture_mock:
+            events = transport.j1939_monitor_events(interface="can0")
+
+        capture_mock.assert_called_once_with("can0")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "j1939_pgn")
+
     def test_uds_scan_events_use_explicit_sample_provider(self) -> None:
         transport = LocalTransport(live_backend=ScaffoldCanBackend())
 

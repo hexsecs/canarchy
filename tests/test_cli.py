@@ -383,6 +383,17 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
         self.assertEqual(payload["data"]["events"][0]["payload"]["source_address"], 0x31)
         self.assertEqual(payload["data"]["events"][0]["payload"]["priority"], 6)
+        self.assertEqual(payload["data"]["implementation"], "sample/reference provider")
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_j1939_monitor_with_interface_uses_transport_path(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "monitor", "can0", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["interface"], "can0")
+        self.assertEqual(payload["data"]["implementation"], "transport-backed")
+        self.assertEqual(len(payload["data"]["events"]), 2)
 
     def test_j1939_monitor_pgn_filter_is_applied(self) -> None:
         exit_code, stdout, _ = run_cli("j1939", "monitor", "--pgn", "65262", "--json")

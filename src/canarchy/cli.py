@@ -234,6 +234,7 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_subparsers = j1939.add_subparsers(dest="j1939_action", required=True)
 
     j1939_monitor = j1939_subparsers.add_parser("monitor", help="monitor J1939 traffic")
+    j1939_monitor.add_argument("interface", nargs="?", default=None)
     j1939_monitor.add_argument("--pgn", type=int)
     add_output_arguments(j1939_monitor)
     j1939_monitor.set_defaults(command="j1939 monitor")
@@ -887,13 +888,15 @@ def j1939_payload(
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
     if args.command == "j1939 monitor":
+        implementation = "transport-backed" if args.interface else "sample/reference provider"
         return (
             {
                 "mode": "passive",
+                "interface": args.interface,
                 "pgn_filter": args.pgn,
-                "implementation": "sample/reference provider",
+                "implementation": implementation,
             },
-            transport.j1939_monitor_events(args.pgn),
+            transport.j1939_monitor_events(args.pgn, interface=args.interface),
             [],
         )
     if args.command == "j1939 decode":

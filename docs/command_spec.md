@@ -248,21 +248,23 @@ canarchy shell [--command "capture can0 --raw"] [--json|--jsonl|--table|--raw]
 
 ### j1939 monitor
 
-Inspect representative J1939 traffic and emit PGN-oriented structured events.
+Inspect J1939 traffic and emit PGN-oriented structured events.
 
 ```bash
-canarchy j1939 monitor [--pgn <id>] [--json|--jsonl|--table|--raw]
+canarchy j1939 monitor [<interface>] [--pgn <id>] [--json|--jsonl|--table|--raw]
 ```
 
 Example:
 
 ```bash
 canarchy j1939 monitor --pgn 65262 --json
+canarchy j1939 monitor can0 --pgn 65262 --json
 ```
 
 Notes:
 
-* this command currently uses an explicit sample/reference provider rather than a live transport stream
+* without an interface, this command uses an explicit sample/reference provider
+* with an interface, this command captures from the selected transport backend and filters to J1939 extended-ID traffic
 * `j1939 decode`, `j1939 spn`, `j1939 tp`, and `j1939 dm1` remain file-backed
 
 ### j1939 decode
