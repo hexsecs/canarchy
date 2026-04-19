@@ -5,12 +5,12 @@
 | Field | Value |
 |-------|-------|
 | Status | Partial |
-| Command surface | `canarchy re signals`, `re counters`, `re entropy`, `re correlate` |
+| Command surface | `canarchy re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, `re shortlist-dbc` |
 | Primary area | CLI, analysis |
 
 ## Goal
 
-Provide evidence-driven reverse-engineering helpers over recorded CAN traffic so operators can identify likely signals, counters, entropy-heavy fields, and correlations without treating heuristics as ground truth.
+Provide evidence-driven reverse-engineering helpers over recorded CAN traffic so operators can identify likely signals, counters, entropy-heavy fields, candidate DBC matches, and future correlations without treating heuristics as ground truth.
 
 ## User-Facing Motivation
 
@@ -20,7 +20,7 @@ Operators analysing unknown traffic need repeatable helpers that summarise likel
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| `REQ-RE-01` | Ubiquitous | The system shall provide `re signals`, `re counters`, `re entropy`, and `re correlate` commands over capture files. |
+| `REQ-RE-01` | Ubiquitous | The system shall provide `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, and `re shortlist-dbc` commands over capture files. |
 | `REQ-RE-02` | Ubiquitous | Each reverse-engineering command shall operate passively on recorded traffic and shall not transmit frames. |
 | `REQ-RE-03` | Event-driven | When `re signals <file>` is invoked, the system shall return candidate field boundaries with supporting rationale and confidence metadata. |
 | `REQ-RE-04` | Event-driven | When `re counters <file>` is invoked, the system shall return candidate fields that exhibit monotonic incrementing behaviour, including rollover detection and monotonicity evidence. |
@@ -30,6 +30,8 @@ Operators analysing unknown traffic need repeatable helpers that summarise likel
 | `REQ-RE-08` | Ubiquitous | The commands shall support `--json`, `--jsonl`, and `--table` output modes. |
 | `REQ-RE-09` | Unwanted behaviour | If `re correlate` is invoked without `--reference`, the system shall return a structured error with code `RE_REFERENCE_REQUIRED` and exit code 1. |
 | `REQ-RE-10` | Unwanted behaviour | If the reference file is missing, malformed, or does not match the required timestamped numeric sample schema, the system shall return a structured error with code `RE_REFERENCE_INVALID` and exit code 1. |
+| `REQ-RE-11` | Event-driven | When `re match-dbc <capture>` is invoked, the system shall rank candidate DBCs by comparing provider-catalog message IDs against the capture's observed arbitration IDs. |
+| `REQ-RE-12` | Event-driven | When `re shortlist-dbc <capture> --make <brand>` is invoked, the system shall pre-filter provider-catalog candidates by make before ranking them against the capture. |
 
 ## Command Surface
 
@@ -38,11 +40,18 @@ canarchy re signals <file> [--json] [--jsonl] [--table] [--raw]
 canarchy re counters <file> [--json] [--jsonl] [--table] [--raw]
 canarchy re entropy <file> [--json] [--jsonl] [--table] [--raw]
 canarchy re correlate <file> --reference <file> [--json] [--jsonl] [--table] [--raw]
+canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--table] [--raw]
+canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--table] [--raw]
 ```
 
 ### Initial scope assumptions
 
 The first implementation should be file-backed and deterministic. Live capture subscriptions, interactive tuning, and OEM-specific knowledge are explicitly deferred.
+
+Current implementation note:
+
+* `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc` are implemented as deterministic file-backed helpers
+* `re signals` and `re correlate` remain command-surface placeholders and are still deferred
 
 ## Responsibilities And Boundaries
 
@@ -51,6 +60,7 @@ In scope:
 * file-backed heuristic analysis over candump-style captures
 * confidence-bearing candidate output
 * command-specific summaries over arbitration IDs, bytes, bit ranges, and observed value series
+* provider-backed DBC candidate ranking against capture arbitration IDs
 
 Out of scope:
 
@@ -74,9 +84,9 @@ All reverse-engineering commands shall return:
 
 Each candidate shall include at least:
 
-* `arbitration_id`
-* `score` or `confidence`
-* `rationale`
+* an identifier appropriate to the candidate family, such as `arbitration_id` or `source_ref`
+* `score` or `confidence` when the helper returns ranked candidates
+* `rationale` when the helper emits heuristic justification
 
 ### `re signals`
 
@@ -144,6 +154,31 @@ Correlation candidates shall include:
 * `correlation`
 * `lag` when relevant
 * `sample_count`
+
+### `re match-dbc`
+
+DBC match candidates shall include:
+
+* `name`
+* `source_ref`
+* `score`
+* `matched_ids`
+* `total_capture_ids`
+
+Current implementation note:
+
+* `re match-dbc` is implemented as a deterministic file-backed helper
+* candidate scoring is frequency-weighted by captured arbitration-ID occurrence, not just unique ID overlap
+* the default provider is `opendbc`
+
+### `re shortlist-dbc`
+
+Shortlist candidates shall use the same output shape as `re match-dbc` with additional request metadata for the selected make filter.
+
+Current implementation note:
+
+* `re shortlist-dbc` is implemented as a deterministic file-backed helper
+* `--make` is required and narrows provider-catalog candidates before scoring
 
 ## Output Contracts
 
