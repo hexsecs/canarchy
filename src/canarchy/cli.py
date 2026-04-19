@@ -41,13 +41,14 @@ EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
+DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
 RE_COMMANDS = {"re counters", "re entropy"}
 ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
-IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
+IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
 
 class CliUsageError(Exception):
@@ -241,6 +242,42 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_output_arguments(dbc_inspect)
     dbc_inspect.set_defaults(command="dbc inspect")
+
+    dbc_provider = dbc_subparsers.add_parser("provider", help="manage DBC providers")
+    dbc_provider_subparsers = dbc_provider.add_subparsers(dest="dbc_provider_action", required=True)
+
+    dbc_provider_list = dbc_provider_subparsers.add_parser("list", help="list registered providers")
+    add_output_arguments(dbc_provider_list)
+    dbc_provider_list.set_defaults(command="dbc provider list")
+
+    dbc_search = dbc_subparsers.add_parser("search", help="search for DBC files across providers")
+    dbc_search.add_argument("query", help="search query (name, make, or keyword)")
+    dbc_search.add_argument("--provider", help="restrict search to a specific provider")
+    dbc_search.add_argument("--limit", type=int, default=20, help="maximum results (default: 20)")
+    add_output_arguments(dbc_search)
+    dbc_search.set_defaults(command="dbc search")
+
+    dbc_fetch = dbc_subparsers.add_parser("fetch", help="fetch and cache a DBC file")
+    dbc_fetch.add_argument("ref", help="DBC ref (e.g. opendbc:toyota_tnga_k_pt_generated)")
+    add_output_arguments(dbc_fetch)
+    dbc_fetch.set_defaults(command="dbc fetch")
+
+    dbc_cache = dbc_subparsers.add_parser("cache", help="manage the local DBC cache")
+    dbc_cache_subparsers = dbc_cache.add_subparsers(dest="dbc_cache_action", required=True)
+
+    dbc_cache_list = dbc_cache_subparsers.add_parser("list", help="list cached providers")
+    add_output_arguments(dbc_cache_list)
+    dbc_cache_list.set_defaults(command="dbc cache list")
+
+    dbc_cache_prune = dbc_cache_subparsers.add_parser("prune", help="remove stale cached commits")
+    dbc_cache_prune.add_argument("--provider", help="restrict to a specific provider")
+    add_output_arguments(dbc_cache_prune)
+    dbc_cache_prune.set_defaults(command="dbc cache prune")
+
+    dbc_cache_refresh = dbc_cache_subparsers.add_parser("refresh", help="refresh catalog from upstream")
+    dbc_cache_refresh.add_argument("--provider", default="opendbc", help="provider to refresh (default: opendbc)")
+    add_output_arguments(dbc_cache_refresh)
+    dbc_cache_refresh.set_defaults(command="dbc cache refresh")
 
     export = subparsers.add_parser("export", help="export session data")
     export.add_argument("source")
@@ -1163,6 +1200,84 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
 
+def dbc_provider_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.dbc_provider import get_registry
+    from canarchy.dbc_cache import cache_list, cache_prune
+
+    if args.command == "dbc provider list":
+        registry = get_registry()
+        providers = registry.list_providers()
+        return ({"providers": providers}, [], [])
+
+    if args.command == "dbc search":
+        registry = get_registry()
+        provider_filter = [args.provider] if getattr(args, "provider", None) else None
+        limit = getattr(args, "limit", 20)
+        results = registry.search(args.query, providers=provider_filter)[:limit]
+        items = [
+            {
+                "provider": d.provider,
+                "name": d.name,
+                "version": d.version,
+                "source_ref": d.source_ref,
+                "metadata": d.metadata,
+            }
+            for d in results
+        ]
+        warnings: list[str] = []
+        if not items:
+            warnings.append("No DBC files matched the query. Try `canarchy dbc cache refresh --provider opendbc` to populate the catalog.")
+        return ({"query": args.query, "count": len(items), "results": items}, [], warnings)
+
+    if args.command == "dbc fetch":
+        registry = get_registry()
+        resolution = registry.resolve(args.ref)
+        return (
+            {
+                "ref": args.ref,
+                "provider": resolution.descriptor.provider,
+                "name": resolution.descriptor.name,
+                "version": resolution.descriptor.version,
+                "local_path": str(resolution.local_path),
+                "is_cached": resolution.is_cached,
+            },
+            [],
+            [],
+        )
+
+    if args.command == "dbc cache list":
+        entries = cache_list()
+        return ({"entries": entries, "count": len(entries)}, [], [])
+
+    if args.command == "dbc cache prune":
+        provider_filter = getattr(args, "provider", None)
+        removed = cache_prune(provider_filter)
+        return ({"removed": removed, "count": len(removed)}, [], [])
+
+    if args.command == "dbc cache refresh":
+        provider_name = getattr(args, "provider", "opendbc")
+        registry = get_registry()
+        provider = registry.get_provider(provider_name)
+        if provider is None:
+            from canarchy.dbc import DbcError
+            raise DbcError(
+                code="DBC_PROVIDER_NOT_FOUND",
+                message=f"Provider '{provider_name}' is not registered.",
+                hint=f"Available providers: {', '.join(p['name'] for p in registry.list_providers())}.",
+            )
+        descriptors = provider.refresh()
+        return (
+            {
+                "provider": provider_name,
+                "dbc_count": len(descriptors),
+            },
+            [],
+            [],
+        )
+
+    raise AssertionError(f"unsupported dbc provider command: {args.command}")
+
+
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
     backend_metadata = transport.backend_metadata()
@@ -1359,6 +1474,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in DBC_COMMANDS:
         _, events, _ = dbc_payload(args)
         return events
+    if args.command in DBC_PROVIDER_COMMANDS:
+        _, events, _ = dbc_provider_payload(args)
+        return events
     if args.command in J1939_COMMANDS:
         _, events, _ = j1939_payload(args)
         return events
@@ -1422,6 +1540,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(decode_data)
         data["events"] = decode_events
         warnings.extend(decode_warnings)
+    elif args.command in DBC_PROVIDER_COMMANDS:
+        prov_data, prov_events, prov_warnings = dbc_provider_payload(args)
+        data.update(prov_data)
+        data["events"] = prov_events
+        warnings.extend(prov_warnings)
     elif args.command in UDS_COMMANDS:
         uds_data, uds_events, uds_warnings = uds_payload(args)
         data.update(uds_data)
@@ -1703,6 +1826,58 @@ def format_candump_frame(frame: dict[str, Any]) -> str:
     return f"{frame_id}#{frame['data'].upper()}"
 
 
+def format_dbc_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    db = result.data.get("database", {})
+    if db:
+        lines.append(f"path: {db.get('path', '')}")
+        lines.append(f"messages: {db.get('message_count', 0)}")
+        lines.append(f"signals: {db.get('signal_count', 0)}")
+    for message in result.data.get("messages", []):
+        lines.append(
+            f"  [{message.get('arbitration_id_hex', '')}] {message.get('name', '')} "
+            f"({message.get('signal_count', 0)} signals, {message.get('length', 0)} bytes)"
+        )
+        for signal in message.get("signals", []):
+            unit = f" [{signal['unit']}]" if signal.get("unit") else ""
+            lines.append(f"    {signal['name']}: {signal.get('byte_order', '')} {signal.get('length', '')}bit{unit}")
+    return lines
+
+
+def format_dbc_provider_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    if result.command == "dbc provider list":
+        for p in result.data.get("providers", []):
+            lines.append(f"  {p['name']}")
+    elif result.command == "dbc search":
+        lines.append(f"query: {result.data.get('query', '')}")
+        lines.append(f"results: {result.data.get('count', 0)}")
+        for item in result.data.get("results", []):
+            brand = item.get("metadata", {}).get("brand", "")
+            brand_text = f" ({brand})" if brand else ""
+            lines.append(f"  {item['source_ref']}{brand_text}")
+    elif result.command == "dbc fetch":
+        lines.append(f"ref: {result.data.get('ref', '')}")
+        lines.append(f"name: {result.data.get('name', '')}")
+        lines.append(f"version: {result.data.get('version', '')}")
+        lines.append(f"path: {result.data.get('local_path', '')}")
+    elif result.command == "dbc cache list":
+        for entry in result.data.get("entries", []):
+            lines.append(
+                f"  {entry['provider']}  commit={entry.get('commit', 'unknown')[:12]}  "
+                f"dbcs={entry.get('dbc_count', 0)}"
+            )
+    elif result.command == "dbc cache prune":
+        removed = result.data.get("removed", [])
+        lines.append(f"removed: {len(removed)}")
+        for path in removed:
+            lines.append(f"  {path}")
+    elif result.command == "dbc cache refresh":
+        lines.append(f"provider: {result.data.get('provider', '')}")
+        lines.append(f"dbc_count: {result.data.get('dbc_count', 0)}")
+    return lines
+
+
 def emit_live_capture(args: argparse.Namespace, output_format: str) -> int:
     """Stream live capture frames until Ctrl+C, honouring *output_format*.
 
@@ -1846,6 +2021,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "table" and result.ok and result.command == "dbc inspect":
         for line in format_dbc_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command in DBC_PROVIDER_COMMANDS:
+        for line in format_dbc_provider_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

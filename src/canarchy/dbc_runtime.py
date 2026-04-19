@@ -13,16 +13,15 @@ from canarchy.models import CanFrame, DecodedMessageEvent, FrameEvent, SignalVal
 
 
 def load_runtime_database(dbc_path: str) -> cantools.database.Database:
-    path = Path(dbc_path)
-    if not path.exists():
-        raise DbcError(
-            code="DBC_NOT_FOUND",
-            message=f"DBC file '{dbc_path}' was not found.",
-            hint="Pass a readable DBC file path with `--dbc`.",
-        )
+    from canarchy.dbc_provider import resolve_dbc_ref
+
+    resolved = resolve_dbc_ref(dbc_path)
+    path = Path(resolved)
 
     try:
         return cantools.database.load_file(str(path))
+    except DbcError:
+        raise
     except Exception as exc:  # pragma: no cover
         raise DbcError(
             code="DBC_LOAD_FAILED",
