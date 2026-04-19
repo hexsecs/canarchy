@@ -8,7 +8,7 @@ theme:
   name: material
   features:
     - navigation.sections
-    - navigation.top
+    - navigation.tabs
     - navigation.path
     - search.suggest
     - search.highlight
@@ -62,15 +62,17 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Operators:
-      - Getting Started: getting_started.md
+  - Getting Started: getting_started.md
+  - User Guide:
       - Backends & Interfaces: backends.md
       - Project Overview: overview.md
       - Command Spec: command_spec.md
       - Event Schema: event-schema.md
       - CAN Tool Feature Matrix: feature-matrix.md
-      - "Demo: J1939 Heavy Vehicle": demo_j1939_heavy_vehicle.md
-      - "Demo: Generate and Capture": demo_generate_and_capture.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - J1939 Heavy Vehicle Analysis: tutorials/j1939_heavy_vehicle.md
+      - Generate and Capture: tutorials/generate_and_capture.md
   - Developers:
       - Architecture: architecture.md
       - Docs Workflow: docs_site.md

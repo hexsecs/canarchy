@@ -10,7 +10,7 @@ Start here:
 
 * Operators: [Getting Started](getting_started.md), [Event Schema](event-schema.md), [Command Spec](command_spec.md)
 * Evaluators: [CAN Tool Feature Matrix](feature-matrix.md)
-* Demos: [J1939 Heavy Vehicle Analysis](demo_j1939_heavy_vehicle.md), [Generate and Capture](demo_generate_and_capture.md)
+* Tutorials: [Overview](tutorials/index.md), [J1939 Heavy Vehicle Analysis](tutorials/j1939_heavy_vehicle.md), [Generate and Capture](tutorials/generate_and_capture.md)
 * Developers: [Architecture](architecture.md), [Docs Workflow](docs_site.md)
 * Agents: [Agent Guide](agents.md)
 

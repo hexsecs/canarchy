@@ -122,7 +122,7 @@ canarchy j1939 spn 110 --file tests/fixtures/j1939_heavy_vehicle.candump --jsonl
 [110, 87.0, "degC", 0.55]
 ```
 
-See the [Event Schema](event-schema.md) for the full structure of each event type.
+See the [Event Schema](../event-schema.md) for the full structure of each event type.
 
 ---
 
@@ -138,7 +138,7 @@ canarchy capture can0 --candump                   # live candump view
 canarchy j1939 dm1 today.candump --table          # decode DM1 from saved capture
 ```
 
-For cross-process demos without physical hardware, see the [Generate and Capture Demo](demo_generate_and_capture.md) using the `udp_multicast` backend.
+For cross-process demos without physical hardware, see the [Generate and Capture Demo](generate_and_capture.md) using the `udp_multicast` backend.
 
 ---
 
