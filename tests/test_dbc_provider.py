@@ -391,6 +391,88 @@ class OpenDbcProviderTests(unittest.TestCase):
         self.assertNotIn("toyota", dbc_names)  # car/ files excluded
         self.assertEqual(len(descriptors), 2)
 
+    def test_cache_miss_message_contains_refresh_command(self) -> None:
+        """DBC_CACHE_MISS error includes the exact copy-pasteable fix command."""
+        from canarchy.dbc_opendbc import OpenDbcProvider
+
+        with patch("canarchy.dbc_cache.load_manifest", return_value=None):
+            with patch("canarchy.dbc_cache.load_dbc_config", return_value={
+                "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": False}}
+            }):
+                provider = OpenDbcProvider()
+                with self.assertRaises(DbcError) as ctx:
+                    provider.resolve("toyota_tnga_k_pt_generated")
+
+        err = ctx.exception
+        self.assertEqual(err.code, "DBC_CACHE_MISS")
+        self.assertIn("canarchy dbc cache refresh --provider opendbc", err.hint)
+        self.assertIn("canarchy dbc cache refresh --provider opendbc", err.message)
+        self.assertIn("auto_refresh", err.message)
+
+    def test_auto_refresh_true_triggers_refresh_and_succeeds(self) -> None:
+        """When auto_refresh=True, a cold resolve() calls refresh() then retries."""
+        from canarchy.dbc_opendbc import OpenDbcProvider
+
+        commit = "autorefreshcommit"
+        manifest = self._make_manifest(commit)
+
+        call_sequence: list[str] = []
+
+        def load_manifest_side_effect(provider_name: str):
+            call_sequence.append("load_manifest")
+            # Return None on first call (cache cold), manifest on subsequent calls.
+            if call_sequence.count("load_manifest") == 1:
+                return None
+            return manifest
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_root = Path(tmpdir)
+            cached = cache_root / "providers" / "opendbc" / "files" / commit / "toyota_tnga_k_pt_generated.dbc"
+            cached.parent.mkdir(parents=True)
+            cached.write_text("")
+
+            with patch("canarchy.dbc_cache.load_manifest", side_effect=load_manifest_side_effect):
+                with patch("canarchy.dbc_cache.load_dbc_config", return_value={
+                    "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": True}}
+                }):
+                    with patch("canarchy.dbc_cache.cached_file_path", return_value=cached):
+                        with patch.object(OpenDbcProvider, "refresh") as mock_refresh:
+                            mock_refresh.return_value = []
+                            provider = OpenDbcProvider()
+                            resolution = provider.resolve("toyota_tnga_k_pt_generated")
+
+        mock_refresh.assert_called_once()
+        self.assertEqual(resolution.descriptor.name, "toyota_tnga_k_pt_generated")
+        self.assertTrue(resolution.is_cached)
+
+    def test_auto_refresh_true_network_failure_raises_cleanly(self) -> None:
+        """When auto_refresh=True but network fails, a clean error is raised (no crash)."""
+        from canarchy.dbc_opendbc import OpenDbcProvider
+
+        with patch("canarchy.dbc_cache.load_manifest", return_value=None):
+            with patch("canarchy.dbc_cache.load_dbc_config", return_value={
+                "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": True}}
+            }):
+                with patch.object(OpenDbcProvider, "refresh", side_effect=DbcError(
+                    code="DBC_PROVIDER_NOT_FOUND",
+                    message="Failed to resolve opendbc ref 'master'.",
+                    hint="Check your network connection.",
+                )):
+                    provider = OpenDbcProvider()
+                    with self.assertRaises(DbcError) as ctx:
+                        provider.resolve("toyota_tnga_k_pt_generated")
+
+        self.assertIn(ctx.exception.code, {"DBC_CACHE_MISS", "DBC_PROVIDER_NOT_FOUND"})
+
+    def test_auto_refresh_config_default_is_false(self) -> None:
+        """auto_refresh defaults to False in load_dbc_config."""
+        from canarchy.dbc_cache import load_dbc_config
+
+        with patch("canarchy.dbc_cache._CONFIG_PATH", Path("/does/not/exist/config.toml")):
+            cfg = load_dbc_config()
+
+        self.assertFalse(cfg["providers"]["opendbc"]["auto_refresh"])
+
 
 class CliProviderCommandTests(unittest.TestCase):
     def setUp(self) -> None:
