@@ -7,7 +7,7 @@ from pathlib import Path
 from decimal import Decimal
 from typing import Any
 
-from canmatrix import ArbitrationId, CanMatrix, formats
+
 
 from canarchy.dbc_types import DatabaseInfo, DatabaseInspection, MessageInfo, SignalInfo
 from canarchy.models import (
@@ -81,34 +81,6 @@ def message_metadata(message: Any) -> MessageInfo:
         senders=senders,
         signals=signals,
     )
-
-
-def load_database(dbc_path: str) -> CanMatrix:
-    path = Path(dbc_path)
-    if not path.exists():
-        raise DbcError(
-            code="DBC_NOT_FOUND",
-            message=f"DBC file '{dbc_path}' was not found.",
-            hint="Pass a readable DBC file path with `--dbc`.",
-        )
-
-    try:
-        database = formats.loadp_flat(str(path))
-    except Exception as exc:  # pragma: no cover
-        raise DbcError(
-            code="DBC_LOAD_FAILED",
-            message="Failed to parse DBC file.",
-            hint="Validate the DBC syntax and line endings.",
-        ) from exc
-
-    if not database.frames:
-        raise DbcError(
-            code="DBC_LOAD_FAILED",
-            message="Failed to parse DBC file.",
-            hint="Validate the DBC syntax and line endings.",
-        )
-
-    return database
 
 
 def decode_frames(frames: list[CanFrame], dbc_path: str) -> list[dict[str, Any]]:

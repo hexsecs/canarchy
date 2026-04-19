@@ -7,7 +7,8 @@ import unittest
 from pathlib import Path
 
 from canarchy.cli import EXIT_DECODE_ERROR, EXIT_OK, main
-from canarchy.dbc import decode_frames, encode_message, inspect_database, load_database
+from canarchy.dbc import decode_frames, encode_message, inspect_database
+from canarchy.dbc_runtime import load_runtime_database
 from canarchy.transport import LocalTransport
 
 
@@ -24,8 +25,8 @@ def run_cli(*argv: str) -> tuple[int, str, str]:
 
 class DbcTests(unittest.TestCase):
     def test_load_database_succeeds_for_valid_fixture(self) -> None:
-        database = load_database(str(FIXTURES / "sample.dbc"))
-        self.assertEqual(database.frame_by_name("EngineStatus1").arbitration_id.id, 0x18FEEE31)
+        database = load_runtime_database(str(FIXTURES / "sample.dbc"))
+        self.assertEqual(database.get_message_by_name("EngineStatus1").frame_id, 0x18FEEE31)
 
     def test_decode_frames_returns_decoded_and_signal_events(self) -> None:
         frames = LocalTransport().frames_from_file(str(FIXTURES / "sample.candump"))
