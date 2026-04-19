@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import pytest
 
 from canarchy.dbc import decode_frames, encode_message, inspect_database
 from canarchy.dbc_runtime import (
@@ -49,7 +48,7 @@ def test_inspect_database_runtime_matches_current_inspection_shape() -> None:
     assert runtime_payload == current_payload
 
 
-def test_encode_message_runtime_preserves_message_identity_but_differs_in_payload() -> None:
+def test_encode_message_runtime_parity_with_primary_encode() -> None:
     signals = {"CoolantTemp": 55, "OilTemp": 65, "Load": 40, "LampState": 1}
 
     current_frame, current_events = encode_message(str(FIXTURES / "sample.dbc"), "EngineStatus1", signals)
@@ -59,33 +58,56 @@ def test_encode_message_runtime_preserves_message_identity_but_differs_in_payloa
         signals,
     )
 
-    # cantools and canmatrix do not currently produce identical payload bytes for this fixture,
-    # so this test captures the shared command contract while leaving the backend difference explicit.
+    # Both encode_message and encode_message_runtime now use cantools internally,
+    # so they produce identical results.
     assert runtime_frame.arbitration_id == current_frame.arbitration_id
     assert runtime_frame.is_extended_id == current_frame.is_extended_id
     assert runtime_frame.dlc == current_frame.dlc
-    assert runtime_frame.data.hex() != current_frame.data.hex()
+    assert runtime_frame.data.hex() == current_frame.data.hex()
     assert runtime_events[0]["payload"]["frame"]["arbitration_id"] == current_events[0]["payload"]["frame"]["arbitration_id"]
 
 
-def test_decode_frames_runtime_matches_current_decode_result_with_float_tolerance() -> None:
+def test_decode_frames_runtime_parity_with_primary_decode() -> None:
     frames = LocalTransport().frames_from_file(str(FIXTURES / "sample.candump"))
 
     current_events = decode_frames(frames, str(FIXTURES / "sample.dbc"))
     runtime_events = decode_frames_runtime(frames, str(FIXTURES / "sample.dbc"))
 
+    # Both decode_frames and decode_frames_runtime now use cantools internally,
+    # so they produce identical results.
     assert len(runtime_events) == len(current_events)
     for runtime_event, current_event in zip(runtime_events, current_events, strict=True):
-        assert runtime_event["event_type"] == current_event["event_type"]
-        assert runtime_event["source"] == current_event["source"]
-        assert runtime_event["timestamp"] == current_event["timestamp"]
-        if runtime_event["event_type"] == "decoded_message":
-            assert runtime_event["payload"]["frame"] == current_event["payload"]["frame"]
-            assert runtime_event["payload"]["message_name"] == current_event["payload"]["message_name"]
-            for signal_name, runtime_value in runtime_event["payload"]["signals"].items():
-                assert runtime_value == pytest.approx(current_event["payload"]["signals"][signal_name])
-        else:
-            assert runtime_event["payload"]["message_name"] == current_event["payload"]["message_name"]
-            assert runtime_event["payload"]["signal_name"] == current_event["payload"]["signal_name"]
-            assert (runtime_event["payload"]["units"] or "") == (current_event["payload"]["units"] or "")
-            assert runtime_event["payload"]["value"] == pytest.approx(current_event["payload"]["value"])
+        assert runtime_event == current_event
+
+
+def test_complex_dbc_fixture_loads_both_backends() -> None:
+    current_payload, _ = inspect_database(str(FIXTURES / "complex.dbc"))
+    runtime_payload = inspect_database_runtime(str(FIXTURES / "complex.dbc")).to_payload()
+
+    assert current_payload["database"]["message_count"] == runtime_payload["database"]["message_count"] == 15
+
+
+def test_complex_dbc_fixture_decode_parity() -> None:
+    frames = LocalTransport().frames_from_file(str(FIXTURES / "complex.candump"))
+
+    current_events = decode_frames(frames, str(FIXTURES / "complex.dbc"))
+    runtime_events = decode_frames_runtime(frames, str(FIXTURES / "complex.dbc"))
+
+    assert len(current_events) == len(runtime_events) == 68
+    for ce, re in zip(current_events, runtime_events, strict=True):
+        if ce["event_type"] == "decoded_message":
+            assert ce["payload"]["message_name"] == re["payload"]["message_name"]
+
+
+def test_complex_dbc_fixture_encode_preserves_message_identity() -> None:
+    signals = {"CoolantTemp": 55, "OilTemp": 65, "Load": 40, "LampState": 1}
+
+    current_frame, _ = encode_message(str(FIXTURES / "complex.dbc"), "EngineStatus1", signals)
+    runtime_frame, _ = encode_message_runtime(
+        str(FIXTURES / "complex.dbc"),
+        "EngineStatus1",
+        signals,
+    )
+
+    assert current_frame.arbitration_id == runtime_frame.arbitration_id
+    assert current_frame.dlc == runtime_frame.dlc

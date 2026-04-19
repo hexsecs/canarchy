@@ -1,0 +1,125 @@
+VERSION ""
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_:
+
+BU_: Engine_BCM Transmisson_BCM ABS_Bridge
+
+BO_ 100 EngineStatus1: 4 Engine_BCM
+ SG_ CoolantTemp : 0|8@1+ (1,-40) [0|210] "degC" Engine_BCM
+ SG_ OilTemp : 8|8@1+ (1,-40) [0|210] "degC" Engine_BCM
+ SG_ Load : 16|8@1+ (0.4,0) [0|100] "%" Engine_BCM
+ SG_ LampState : 24|8@1+ (1,0) [0|255] "" Engine_BCM
+
+BO_ 200 EngineSpeed1: 4 Engine_BCM
+ SG_ EngineSpeed : 8|16@1+ (0.125,0) [0|8031.875] "rpm" Engine_BCM
+ SG_ TorqueMode : 24|8@1+ (1,0) [0|255] "" Engine_BCM
+
+BO_ 300 TransmissionGear: 4 Transmisson_BCM
+ SG_ CurrentGear : 0|4@1+ (1,0) [0|15] "" Transmisson_BCM
+ SG_ RequestedGear : 4|4@1+ (1,0) [0|15] "" Transmisson_BCM
+ SG_ TransmissionTemp : 16|8@1+ (1,-40) [0|210] "degC" Transmisson_BCM
+ SG_ OilLevel : 24|8@1+ (1,0) [0|100] "%" Transmisson_BCM
+
+BO_ 400 TorqueConverter: 4 Transmisson_BCM
+ SG_ InputSpeed : 0|16@1+ (0.25,0) [0|16383.75] "rpm" Transmisson_BCM
+ SG_ OutputSpeed : 16|12@1+ (0.25,0) [0|4095.75] "rpm" Transmisson_BCM
+ SG_ LockupEngaged : 28|1@1+ (1,0) [0|1] "" Transmisson_BCM
+
+BO_ 500 FuelSystem: 8 Engine_BCM
+ SG_ FuelLevel : 0|8@1+ (0.4,0) [0|100] "%" Engine_BCM
+ SG_ FuelPressure : 8|16@1+ (0.5,0) [0|3276.75] "kPa" Engine_BCM
+ SG_ FuelTemperature : 24|8@1- (1,-40) [-40|215] "degC" Engine_BCM
+
+BO_ 600 ABS_Status: 8 ABS_Bridge
+ SG_ WheelSpeedFL : 0|12@1+ (0.01,0) [0|40.95] "m/s" ABS_Bridge
+ SG_ WheelSpeedFR : 12|12@1+ (0.01,0) [0|40.95] "m/s" ABS_Bridge
+ SG_ WheelSpeedRL : 24|12@1+ (0.01,0) [0|40.95] "m/s" ABS_Bridge
+ SG_ WheelSpeedRR : 36|12@1+ (0.01,0) [0|40.95] "m/s" ABS_Bridge
+ SG_ ABS_Active : 48|1@1+ (1,0) [0|1] "" ABS_Bridge
+ SG_ TC_Active : 49|1@1+ (1,0) [0|1] "" ABS_Bridge
+
+BO_ 700 BrakePressure: 8 ABS_Bridge
+ SG_ BrakePressureFL : 0|12@1+ (0.01,0) [0|40.95] "bar" ABS_Bridge
+ SG_ BrakePressureFR : 12|12@1+ (0.01,0) [0|40.95] "bar" ABS_Bridge
+ SG_ BrakePressureRL : 24|12@1+ (0.01,0) [0|40.95] "bar" ABS_Bridge
+ SG_ BrakePressureRR : 36|12@1+ (0.01,0) [0|40.95] "bar" ABS_Bridge
+
+BO_ 800 SuspensionLevel: 4 ABS_Bridge
+ SG_ FrontAxleHeight : 0|8@1+ (1,0) [0|255] "mm" ABS_Bridge
+ SG_ RearAxleHeight : 8|8@1+ (1,0) [0|255] "mm" ABS_Bridge
+ SG_ RideHeightRequest : 16|2@1+ (1,0) [0|3] "" ABS_Bridge
+ SG_ SuspensionMode : 18|2@1+ (1,0) [0|3] "" ABS_Bridge
+
+BO_ 900 SteeringAngle: 8 ABS_Bridge
+ SG_ SteeringAngle : 0|16@1- (0.1,-600) [-600|600] "deg" ABS_Bridge
+ SG_ SteeringRate : 16|12@1+ (0.1,0) [0|409.5] "deg/s" ABS_Bridge
+ SG_ SteeringTorque : 28|8@1- (0.1,-12.7) [-12.7|12.7] "Nm" ABS_Bridge
+
+BO_ 110 AirConditioningRequest: 8 Engine_BCM
+ SG_ AC_CompressorRequest : 0|4@1+ (1,0) [0|15] "" Engine_BCM
+ SG_ AC_Load : 4|8@1+ (0.4,0) [0|100] "%" Engine_BCM
+ SG_ AC_RefrigerantPressure : 12|12@1+ (0.5,0) [0|2047.5] "bar" Engine_BCM
+ SG_ AC_CoolantTemp : 24|8@1+ (1,-40) [0|210] "degC" Engine_BCM
+
+BO_ 120 CabinTemperature: 4 Engine_BCM
+ SG_ DriverTempSetpoint : 0|8@1+ (0.5,16) [16|32] "degC" Engine_BCM
+ SG_ PassengerTempSetpoint : 8|8@1+ (0.5,16) [16|32] "degC" Engine_BCM
+ SG_ CabinTempActual : 16|8@1+ (0.5,0) [0|127.5] "degC" Engine_BCM
+
+BO_ 130 HVAC_Mode: 4 Engine_BCM
+ SG_ HVAC_Mode : 0|4@1+ (1,0) [0|7] "" Engine_BCM
+ SG_ BlowerSpeed : 4|4@1+ (1,0) [0|7] "" Engine_BCM
+ SG_ Recirculation : 8|1@1+ (1,0) [0|1] "" Engine_BCM
+ SG_ AutoMode : 9|1@1+ (1,0) [0|1] "" Engine_BCM
+
+BO_ 150 BatteryStatus: 8 Engine_BCM
+ SG_ BatteryVoltage : 0|12@1+ (0.01,0) [0|40.95] "V" Engine_BCM
+ SG_ BatteryCurrent : 12|12@1- (0.1,-500) [-500|500] "A" Engine_BCM
+ SG_ BatteryTemperature : 24|8@1- (1,-40) [-40|215] "degC" Engine_BCM
+ SG_ StateOfCharge : 32|8@1+ (0.4,0) [0|100] "%" Engine_BCM
+
+BO_ 160 AlternatorStatus: 4 Engine_BCM
+ SG_ AlternatorVoltage : 0|8@1+ (0.05,0) [0|12.75] "V" Engine_BCM
+ SG_ AlternatorCurrent : 8|8@1- (0.5,-120) [-120|120] "A" Engine_BCM
+
+BO_ 170 StarterMotor: 4 Engine_BCM
+ SG_ StarterEngaged : 0|1@1+ (1,0) [0|1] "" Engine_BCM
+ SG_ StarterCurrent : 1|7@1+ (0.5,0) [0|63.5] "A" Engine_BCM
+ SG_ CrankSense : 8|2@1+ (1,0) [0|3] "" Engine_BCM
+
+VAL_ 300 CurrentGear 0 "N" 1 "1" 2 "2" 3 "3" 4 "4" 5 "5" 6 "6" ;
+VAL_ 300 RequestedGear 0 "N" 1 "1" 2 "2" 3 "3" 4 "4" 5 "5" 6 "6" ;
+VAL_ 800 RideHeightRequest 0 "Low" 1 "Normal" 2 "High" 3 "Auto" ;
+VAL_ 800 SuspensionMode 0 "Comfort" 1 "Sport" 2 "Manual" 3 "Off" ;
+VAL_ 130 HVAC_Mode 0 "Off" 1 "Auto" 2 "Heat" 3 "Cool" 4 "Defrost" 5 "HeatDefrost" ;
+VAL_ 170 CrankSense 0 "Off" 1 "Starting" 2 "Running" 3 "Fault" ;
