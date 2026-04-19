@@ -25,6 +25,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Refreshed architecture, backend, command, and feature-comparison docs to match the current implementation.
 * Added MkDocs Mermaid support, theme toggles, and missing nav entries.
 
+## [0.1.1] - 2026-04-19
+
+### Fixed
+
+* Corrected license metadata from MIT to GPL-3.0-or-later to match the actual LICENSE file.
+
 ## [0.1.0] - 2026-04-19
 
 ### Added
