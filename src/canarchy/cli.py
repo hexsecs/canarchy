@@ -1681,6 +1681,24 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             f"data={frame['data']}"
         )
     return lines
+def format_dbc_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    database = result.data.get("database", {})
+    message_count = database.get("message_count", 0)
+    lines.append(f"messages: {message_count}")
+    messages = result.data.get("messages", [])
+    if not messages:
+        lines.append("- no messages")
+        return lines
+    for message in messages:
+        lines.append(
+            "- "
+            f"name={message['name']} "
+            f"id={message['arbitration_id_hex']} "
+            f"signals={message['signal_count']} "
+            f"length={message['length']}"
+        )
+    return lines
 def format_uds_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
     if result.command == "uds services":
