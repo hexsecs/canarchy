@@ -27,24 +27,47 @@ Validate that `uds services` returns a stable protocol-reference catalog and ren
 | `REQ-UDS-SVC-02` | `TEST-UDS-SVC-01`, `TEST-UDS-SVC-02` |
 | `REQ-UDS-SVC-03` | `TEST-UDS-SVC-01`, `TEST-UDS-SVC-02` |
 | `REQ-UDS-SVC-04` | `TEST-UDS-SVC-01` |
-| `REQ-UDS-SVC-05` | `TEST-UDS-SVC-02`, `TEST-UDS-SVC-03` |
 
 ## Representative Test Cases
 
-### `TEST-UDS-SVC-01` JSON catalog output
+### `TEST-UDS-SVC-01` — JSON catalog output
 
-Action: run `canarchy uds services --json`.  
-Assert: the command succeeds and returns `service_count` plus a `services` list containing known entries such as `DiagnosticSessionControl` and `SecurityAccess`.
+```gherkin
+Given  no transport interface or live bus connection is required
+When   the operator runs `canarchy uds services --json`
+Then   the command shall succeed
+And    the result shall include a `service_count` field
+And    the result shall include a `services` list containing known entries such as `DiagnosticSessionControl` and `SecurityAccess`
+```
 
-### `TEST-UDS-SVC-02` Table catalog output
+**Fixture:** none required (in-repo UDS service catalog).
 
-Action: run `canarchy uds services --table`.  
-Assert: output includes the command header, service count, and catalog rows with service and positive-response identifiers.
+---
 
-### `TEST-UDS-SVC-03` Raw output behavior
+### `TEST-UDS-SVC-02` — Table catalog output
 
-Action: run `canarchy uds services --raw`.  
-Assert: raw output emits the command name on success.
+```gherkin
+Given  no transport interface or live bus connection is required
+When   the operator runs `canarchy uds services --table`
+Then   the output shall include the command header and service count
+And    the output shall include catalog rows with service and positive-response identifiers
+```
+
+**Fixture:** none required (in-repo UDS service catalog).
+
+---
+
+### `TEST-UDS-SVC-03` — Raw output behavior
+
+```gherkin
+Given  no transport interface or live bus connection is required
+When   the operator runs `canarchy uds services --raw`
+Then   the output shall emit the command name on success
+```
+
+**Fixture:** none required (in-repo UDS service catalog).
+
+---
 
 ## Fixtures And Environment
 

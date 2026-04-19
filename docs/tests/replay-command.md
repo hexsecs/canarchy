@@ -31,30 +31,68 @@ Validate deterministic replay-plan behavior, CLI result structure, and structure
 
 ## Representative Test Cases
 
-### `TEST-REPLAY-01` Replay plan preserves frame count
+### `TEST-REPLAY-01` — Replay plan preserves frame count
 
-Action: build a replay plan from the sample capture at rate `1.0`.  
-Assert: frame count, event count, and duration match the input capture.
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   a replay plan is built from the capture at rate `1.0`
+Then   the plan frame count, event count, and duration shall match the input capture
+```
 
-### `TEST-REPLAY-02` Replay rate scales timing
+**Fixture:** `tests/fixtures/sample.candump`.
 
-Action: build a replay plan from the sample capture at rate `0.5`.  
-Assert: event timestamps scale relative to the slower replay rate.
+---
 
-### `TEST-REPLAY-03` Replay CLI returns structured output
+### `TEST-REPLAY-02` — Replay rate scales timing
 
-Action: run `canarchy replay sample.candump --rate 2.0 --json`.  
-Assert: output includes active mode, frame count, duration, replay events, and the active warning.
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   a replay plan is built from the capture at rate `0.5`
+Then   event timestamps shall be scaled relative to the slower replay rate
+```
 
-### `TEST-REPLAY-04` Invalid rate returns structured error
+**Fixture:** `tests/fixtures/sample.candump`.
 
-Action: run `replay` with `--rate 0`.  
-Assert: exit code `1` and `errors[0].code == "INVALID_RATE"`.
+---
 
-### `TEST-REPLAY-05` Missing source returns transport error
+### `TEST-REPLAY-03` — Replay CLI returns structured output
 
-Action: run `replay` against a missing file.  
-Assert: exit code `2` and `errors[0].code == "CAPTURE_SOURCE_UNAVAILABLE"`.
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy replay sample.candump --rate 2.0 --json`
+Then   the result shall include active mode, frame count, duration, and replay events
+And    the result shall include an active warning alert
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-REPLAY-04` — Invalid rate returns structured error
+
+```gherkin
+Given  a valid capture file is available
+When   the operator runs `canarchy replay sample.candump --rate 0 --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"INVALID_RATE"`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-REPLAY-05` — Missing source returns transport error
+
+```gherkin
+Given  the file `missing.candump` does not exist
+When   the operator runs `canarchy replay missing.candump --json`
+Then   the command shall exit with code `2`
+And    `errors[0].code` shall equal `"CAPTURE_SOURCE_UNAVAILABLE"`
+```
+
+**Fixture:** none (missing file path).
+
+---
 
 ## Fixtures And Environment
 

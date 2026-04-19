@@ -18,18 +18,18 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-MCP-01` | The system shall provide a `canarchy mcp serve` subcommand that starts an MCP server over stdio. |
-| `REQ-MCP-02` | Each implemented CLI command shall surface as an MCP tool whose name is the command string with spaces replaced by underscores (e.g. `j1939 monitor` → `j1939_monitor`). |
-| `REQ-MCP-03` | Each tool's input schema shall be derived from the argparse parameter definitions for the corresponding CLI command. |
-| `REQ-MCP-04` | Tool responses shall return the canonical command result envelope (`ok`, `command`, `data`, `warnings`, `errors`) serialised as JSON text content. |
-| `REQ-MCP-05` | Invalid tool inputs that would produce CLI user errors shall return the same structured error codes as the CLI (e.g. `INVALID_FRAME_ID`, `INVALID_RATE`). |
-| `REQ-MCP-06` | Tool discovery (`list_tools`) shall return all implemented tools with name, description, and input schema. |
-| `REQ-MCP-07` | The MCP server shall use stdio transport only (v1 scope). |
-| `REQ-MCP-08` | Calling an unregistered tool name shall raise an error indicating the tool is unknown. |
-| `REQ-MCP-09` | The `mcp` package shall be declared as a project dependency in `pyproject.toml`. |
-| `REQ-MCP-10` | The server shall not expose `shell` or `tui` commands as MCP tools; those are interactive front-end commands with no RPC equivalent. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-MCP-01` | Ubiquitous | The system shall provide a `canarchy mcp serve` subcommand that starts an MCP server over stdio. |
+| `REQ-MCP-02` | Ubiquitous | Each implemented CLI command shall surface as an MCP tool whose name is the command string with spaces replaced by underscores (e.g. `j1939 monitor` → `j1939_monitor`). |
+| `REQ-MCP-03` | Ubiquitous | Each MCP tool's input schema shall be derived from the argparse parameter definitions of the corresponding CLI command. |
+| `REQ-MCP-04` | Event-driven | When an MCP tool call is received, the system shall return the canonical command result envelope (`ok`, `command`, `data`, `warnings`, `errors`) serialised as JSON text content. |
+| `REQ-MCP-05` | Event-driven | When an MCP tool call is received with invalid inputs, the system shall return the same structured error codes as the equivalent CLI invocation. |
+| `REQ-MCP-06` | Event-driven | When a `list_tools` request is received, the system shall return all implemented tools with name, description, and input schema. |
+| `REQ-MCP-07` | Ubiquitous | The MCP server shall use stdio transport only. |
+| `REQ-MCP-08` | Unwanted behaviour | If a `call_tool` request names an unregistered tool, the system shall raise an error indicating the tool is unknown. |
+| `REQ-MCP-09` | Ubiquitous | The `mcp` package shall be declared as a project dependency in `pyproject.toml`. |
+| `REQ-MCP-10` | Ubiquitous | The server shall not expose `shell` or `tui` as MCP tools; those are interactive front-end commands with no RPC equivalent. |
 
 ## Command Surface
 

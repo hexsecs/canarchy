@@ -10,7 +10,7 @@
 
 ## Goal
 
-Give operators a `cangen` style frame-generation workflow directly from the CANarchy CLI so they can produce repeatable test traffic without reaching for a separate tool.
+Give operators a `cangen`-style frame-generation workflow directly from the CANarchy CLI so they can produce repeatable test traffic without reaching for a separate tool.
 
 ## User-Facing Motivation
 
@@ -18,13 +18,17 @@ Operators need a quick active-traffic workflow for lab validation, replay suppor
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-GENERATE-01` | The system shall provide a `canarchy generate` command for active frame generation. |
-| `REQ-GENERATE-02` | The command shall support fixed, random, and incrementing generation modes for identifiers and payloads as defined by the flags. |
-| `REQ-GENERATE-03` | The command shall support bounded generation through `--count` and timestamp spacing through `--gap`. |
-| `REQ-GENERATE-04` | The command shall emit an active-transmit warning and serialized frame events. |
-| `REQ-GENERATE-05` | The command shall return structured validation errors for invalid identifier, DLC, payload, count, and gap inputs. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-GENERATE-01` | Ubiquitous | The system shall provide a `canarchy generate <interface>` command for active CAN frame generation. |
+| `REQ-GENERATE-02` | Event-driven | When `generate` is invoked, the system shall support fixed, random (`R`), and incrementing (`I`) generation modes for identifiers and payloads as specified by `--id`, `--dlc`, and `--data`. |
+| `REQ-GENERATE-03` | Event-driven | When `generate` is invoked, the system shall bound output by `--count` and space events by `--gap` milliseconds. |
+| `REQ-GENERATE-04` | Event-driven | When `generate` is invoked, the system shall emit a leading active-transmit alert and serialise the generated frame events. |
+| `REQ-GENERATE-05` | Unwanted behaviour | If `--id` is not a valid hex value or `R`, the system shall return a structured error with code `INVALID_FRAME_ID` and exit code 1. |
+| `REQ-GENERATE-06` | Unwanted behaviour | If `--dlc` is not an integer in 0–8 or `R`, the system shall return a structured error with code `INVALID_DLC` and exit code 1. |
+| `REQ-GENERATE-07` | Unwanted behaviour | If `--data` is not valid hex, `R`, or `I`, the system shall return a structured error with code `INVALID_FRAME_DATA` and exit code 1. |
+| `REQ-GENERATE-08` | Unwanted behaviour | If `--count` is less than 1, the system shall return a structured error with code `INVALID_COUNT` and exit code 1. |
+| `REQ-GENERATE-09` | Unwanted behaviour | If `--gap` is negative, the system shall return a structured error with code `INVALID_GAP` and exit code 1. |
 
 ## Command Surface
 
@@ -81,26 +85,7 @@ Each generated frame produces a `FrameEvent` with `source="transport.generate"`.
 
 ### JSON and JSONL
 
-`--json` returns the standard CANarchy envelope:
-
-```json
-{
-  "ok": true,
-  "command": "generate",
-  "data": {
-    "interface": "can0",
-    "mode": "active",
-    "frame_count": 3,
-    "gap_ms": 200,
-    "transport_backend": "scaffold",
-    "events": []
-  },
-  "warnings": ["..."],
-  "errors": []
-}
-```
-
-`--jsonl` emits the generated event stream one event per line. Because `generate` already includes the active-transmit `AlertEvent` in its event stream, the warning is preserved in JSONL form without an additional wrapper envelope.
+`--json` returns the standard CANarchy envelope. `--jsonl` emits the generated event stream one event per line.
 
 ### Table
 

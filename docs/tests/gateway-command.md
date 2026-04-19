@@ -38,53 +38,109 @@ Validate that `gateway` forwards frames correctly, preserves structured directio
 
 ## Representative Test Cases
 
-### `TEST-GATEWAY-01` Unidirectional forwarding
+### `TEST-GATEWAY-01` — Unidirectional forwarding
 
-Setup: two in-process virtual buses on the same channel using threads.  
-Action: send two frames on the source bus.  
-Assert: both frames arrive on the destination bus with the expected arbitration IDs and payloads.
+```gherkin
+Given  two in-process virtual buses sharing the same channel
+And    two frames are available on the source bus
+When   the gateway runs in unidirectional mode
+Then   both frames shall arrive on the destination bus
+And    each forwarded frame shall preserve the original arbitration ID and payload
+```
 
-### `TEST-GATEWAY-02` Bidirectional forwarding
+**Fixture:** in-process `python-can` virtual buses (no file required).
 
-Setup: two in-process virtual buses on distinct channels.  
-Action: send one frame `src->dst` and one frame `dst->src`.  
-Assert: both frames are forwarded and the emitted events carry the correct direction label.
+---
 
-### `TEST-GATEWAY-03` Backend selection
+### `TEST-GATEWAY-02` — Bidirectional forwarding
 
-Setup: source and destination backends are provided explicitly.  
-Action: run gateway with `--src-backend` and `--dst-backend`.  
-Assert: the correct backend values are passed to the source and destination bus open path.
+```gherkin
+Given  two in-process virtual buses on distinct channels
+When   the operator sends one frame from src to dst and one frame from dst to src
+And    the gateway runs in bidirectional mode
+Then   both frames shall be forwarded across their respective directions
+And    each emitted event shall carry the correct direction label
+```
 
-### `TEST-GATEWAY-04` Count limit
+**Fixture:** in-process `python-can` virtual buses (no file required).
 
-Setup: more frames are available than `--count`.  
-Action: run gateway with `--count 2`.  
-Assert: forwarding stops after exactly two total forwarded frames.
+---
 
-### `TEST-GATEWAY-05` Backend requirement
+### `TEST-GATEWAY-03` — Backend selection
 
-Setup: scaffold backend selected explicitly through `CANARCHY_TRANSPORT_BACKEND=scaffold`.  
-Action: run `canarchy gateway src dst --json`.  
-Assert: exit code `2` and `errors[0].code == "GATEWAY_LIVE_BACKEND_REQUIRED"`.
+```gherkin
+Given  source and destination backends are specified explicitly
+When   the operator runs `canarchy gateway src dst --src-backend TYPE --dst-backend TYPE`
+Then   the correct backend value shall be passed to each respective bus open path
+```
 
-### `TEST-GATEWAY-06` Invalid count
+**Fixture:** mocked bus open path.
 
-Setup: request `--count 0`.  
-Action: run `canarchy gateway src dst --count 0 --json`.  
-Assert: exit code `1` and `errors[0].code == "INVALID_COUNT"`.
+---
 
-### `TEST-GATEWAY-07` JSON output structure
+### `TEST-GATEWAY-04` — Count limit
 
-Setup: forward one frame with `--count 1`.  
-Action: run with `--json`.  
-Assert: payload contains one frame event whose `source` is `gateway.src->dst`.
+```gherkin
+Given  more frames are available on the source bus than the requested count
+When   the operator runs `canarchy gateway src dst --count 2`
+Then   forwarding shall stop after exactly two total forwarded frames
+```
 
-### `TEST-GATEWAY-08` Table output
+**Fixture:** in-process `python-can` virtual bus with more than two frames.
 
-Setup: forward one frame with `--count 1`.  
-Action: run with `--table`.  
-Assert: output contains a `gateway:` header plus at least one candump-style frame line.
+---
+
+### `TEST-GATEWAY-05` — Backend requirement
+
+```gherkin
+Given  the scaffold backend is active via `CANARCHY_TRANSPORT_BACKEND=scaffold`
+When   the operator runs `canarchy gateway src dst --json`
+Then   the command shall exit with code `2`
+And    `errors[0].code` shall equal `"GATEWAY_LIVE_BACKEND_REQUIRED"`
+```
+
+**Fixture:** scaffold backend environment variable.
+
+---
+
+### `TEST-GATEWAY-06` — Invalid count
+
+```gherkin
+Given  a valid gateway source and destination are specified
+When   the operator runs `canarchy gateway src dst --count 0 --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"INVALID_COUNT"`
+```
+
+**Fixture:** none required.
+
+---
+
+### `TEST-GATEWAY-07` — JSON output structure
+
+```gherkin
+Given  a valid gateway source and destination with one frame available
+When   the operator runs `canarchy gateway src dst --count 1 --json`
+Then   the result envelope shall contain one frame event
+And    the event `source` field shall equal `"gateway.src->dst"`
+```
+
+**Fixture:** in-process `python-can` virtual bus with one frame.
+
+---
+
+### `TEST-GATEWAY-08` — Table output
+
+```gherkin
+Given  a valid gateway source and destination with one frame available
+When   the operator runs `canarchy gateway src dst --count 1 --table`
+Then   the output shall contain a `gateway:` header line
+And    the output shall contain at least one candump-style frame line
+```
+
+**Fixture:** in-process `python-can` virtual bus with one frame.
+
+---
 
 ## Fixtures And Environment
 

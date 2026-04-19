@@ -29,15 +29,34 @@ Validate session round-trip persistence and structured missing-session error han
 
 ## Representative Test Cases
 
-### `TEST-SESSION-01` Session round trip
+### `TEST-SESSION-01` — Session round trip
 
-Action: save a named session with interface, DBC, and capture context, then load it and show session state.  
-Assert: saved context is preserved and `session show` reports the active and saved session entries.
+```gherkin
+Given  a temporary working directory with an isolated `.canarchy/` store
+And    the files `tests/fixtures/sample.candump` and `tests/fixtures/sample.dbc` are available
+When   the operator saves a named session with interface, DBC, and capture context
+And    then loads the saved session
+And    then runs `canarchy session show --json`
+Then   the saved context shall be preserved
+And    `session show` shall report both the active and saved session entries
+```
 
-### `TEST-SESSION-02` Missing session error
+**Fixture:** `tests/fixtures/sample.candump`, `tests/fixtures/sample.dbc`, temporary session directory.
 
-Action: run `session load missing --json`.  
-Assert: exit code `1` and `errors[0].code == "SESSION_NOT_FOUND"`.
+---
+
+### `TEST-SESSION-02` — Missing session error
+
+```gherkin
+Given  no session named `missing` exists in the session store
+When   the operator runs `canarchy session load missing --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"SESSION_NOT_FOUND"`
+```
+
+**Fixture:** temporary session directory (empty).
+
+---
 
 ## Fixtures And Environment
 

@@ -10,7 +10,7 @@
 
 ## Goal
 
-Bridge CAN frames between two interfaces so operators can forward traffic from a physical bus to a software loopback, between two network endpoints, or between any two `python-can` supported channels without dropping to `python-can` directly.
+Bridge CAN frames between two interfaces so operators can forward traffic from a physical bus to a software loopback, between two network endpoints, or between any two `python-can`-supported channels without dropping to `python-can` directly.
 
 ## User-Facing Motivation
 
@@ -18,15 +18,16 @@ Operators need a first-class CLI workflow for controlled bus-to-bus forwarding t
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-GATEWAY-01` | The system shall provide a `canarchy gateway <src> <dst>` command for live CAN frame forwarding. |
-| `REQ-GATEWAY-02` | The command shall support independent backend selection for source and destination buses. |
-| `REQ-GATEWAY-03` | The command shall support optional bidirectional forwarding. |
-| `REQ-GATEWAY-04` | The command shall support bounded forwarding through `--count`. |
-| `REQ-GATEWAY-05` | The command shall emit structured frame events with direction encoded in the event `source` field. |
-| `REQ-GATEWAY-06` | The command shall require the `python-can` backend and return structured transport errors when unavailable. |
-| `REQ-GATEWAY-07` | Table and raw output shall present forwarded frames in candump-style form with direction labels. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-GATEWAY-01` | Ubiquitous | The system shall provide a `canarchy gateway <src> <dst>` command for live CAN frame forwarding between two interfaces. |
+| `REQ-GATEWAY-02` | Event-driven | When `gateway <src> <dst>` is invoked, the system shall forward frames from the source interface to the destination interface and emit a structured frame event per forwarded frame. |
+| `REQ-GATEWAY-03` | Optional feature | Where `--bidirectional` is specified, the system shall also forward frames from the destination interface back to the source. |
+| `REQ-GATEWAY-04` | Optional feature | Where `--count <n>` is specified, the system shall stop forwarding after `n` total frames and return the result. |
+| `REQ-GATEWAY-05` | Ubiquitous | Each forwarded frame event shall encode the direction in the event `source` field as `gateway.src->dst` or `gateway.dst->src`. |
+| `REQ-GATEWAY-06` | State-driven | While the scaffold backend is active, the system shall refuse to start the gateway and return a structured error with code `GATEWAY_LIVE_BACKEND_REQUIRED` and exit code 2. |
+| `REQ-GATEWAY-07` | Unwanted behaviour | If the source or destination interface is unavailable, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
+| `REQ-GATEWAY-08` | Unwanted behaviour | If `--count` is less than 1, the system shall return a structured error with code `INVALID_COUNT` and exit code 1. |
 
 ## Command Surface
 
@@ -49,8 +50,6 @@ canarchy gateway <src> <dst>
 | `--bidirectional` | off | Also forward frames from dst back to src |
 | `--count` | unlimited | Stop after `N` forwarded frames total |
 
-`--src-backend` and `--dst-backend` both default to `CANARCHY_PYTHON_CAN_INTERFACE` so operators only need explicit flags when the two buses use different backend types.
-
 ## Responsibilities And Boundaries
 
 In scope:
@@ -68,7 +67,7 @@ Out of scope:
 
 ## Behavioral Model
 
-`gateway` is always a streaming command. It runs until interrupted with `Ctrl+C` or until `--count` frames have been forwarded.
+`gateway` is always a streaming command. It runs until interrupted with Ctrl+C or until `--count` frames have been forwarded.
 
 ### Unidirectional mode
 
@@ -85,11 +84,11 @@ Both workers write forwarded events to a shared queue. A shared stop condition e
 
 ## Backend Requirement
 
-`gateway` requires the `python-can` backend. If `CANARCHY_TRANSPORT_BACKEND` is not `python-can`, the command returns a structured transport error with code `GATEWAY_LIVE_BACKEND_REQUIRED`.
+`gateway` requires the `python-can` backend. While the scaffold backend is active, the command returns a structured error with code `GATEWAY_LIVE_BACKEND_REQUIRED`.
 
 ## Data Model
 
-Each forwarded frame is emitted as a serialized `FrameEvent`.
+Each forwarded frame is emitted as a serialised `FrameEvent`.
 
 Relevant event fields:
 
@@ -111,14 +110,14 @@ gateway: src=can0 dst=239.0.0.1
 
 ### JSON and JSONL
 
-`--json` returns the standard CANarchy command envelope. `--jsonl` emits one forwarded frame event per line. Forwarded frame events use `source` values `gateway.src->dst` and `gateway.dst->src`.
+`--json` returns the standard CANarchy command envelope. `--jsonl` emits one forwarded frame event per line.
 
 ## Error Contracts
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|
-| `GATEWAY_LIVE_BACKEND_REQUIRED` | `CANARCHY_TRANSPORT_BACKEND` is not `python-can` | 2 |
-| `TRANSPORT_UNAVAILABLE` | Source or destination bus cannot be opened or written | 2 |
+| `GATEWAY_LIVE_BACKEND_REQUIRED` | scaffold backend is active | 2 |
+| `TRANSPORT_UNAVAILABLE` | source or destination bus cannot be opened or written | 2 |
 | `INVALID_COUNT` | `--count` is less than `1` | 1 |
 
 ## Deferred Decisions

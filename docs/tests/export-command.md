@@ -34,41 +34,82 @@ Validate that `export` writes the supported artifact shapes, preserves event and
 
 ## Representative Test Cases
 
-### `TEST-EXPORT-01` Capture file to JSON
+### `TEST-EXPORT-01` — Capture file to JSON
 
-Setup: use a representative candump fixture.  
-Action: run `canarchy export sample.candump artifact.json --json`.  
-Assert: the destination file exists, contains a structured envelope, and includes serialized frame events.
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy export sample.candump artifact.json --json`
+Then   the destination file shall exist
+And    it shall contain a structured result envelope
+And    the envelope shall include serialized frame events
+```
 
-### `TEST-EXPORT-02` Capture file to JSONL
+**Fixture:** `tests/fixtures/sample.candump`, temporary output directory.
 
-Setup: use a representative candump fixture.  
-Action: run `canarchy export sample.candump artifact.jsonl --json`.  
-Assert: the destination file contains one serialized event per line.
+---
 
-### `TEST-EXPORT-03` Saved session to JSON
+### `TEST-EXPORT-02` — Capture file to JSONL
 
-Setup: save a session first.  
-Action: run `canarchy export session:lab-a artifact.json --json`.  
-Assert: the destination file contains a structured envelope with a session payload.
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy export sample.candump artifact.jsonl --json`
+Then   the destination file shall contain one serialized event per line
+```
 
-### `TEST-EXPORT-04` Session to JSONL rejected
+**Fixture:** `tests/fixtures/sample.candump`, temporary output directory.
 
-Setup: save a session first.  
-Action: run `canarchy export session:lab-a artifact.jsonl --json`.  
-Assert: exit code `1` and `errors[0].code == "EXPORT_EVENTS_UNAVAILABLE"`.
+---
 
-### `TEST-EXPORT-05` Unsupported source rejected
+### `TEST-EXPORT-03` — Saved session to JSON
 
-Setup: no matching capture file or session source.  
-Action: run `canarchy export unknown-source artifact.json --json`.  
-Assert: exit code `1` and `errors[0].code == "EXPORT_SOURCE_UNSUPPORTED"`.
+```gherkin
+Given  a session named `lab-a` has been saved to the session store
+When   the operator runs `canarchy export session:lab-a artifact.json --json`
+Then   the destination file shall contain a structured envelope with a session payload
+```
 
-### `TEST-EXPORT-06` Unsupported destination suffix rejected
+**Fixture:** temporary session store under `.canarchy/`, temporary output directory.
 
-Setup: valid exportable source.  
-Action: run `canarchy export sample.candump artifact.txt --json`.  
-Assert: exit code `1` and `errors[0].code == "EXPORT_FORMAT_UNSUPPORTED"`.
+---
+
+### `TEST-EXPORT-04` — Session to JSONL rejected
+
+```gherkin
+Given  a session named `lab-a` has been saved to the session store
+When   the operator runs `canarchy export session:lab-a artifact.jsonl --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"EXPORT_EVENTS_UNAVAILABLE"`
+```
+
+**Fixture:** temporary session store under `.canarchy/`.
+
+---
+
+### `TEST-EXPORT-05` — Unsupported source rejected
+
+```gherkin
+Given  no capture file or session named `unknown-source` exists
+When   the operator runs `canarchy export unknown-source artifact.json --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"EXPORT_SOURCE_UNSUPPORTED"`
+```
+
+**Fixture:** none required.
+
+---
+
+### `TEST-EXPORT-06` — Unsupported destination suffix rejected
+
+```gherkin
+Given  a valid exportable source is available
+When   the operator runs `canarchy export sample.candump artifact.txt --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"EXPORT_FORMAT_UNSUPPORTED"`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
 
 ## Fixtures And Environment
 

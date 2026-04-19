@@ -18,12 +18,12 @@ Operators sometimes want to run several CANarchy commands from a persistent prom
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-SHELL-01` | The system shall provide a `canarchy shell` command. |
-| `REQ-SHELL-02` | `canarchy shell --command "..."` shall execute the provided command through the shared CLI path. |
-| `REQ-SHELL-03` | Interactive shell entry shall reuse the existing parser and exit cleanly on `exit`, `quit`, or EOF. |
-| `REQ-SHELL-04` | The shell shall not introduce separate protocol or transport behavior. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-SHELL-01` | Ubiquitous | The system shall provide a `canarchy shell` command that starts an interactive prompt reusing the existing CLI parser. |
+| `REQ-SHELL-02` | Event-driven | When `canarchy shell --command "<cmd>"` is invoked, the system shall execute the provided command through the shared CLI path and exit. |
+| `REQ-SHELL-03` | Event-driven | When the interactive shell receives `exit`, `quit`, or EOF, the system shall terminate cleanly with exit code 0. |
+| `REQ-SHELL-04` | Ubiquitous | The shell shall not introduce transport, protocol, or session behavior separate from the shared command layer. |
 
 ## Command Surface
 

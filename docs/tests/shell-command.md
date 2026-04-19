@@ -27,10 +27,18 @@ Validate the one-shot shared-parser behavior of `shell` and document the current
 
 ## Representative Test Cases
 
-### `TEST-SHELL-01` One-shot shell command reuse
+### `TEST-SHELL-01` — One-shot shell command reuse
 
-Action: run `canarchy shell --command "capture can0 --raw"`.  
-Assert: the delegated command executes through the shared CLI path and returns the expected raw output.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy shell --command "capture can0 --raw"`
+Then   the delegated command shall execute through the shared CLI path
+And    the output shall match the expected raw output for the delegated command
+```
+
+**Fixture:** scaffold backend (no file required).
+
+---
 
 ## Fixtures And Environment
 

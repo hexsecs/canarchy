@@ -38,57 +38,128 @@ Define the expected coverage for the reverse-engineering helper family so shippe
 
 ## Representative Test Cases
 
-### `TEST-RE-01` Signal candidate analysis
+### `TEST-RE-01` — Signal candidate analysis
 
-Action: run `canarchy re signals <fixture> --json`.  
-Assert: output includes passive mode, ranked signal candidates, confidence or score fields, and rationale.
+```gherkin
+Given  a capture fixture with varying byte fields is available
+When   the operator runs `canarchy re signals <fixture> --json`
+Then   the result shall indicate passive mode
+And    the result shall include ranked signal candidates
+And    each candidate shall include a confidence or score field and a rationale
+```
 
-### `TEST-RE-02` Counter candidate analysis
+**Fixture:** capture file with signal-like byte variation.
 
-Action: run `canarchy re counters <fixture> --json`.  
-Assert: output includes candidate fields with monotonicity or rollover evidence.
+---
 
-### `TEST-RE-03` Entropy ranking analysis
+### `TEST-RE-02` — Counter candidate analysis
 
-Action: run `canarchy re entropy <fixture> --json`.  
-Assert: output ranks arbitration IDs or fields by entropy-related values with sample counts.
+```gherkin
+Given  a capture fixture containing monotonically incrementing nibble or byte fields is available
+When   the operator runs `canarchy re counters <fixture> --json`
+Then   the result shall include candidate fields
+And    each candidate shall include monotonicity evidence and rollover detection metadata
+```
 
-### `TEST-RE-04` Correlation analysis
+**Fixture:** capture file with nibble and byte counter fields.
 
-Action: run `canarchy re correlate <fixture> --reference <reference> --json`.  
-Assert: output includes ranked correlation candidates with correlation strength and rationale.
+---
 
-The reference fixture should use one of the documented supported formats:
+### `TEST-RE-03` — Entropy ranking analysis
 
-* `.json` object with `name` and `samples`
-* `.jsonl` sample stream with timestamp/value pairs
+```gherkin
+Given  a capture fixture with mixed-entropy arbitration IDs and fields is available
+When   the operator runs `canarchy re entropy <fixture> --json`
+Then   the result shall rank arbitration IDs or fields by entropy-related values
+And    each entry shall include a sample count
+```
 
-### `TEST-RE-05` Table output summaries
+**Fixture:** capture file with mixed-entropy fields.
 
-Action: run each `re` command with `--table`.  
-Assert: output presents a compact ranked summary with visible score or confidence data.
+---
 
-### `TEST-RE-06` JSONL behavior
+### `TEST-RE-04` — Correlation analysis
 
-Action: run each `re` command with `--jsonl`.  
-Assert: output matches the documented JSONL contract selected by the implementation.
+```gherkin
+Given  a capture fixture and a reference series file are available
+And    the reference file conforms to the documented schema with timestamp and value fields
+When   the operator runs `canarchy re correlate <fixture> --reference <reference> --json`
+Then   the result shall include ranked correlation candidates
+And    each candidate shall include a correlation strength value and rationale
+```
 
-### `TEST-RE-07` Missing capture error
+**Fixture:** capture file, `.json` or `.jsonl` reference series file.
 
-Action: run a `re` command against a missing capture file.  
-Assert: exit code `2` and a structured capture-source error.
+---
 
-### `TEST-RE-08` Missing or unsupported reference input
+### `TEST-RE-05` — Table output summaries
 
-Action: run `re correlate` without a required reference input or with an unsupported reference format.  
-Assert: exit code `1` and a structured correlation-reference error.
+```gherkin
+Given  a valid capture fixture is available
+When   the operator runs any `re` command with `--table`
+Then   the output shall present a compact ranked summary
+And    score or confidence data shall be visible in the table
+```
 
-This coverage should also include invalid-schema cases where the reference file exists but does not contain timestamped numeric samples, returning `RE_REFERENCE_INVALID`.
+**Fixture:** capture file appropriate to the command.
 
-### `TEST-RE-09` Low-sample or sparse capture behavior
+---
 
-Action: run `re` helpers against small or low-variance fixtures.  
-Assert: the commands degrade gracefully, return empty or low-confidence results, and do not present guesses as facts.
+### `TEST-RE-06` — JSONL behavior
+
+```gherkin
+Given  a valid capture fixture is available
+When   the operator runs any `re` command with `--jsonl`
+Then   the output shall match the documented JSONL contract selected by the implementation
+```
+
+**Fixture:** capture file appropriate to the command.
+
+---
+
+### `TEST-RE-07` — Missing capture error
+
+```gherkin
+Given  the specified capture file does not exist
+When   the operator runs any `re` command against the missing file
+Then   the command shall exit with code `2`
+And    the error shall be a structured capture-source error
+```
+
+**Fixture:** none (missing file path).
+
+---
+
+### `TEST-RE-08` — Missing or unsupported reference input
+
+```gherkin
+Given  no `--reference` argument is provided
+When   the operator runs `canarchy re correlate <fixture>`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"RE_REFERENCE_REQUIRED"`
+
+Given  a reference file exists but does not contain timestamped numeric samples
+When   the operator runs `re correlate` with that reference file
+Then   `errors[0].code` shall equal `"RE_REFERENCE_INVALID"`
+```
+
+**Fixture:** none for missing-reference case; malformed reference file for schema-invalid case.
+
+---
+
+### `TEST-RE-09` — Low-sample or sparse capture behavior
+
+```gherkin
+Given  a capture fixture with very few frames or low field variance is available
+When   the operator runs any `re` command against the sparse capture
+Then   the command shall not exit with an error
+And    the result shall return empty or low-confidence candidates
+And    no candidates shall be presented as authoritative facts
+```
+
+**Fixture:** small or low-variance candump fixture.
+
+---
 
 ## Fixture Requirements
 
@@ -103,7 +174,6 @@ Planned fixtures should include:
 Current implementation note:
 
 * `re counters` is covered with fixtures for nibble counters, rollover counters, non-counter noise, and low-sample captures
-* `re entropy` is covered with fixtures for constant-byte, alternating-byte, high-entropy, and low-sample arbitration IDs
 
 ## Explicit Non-Coverage
 

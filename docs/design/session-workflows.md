@@ -18,13 +18,14 @@ Operators often reuse the same interface, DBC, and capture context across comman
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-SESSION-01` | The system shall provide `session save`, `session load`, and `session show` commands. |
-| `REQ-SESSION-02` | `session save` shall persist a named session record with the current CLI context. |
-| `REQ-SESSION-03` | `session load` shall restore a previously saved named session. |
-| `REQ-SESSION-04` | `session show` shall present active-session and saved-session state. |
-| `REQ-SESSION-05` | Loading a missing session shall return a structured user error. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-SESSION-01` | Ubiquitous | The system shall provide `session save`, `session load`, and `session show` commands for named session persistence. |
+| `REQ-SESSION-02` | Event-driven | When `session save <name>` is invoked, the system shall persist a named session record with the supplied interface, DBC, and capture context. |
+| `REQ-SESSION-03` | Event-driven | When `session load <name>` is invoked, the system shall restore the named session and update the active session state. |
+| `REQ-SESSION-04` | Event-driven | When `session show` is invoked, the system shall return the current active session and the list of all saved sessions. |
+| `REQ-SESSION-05` | Unwanted behaviour | If `session load` is invoked with a name that does not exist, the system shall return a structured error with code `SESSION_NOT_FOUND` and exit code 1. |
+| `REQ-SESSION-06` | Unwanted behaviour | If a session name contains a path separator or is `.` or `..`, the system shall return a structured error with code `INVALID_SESSION_NAME` and exit code 1. |
 
 ## Command Surface
 
@@ -59,6 +60,7 @@ Session commands return stateful payloads with a `session`, `sessions`, or `acti
 | Code | Trigger | Exit code |
 |------|---------|-----------|
 | `SESSION_NOT_FOUND` | requested session does not exist | 1 |
+| `INVALID_SESSION_NAME` | session name contains path separators or is `.` / `..` | 1 |
 
 ## Deferred Decisions
 

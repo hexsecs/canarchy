@@ -37,68 +37,157 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 
 ## Representative Test Cases
 
-### `TEST-TRANSPORT-01` Capture scaffold JSON streaming output
+### `TEST-TRANSPORT-01` — Capture scaffold JSON streaming output
 
-Action: run `canarchy capture can0 --json`.  
-Assert: output emits one serialized frame event per line from the streaming path.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy capture can0 --json`
+Then   the system shall emit at least one JSON-parseable line
+And    each emitted object shall have `event_type` equal to `"frame"`
+```
 
-### `TEST-TRANSPORT-02` Send active JSON output
+**Fixture:** scaffold backend (no file required).
 
-Action: run `canarchy send can0 0x123 11223344 --json`.  
-Assert: output includes active mode, scaffold metadata, serialized events, and the active-transmit warning.
+---
 
-### `TEST-TRANSPORT-03` Candump-style scaffold streaming
+### `TEST-TRANSPORT-02` — Send active JSON output
 
-Action: run `canarchy capture can0 --candump` without enabling `python-can`.  
-Assert: fixture frames are emitted as candump-style lines.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy send can0 0x123 11223344 --json`
+Then   the result envelope shall indicate active mode
+And    the envelope shall include serialized frame events
+And    the envelope shall include an active-transmit warning
+```
 
-### `TEST-TRANSPORT-04` Capture JSONL uses live backend when requested
+**Fixture:** scaffold backend (no file required).
 
-Setup: patch the `python-can` open path.  
-Action: run `capture --jsonl` against the live backend.  
-Assert: output emits one serialized frame event per line from the streaming path.
+---
 
-### `TEST-TRANSPORT-05` Filter returns matching frames
+### `TEST-TRANSPORT-03` — Candump-style scaffold streaming
 
-Action: run `canarchy filter sample.candump id==0x18FEEE31 --json`.  
-Assert: one matching frame event is returned.
+```gherkin
+Given  the scaffold transport backend is active and `python-can` is not enabled
+When   the operator runs `canarchy capture can0 --candump`
+Then   the system shall emit fixture frames as candump-style text lines
+```
 
-### `TEST-TRANSPORT-06` Stats returns summary
+**Fixture:** scaffold backend (no file required).
 
-Action: run `canarchy stats sample.candump --json`.  
-Assert: output includes deterministic summary fields including frame and arbitration-ID counts.
+---
 
-### `TEST-TRANSPORT-07` Transport unavailable error
+### `TEST-TRANSPORT-04` — Capture JSONL uses live backend when requested
 
-Action: run `capture` against an unavailable interface.  
-Assert: exit code `2` and `errors[0].code == "TRANSPORT_UNAVAILABLE"`.
+```gherkin
+Given  the `python-can` open path is patched with a mock bus
+When   the operator runs `canarchy capture can0 --jsonl` against the live backend
+Then   the system shall emit one serialized frame event per output line
+```
 
-### `TEST-TRANSPORT-08` Candump live text rendering
+**Fixture:** mocked `python-can` bus.
 
-Setup: patch a live backend bus with sample frames.  
-Action: run `capture --candump`.  
-Assert: output uses candump-style text lines.
+---
 
-### `TEST-TRANSPORT-09` Candump FD/RTR/error formatting
+### `TEST-TRANSPORT-05` — Filter returns matching frames
 
-Setup: patch a live backend bus with FD, RTR, and error frames.  
-Action: run `capture --candump`.  
-Assert: output renders the special frame forms correctly.
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy filter sample.candump id==0x18FEEE31 --json`
+Then   the result shall contain exactly one frame event matching arbitration ID `0x18FEEE31`
+```
 
-### `TEST-TRANSPORT-10` Filter expression error
+**Fixture:** `tests/fixtures/sample.candump`.
 
-Action: run `filter` with an unsupported expression.  
-Assert: exit code `2` and `errors[0].code == "FILTER_EXPRESSION_UNSUPPORTED"`.
+---
 
-### `TEST-TRANSPORT-11` Invalid capture file error
+### `TEST-TRANSPORT-06` — Stats returns summary
 
-Action: run `stats` against an invalid candump fixture.  
-Assert: exit code `2` and `errors[0].code == "CAPTURE_SOURCE_INVALID"`.
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy stats sample.candump --json`
+Then   the result shall include deterministic summary fields
+And    the summary shall include a total frame count and an arbitration-ID count
+```
 
-### `TEST-TRANSPORT-12` Unsupported capture format error
+**Fixture:** `tests/fixtures/sample.candump`.
 
-Action: run `stats` against an unsupported file type.  
-Assert: exit code `2` and `errors[0].code == "CAPTURE_FORMAT_UNSUPPORTED"`.
+---
+
+### `TEST-TRANSPORT-07` — Transport unavailable error
+
+```gherkin
+Given  the interface `offline0` is not available
+When   the operator runs `canarchy capture offline0 --json`
+Then   the command shall exit with code `2`
+And    `errors[0].code` shall equal `"TRANSPORT_UNAVAILABLE"`
+```
+
+**Fixture:** none (unavailable interface name).
+
+---
+
+### `TEST-TRANSPORT-08` — Candump live text rendering
+
+```gherkin
+Given  the `python-can` bus is patched with sample frames
+When   the operator runs `canarchy capture can0 --candump`
+Then   the system shall emit candump-style text lines for each frame
+```
+
+**Fixture:** mocked `python-can` bus with sample frames.
+
+---
+
+### `TEST-TRANSPORT-09` — Candump FD/RTR/error formatting
+
+```gherkin
+Given  the `python-can` bus is patched with FD, RTR, and error frame types
+When   the operator runs `canarchy capture can0 --candump`
+Then   the system shall render each special frame type correctly in candump format
+```
+
+**Fixture:** mocked `python-can` bus with FD, RTR, and error frames.
+
+---
+
+### `TEST-TRANSPORT-10` — Filter expression error
+
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy filter sample.candump unsupported_expr --json`
+Then   the command shall exit with code `2`
+And    `errors[0].code` shall equal `"FILTER_EXPRESSION_UNSUPPORTED"`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-TRANSPORT-11` — Invalid capture file error
+
+```gherkin
+Given  the file `tests/fixtures/invalid.candump` contains unparseable content
+When   the operator runs `canarchy stats invalid.candump --json`
+Then   the command shall exit with code `2`
+And    `errors[0].code` shall equal `"CAPTURE_SOURCE_INVALID"`
+```
+
+**Fixture:** `tests/fixtures/invalid.candump`.
+
+---
+
+### `TEST-TRANSPORT-12` — Unsupported capture format error
+
+```gherkin
+Given  a file with an unsupported extension is present
+When   the operator runs `canarchy stats file.xyz --json`
+Then   the command shall exit with code `2`
+And    `errors[0].code` shall equal `"CAPTURE_FORMAT_UNSUPPORTED"`
+```
+
+**Fixture:** file with an unsupported format suffix.
+
+---
 
 ## Fixtures And Environment
 

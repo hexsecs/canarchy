@@ -539,12 +539,30 @@ Describe the test strategy and coverage expectations for a component or feature.
 * fixture requirements
 * what is explicitly not tested and why
 
+### Spec language standard
+
+All design specs and test specs must use the formats defined in [`docs/spec-template.md`](docs/spec-template.md).
+
+**Design specs** shall write requirements using EARS (Easy Approach to Requirements Syntax):
+
+| EARS type | Template |
+|-----------|----------|
+| Ubiquitous | The system shall … |
+| Event-driven | When \<trigger\>, the system shall … |
+| State-driven | While \<state\>, the system shall … |
+| Optional feature | Where \<feature\> is specified, the system shall … |
+| Unwanted behaviour | If \<condition\>, the system shall … |
+
+Each requirement row in the table shall include a `Type` column identifying which EARS pattern applies.
+
+**Test specs** shall write test cases using Gherkin Given/When/Then syntax inside a fenced `gherkin` block, followed by a `**Fixture:**` line naming the required files or environment.
+
 ### Rules for agents
 
 * When implementing a new feature or command, check `docs/design/` for an existing spec before writing code. If a spec exists, implement against it. If it conflicts with the code, flag the conflict rather than silently diverging.
-* When no spec exists for a significant new feature, create one in `docs/design/` before or alongside the implementation, using requirement IDs and the current formal structure.
+* When no spec exists for a significant new feature, create one in `docs/design/` before or alongside the implementation. Follow `docs/spec-template.md` for the required sections, requirement IDs (`REQ-<AREA>-NN`), and EARS language.
 * When adding new protocol logic, transport backends, or output formats, update or create the relevant architecture document in `docs/architecture/`.
-* After implementing a feature, verify the test spec in `docs/tests/` matches what was actually tested, includes test IDs, and traces back to the design-spec requirement IDs. Update it if coverage changed.
+* After implementing a feature, verify the test spec in `docs/tests/` matches what was actually tested, includes test IDs (`TEST-<AREA>-NN`), uses Gherkin Given/When/Then, and traces back to the design-spec requirement IDs. Update it if coverage changed.
 * Specs are living documents. Update them when the implementation changes rather than letting them drift.
 * Do not create specs for trivial changes (single-function fixes, minor output tweaks). Reserve them for features that affect the command surface, data model, or module boundaries.
 

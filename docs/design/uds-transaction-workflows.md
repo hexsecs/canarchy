@@ -18,14 +18,14 @@ Operators need a protocol-aware UDS surface for discovery and transaction inspec
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-UDS-TX-01` | The system shall provide `uds scan` and `uds trace` commands. |
-| `REQ-UDS-TX-02` | `uds scan` shall emit structured UDS transaction events representing responder discovery. |
-| `REQ-UDS-TX-03` | `uds trace` shall emit structured UDS transaction events for traced request/response exchanges. |
-| `REQ-UDS-TX-04` | `uds scan` shall communicate its active nature through a warning. |
-| `REQ-UDS-TX-05` | UDS table output shall summarize service, ECU, request ID, and response ID information. |
-| `REQ-UDS-TX-06` | Transport failures shall return structured transport errors. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-UDS-TX-01` | Ubiquitous | The system shall provide `uds scan` and `uds trace` commands for UDS responder discovery and session tracing. |
+| `REQ-UDS-TX-02` | Event-driven | When `uds scan <interface>` is invoked, the system shall emit structured `uds_transaction` events representing discovered responders. |
+| `REQ-UDS-TX-03` | Event-driven | When `uds scan <interface>` is invoked, the system shall emit an active-transmit warning. |
+| `REQ-UDS-TX-04` | Event-driven | When `uds trace <interface>` is invoked, the system shall emit structured `uds_transaction` events for traced request/response exchanges. |
+| `REQ-UDS-TX-05` | Ubiquitous | UDS table output shall present service identifier, ECU address, request ID, and response ID for each transaction. |
+| `REQ-UDS-TX-06` | Unwanted behaviour | If the transport interface is unavailable, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
 
 ## Command Surface
 

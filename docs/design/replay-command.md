@@ -18,13 +18,14 @@ Replay is a core lab workflow for reproducing traffic patterns, validating tooli
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-REPLAY-01` | The system shall provide a `canarchy replay <file>` command. |
-| `REQ-REPLAY-02` | Replay planning shall preserve frame count and derive a duration from the capture timeline. |
-| `REQ-REPLAY-03` | Replay planning shall scale relative timing based on `--rate`. |
-| `REQ-REPLAY-04` | The command shall communicate its active nature through a warning. |
-| `REQ-REPLAY-05` | Invalid rates and missing capture sources shall return structured errors. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-REPLAY-01` | Ubiquitous | The system shall provide a `canarchy replay <file>` command for deterministic replay planning over capture files. |
+| `REQ-REPLAY-02` | Event-driven | When `replay <file>` is invoked, the system shall produce a replay plan preserving the capture frame count and deriving duration from the capture timeline. |
+| `REQ-REPLAY-03` | Event-driven | When `replay <file> --rate <factor>` is invoked, the system shall scale relative event timing by the specified rate factor. |
+| `REQ-REPLAY-04` | Event-driven | When `replay` is invoked, the system shall emit an active-transmit warning communicating the scheduled-transmission nature of the output. |
+| `REQ-REPLAY-05` | Unwanted behaviour | If `--rate` is zero or negative, the system shall return a structured error with code `INVALID_RATE` and exit code 1. |
+| `REQ-REPLAY-06` | Unwanted behaviour | If the capture source file is missing or unreadable, the system shall return a structured error with code `CAPTURE_SOURCE_UNAVAILABLE` and exit code 2. |
 
 ## Command Surface
 
@@ -38,7 +39,7 @@ In scope:
 
 * deterministic replay planning from capture files
 * relative timing scaling through `--rate`
-* replay-event serialization
+* replay-event serialisation
 
 Out of scope:
 
@@ -62,7 +63,7 @@ Replay returns:
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|
-| `INVALID_RATE` | replay rate is less than or equal to zero | 1 |
+| `INVALID_RATE` | replay rate is zero or negative | 1 |
 | `CAPTURE_SOURCE_UNAVAILABLE` | replay source file cannot be opened | 2 |
 
 ## Deferred Decisions

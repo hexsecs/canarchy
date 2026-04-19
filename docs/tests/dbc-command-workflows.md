@@ -32,35 +32,80 @@ Validate the shipped DBC-backed decode and encode workflows, including both libr
 
 ## Representative Test Cases
 
-### `TEST-DBC-01` Load valid DBC fixture
+### `TEST-DBC-01` — Load valid DBC fixture
 
-Action: load the sample DBC fixture directly.  
-Assert: a known frame name resolves correctly.
+```gherkin
+Given  the file `tests/fixtures/sample.dbc` is available
+When   the DBC loader reads the fixture directly
+Then   a known frame name shall resolve correctly from the loaded schema
+```
 
-### `TEST-DBC-02` Decode frames returns semantic events
+**Fixture:** `tests/fixtures/sample.dbc`.
 
-Action: decode sample capture frames with the sample DBC.  
-Assert: decoded-message events are returned for known messages.
+---
 
-### `TEST-DBC-03` Encode message returns frame
+### `TEST-DBC-02` — Decode frames returns semantic events
 
-Action: encode a named message with signal assignments.  
-Assert: a frame and frame events are returned.
+```gherkin
+Given  the files `tests/fixtures/sample.candump` and `tests/fixtures/sample.dbc` are available
+When   the decode library processes the capture frames with the DBC schema
+Then   decoded-message events shall be returned for all known messages in the capture
+```
 
-### `TEST-DBC-04` Decode CLI returns structured output
+**Fixture:** `tests/fixtures/sample.candump`, `tests/fixtures/sample.dbc`.
 
-Action: run `canarchy decode sample.candump --dbc sample.dbc --json`.  
-Assert: output includes matched message count and decoded-message events.
+---
 
-### `TEST-DBC-05` Encode CLI returns structured frame
+### `TEST-DBC-03` — Encode message returns frame
 
-Action: run `canarchy encode --dbc sample.dbc EngineStatus1 ... --json`.  
-Assert: output includes the encoded frame and frame events.
+```gherkin
+Given  the file `tests/fixtures/sample.dbc` is available
+When   the encode library encodes a named message with signal assignments
+Then   the result shall include a frame and associated frame events
+```
 
-### `TEST-DBC-06` Invalid DBC returns decode error
+**Fixture:** `tests/fixtures/sample.dbc`.
 
-Action: run `decode` against an invalid DBC file.  
-Assert: exit code `3` and `errors[0].code == "DBC_LOAD_FAILED"`.
+---
+
+### `TEST-DBC-04` — Decode CLI returns structured output
+
+```gherkin
+Given  the files `tests/fixtures/sample.candump` and `tests/fixtures/sample.dbc` are available
+When   the operator runs `canarchy decode sample.candump --dbc sample.dbc --json`
+Then   the result shall include a matched message count
+And    the result shall include decoded-message events for known messages
+```
+
+**Fixture:** `tests/fixtures/sample.candump`, `tests/fixtures/sample.dbc`.
+
+---
+
+### `TEST-DBC-05` — Encode CLI returns structured frame
+
+```gherkin
+Given  the file `tests/fixtures/sample.dbc` is available
+When   the operator runs `canarchy encode --dbc sample.dbc EngineStatus1 ... --json`
+Then   the result shall include the encoded frame
+And    the result shall include associated frame events
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`.
+
+---
+
+### `TEST-DBC-06` — Invalid DBC returns decode error
+
+```gherkin
+Given  the file `tests/fixtures/invalid.dbc` contains malformed DBC content
+When   the operator runs `canarchy decode sample.candump --dbc invalid.dbc --json`
+Then   the command shall exit with code `3`
+And    `errors[0].code` shall equal `"DBC_LOAD_FAILED"`
+```
+
+**Fixture:** `tests/fixtures/invalid.dbc`, `tests/fixtures/sample.candump`.
+
+---
 
 ## Fixtures And Environment
 

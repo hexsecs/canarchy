@@ -32,45 +32,109 @@ Validate that `generate` produces deterministic frame sequences, emits active-tr
 
 ## Representative Test Cases
 
-### `TEST-GENERATE-01` Explicit frame generation
+### `TEST-GENERATE-01` — Explicit frame generation
 
-Action: run `canarchy generate can0 --id 0x123 --dlc 4 --data 11223344 --count 2 --gap 100 --json`.  
-Assert: two frames are returned with the expected identifier, payload, timestamps, and active-transmit alert.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy generate can0 --id 0x123 --dlc 4 --data 11223344 --count 2 --gap 100 --json`
+Then   the result shall contain exactly two frame events
+And    each frame shall have arbitration ID `0x123`, a 4-byte payload `11223344`, and timestamps spaced by the gap value
+And    the result shall include an active-transmit warning alert
+```
 
-### `TEST-GENERATE-02` Random generation modes
+**Fixture:** scaffold backend (no file required).
 
-Action: run `generate` with random identifier or payload settings.  
-Assert: the command succeeds and emitted frames still satisfy the expected structural constraints.
+---
 
-### `TEST-GENERATE-03` Incrementing payload mode
+### `TEST-GENERATE-02` — Random generation modes
 
-Action: run `generate` with `--data I`.  
-Assert: payload bytes increment deterministically across the emitted frames.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `generate` with random identifier or payload settings
+Then   the command shall succeed
+And    the emitted frames shall still satisfy the expected structural constraints
+```
 
-### `TEST-GENERATE-04` Invalid identifier
+**Fixture:** scaffold backend (no file required).
 
-Action: run `generate` with an invalid `--id` value.  
-Assert: exit code `1` and `errors[0].code == "INVALID_FRAME_ID"`.
+---
 
-### `TEST-GENERATE-05` Invalid DLC
+### `TEST-GENERATE-03` — Incrementing payload mode
 
-Action: run `generate` with an invalid `--dlc` value.  
-Assert: exit code `1` and `errors[0].code == "INVALID_DLC"`.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `generate` with `--data I`
+Then   the payload bytes in successive frames shall increment deterministically
+```
 
-### `TEST-GENERATE-06` Invalid payload
+**Fixture:** scaffold backend (no file required).
 
-Action: run `generate` with invalid `--data`.  
-Assert: exit code `1` and `errors[0].code == "INVALID_FRAME_DATA"`.
+---
 
-### `TEST-GENERATE-07` Invalid count
+### `TEST-GENERATE-04` — Invalid identifier
 
-Action: run `generate` with `--count 0`.  
-Assert: exit code `1` and `errors[0].code == "INVALID_COUNT"`.
+```gherkin
+Given  an invalid frame identifier is supplied
+When   the operator runs `canarchy generate can0 --id not_hex --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"INVALID_FRAME_ID"`
+```
 
-### `TEST-GENERATE-08` Invalid gap
+**Fixture:** none required.
 
-Action: run `generate` with a negative `--gap`.  
-Assert: exit code `1` and `errors[0].code == "INVALID_GAP"`.
+---
+
+### `TEST-GENERATE-05` — Invalid DLC
+
+```gherkin
+Given  an out-of-range DLC value is supplied
+When   the operator runs `canarchy generate can0 --dlc 99 --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"INVALID_DLC"`
+```
+
+**Fixture:** none required.
+
+---
+
+### `TEST-GENERATE-06` — Invalid payload
+
+```gherkin
+Given  a malformed data string is supplied
+When   the operator runs `canarchy generate can0 --data ZZZZ --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"INVALID_FRAME_DATA"`
+```
+
+**Fixture:** none required.
+
+---
+
+### `TEST-GENERATE-07` — Invalid count
+
+```gherkin
+Given  a count of zero is supplied
+When   the operator runs `canarchy generate can0 --count 0 --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"INVALID_COUNT"`
+```
+
+**Fixture:** none required.
+
+---
+
+### `TEST-GENERATE-08` — Invalid gap
+
+```gherkin
+Given  a negative gap value is supplied
+When   the operator runs `canarchy generate can0 --gap -1 --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"INVALID_GAP"`
+```
+
+**Fixture:** none required.
+
+---
 
 ## Fixtures And Environment
 
