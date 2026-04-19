@@ -40,6 +40,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
+* Refreshed the reverse-engineering design and test specs to distinguish the shipped helpers (`re counters`, `re entropy`, `re match-dbc`, `re shortlist-dbc`) from still-deferred `re signals` and `re correlate` work.
 * Refreshed tutorials and comparison docs to add a provider-backed DBC workflow tutorial, update tutorial discoverability, and align the feature matrix with the shipped reverse-engineering and DBC-provider capabilities.
 * Refreshed `docs/command_spec.md`, `docs/agents.md`, and related operator/spec docs to reflect the current DBC provider workflows, `dbc_source` provenance, reverse-engineering DBC matching commands, and the current curated MCP tool surface.
 * Updated `docs/architecture.md` to reflect the current DBC provider/cache/provenance subsystem and the shipped reverse-engineering DBC-matching commands.
