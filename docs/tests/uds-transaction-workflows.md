@@ -16,7 +16,7 @@ The current implementation covers both transport-backed single-frame behavior on
 
 ## Coverage Requirements
 
-* scan JSON output with transaction events and active warning
+* scan JSON output with transaction events and preflight warning behavior
 * trace JSON output with transaction events
 * protocol-aware table rendering for scan and trace
 * transport-unavailable error handling
@@ -41,7 +41,7 @@ Given  the scaffold transport backend is active
 When   the operator runs `canarchy uds scan can0 --json`
 Then   the result shall indicate active mode
 And    the result shall include a responder count and structured transaction events
-And    the result shall include an active scan warning alert
+And    the command shall emit a preflight warning on `stderr`
 ```
 
 **Fixture:** scaffold backend (no file required).

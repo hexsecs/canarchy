@@ -22,7 +22,9 @@ Operators need a protocol-aware UDS surface for discovery and transaction inspec
 |----|------|-------------|
 | `REQ-UDS-TX-01` | Ubiquitous | The system shall provide `uds scan` and `uds trace` commands for UDS responder discovery and session tracing. |
 | `REQ-UDS-TX-02` | Event-driven | When `uds scan <interface>` is invoked, the system shall emit structured `uds_transaction` events representing discovered responders. |
-| `REQ-UDS-TX-03` | Event-driven | When `uds scan <interface>` is invoked, the system shall emit an active-transmit warning. |
+| `REQ-UDS-TX-03` | Event-driven | When `uds scan <interface>` is invoked and validation succeeds, the system shall emit a preflight active-transmit warning to `stderr` before diagnostic requests are sent. |
+| `REQ-UDS-TX-07` | Optional feature | Where `--ack-active` is supplied for `uds scan`, the system shall require a confirmation response of `YES` before a diagnostic request is sent. |
+| `REQ-UDS-TX-08` | Optional feature | Where active acknowledgement is required, the system shall require `--ack-active` before `uds scan` sends a diagnostic request. |
 | `REQ-UDS-TX-04` | Event-driven | When `uds trace <interface>` is invoked, the system shall emit structured `uds_transaction` events for traced request/response exchanges. |
 | `REQ-UDS-TX-05` | Ubiquitous | UDS table output shall present service identifier, ECU address, request ID, and response ID for each transaction. |
 | `REQ-UDS-TX-06` | Unwanted behaviour | If the transport interface is unavailable, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
@@ -30,7 +32,7 @@ Operators need a protocol-aware UDS surface for discovery and transaction inspec
 ## Command Surface
 
 ```text
-canarchy uds scan <interface> [--json] [--jsonl] [--table] [--raw]
+canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--table] [--raw]
 canarchy uds trace <interface> [--json] [--jsonl] [--table] [--raw]
 ```
 
@@ -63,7 +65,7 @@ Both commands emit `uds_transaction` events with fields including:
 
 ## Output Contracts
 
-`--json` returns the standard CANarchy envelope. `--jsonl` emits one transaction event per line plus warning alerts when applicable.
+`--json` returns the standard CANarchy envelope. `--jsonl` emits one transaction event per line. `uds scan` emits its preflight safety warning on `stderr`.
 
 Current implementation note:
 
@@ -75,6 +77,8 @@ Current implementation note:
 | Code | Trigger | Exit code |
 |------|---------|-----------|
 | `TRANSPORT_UNAVAILABLE` | transport interface is unavailable | 2 |
+| `ACTIVE_ACK_REQUIRED` | active acknowledgement is required but `--ack-active` was omitted for `uds scan` | 1 |
+| `ACTIVE_CONFIRMATION_DECLINED` | `--ack-active` was supplied for `uds scan` but the confirmation response was not `YES` | 1 |
 
 ## Deferred Decisions
 

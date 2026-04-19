@@ -17,7 +17,7 @@ Validate that `generate` produces deterministic frame sequences, emits active-tr
 * fixed frame generation from explicit ID, DLC, and data inputs
 * random and incrementing data modes
 * count and gap handling in generated timestamps
-* active-transmit alert emission
+* preflight active-transmit warning and alert emission
 * structured validation errors for invalid ID, DLC, data, count, and gap inputs
 
 ## Requirement Traceability
@@ -39,7 +39,8 @@ Given  the scaffold transport backend is active
 When   the operator runs `canarchy generate can0 --id 0x123 --dlc 4 --data 11223344 --count 2 --gap 100 --json`
 Then   the result shall contain exactly two frame events
 And    each frame shall have arbitration ID `0x123`, a 4-byte payload `11223344`, and timestamps spaced by the gap value
-And    the result shall include an active-transmit warning alert
+And    the result shall include an active-transmit warning alert event
+And    the command shall emit a preflight warning on `stderr`
 ```
 
 **Fixture:** scaffold backend (no file required).

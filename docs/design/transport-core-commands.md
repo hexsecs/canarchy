@@ -22,7 +22,7 @@ Operators need a stable base command set that supports passive live observation,
 |----|------|-------------|
 | `REQ-TRANSPORT-01` | Ubiquitous | The system shall provide `capture`, `send`, `filter`, and `stats` commands as the foundational transport command set. |
 | `REQ-TRANSPORT-02` | Event-driven | When `capture <interface>` is invoked, the system shall stream frame events through the live capture path for all output formats. |
-| `REQ-TRANSPORT-03` | Event-driven | When `send <interface> <frame-id> <data>` is invoked, the system shall transmit the specified frame and emit an active-transmit warning distinct from passive workflows. |
+| `REQ-TRANSPORT-03` | Event-driven | When `send <interface> <frame-id> <data>` is invoked, the system shall emit a preflight active-transmit warning to `stderr` and then transmit the specified frame. |
 | `REQ-TRANSPORT-04` | Event-driven | When `filter <file> <expression>` is invoked, the system shall return only the frame events from the capture file that satisfy the expression. |
 | `REQ-TRANSPORT-05` | Event-driven | When `stats <file>` is invoked, the system shall return a deterministic summary including total frame count and unique arbitration ID count. |
 | `REQ-TRANSPORT-06` | Event-driven | When `capture` or `send` is invoked, the system shall expose the effective transport backend name and configuration metadata in the result. |
@@ -35,7 +35,7 @@ Operators need a stable base command set that supports passive live observation,
 
 ```text
 canarchy capture <interface> [--candump] [--json] [--jsonl] [--table] [--raw]
-canarchy send <interface> <frame-id> <hex-data> [--json] [--jsonl] [--table] [--raw]
+canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--table] [--raw]
 canarchy filter <file> <expression> [--json] [--jsonl] [--table] [--raw]
 canarchy stats <file> [--json] [--jsonl] [--table] [--raw]
 ```
@@ -46,6 +46,8 @@ In scope:
 
 * passive capture through selected backend resolution
 * intentional active transmit through `send`
+* config-backed acknowledgement gating for active transmit commands
+* optional confirmation prompts for explicitly acknowledged active transmit commands
 * file-backed filtering by simple expressions
 * file-backed capture summary statistics
 
@@ -85,13 +87,15 @@ Event-producing commands emit one event per line. Event-less success and error p
 
 ### Table and raw
 
-`capture` uses candump-style rendering for table, raw, and `--candump`. Other commands use the standard table or raw command-result paths.
+`capture` uses candump-style rendering for table, raw, and `--candump`. Other commands use the standard table or raw command-result paths, while active-command preflight warnings are emitted on `stderr`.
 
 ## Error Contracts
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|
 | `TRANSPORT_UNAVAILABLE` | interface or backend open/send fails | 2 |
+| `ACTIVE_ACK_REQUIRED` | active acknowledgement is required but `--ack-active` was omitted | 1 |
+| `ACTIVE_CONFIRMATION_DECLINED` | `--ack-active` was supplied but the confirmation response was not `YES` | 1 |
 | `FILTER_EXPRESSION_UNSUPPORTED` | `filter` receives an unsupported expression | 2 |
 | `CAPTURE_SOURCE_INVALID` | capture file cannot be parsed | 2 |
 | `CAPTURE_FORMAT_UNSUPPORTED` | file format is unsupported | 2 |

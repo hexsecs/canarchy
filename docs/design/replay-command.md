@@ -23,7 +23,7 @@ Replay is a core lab workflow for reproducing traffic patterns, validating tooli
 | `REQ-REPLAY-01` | Ubiquitous | The system shall provide a `canarchy replay <file>` command for deterministic replay planning over capture files. |
 | `REQ-REPLAY-02` | Event-driven | When `replay <file>` is invoked, the system shall produce a replay plan preserving the capture frame count and deriving duration from the capture timeline. |
 | `REQ-REPLAY-03` | Event-driven | When `replay <file> --rate <factor>` is invoked, the system shall scale relative event timing by the specified rate factor. |
-| `REQ-REPLAY-04` | Event-driven | When `replay` is invoked, the system shall emit an active-transmit warning communicating the scheduled-transmission nature of the output. |
+| `REQ-REPLAY-04` | Event-driven | When `replay` is invoked, the system shall return a replay plan that remains machine-readable without emitting duplicated active-transmit safety warnings in structured output. |
 | `REQ-REPLAY-05` | Unwanted behaviour | If `--rate` is zero or negative, the system shall return a structured error with code `INVALID_RATE` and exit code 1. |
 | `REQ-REPLAY-06` | Unwanted behaviour | If the capture source file is missing or unreadable, the system shall return a structured error with code `CAPTURE_SOURCE_UNAVAILABLE` and exit code 2. |
 
@@ -57,7 +57,7 @@ Replay returns:
 
 ## Output Contracts
 
-`--json` returns the standard CANarchy result envelope. `--jsonl` emits replay events one per line plus synthetic warning alerts when needed.
+`--json` returns the standard CANarchy result envelope. `--jsonl` emits replay events one per line.
 
 ## Error Contracts
 

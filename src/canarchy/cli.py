@@ -24,7 +24,13 @@ from canarchy.models import (
 from canarchy.replay import build_replay_plan
 from canarchy.reverse_engineering import counter_candidates, entropy_candidates
 from canarchy.session import SessionError, SessionStore, build_session_context
-from canarchy.transport import LocalTransport, TransportError, config_show_payload, generate_frames
+from canarchy.transport import (
+    LocalTransport,
+    TransportError,
+    active_ack_required,
+    config_show_payload,
+    generate_frames,
+)
 from canarchy.tui import run_tui
 from canarchy.uds import uds_services_payload
 
@@ -40,6 +46,7 @@ SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
 RE_COMMANDS = {"re counters", "re entropy"}
+ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
 IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
 
@@ -129,6 +136,14 @@ def add_output_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--raw", action="store_true", help="emit raw output")
 
 
+def add_active_ack_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--ack-active",
+        action="store_true",
+        help="require interactive confirmation before active transmission",
+    )
+
+
 def build_parser() -> CanarchyArgumentParser:
     parser = CanarchyArgumentParser(
         prog="canarchy", description="CLI-first CAN security research toolkit"
@@ -151,6 +166,7 @@ def build_parser() -> CanarchyArgumentParser:
     send.add_argument("interface")
     send.add_argument("frame_id")
     send.add_argument("data")
+    add_active_ack_argument(send)
     add_output_arguments(send)
     send.set_defaults(command="send")
 
@@ -162,6 +178,7 @@ def build_parser() -> CanarchyArgumentParser:
     generate.add_argument("--count", type=int, default=1, help="number of frames to generate")
     generate.add_argument("--gap", type=float, default=200.0, help="inter-frame gap in milliseconds")
     generate.add_argument("--extended", action="store_true", help="force 29-bit extended IDs")
+    add_active_ack_argument(generate)
     add_output_arguments(generate)
     generate.set_defaults(command="generate")
 
@@ -172,6 +189,7 @@ def build_parser() -> CanarchyArgumentParser:
     gateway.add_argument("--dst-backend", help="python-can interface type for the destination bus")
     gateway.add_argument("--bidirectional", action="store_true", help="also forward frames from dst back to src")
     gateway.add_argument("--count", type=int, help="stop after forwarding N frames")
+    add_active_ack_argument(gateway)
     add_output_arguments(gateway)
     gateway.set_defaults(command="gateway")
 
@@ -275,6 +293,7 @@ def build_parser() -> CanarchyArgumentParser:
 
     uds_scan = uds_subparsers.add_parser("scan", help="scan for UDS responders")
     uds_scan.add_argument("interface")
+    add_active_ack_argument(uds_scan)
     add_output_arguments(uds_scan)
     uds_scan.set_defaults(command="uds scan")
 
@@ -367,6 +386,85 @@ def requested_output_format(argv: Sequence[str] | None) -> str:
         if f"--{name}" in argv:
             return name
     return "table"
+
+
+def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
+    if args.command == "send":
+        return (
+            f"warning: `send` will transmit a CAN frame on interface `{args.interface}`; "
+            "use intentionally on a controlled bus."
+        )
+    if args.command == "generate":
+        return (
+            f"warning: `generate` will transmit generated frames on interface `{args.interface}`; "
+            "use intentionally on a controlled bus."
+        )
+    if args.command == "uds scan":
+        return (
+            f"warning: `uds scan` will transmit diagnostic requests on interface `{args.interface}`; "
+            "use intentionally on a controlled bus."
+        )
+    if args.command == "gateway":
+        return (
+            f"warning: `gateway` will forward traffic from `{args.src}` to `{args.dst}`; "
+            "use intentionally on a controlled bus."
+        )
+    raise AssertionError(f"unsupported active transmit command: {args.command}")
+
+
+def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
+    if args.command == "send":
+        return f"confirm: type YES to send on `{args.interface}`: "
+    if args.command == "generate":
+        return f"confirm: type YES to generate frames on `{args.interface}`: "
+    if args.command == "uds scan":
+        return f"confirm: type YES to run UDS scan on `{args.interface}`: "
+    if args.command == "gateway":
+        return f"confirm: type YES to forward traffic from `{args.src}` to `{args.dst}`: "
+    raise AssertionError(f"unsupported active transmit command: {args.command}")
+
+
+def enforce_active_transmit_safety(
+    args: argparse.Namespace,
+) -> None:
+    if args.command not in ACTIVE_TRANSMIT_COMMANDS:
+        return
+
+    print(active_transmit_preflight_warning(args), file=sys.stderr)
+    ack_active = getattr(args, "ack_active", False)
+    if active_ack_required() and not ack_active:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="ACTIVE_ACK_REQUIRED",
+                    message="Active transmission acknowledgement is required before this command can proceed.",
+                    hint="Re-run with `--ack-active` or disable `[safety].require_active_ack` in `~/.canarchy/config.toml`.",
+                )
+            ],
+            data={"mode": "active"},
+        )
+    if not ack_active:
+        return
+
+    print(active_transmit_confirmation_prompt(args), file=sys.stderr, end="", flush=True)
+    confirmation = sys.stdin.readline().strip()
+    if confirmation == "YES":
+        return
+
+    raise CommandError(
+        command=args.command,
+        exit_code=EXIT_USER_ERROR,
+        errors=[
+            ErrorDetail(
+                code="ACTIVE_CONFIRMATION_DECLINED",
+                message="Active transmission confirmation was not accepted.",
+                hint="Re-run with `--ack-active` and reply `YES` to the confirmation prompt.",
+            )
+        ],
+        data={"mode": "active"},
+    )
 
 
 def validate_args(args: argparse.Namespace) -> None:
@@ -826,6 +924,7 @@ def transport_payload(
         )
     if args.command == "send":
         frame = parse_send_frame(args)
+        enforce_active_transmit_safety(args)
         return (
             {
                 "mode": "active",
@@ -836,7 +935,7 @@ def transport_payload(
                 "implementation": implementation,
             },
             transport.send_events(args.interface, frame),
-            ["Active transmission is intentionally distinct from passive monitoring workflows."],
+            [],
         )
     if args.command == "generate":
         frames = generate_frames(
@@ -848,6 +947,7 @@ def transport_payload(
             gap_ms=args.gap,
             extended=args.extended,
         )
+        enforce_active_transmit_safety(args)
         return (
             {
                 "interface": args.interface,
@@ -1048,6 +1148,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         else "sample/reference provider"
     )
     if args.command == "uds scan":
+        enforce_active_transmit_safety(args)
         events = transport.uds_scan_events(args.interface)
         return (
             {
@@ -1058,7 +1159,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "implementation": implementation,
             },
             events,
-            ["UDS scanning is active and should be used intentionally on a controlled bus."],
+            [],
         )
     if args.command == "uds trace":
         events = transport.uds_trace_events(args.interface)
@@ -1091,6 +1192,7 @@ def gateway_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
+    enforce_active_transmit_safety(args)
     events = transport.gateway_events(
         args.src,
         args.dst,
@@ -1148,7 +1250,7 @@ def replay_payload(
             "rate": plan.rate,
         },
         plan.events,
-        ["Replay schedules active frame transmission; use it intentionally on a controlled bus."],
+        [],
     )
 
 
@@ -1273,7 +1375,7 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         key: value
         for key, value in vars(args).items()
         if not key.endswith("_action")
-        and key not in {"command", "command_name", "json", "jsonl", "table", "raw"}
+        and key not in {"command", "command_name", "json", "jsonl", "table", "raw", "ack_active"}
         and value is not None
     }
     if args.command in TRANSPORT_COMMANDS:
@@ -1626,6 +1728,7 @@ def emit_live_candump(args: argparse.Namespace) -> int:
 
 def emit_live_gateway(args: argparse.Namespace) -> int:
     transport = LocalTransport()
+    enforce_active_transmit_safety(args)
     print(f"gateway: src={args.src} dst={args.dst}")
     try:
         for event in transport.gateway_stream_events(
@@ -1746,6 +1849,10 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         for field in ("backend", "interface", "capture_limit", "capture_timeout"):
             src = sources.get(field, "?")
             print(f"  {field}: {result.data.get(field)}  [{src}]")
+        print(
+            "  require_active_ack: "
+            f"{result.data.get('require_active_ack')}  [{sources.get('require_active_ack', '?')}]"
+        )
         config_file = result.data.get("config_file", "")
         found = result.data.get("config_file_found", False)
         status = "found" if found else "not found"

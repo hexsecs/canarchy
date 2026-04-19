@@ -160,7 +160,7 @@ class CliTests(unittest.TestCase):
     def test_send_json_output_marks_active_mode(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("send", "can0", "0x123", "11223344", "--json")
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `send` will transmit a CAN frame", stderr)
 
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "active")
@@ -169,10 +169,99 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["transport_backend"], "scaffold")
         self.assertEqual(payload["data"]["frame"]["arbitration_id"], 0x123)
         self.assertEqual(payload["data"]["events"][0]["event_type"], "alert")
-        self.assertEqual(
-            payload["warnings"][0],
-            "Active transmission is intentionally distinct from passive monitoring workflows.",
+        self.assertEqual(payload["warnings"], [])
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_send_preflight_warning_happens_before_transport(self, _mock_cfg) -> None:
+        observed_stderr: dict[str, str] = {}
+
+        def fake_send_events(_transport, _interface, _frame):
+            import sys
+
+            observed_stderr["value"] = sys.stderr.getvalue()
+            return []
+
+        with patch("canarchy.cli.LocalTransport.send_events", new=fake_send_events):
+            exit_code, stdout, stderr = run_cli("send", "can0", "0x123", "11223344", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("warning: `send` will transmit a CAN frame", stderr)
+        self.assertIn("warning: `send` will transmit a CAN frame", observed_stderr["value"])
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["events"], [])
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_REQUIRE_ACTIVE_ACK": "true",
+        },
+    )
+    def test_send_requires_ack_when_configured(self, _mock_cfg) -> None:
+        with patch(
+            "canarchy.cli.LocalTransport.send_events",
+            side_effect=AssertionError("send should not be reached without ack"),
+        ):
+            exit_code, stdout, stderr = run_cli("send", "can0", "0x123", "11223344", "--json")
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertIn("warning: `send` will transmit a CAN frame", stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "ACTIVE_ACK_REQUIRED")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_REQUIRE_ACTIVE_ACK": "true",
+        },
+    )
+    def test_send_ack_flag_allows_active_transmission(self, _mock_cfg) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "send", "can0", "0x123", "11223344", "--ack-active", "--json", input="YES\n"
         )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("warning: `send` will transmit a CAN frame", stderr)
+        self.assertIn("confirm: type YES to send on `can0`:", stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_send_ack_flag_requires_confirmation_before_transport(self, _mock_cfg) -> None:
+        observed_stderr: dict[str, str] = {}
+
+        def fake_send_events(_transport, _interface, _frame):
+            import sys
+
+            observed_stderr["value"] = sys.stderr.getvalue()
+            return []
+
+        with patch("canarchy.cli.LocalTransport.send_events", new=fake_send_events):
+            exit_code, stdout, stderr = run_cli(
+                "send", "can0", "0x123", "11223344", "--ack-active", "--json", input="YES\n"
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("confirm: type YES to send on `can0`:", stderr)
+        self.assertIn("confirm: type YES to send on `can0`:", observed_stderr["value"])
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["events"], [])
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_send_ack_flag_decline_blocks_transmission(self, _mock_cfg) -> None:
+        with patch(
+            "canarchy.cli.LocalTransport.send_events",
+            side_effect=AssertionError("send should not be reached without confirmation"),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "send", "can0", "0x123", "11223344", "--ack-active", "--json", input="no\n"
+            )
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertIn("confirm: type YES to send on `can0`:", stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "ACTIVE_CONFIRMATION_DECLINED")
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_capture_candump_streams_fixture_frames_on_scaffold(self, _mock_cfg) -> None:
@@ -242,7 +331,7 @@ class CliTests(unittest.TestCase):
                     )
 
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `gateway` will forward traffic", stderr)
         payload = json.loads(stdout)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["command"], "gateway")
@@ -282,7 +371,7 @@ class CliTests(unittest.TestCase):
                     )
 
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `gateway` will forward traffic", stderr)
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["forwarded_frames"], 2)
         self.assertEqual(
@@ -296,7 +385,7 @@ class CliTests(unittest.TestCase):
             exit_code, stdout, stderr = run_cli("gateway", "src0", "dst0", "--count", "1", "--json")
 
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `gateway` will forward traffic", stderr)
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "GATEWAY_LIVE_BACKEND_REQUIRED")
 
@@ -323,7 +412,7 @@ class CliTests(unittest.TestCase):
                 )
 
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `gateway` will forward traffic", stderr)
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
 
@@ -342,7 +431,7 @@ class CliTests(unittest.TestCase):
                     )
 
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `gateway` will forward traffic", stderr)
         self.assertIn("gateway: src=src0 dst=dst0", stdout)
         self.assertIn("src0 18FEEE31#11223344  [src->dst]", stdout)
 
@@ -530,7 +619,7 @@ class CliTests(unittest.TestCase):
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
             exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `uds scan` will transmit diagnostic requests", stderr)
 
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "active")
@@ -540,10 +629,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["events"][0]["payload"]["service_name"], "DiagnosticSessionControl"
         )
-        self.assertEqual(
-            payload["warnings"][0],
-            "UDS scanning is active and should be used intentionally on a controlled bus.",
-        )
+        self.assertEqual(payload["warnings"], [])
 
     def test_uds_trace_returns_transaction_events(self) -> None:
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
@@ -589,6 +675,7 @@ class CliTests(unittest.TestCase):
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
             exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--table")
         self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("warning: `uds scan` will transmit diagnostic requests", stderr)
         self.assertIn("command: uds scan", stdout)
         self.assertIn("interface: can0", stdout)
         self.assertIn("responders:", stdout)
@@ -643,7 +730,7 @@ class CliTests(unittest.TestCase):
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
             exit_code, stdout, stderr = run_cli("uds", "scan", "offline0", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `uds scan` will transmit diagnostic requests", stderr)
 
         payload = json.loads(stdout)
         self.assertFalse(payload["ok"])
@@ -1159,10 +1246,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["frame_count"], 3)
         self.assertEqual(payload["data"]["duration"], 0.1)
         self.assertEqual(payload["data"]["events"][0]["event_type"], "replay_event")
-        self.assertEqual(
-            payload["warnings"][0],
-            "Replay schedules active frame transmission; use it intentionally on a controlled bus.",
-        )
+        self.assertEqual(payload["warnings"], [])
 
     def test_replay_missing_source_returns_transport_error(self) -> None:
         exit_code, stdout, _ = run_cli("replay", "missing.log", "--json")
@@ -1184,16 +1268,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(second_event["event_type"], "frame")
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
-    def test_jsonl_output_emits_warning_alert_lines_for_event_commands(self, _mock_cfg) -> None:
+    def test_jsonl_output_does_not_emit_extra_warning_lines_for_uds_scan(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli("uds", "scan", "can0", "--jsonl")
         self.assertEqual(exit_code, EXIT_OK)
 
         lines = stdout.strip().splitlines()
-        self.assertEqual(len(lines), 3)
-        warning_event = json.loads(lines[-1])
-        self.assertEqual(warning_event["event_type"], "alert")
-        self.assertEqual(warning_event["payload"]["level"], "warning")
-        self.assertIn("UDS scanning is active", warning_event["payload"]["message"])
+        self.assertEqual(len(lines), 2)
+        for line in lines:
+            self.assertEqual(json.loads(line)["event_type"], "uds_transaction")
 
     def test_jsonl_output_falls_back_to_result_line_for_eventless_commands(self) -> None:
         exit_code, stdout, _ = run_cli("uds", "services", "--jsonl")
@@ -1249,7 +1331,7 @@ class CliTests(unittest.TestCase):
             "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344", "--json"
         )
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
+        self.assertIn("warning: `generate` will transmit generated frames", stderr)
 
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "active")
@@ -1310,6 +1392,7 @@ class CliTests(unittest.TestCase):
     def test_generate_random_produces_frame_events(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--count", "5", "--json")
         self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("warning: `generate` will transmit generated frames", stderr)
         payload = json.loads(stdout)
         frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
         self.assertEqual(len(frame_events), 5)
@@ -1732,30 +1815,35 @@ class CliTests(unittest.TestCase):
     def test_generate_invalid_id_returns_user_error(self) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--id", "ZZZZ", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_FRAME_ID")
 
     def test_generate_invalid_dlc_returns_user_error(self) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--dlc", "99", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_DLC")
 
     def test_generate_invalid_payload_returns_user_error(self) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--data", "XYZ", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_FRAME_DATA")
 
     def test_generate_invalid_count_returns_user_error(self) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--count", "0", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_COUNT")
 
     def test_generate_negative_gap_returns_user_error(self) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--gap", "-1", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_GAP")
 
@@ -2007,6 +2095,7 @@ class CompletionTests(unittest.TestCase):
     def test_generate_flags_include_gap_and_count(self) -> None:
         results = self._completions("generate can0 ", "")
         names = [r.strip() for r in results]
+        self.assertIn("--ack-active", names)
         self.assertIn("--gap", names)
         self.assertIn("--count", names)
         self.assertIn("--id", names)
@@ -2129,11 +2218,13 @@ class ConfigShowTests(unittest.TestCase):
         self.assertEqual(payload["data"]["backend"], "python-can")
         self.assertEqual(payload["data"]["interface"], "socketcan")
         self.assertEqual(payload["data"]["capture_limit"], 2)
+        self.assertFalse(payload["data"]["require_active_ack"])
         sources = payload["data"]["sources"]
         self.assertEqual(sources["backend"], "default")
         self.assertEqual(sources["interface"], "default")
         self.assertEqual(sources["capture_limit"], "default")
         self.assertEqual(sources["capture_timeout"], "default")
+        self.assertEqual(sources["require_active_ack"], "default")
 
     def test_config_show_file_config_overrides_default(self) -> None:
         """Values set in the config file appear with source=file."""
@@ -2190,6 +2281,7 @@ class ConfigShowTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("backend: python-can", stdout)
         self.assertIn("interface: socketcan", stdout)
+        self.assertIn("require_active_ack: False", stdout)
         self.assertIn("config file:", stdout)
 
     def test_config_show_config_file_found_false_when_missing(self) -> None:
@@ -2223,6 +2315,19 @@ class ConfigShowTests(unittest.TestCase):
         sources = payload["data"]["sources"]
         self.assertEqual(sources["capture_limit"], "file")
         self.assertEqual(sources["capture_timeout"], "file")
+
+    def test_config_show_active_ack_from_file(self) -> None:
+        file_cfg = {"CANARCHY_REQUIRE_ACTIVE_ACK": "true"}
+        with (
+            patch("canarchy.transport._load_user_config", return_value=file_cfg),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            exit_code, stdout, _ = run_cli("config", "show", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["data"]["require_active_ack"])
+        self.assertEqual(payload["data"]["sources"]["require_active_ack"], "file")
 
 
 if __name__ == "__main__":

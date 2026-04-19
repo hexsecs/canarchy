@@ -15,7 +15,7 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 ## Coverage Requirements
 
 * capture streaming output across JSON, JSONL, and candump-style formats
-* send active mode and warning behavior
+* send active mode, preflight warning, and acknowledgement behavior
 * default `python-can` and scaffold capture streaming paths
 * filter matching behavior
 * stats summary behavior
@@ -57,7 +57,7 @@ Given  the scaffold transport backend is active
 When   the operator runs `canarchy send can0 0x123 11223344 --json`
 Then   the result envelope shall indicate active mode
 And    the envelope shall include serialized frame events
-And    the envelope shall include an active-transmit warning
+And    the preflight warning shall be emitted on `stderr`
 ```
 
 **Fixture:** scaffold backend (no file required).

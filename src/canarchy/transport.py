@@ -81,6 +81,16 @@ class TransportBackendConfig:
     capture_timeout: float = 0.05
 
 
+def _parse_bool(raw_value: str | bool | int | None, *, default: bool = False) -> bool:
+    if isinstance(raw_value, bool):
+        return raw_value
+    if raw_value is None:
+        return default
+    if isinstance(raw_value, int):
+        return raw_value != 0
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class LiveCanBackend(Protocol):
     @property
     def backend_name(self) -> str: ...
@@ -240,12 +250,19 @@ def _load_user_config() -> dict[str, str]:
         # capture_limit = 2
         # capture_timeout = 0.05
 
+        [safety]
+        # require_active_ack = true
+
     Supported keys under ``[transport]``:
 
     * ``backend``        → ``CANARCHY_TRANSPORT_BACKEND``
     * ``interface``      → ``CANARCHY_PYTHON_CAN_INTERFACE``
     * ``capture_limit``  → ``CANARCHY_CAPTURE_LIMIT``
     * ``capture_timeout``→ ``CANARCHY_CAPTURE_TIMEOUT``
+
+    Supported keys under ``[safety]``:
+
+    * ``require_active_ack`` → ``CANARCHY_REQUIRE_ACTIVE_ACK``
     """
     import tomllib
 
@@ -259,17 +276,29 @@ def _load_user_config() -> dict[str, str]:
         return {}
 
     transport = raw.get("transport", {})
+    safety = raw.get("safety", {})
     key_map = {
         "backend": "CANARCHY_TRANSPORT_BACKEND",
         "interface": "CANARCHY_PYTHON_CAN_INTERFACE",
         "capture_limit": "CANARCHY_CAPTURE_LIMIT",
         "capture_timeout": "CANARCHY_CAPTURE_TIMEOUT",
     }
-    return {
+    file_config = {
         env_key: str(transport[toml_key])
         for toml_key, env_key in key_map.items()
         if toml_key in transport
     }
+    if "require_active_ack" in safety:
+        file_config["CANARCHY_REQUIRE_ACTIVE_ACK"] = str(safety["require_active_ack"])
+    return file_config
+
+
+def active_ack_required() -> bool:
+    file_config = _load_user_config()
+    raw_value = os.environ.get("CANARCHY_REQUIRE_ACTIVE_ACK") or file_config.get(
+        "CANARCHY_REQUIRE_ACTIVE_ACK"
+    )
+    return _parse_bool(raw_value, default=False)
 
 
 def transport_backend_config() -> TransportBackendConfig:
@@ -306,6 +335,7 @@ def config_show_payload() -> dict[str, object]:
         "interface": ("CANARCHY_PYTHON_CAN_INTERFACE", "virtual"),
         "capture_limit": ("CANARCHY_CAPTURE_LIMIT", "2"),
         "capture_timeout": ("CANARCHY_CAPTURE_TIMEOUT", "0.05"),
+        "require_active_ack": ("CANARCHY_REQUIRE_ACTIVE_ACK", "false"),
     }
 
     config = transport_backend_config()
@@ -314,6 +344,7 @@ def config_show_payload() -> dict[str, object]:
         "interface": config.python_can_interface,
         "capture_limit": config.capture_limit,
         "capture_timeout": config.capture_timeout,
+        "require_active_ack": active_ack_required(),
     }
 
     sources: dict[str, str] = {}

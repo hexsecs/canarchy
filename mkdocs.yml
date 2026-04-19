@@ -78,6 +78,7 @@ nav:
       - TUI Plan: tui_plan.md
       - Spec Template: spec-template.md
       - Design Specs:
+          - Active Command Safety: design/active-command-safety.md
           - Transport Core Commands: design/transport-core-commands.md
           - DBC Command Workflows: design/dbc-command-workflows.md
           - Generate Command: design/generate-command.md
@@ -94,6 +95,7 @@ nav:
           - Shell Command: design/shell-command.md
           - TUI Shell: design/tui-shell.md
       - Test Specs:
+          - Active Command Safety: tests/active-command-safety.md
           - Transport Core Commands: tests/transport-core-commands.md
           - DBC Command Workflows: tests/dbc-command-workflows.md
           - Generate Command: tests/generate-command.md

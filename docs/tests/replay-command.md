@@ -61,7 +61,7 @@ Then   event timestamps shall be scaled relative to the slower replay rate
 Given  the file `tests/fixtures/sample.candump` is available
 When   the operator runs `canarchy replay sample.candump --rate 2.0 --json`
 Then   the result shall include active mode, frame count, duration, and replay events
-And    the result shall include an active warning alert
+And    the result shall keep `warnings` empty for the replay plan output
 ```
 
 **Fixture:** `tests/fixtures/sample.candump`.
