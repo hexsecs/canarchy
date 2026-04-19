@@ -71,6 +71,7 @@ nav:
       - CAN Tool Feature Matrix: feature-matrix.md
   - Tutorials:
       - Overview: tutorials/index.md
+      - Discover and Use Provider-Backed DBC Files: tutorials/dbc_provider_workflow.md
       - J1939 Heavy Vehicle Analysis: tutorials/j1939_heavy_vehicle.md
       - Generate and Capture: tutorials/generate_and_capture.md
   - Developers:
