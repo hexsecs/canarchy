@@ -746,6 +746,66 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
 
+    def test_re_entropy_returns_ranked_id_summaries(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "entropy",
+            str(FIXTURES / "re_entropy_mixed.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["analysis"], "entropy_ranking")
+        self.assertEqual(payload["data"]["candidate_count"], 4)
+        self.assertEqual(payload["data"]["candidates"][0]["arbitration_id"], 0x102)
+
+    def test_re_entropy_marks_low_sample_candidates(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "entropy",
+            str(FIXTURES / "re_entropy_mixed.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        low_sample = next(
+            candidate for candidate in payload["data"]["candidates"] if candidate["arbitration_id"] == 0x103
+        )
+        self.assertTrue(low_sample["low_sample"])
+        self.assertEqual(low_sample["frame_count"], 5)
+
+    def test_re_entropy_table_output_is_ranked(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "entropy",
+            str(FIXTURES / "re_entropy_mixed.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: re entropy", stdout)
+        self.assertIn("analysis: entropy_ranking", stdout)
+        self.assertIn("id=0x102", stdout)
+        self.assertIn("mean=3.322", stdout)
+        self.assertIn("byte=0 entropy=3.322 unique=10", stdout)
+
+    def test_re_entropy_missing_capture_returns_transport_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "entropy",
+            str(FIXTURES / "missing-entropy-file.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
+
     def test_session_save_load_and_show_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             with working_directory(temp_dir):

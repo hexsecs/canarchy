@@ -19,6 +19,7 @@ Implemented and exercised in the current codebase:
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
 * UDS `scan`, `trace`, and `services`
 * `re counters` for file-backed likely-counter detection
+* `re entropy` for file-backed per-ID and per-byte entropy ranking
 * session `save`, `load`, and `show`
 * structured `export` for capture files and saved sessions
 * shell command reuse through `canarchy shell --command ...`
@@ -31,7 +32,7 @@ Some protocol-oriented commands still use explicit sample/reference providers ra
 
 Present in the CLI tree but not yet implemented end to end:
 
-* `re signals`, `re entropy`, and `re correlate`
+* `re signals` and `re correlate`
 * `fuzz replay`, `fuzz mutate`, and `fuzz id`
 
 ## Recommended Reading

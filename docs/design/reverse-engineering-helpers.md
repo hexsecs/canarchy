@@ -110,6 +110,13 @@ Entropy candidates should include:
 * `entropy`
 * `sample_count`
 
+Current implementation note:
+
+* `re entropy` is implemented as a deterministic file-backed helper
+* candidates are ranked per arbitration ID by mean byte entropy descending
+* each candidate includes a per-byte breakdown with `byte_position`, `entropy`, and `unique_values`
+* IDs with fewer than 10 frames are retained and annotated with `low_sample: true`
+
 ### `re correlate`
 
 The initial `re correlate` workflow is file-backed and requires an explicit reference series file.

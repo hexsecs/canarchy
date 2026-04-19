@@ -402,6 +402,20 @@ Notes:
 * the current implementation inspects nibble- and byte-sized candidate fields on recorded arbitration IDs
 * candidates are ranked by monotonicity evidence and explicit rollover detection
 
+### re entropy
+
+Rank arbitration IDs and byte positions by Shannon entropy over recorded CAN traffic.
+
+```bash
+canarchy re entropy <file> [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* this command is passive and file-backed
+* JSON output includes one candidate per arbitration ID plus a per-byte entropy breakdown inside each candidate
+* IDs with fewer than 10 observed frames are retained and marked with `low_sample: true`
+
 ---
 
 ## Output Modes
@@ -571,7 +585,7 @@ canarchy shell --command "capture can0 --raw"
 
 These commands are present in the CLI tree but not yet implemented end to end:
 
-* `re signals|entropy|correlate`
+* `re signals|correlate`
 * `fuzz replay|mutate|id`
 
 These deeper capabilities are also not implemented yet even where the command surface exists:

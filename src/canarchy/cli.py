@@ -21,7 +21,7 @@ from canarchy.models import (
     serialize_events,
 )
 from canarchy.replay import build_replay_plan
-from canarchy.reverse_engineering import counter_candidates
+from canarchy.reverse_engineering import counter_candidates, entropy_candidates
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.transport import LocalTransport, TransportError, config_show_payload, generate_frames
 from canarchy.tui import run_tui
@@ -38,7 +38,7 @@ J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
-RE_COMMANDS = {"re counters"}
+RE_COMMANDS = {"re counters", "re entropy"}
 IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
 
@@ -1204,6 +1204,24 @@ def reverse_engineering_payload(
             [],
             warnings,
         )
+    if args.command == "re entropy":
+        frames = transport.frames_from_file(args.file)
+        candidates = entropy_candidates(frames)
+        warnings: list[str] = []
+        if not candidates:
+            warnings.append("No arbitration IDs with payload bytes were found for entropy analysis.")
+        return (
+            {
+                "mode": "passive",
+                "file": args.file,
+                "analysis": "entropy_ranking",
+                "candidate_count": len(candidates),
+                "candidates": candidates,
+                "implementation": "file-backed heuristic analysis",
+            },
+            [],
+            warnings,
+        )
     raise AssertionError(f"unsupported reverse-engineering command: {args.command}")
 
 
@@ -1472,7 +1490,30 @@ def format_re_table(result: CommandResult) -> list[str]:
     lines.append("candidates:")
     candidates = result.data.get("candidates", [])
     if not candidates:
-        lines.append("- no likely counters")
+        if result.command == "re entropy":
+            lines.append("- no entropy candidates")
+        else:
+            lines.append("- no likely counters")
+        return lines
+
+    if result.command == "re entropy":
+        for candidate in candidates:
+            lines.append(
+                "- "
+                f"id=0x{candidate['arbitration_id']:X} "
+                f"frames={candidate['frame_count']} "
+                f"mean={candidate['mean_byte_entropy']} "
+                f"max={candidate['max_byte_entropy']} "
+                f"low_sample={candidate['low_sample']} "
+                f"why={candidate['rationale']}"
+            )
+            for byte_summary in candidate["byte_entropies"]:
+                lines.append(
+                    "  "
+                    f"byte={byte_summary['byte_position']} "
+                    f"entropy={byte_summary['entropy']} "
+                    f"unique={byte_summary['unique_values']}"
+                )
         return lines
 
     for candidate in candidates:

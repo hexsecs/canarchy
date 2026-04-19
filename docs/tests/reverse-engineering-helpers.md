@@ -103,6 +103,7 @@ Planned fixtures should include:
 Current implementation note:
 
 * `re counters` is covered with fixtures for nibble counters, rollover counters, non-counter noise, and low-sample captures
+* `re entropy` is covered with fixtures for constant-byte, alternating-byte, high-entropy, and low-sample arbitration IDs
 
 ## Explicit Non-Coverage
 

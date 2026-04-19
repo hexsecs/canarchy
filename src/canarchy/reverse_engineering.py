@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from math import log2
 
 from canarchy.models import CanFrame
 
@@ -36,6 +37,44 @@ class CounterCandidate:
         }
 
 
+@dataclass(slots=True, frozen=True)
+class EntropyByteSummary:
+    arbitration_id: int
+    byte_position: int
+    entropy: float
+    unique_values: int
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "arbitration_id": self.arbitration_id,
+            "byte_position": self.byte_position,
+            "entropy": self.entropy,
+            "unique_values": self.unique_values,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class EntropyCandidate:
+    arbitration_id: int
+    frame_count: int
+    mean_byte_entropy: float
+    max_byte_entropy: float
+    low_sample: bool
+    rationale: str
+    byte_entropies: tuple[EntropyByteSummary, ...]
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "arbitration_id": self.arbitration_id,
+            "frame_count": self.frame_count,
+            "mean_byte_entropy": self.mean_byte_entropy,
+            "max_byte_entropy": self.max_byte_entropy,
+            "low_sample": self.low_sample,
+            "rationale": self.rationale,
+            "byte_entropies": [summary.to_payload() for summary in self.byte_entropies],
+        }
+
+
 def counter_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
     grouped_frames: dict[int, list[CanFrame]] = defaultdict(list)
     for frame in frames:
@@ -59,6 +98,51 @@ def counter_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
             candidate.arbitration_id,
             candidate.start_bit,
             candidate.bit_length,
+        )
+    )
+    return [candidate.to_payload() for candidate in candidates]
+
+
+def entropy_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
+    grouped_frames: dict[int, list[CanFrame]] = defaultdict(list)
+    for frame in frames:
+        if not frame.is_remote_frame and not frame.is_error_frame and frame.data:
+            grouped_frames[frame.arbitration_id].append(frame)
+
+    candidates: list[EntropyCandidate] = []
+    for arbitration_id, group in grouped_frames.items():
+        byte_count = min(len(frame.data) for frame in group)
+        byte_summaries = tuple(
+            _entropy_byte_summary(group, arbitration_id, byte_position)
+            for byte_position in range(byte_count)
+        )
+        if not byte_summaries:
+            continue
+        entropies = [summary.entropy for summary in byte_summaries]
+        low_sample = len(group) < 10
+        rationale_parts = [
+            f"{len(group)} frames observed",
+            f"mean byte entropy {round(sum(entropies) / len(entropies), 3)} bits",
+        ]
+        if low_sample:
+            rationale_parts.append("low sample count")
+        candidates.append(
+            EntropyCandidate(
+                arbitration_id=arbitration_id,
+                frame_count=len(group),
+                mean_byte_entropy=round(sum(entropies) / len(entropies), 3),
+                max_byte_entropy=round(max(entropies), 3),
+                low_sample=low_sample,
+                rationale="; ".join(rationale_parts),
+                byte_entropies=byte_summaries,
+            )
+        )
+
+    candidates.sort(
+        key=lambda candidate: (
+            -candidate.mean_byte_entropy,
+            -candidate.max_byte_entropy,
+            candidate.arbitration_id,
         )
     )
     return [candidate.to_payload() for candidate in candidates]
@@ -125,3 +209,25 @@ def _counter_candidate_for_field(
 def _extract_field_value(frame: CanFrame, start_bit: int, bit_length: int) -> int:
     raw_value = int.from_bytes(frame.data, byteorder="little", signed=False)
     return (raw_value >> start_bit) & ((1 << bit_length) - 1)
+
+
+def _entropy_byte_summary(
+    frames: list[CanFrame], arbitration_id: int, byte_position: int
+) -> EntropyByteSummary:
+    values = [frame.data[byte_position] for frame in frames]
+    counts: dict[int, int] = defaultdict(int)
+    for value in values:
+        counts[value] += 1
+
+    total = len(values)
+    entropy = 0.0
+    for count in counts.values():
+        probability = count / total
+        entropy -= probability * log2(probability)
+
+    return EntropyByteSummary(
+        arbitration_id=arbitration_id,
+        byte_position=byte_position,
+        entropy=round(entropy, 3),
+        unique_values=len(counts),
+    )
