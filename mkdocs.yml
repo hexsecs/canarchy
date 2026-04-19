@@ -74,6 +74,7 @@ nav:
   - Developers:
       - Architecture: architecture.md
       - Docs Workflow: docs_site.md
+      - Release Workflow: release.md
       - TUI Plan: tui_plan.md
       - Design Specs:
           - Transport Core Commands: design/transport-core-commands.md

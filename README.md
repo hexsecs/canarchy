@@ -53,6 +53,8 @@ Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaff
 * [Command spec](docs/command_spec.md)
 * [CAN Tool Feature Matrix](docs/feature-matrix.md) — high-level comparison to other OSS CAN tools
 * [Architecture](docs/architecture.md)
+* [Changelog](CHANGELOG.md)
+* [Release Workflow](docs/release.md)
 * [J1939 Heavy Vehicle Demo](docs/demo_j1939_heavy_vehicle.md)
 
 ### Installation
