@@ -555,3 +555,122 @@ class CliProviderCommandTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
         self.assertEqual(payload["command"], "decode")
+
+    def test_decode_opendbc_ref_includes_dbc_source(self) -> None:
+        mock = self._make_mock_opendbc_provider()
+        with patch("canarchy.dbc_provider._build_default_registry") as mock_build:
+            registry = ProviderRegistry()
+            registry.register(LocalDbcProvider())
+            registry.register(mock)
+            mock_build.return_value = registry
+
+            reset_registry()
+            exit_code, stdout, _ = run_cli(
+                "decode",
+                str(FIXTURES / "sample.candump"),
+                "--dbc",
+                "opendbc:toyota_tnga_k_pt_generated",
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        dbc_source = payload["data"]["dbc_source"]
+        self.assertEqual(dbc_source["provider"], "opendbc")
+        self.assertEqual(dbc_source["name"], "toyota_tnga_k_pt_generated")
+        self.assertEqual(dbc_source["version"], "abc123")
+        self.assertIn("path", dbc_source)
+
+    def test_decode_local_ref_includes_dbc_source_with_local_provider(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "decode",
+            str(FIXTURES / "sample.candump"),
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        dbc_source = payload["data"]["dbc_source"]
+        self.assertEqual(dbc_source["provider"], "local")
+        self.assertIsNone(dbc_source["version"])
+
+    def test_encode_opendbc_ref_includes_dbc_source(self) -> None:
+        mock = self._make_mock_opendbc_provider()
+        with patch("canarchy.dbc_provider._build_default_registry") as mock_build:
+            registry = ProviderRegistry()
+            registry.register(LocalDbcProvider())
+            registry.register(mock)
+            mock_build.return_value = registry
+
+            reset_registry()
+            exit_code, stdout, _ = run_cli(
+                "encode",
+                "--dbc",
+                "opendbc:toyota_tnga_k_pt_generated",
+                "EngineStatus1",
+                "CoolantTemp=55",
+                "OilTemp=65",
+                "Load=40",
+                "LampState=1",
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        dbc_source = payload["data"]["dbc_source"]
+        self.assertEqual(dbc_source["provider"], "opendbc")
+        self.assertEqual(dbc_source["version"], "abc123")
+
+    def test_encode_local_ref_includes_dbc_source_with_local_provider(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "encode",
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "EngineStatus1",
+            "CoolantTemp=55",
+            "OilTemp=65",
+            "Load=40",
+            "LampState=1",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        dbc_source = payload["data"]["dbc_source"]
+        self.assertEqual(dbc_source["provider"], "local")
+        self.assertIsNone(dbc_source["version"])
+
+    def test_dbc_inspect_opendbc_ref_includes_dbc_source(self) -> None:
+        mock = self._make_mock_opendbc_provider()
+        with patch("canarchy.dbc_provider._build_default_registry") as mock_build:
+            registry = ProviderRegistry()
+            registry.register(LocalDbcProvider())
+            registry.register(mock)
+            mock_build.return_value = registry
+
+            reset_registry()
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "inspect",
+                "opendbc:toyota_tnga_k_pt_generated",
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        dbc_source = payload["data"]["dbc_source"]
+        self.assertEqual(dbc_source["provider"], "opendbc")
+        self.assertEqual(dbc_source["version"], "abc123")
+
+    def test_dbc_inspect_local_ref_includes_dbc_source_with_local_provider(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        dbc_source = payload["data"]["dbc_source"]
+        self.assertEqual(dbc_source["provider"], "local")
+        self.assertIsNone(dbc_source["version"])

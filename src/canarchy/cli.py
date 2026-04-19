@@ -1151,12 +1151,28 @@ def j1939_payload(
     raise AssertionError(f"unsupported j1939 command: {args.command}")
 
 
+def _build_dbc_source(resolution: Any) -> dict[str, Any]:
+    d = resolution.descriptor
+    return {
+        "provider": d.provider,
+        "name": d.name,
+        "version": d.version,
+        "path": str(resolution.local_path),
+    }
+
+
 def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.dbc_provider import get_registry
+
     transport = LocalTransport()
+    resolution = get_registry().resolve(args.dbc)
+    dbc_path = str(resolution.local_path)
+    dbc_source = _build_dbc_source(resolution)
+
     if args.command == "decode":
         frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)
-        
-        events = decode_frames(frames, args.dbc)
+
+        events = decode_frames(frames, dbc_path)
         warnings = []
         if not events:
             warnings.append("No frames in the capture matched messages from the selected DBC.")
@@ -1166,6 +1182,7 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         return (
             {
                 "dbc": args.dbc,
+                "dbc_source": dbc_source,
                 "file": args.file,
                 "matched_messages": matched_messages,
                 "mode": "passive",
@@ -1176,10 +1193,11 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         )
     if args.command == "encode":
         signals = parse_signal_assignments(args.signals)
-        frame, events = encode_message(args.dbc, args.message, signals)
+        frame, events = encode_message(dbc_path, args.message, signals)
         return (
             {
                 "dbc": args.dbc,
+                "dbc_source": dbc_source,
                 "frame": frame.to_payload(),
                 "message": args.message,
                 "mode": "active",
@@ -1192,10 +1210,11 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         )
     if args.command == "dbc inspect":
         data, events = inspect_database(
-            args.dbc,
+            dbc_path,
             message_name=args.message,
             signals_only=args.signals_only,
         )
+        data["dbc_source"] = dbc_source
         return (data, events, [])
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
