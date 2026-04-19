@@ -15,13 +15,26 @@ theme:
     - content.code.copy
   palette:
     - media: "(prefers-color-scheme: light)"
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
       scheme: default
       primary: blue grey
       accent: amber
     - media: "(prefers-color-scheme: dark)"
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
       scheme: slate
       primary: black
       accent: lime
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/theme-light-dark
+        name: Use system theme
+      scheme: default
+      primary: blue grey
+      accent: amber
 
 extra_javascript:
   - https://unpkg.com/mermaid@11/dist/mermaid.min.js
@@ -55,6 +68,7 @@ nav:
       - Project Overview: overview.md
       - Command Spec: command_spec.md
       - Event Schema: event-schema.md
+      - CAN Tool Feature Matrix: feature-matrix.md
       - "Demo: J1939 Heavy Vehicle": demo_j1939_heavy_vehicle.md
       - "Demo: Generate and Capture": demo_generate_and_capture.md
   - Developers:
@@ -68,6 +82,8 @@ nav:
           - Gateway Command: design/gateway-command.md
           - Export Command: design/export-command.md
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
+          - Composition: design/composition.md
+          - MCP Server: design/mcp-server.md
           - Reverse-Engineering Helpers: design/reverse-engineering-helpers.md
           - Replay Command: design/replay-command.md
           - Session Workflows: design/session-workflows.md
@@ -82,6 +98,7 @@ nav:
           - Gateway Command: tests/gateway-command.md
           - Export Command: tests/export-command.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
+          - MCP Server: tests/mcp-server.md
           - Reverse-Engineering Helpers: tests/reverse-engineering-helpers.md
           - Replay Command: tests/replay-command.md
           - Session Workflows: tests/session-workflows.md

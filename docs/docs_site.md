@@ -48,6 +48,8 @@ flowchart TD
 
 Mermaid rendering is configured in `mkdocs.yml` and initialized by `docs/javascripts/mermaid.js`.
 
+The site theme also supports light and dark mode through Material for MkDocs, following system preferences by default and allowing manual toggling in the site header. Mermaid diagrams derive their theme from the active site palette.
+
 ## GitHub Pages
 
 The GitHub Pages workflow builds the MkDocs site on pushes to `main` and deploys the generated `site/` artifact through GitHub Pages.
