@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+* `decode`, `encode`, and `dbc inspect` now include a `dbc_source` field in `CommandResult.data` reporting the provider, DBC name, pinned version, and resolved local path. Provider refs (`opendbc:<name>`) include a commit SHA version; local file refs include `provider: "local"` and `version: null`.
+
 ### Changed
 
 * `dbc inspect` now uses the internal `cantools` runtime adapter while preserving the existing CLI, MCP, and structured output contracts for the current fixtures.
