@@ -102,6 +102,7 @@ ipython_config.py
 
 # CANarchy local runtime state
 .canarchy/
+.claude/
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
