@@ -93,3 +93,18 @@ class DbcTests(unittest.TestCase):
 
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "DBC_LOAD_FAILED")
+
+    def test_invalid_encode_signal_returns_signal_invalid_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "encode",
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "EngineStatus1",
+            "NotASignal=1",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_DECODE_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "DBC_SIGNAL_INVALID")

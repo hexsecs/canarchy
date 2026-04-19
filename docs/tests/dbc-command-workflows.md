@@ -29,6 +29,7 @@ Validate the shipped DBC-backed decode and encode workflows, including both libr
 | `REQ-DBC-03` | `TEST-DBC-02`, `TEST-DBC-04` |
 | `REQ-DBC-04` | `TEST-DBC-03`, `TEST-DBC-05` |
 | `REQ-DBC-05` | `TEST-DBC-06` |
+| `REQ-DBC-07` | `TEST-DBC-07` |
 
 ## Representative Test Cases
 
@@ -104,6 +105,19 @@ And    `errors[0].code` shall equal `"DBC_LOAD_FAILED"`
 ```
 
 **Fixture:** `tests/fixtures/invalid.dbc`, `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-DBC-07` — Invalid signal assignment returns structured encode error
+
+```gherkin
+Given  the file `tests/fixtures/sample.dbc` is available
+When   the operator runs `canarchy encode --dbc sample.dbc EngineStatus1 NotASignal=1 --json`
+Then   the command shall exit with code `3`
+And    `errors[0].code` shall equal `"DBC_SIGNAL_INVALID"`
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`.
 
 ---
 

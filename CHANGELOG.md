@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+* Invalid signal assignments for `encode --dbc ...` now return the documented `DBC_SIGNAL_INVALID` error code instead of a generic encode failure.
+
 ### Changed
 
 * Active transmit commands now emit their safety prompt to `stderr` before transmission begins, and `--ack-active` triggers an explicit confirmation prompt before transmission proceeds.

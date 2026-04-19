@@ -109,8 +109,6 @@ def decode_frames(frames: list[CanFrame], dbc_path: str) -> list[dict[str, Any]]
             )
 
     return serialize_events(events)
-
-
 def encode_message(
     dbc_path: str,
     message_name: str,
@@ -128,13 +126,24 @@ def encode_message(
             hint="Use a message name that exists in the selected DBC.",
         )
 
+    known_signals = {signal.name for signal in message.signals}
+    unknown_signals = sorted(set(signals) - known_signals)
+    if unknown_signals:
+        raise DbcError(
+            code="DBC_SIGNAL_INVALID",
+            message=(
+                f"Message '{message_name}' does not define signal(s): {', '.join(unknown_signals)}."
+            ),
+            hint="Use only signal names that exist in the selected DBC message.",
+        )
+
     try:
         encoded = message.encode(signals)
     except Exception as exc:  # pragma: no cover
         raise DbcError(
-            code="DBC_ENCODE_FAILED",
+            code="DBC_SIGNAL_INVALID",
             message=f"Failed to encode message '{message_name}' with the provided signals.",
-            hint="Check the signal names, types, and required values for the selected DBC message.",
+            hint="Check the signal names, types, ranges, and required values for the selected DBC message.",
         ) from exc
 
     frame = CanFrame(

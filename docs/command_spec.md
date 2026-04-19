@@ -507,7 +507,7 @@ Representative failures:
 * `TRANSPORT_UNAVAILABLE` => exit code `2`
 * `CAPTURE_SOURCE_UNAVAILABLE` => exit code `2`
 * `DBC_LOAD_FAILED` => exit code `3`
-* `DBC_ENCODE_FAILED` => exit code `3`
+* `DBC_SIGNAL_INVALID` => exit code `3`
 
 ---
 
