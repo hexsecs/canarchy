@@ -13,7 +13,7 @@ The codebase is organized around four practical layers:
 1. core models and protocol helpers
 2. transport and backend selection
 3. command execution and output shaping
-4. front ends that reuse the same command path
+4. front ends and tool surfaces that reuse the same command path
 
 Important current-state note: live bus integration currently builds on `python-can`. CANarchy does not try to replace hardware abstraction itself; it adds a higher-level workflow, protocol, and structured-output layer on top.
 
@@ -26,15 +26,18 @@ flowchart TD
     U[Operator / Script / Agent] --> CLI[CLI]
     U --> SH[Shell]
     U --> TUI[TUI]
+    U --> MCP[MCP server]
 
     CLI --> CMD[Shared command parser and executor]
     SH --> CMD
     TUI --> CMD
+    MCP --> CMD
 
     CMD --> TP[Transport facade]
     CMD --> DBC[DBC encode / decode]
     CMD --> J[J1939 helpers]
     CMD --> UDS[UDS helpers]
+    CMD --> RE[Reverse-engineering helpers]
     CMD --> SES[Session store]
     CMD --> REP[Replay planner]
 
@@ -45,6 +48,7 @@ flowchart TD
     DBC --> EV[Structured event model]
     J --> EV
     UDS --> EV
+    RE --> EV
     TP --> EV
     REP --> EV
     REF --> EV
@@ -64,6 +68,7 @@ Primary responsibilities:
 * typed event objects such as `frame`, `decoded_message`, `signal`, `j1939_pgn`, `uds_transaction`, `replay_event`, and `alert`
 * J1939 arbitration ID decomposition and higher-level observation helpers
 * DBC encode and decode helpers
+* reverse-engineering analysis helpers such as counter and entropy ranking
 * replay planning from captured timestamps
 * session context and persistence helpers
 
@@ -72,6 +77,7 @@ Relevant modules:
 * `src/canarchy/models.py`
 * `src/canarchy/j1939.py`
 * `src/canarchy/dbc.py`
+* `src/canarchy/reverse_engineering.py`
 * `src/canarchy/replay.py`
 * `src/canarchy/session.py`
 * `src/canarchy/uds.py`
@@ -119,21 +125,23 @@ Relevant module:
 
 The command layer is the authoritative behavior contract for the project.
 
-### 4. Front Ends
+### 4. Front Ends And Tool Surfaces
 
-The project currently ships three front-end entry styles:
+The project currently ships four user- or agent-facing entry styles:
 
 * CLI: non-interactive and authoritative
 * shell: interactive loop that reuses the same parser and command executor
 * TUI: minimal text-mode shell that reuses the same executor and renders selected state
+* MCP server: stdio RPC surface that reuses the same command executor and result envelope
 
 Relevant modules:
 
 * `src/canarchy/cli.py`
 * `src/canarchy/tui.py`
 * `src/canarchy/completion.py`
+* `src/canarchy/mcp_server.py`
 
-The shell and TUI do not define their own business logic. They call back into the same execution path that powers the CLI.
+The shell, TUI, and MCP server do not define their own business logic. They call back into the same execution path that powers the CLI.
 
 ## Front-End Reuse
 
@@ -142,9 +150,11 @@ flowchart LR
     CLI[canarchy <command>] --> EXEC[execute_command]
     SHELL[canarchy shell] --> RS[run_shell]
     TUI[canarchy tui] --> RT[run_tui]
+    MCP[canarchy mcp serve] --> MS[mcp_server.call_tool]
 
     RS --> EXEC
     RT --> EXEC
+    MS --> EXEC
 
     EXEC --> RESULT[CommandResult]
     RESULT --> EMIT[Output rendering or TUI state update]
@@ -155,9 +165,10 @@ Current behavior:
 * `canarchy shell --command ...` routes a one-shot shell command back through `main()`
 * interactive shell mode uses `shlex` parsing and then calls the same executor used by the CLI
 * `canarchy tui` renders a minimal status view and updates it from shared command results
+* `canarchy mcp serve` exposes implemented commands as MCP tools and delegates tool calls to the same `execute_command()` path
 * nested interactive front ends are rejected to preserve a single clear execution boundary
 
-This is deliberate. The shell and TUI are convenience surfaces, not separate applications.
+This is deliberate. The shell, TUI, and MCP server are convenience or integration surfaces, not separate applications.
 
 ## Transport Boundary
 
@@ -245,7 +256,7 @@ The command layer follows one main pattern:
 2. validate command-specific constraints
 3. dispatch to transport, protocol, replay, export, or session helpers
 4. normalize results into `CommandResult`
-5. render through one output mode
+5. render through one output mode or serialize the canonical result envelope for MCP
 
 This centralization is what allows the CLI, shell, and TUI to stay aligned.
 
@@ -289,7 +300,7 @@ The architecture is intentionally ahead of some implementations. These are the m
 * live transport coverage is currently limited by the `python-can` integration and configured interfaces
 * some protocol commands still rely on explicit sample/reference data providers instead of true transport-backed execution, although `j1939 monitor`, `uds scan`, and `uds trace` now have initial real backend paths when `python-can` is selected
 * the TUI is still a minimal text-mode shell, not yet the richer pane-driven dashboard described in [TUI plan](tui_plan.md)
-* reverse-engineering and fuzzing surfaces exist at the CLI level but are not yet a deep shared subsystem
+* reverse-engineering now has an initial shared analysis subsystem (`re counters`, `re entropy`), but signal inference and correlation remain unimplemented
 * plugin architecture is planned conceptually but not yet implemented as a stable extension boundary
 
 ## Future Plugin Boundary
@@ -315,6 +326,6 @@ The architecture is best understood as:
 * explicit sample/reference providers for commands that are not yet truly transport-backed
 * typed frames and events as the internal contract
 * one command layer as the behavioral contract
-* shell and TUI as reusable views over that same contract
+* shell, TUI, and MCP as reusable views or integration surfaces over that same contract
 
 That structure is what makes CANarchy suitable for both human operators and coding agents: the live bus boundary stays below the workflow layer, and the workflow layer stays above any one front end.
