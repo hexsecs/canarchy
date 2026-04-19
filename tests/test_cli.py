@@ -1123,7 +1123,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(first_event["event_type"], "frame")
         self.assertEqual(second_event["event_type"], "frame")
 
-    def test_jsonl_output_emits_warning_alert_lines_for_event_commands(self) -> None:
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_jsonl_output_emits_warning_alert_lines_for_event_commands(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli("uds", "scan", "can0", "--jsonl")
         self.assertEqual(exit_code, EXIT_OK)
 

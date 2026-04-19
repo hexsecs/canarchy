@@ -39,7 +39,7 @@ SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
 RE_COMMANDS = {"re counters"}
-IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"replay", "gateway", "shell", "export"}
+IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
 
 class CliUsageError(Exception):
@@ -332,6 +332,11 @@ def build_parser() -> CanarchyArgumentParser:
     config_show = config_subparsers.add_parser("show", help="show effective transport configuration")
     add_output_arguments(config_show)
     config_show.set_defaults(command="config show")
+
+    mcp = subparsers.add_parser("mcp", help="MCP server workflows")
+    mcp_subparsers = mcp.add_subparsers(dest="mcp_action", required=True)
+    mcp_serve = mcp_subparsers.add_parser("serve", help="start MCP server over stdio")
+    mcp_serve.set_defaults(command="mcp serve")
 
     shell = subparsers.add_parser("shell", help="start the interactive shell")
     shell.add_argument("--command", dest="shell_command", help="run a single shell command")
@@ -1849,6 +1854,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         emit_result(result, output_format)
         return EXIT_USER_ERROR
     output_format = format_name(args)
+    if args.command == "mcp serve":
+        from canarchy.mcp_server import run_server
+        run_server()
+        return EXIT_OK
     if args.command == "shell":
         return run_shell(args.shell_command)
     if args.command == "tui":
