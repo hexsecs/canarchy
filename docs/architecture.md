@@ -84,11 +84,11 @@ Relevant modules:
 * `src/canarchy/session.py`
 * `src/canarchy/uds.py`
 
-Recommended DBC evolution path:
+DBC architecture (complete):
 
-* keep a CANarchy-owned facade at `src/canarchy/dbc.py`
-* reserve schema ingestion, normalization, and future conversion workflows for a schema layer
-* reserve runtime encode, decode, and metadata-rich inspection workflows for a runtime codec layer
+* CANarchy-owned facade at `src/canarchy/dbc.py` — delegates to runtime adapter
+* `cantools` as the runtime codec layer for encode, decode, and inspection
+* `src/canarchy/dbc_runtime.py` — runtime adapter implementation
 * keep third-party library details out of CLI, REPL, TUI, and MCP command handlers
 
 This layer should remain reusable without depending on any specific front end.

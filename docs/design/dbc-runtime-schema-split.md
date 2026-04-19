@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Planned |
-| Command surface | `canarchy decode`, `canarchy encode`, `canarchy dbc inspect`, future `canarchy db ...` |
+| Status | Complete |
+| Command surface | `canarchy decode`, `canarchy encode`, `canarchy dbc inspect` |
 | Primary area | CLI, DBC, architecture |
 | Related specs | `docs/design/dbc-command-workflows.md`, `docs/design/dbc-inspect-command.md` |
 
@@ -102,36 +102,17 @@ Table and raw formatting remain command-layer concerns and shall not depend on t
 | `DBC_DECODE_FAILED` | runtime decode fails for a matched frame | 3 |
 | `DBC_ENCODE_FAILED` | runtime encode fails for reasons other than invalid signal input | 3 |
 
-## Phased Migration Checklist
+## Migration Status
 
-### Phase 1 — Facade and contracts
+All phases complete as of April 2026:
 
-* introduce internal normalized metadata types for database, message, and signal descriptors
-* refactor `src/canarchy/dbc.py` so the CLI depends on facade methods rather than third-party objects
-* align the current implementation with the documented `DBC_SIGNAL_INVALID` error contract
-* expand fixture coverage to include named choices, multiplexing, and at least one harder real-world DBC fixture
-
-### Phase 2 — Add inspection workflows
-
-* implement `canarchy dbc inspect` against the facade
-* emit stable JSON, JSONL, table, and raw output forms
-* wire message-name and signal-name completion paths where practical
-* expose the same inspection workflow through MCP once the CLI contract is stable
-
-### Phase 3 — Introduce runtime codec adapter
-
-* add a `cantools`-backed runtime adapter behind the facade
-* run decode and encode fixtures against both the legacy and new adapters during migration
-* preserve command envelopes, event ordering, and error-code semantics
-* compare edge-case behavior for scaling, endianness, multiplexing, and unknown messages before switching defaults
-
-### Phase 4 — Reserve schema plumbing for schema workflows
-
-* keep `canmatrix` focused on source-format ingestion and future schema-management commands
-* design future `canarchy db convert` and `canarchy db compare` workflows around the schema layer rather than the runtime codec layer
-* document the responsibility split in the architecture docs once the adapter boundary is implemented
-
-### Phase 5 — Re-evaluate backend simplification
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | Done | Internal metadata types in `dbc_types.py`, facade at `dbc.py`, `DBC_SIGNAL_INVALID` aligned, fixtures expanded |
+| Phase 2 | Done | `canarchy dbc inspect` implemented, JSON/JSONL/table/raw outputs, MCP exposed |
+| Phase 3 | Done | cantools runtime adapter at `dbc_runtime.py`, decode/encode switched, fixture parity verified |
+| Phase 4 | Deferred | canmatrix retained for future schema workflows |
+| Phase 5 | Deferred | Evaluate long-term dependency strategy later |
 
 * decide whether `decode` and `encode` should fully switch to the runtime adapter
 * remove duplicate adapter paths only after fixture coverage and output-stability checks are satisfactory
