@@ -9,6 +9,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+* `DBC_CACHE_MISS` error now includes a copy-pasteable `canarchy dbc cache refresh --provider opendbc` command and a hint about the `auto_refresh` config option.
+* `auto_refresh` opt-in for `[dbc.providers.opendbc]` in `~/.canarchy/config.toml`: when `true`, the first `resolve()` call on a cold cache triggers `refresh()` automatically instead of raising `DBC_CACHE_MISS`. Defaults to `false` for offline safety.
+
 * `decode`, `encode`, and `dbc inspect` now include a `dbc_source` field in `CommandResult.data` reporting the provider, DBC name, pinned version, and resolved local path. Provider refs (`opendbc:<name>`) include a commit SHA version; local file refs include `provider: "local"` and `version: null`.
 
 ### Changed

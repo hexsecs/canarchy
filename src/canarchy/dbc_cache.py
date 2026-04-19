@@ -124,6 +124,11 @@ def load_dbc_config() -> dict[str, Any]:
                 "mode": "cache",
                 "repo": os.environ.get("CANARCHY_DBC_OPENDBC_REPO", "commaai/opendbc"),
                 "ref": os.environ.get("CANARCHY_DBC_OPENDBC_REF", "master"),
+                # auto_refresh=False keeps canarchy safe for offline use and
+                # avoids surprise network calls.  Set to true for convenience
+                # when a network connection is always available; the first
+                # resolve() call will populate the cache automatically instead
+                # of raising DBC_CACHE_MISS.
                 "auto_refresh": False,
             }
         },

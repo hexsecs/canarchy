@@ -153,8 +153,15 @@ class OpenDbcProvider:
             if manifest is None:
                 raise DbcError(
                     code="DBC_CACHE_MISS",
-                    message=f"opendbc catalog is not cached. Run `canarchy dbc cache refresh --provider opendbc` first.",
-                    hint="Run: canarchy dbc cache refresh --provider opendbc",
+                    message=(
+                        "The opendbc catalog has not been cached yet. "
+                        "Run the following command to populate it:\n\n"
+                        "  canarchy dbc cache refresh --provider opendbc\n\n"
+                        "To avoid this step in the future, set "
+                        "`auto_refresh = true` under "
+                        "[dbc.providers.opendbc] in ~/.canarchy/config.toml."
+                    ),
+                    hint="canarchy dbc cache refresh --provider opendbc",
                 )
 
         commit = manifest["commit"]
