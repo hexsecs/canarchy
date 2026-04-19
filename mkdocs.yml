@@ -83,6 +83,8 @@ nav:
           - Active Command Safety: design/active-command-safety.md
           - Transport Core Commands: design/transport-core-commands.md
           - DBC Command Workflows: design/dbc-command-workflows.md
+          - DBC Inspect Command: design/dbc-inspect-command.md
+          - DBC Runtime and Schema Split: design/dbc-runtime-schema-split.md
           - Generate Command: design/generate-command.md
           - Gateway Command: design/gateway-command.md
           - Export Command: design/export-command.md
@@ -100,6 +102,7 @@ nav:
           - Active Command Safety: tests/active-command-safety.md
           - Transport Core Commands: tests/transport-core-commands.md
           - DBC Command Workflows: tests/dbc-command-workflows.md
+          - DBC Inspect Command: tests/dbc-inspect-command.md
           - Generate Command: tests/generate-command.md
           - Gateway Command: tests/gateway-command.md
           - Export Command: tests/export-command.md

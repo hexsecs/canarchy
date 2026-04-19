@@ -67,7 +67,7 @@ Primary responsibilities:
 * `CanFrame` validation and serialization
 * typed event objects such as `frame`, `decoded_message`, `signal`, `j1939_pgn`, `uds_transaction`, `replay_event`, and `alert`
 * J1939 arbitration ID decomposition and higher-level observation helpers
-* DBC encode and decode helpers
+* DBC encode, decode, and schema-inspection helpers
 * reverse-engineering analysis helpers such as counter and entropy ranking
 * replay planning from captured timestamps
 * session context and persistence helpers
@@ -81,6 +81,13 @@ Relevant modules:
 * `src/canarchy/replay.py`
 * `src/canarchy/session.py`
 * `src/canarchy/uds.py`
+
+Recommended DBC evolution path:
+
+* keep a CANarchy-owned facade at `src/canarchy/dbc.py`
+* reserve schema ingestion, normalization, and future conversion workflows for a schema layer
+* reserve runtime encode, decode, and metadata-rich inspection workflows for a runtime codec layer
+* keep third-party library details out of CLI, REPL, TUI, and MCP command handlers
 
 This layer should remain reusable without depending on any specific front end.
 
