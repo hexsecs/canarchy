@@ -9,6 +9,7 @@ from typing import Any
 
 from canmatrix import ArbitrationId, CanMatrix, formats
 
+from canarchy.dbc_types import DatabaseInfo, DatabaseInspection, MessageInfo, SignalInfo
 from canarchy.models import (
     CanFrame,
     DecodedMessageEvent,
@@ -47,40 +48,39 @@ def signal_choices(signal: Any) -> dict[str, str] | None:
     return {str(key): str(value) for key, value in values.items()}
 
 
-def signal_metadata(signal: Any, *, message_name: str) -> dict[str, Any]:
+def signal_metadata(signal: Any, *, message_name: str) -> SignalInfo:
     multiplexer_ids = getattr(signal, "mux_val", None)
-    return {
-        "byte_order": byte_order_name(signal.is_little_endian),
-        "choices": signal_choices(signal),
-        "is_multiplexer": bool(getattr(signal, "is_multiplexer", False)),
-        "is_signed": bool(signal.is_signed),
-        "length": int(signal.size),
-        "maximum": normalize_value(signal.max) if signal.max is not None else None,
-        "message_name": message_name,
-        "minimum": normalize_value(signal.min) if signal.min is not None else None,
-        "multiplexer_ids": [int(multiplexer_ids)] if multiplexer_ids is not None else None,
-        "name": signal.name,
-        "offset": normalize_value(signal.offset),
-        "scale": normalize_value(signal.factor),
-        "start_bit": int(signal.start_bit),
-        "unit": signal.unit or None,
-    }
+    return SignalInfo(
+        byte_order=byte_order_name(signal.is_little_endian),
+        choices=signal_choices(signal),
+        is_multiplexer=bool(getattr(signal, "is_multiplexer", False)),
+        is_signed=bool(signal.is_signed),
+        length=int(signal.size),
+        maximum=normalize_value(signal.max) if signal.max is not None else None,
+        message_name=message_name,
+        minimum=normalize_value(signal.min) if signal.min is not None else None,
+        multiplexer_ids=[int(multiplexer_ids)] if multiplexer_ids is not None else None,
+        name=signal.name,
+        offset=normalize_value(signal.offset),
+        scale=normalize_value(signal.factor),
+        start_bit=int(signal.start_bit),
+        unit=signal.unit or None,
+    )
 
 
-def message_metadata(message: Any) -> dict[str, Any]:
+def message_metadata(message: Any) -> MessageInfo:
     senders = sorted(str(sender) for sender in getattr(message, "transmitters", []) if sender)
     signals = [signal_metadata(signal, message_name=message.name) for signal in message.signals]
-    return {
-        "arbitration_id": int(message.arbitration_id.id),
-        "arbitration_id_hex": f"0x{message.arbitration_id.id:X}",
-        "cycle_time_ms": getattr(message, "cycle_time", None),
-        "is_extended_id": bool(message.arbitration_id.extended),
-        "length": int(message.size),
-        "name": message.name,
-        "senders": senders,
-        "signal_count": len(signals),
-        "signals": signals,
-    }
+    return MessageInfo(
+        arbitration_id=int(message.arbitration_id.id),
+        arbitration_id_hex=f"0x{message.arbitration_id.id:X}",
+        cycle_time_ms=getattr(message, "cycle_time", None),
+        is_extended_id=bool(message.arbitration_id.extended),
+        length=int(message.size),
+        name=message.name,
+        senders=senders,
+        signals=signals,
+    )
 
 
 def load_database(dbc_path: str) -> CanMatrix:
@@ -181,59 +181,21 @@ def inspect_database(
     messages = [message_metadata(message) for message in selected_messages]
     database_nodes = getattr(database, "boardUnits", None)
     node_count = len(database_nodes) if database_nodes else len(
-        {sender for message in messages for sender in message["senders"]}
+        {sender for message in messages for sender in message.senders}
     )
-    database_summary = {
-        "format": "dbc",
-        "message_count": len(database.frames),
-        "node_count": node_count,
-        "path": dbc_path,
-        "signal_count": sum(len(frame.signals) for frame in database.frames),
-    }
+    inspection = DatabaseInspection(
+        database=DatabaseInfo(
+            format="dbc",
+            message_count=len(database.frames),
+            node_count=node_count,
+            path=dbc_path,
+            signal_count=sum(len(frame.signals) for frame in database.frames),
+        ),
+        messages=messages,
+        selected_message=message_name,
+    )
 
-    events: list[dict[str, Any]] = [
-        {
-            "event_type": "dbc_database",
-            "payload": database_summary,
-            "source": "dbc.inspect",
-            "timestamp": None,
-        }
-    ]
-    for message in messages:
-        events.append(
-            {
-                "event_type": "dbc_message",
-                "payload": {key: value for key, value in message.items() if key != "signals"},
-                "source": "dbc.inspect",
-                "timestamp": None,
-            }
-        )
-        for signal in message["signals"]:
-            events.append(
-                {
-                    "event_type": "dbc_signal",
-                    "payload": signal,
-                    "source": "dbc.inspect",
-                    "timestamp": None,
-                }
-            )
-
-    if signals_only:
-        all_signals = [signal for message in messages for signal in message["signals"]]
-        data = {
-            "database": database_summary,
-            "message": message_name,
-            "signal_count": len(all_signals),
-            "signals": all_signals,
-        }
-    else:
-        data = {
-            "database": database_summary,
-            "message": message_name,
-            "messages": messages,
-        }
-
-    return data, events
+    return inspection.to_payload(signals_only=signals_only), inspection.to_events()
 def encode_message(
     dbc_path: str,
     message_name: str,

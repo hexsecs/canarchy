@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+* The DBC inspection path now uses CANarchy-owned metadata types internally so command-layer outputs no longer depend directly on third-party database objects.
+
 ### Fixed
 
 * Invalid signal assignments for `encode --dbc ...` now return the documented `DBC_SIGNAL_INVALID` error code instead of a generic encode failure.
