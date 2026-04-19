@@ -34,7 +34,8 @@ flowchart TD
     MCP --> CMD
 
     CMD --> TP[Transport facade]
-    CMD --> DBC[DBC encode / decode]
+    CMD --> DBCP[DBC provider resolution / cache]
+    CMD --> DBC[DBC encode / decode / inspect]
     CMD --> J[J1939 helpers]
     CMD --> UDS[UDS helpers]
     CMD --> RE[Reverse-engineering helpers]
@@ -45,6 +46,7 @@ flowchart TD
     TP --> SC[Deterministic scaffold backend]
     CMD --> REF[Sample / reference providers]
 
+    DBCP --> DBC
     DBC --> EV[Structured event model]
     J --> EV
     UDS --> EV
@@ -54,6 +56,8 @@ flowchart TD
     REF --> EV
 
     EV --> OUT[JSON / JSONL / table / raw output]
+    DBC --> PROV[dbc_source provenance]
+    PROV --> OUT
 ```
 
 ## Layering
@@ -68,7 +72,7 @@ Primary responsibilities:
 * typed event objects such as `frame`, `decoded_message`, `signal`, `j1939_pgn`, `uds_transaction`, `replay_event`, and `alert`
 * J1939 arbitration ID decomposition and higher-level observation helpers
 * DBC encode, decode, and schema-inspection helpers
-* reverse-engineering analysis helpers such as counter and entropy ranking
+* reverse-engineering analysis helpers such as counter and entropy ranking, plus DBC candidate scoring against captures
 * replay planning from captured timestamps
 * session context and persistence helpers
 
@@ -77,6 +81,10 @@ Relevant modules:
 * `src/canarchy/models.py`
 * `src/canarchy/j1939.py`
 * `src/canarchy/dbc.py`
+* `src/canarchy/dbc_provider.py`
+* `src/canarchy/dbc_provider_local.py`
+* `src/canarchy/dbc_opendbc.py`
+* `src/canarchy/dbc_cache.py`
 * `src/canarchy/dbc_runtime.py`
 * `src/canarchy/dbc_types.py`
 * `src/canarchy/reverse_engineering.py`
@@ -84,12 +92,16 @@ Relevant modules:
 * `src/canarchy/session.py`
 * `src/canarchy/uds.py`
 
-DBC architecture (complete):
+DBC architecture (current):
 
-* CANarchy-owned facade at `src/canarchy/dbc.py` — delegates to runtime adapter
-* `cantools` as the runtime codec layer for encode, decode, and inspection
-* `src/canarchy/dbc_runtime.py` — runtime adapter implementation
-* keep third-party library details out of CLI, REPL, TUI, and MCP command handlers
+* CANarchy-owned facade at `src/canarchy/dbc.py` keeps command handlers insulated from third-party runtime objects
+* `src/canarchy/dbc_provider.py` resolves DBC refs across local paths and provider-prefixed refs such as `opendbc:<name>` and `comma:<name>`
+* `src/canarchy/dbc_provider_local.py` handles explicit local file resolution
+* `src/canarchy/dbc_opendbc.py` provides catalog search, cache refresh, and pinned-file resolution against the configured opendbc source
+* `src/canarchy/dbc_cache.py` persists provider manifests and cached DBC snapshots under `~/.canarchy/cache/dbc`
+* `cantools` remains the runtime codec layer for encode, decode, and inspection through `src/canarchy/dbc_runtime.py`
+* DBC-backed command results now expose `dbc_source` provenance so callers can see which provider, logical DBC name, version, and local resolved path were used
+* third-party library details stay out of CLI, shell, TUI, and MCP command handlers even when provider-backed resolution is used
 
 This layer should remain reusable without depending on any specific front end.
 
@@ -104,6 +116,8 @@ Primary responsibilities:
 * parsing file-backed capture input such as `candump`
 * exposing a stable local transport facade to the command layer
 * keeping live and deterministic transport behavior behind one interface
+
+The DBC provider/cache path is intentionally separate from the transport backend. Provider refresh and cache resolution may involve local filesystem or network access, but they do not change the live CAN transport abstraction.
 
 Relevant module:
 
@@ -124,7 +138,7 @@ Primary responsibilities:
 
 * command definitions and subcommands
 * argument parsing and validation
-* dispatch to transport, protocol, replay, and session helpers
+* dispatch to transport, DBC provider resolution, protocol, replay, reverse-engineering, export, and session helpers
 * structured error handling and exit codes
 * shaping output for `--json`, `--jsonl`, `--table`, and `--raw`
 
@@ -166,6 +180,8 @@ flowchart LR
     MS --> EXEC
 
     EXEC --> RESULT[CommandResult]
+    EXEC --> DBCRES[DBC ref resolution]
+    DBCRES --> RESULT
     RESULT --> EMIT[Output rendering or TUI state update]
 ```
 
@@ -176,6 +192,7 @@ Current behavior:
 * `canarchy tui` renders a minimal status view and updates it from shared command results
 * `canarchy mcp serve` exposes implemented commands as MCP tools and delegates tool calls to the same `execute_command()` path
 * nested interactive front ends are rejected to preserve a single clear execution boundary
+* DBC-backed commands resolve provider refs before handing local files to the runtime codec layer, then attach `dbc_source` metadata to the final command result
 
 This is deliberate. The shell, TUI, and MCP server are convenience or integration surfaces, not separate applications.
 
@@ -227,6 +244,8 @@ Currently modeled event types:
 
 These events are produced from typed Python dataclasses and then serialized deterministically for command output.
 
+Not every command returns event streams. Some command families, including DBC inspection, cache/provider management, and reverse-engineering ranking helpers, return structured result objects under `data` instead. For DBC-backed decode, encode, and inspect commands, `data` also includes `dbc_source` provenance so downstream automation can distinguish a local file from a provider-backed cached schema.
+
 Representative event flow:
 
 ```mermaid
@@ -264,8 +283,9 @@ The command layer follows one main pattern:
 1. parse argv into a canonical command name and arguments
 2. validate command-specific constraints
 3. dispatch to transport, protocol, replay, export, or session helpers
-4. normalize results into `CommandResult`
-5. render through one output mode or serialize the canonical result envelope for MCP
+4. resolve provider-backed dependencies such as DBC refs when required by the command
+5. normalize results into `CommandResult`
+6. render through one output mode or serialize the canonical result envelope for MCP
 
 This centralization is what allows the CLI, shell, and TUI to stay aligned.
 
@@ -300,6 +320,7 @@ The current architecture is strongest in these areas:
 * structured event outputs as a stable contract
 * protocol-aware workflows layered above raw transport
 * clear boundary between transport integration and workflow logic
+* provider-backed DBC workflows that preserve local reproducibility through cache and provenance metadata
 * ability to reuse the same core behavior across CLI, shell, and TUI
 
 ## Current Gaps And Boundaries
@@ -309,7 +330,7 @@ The architecture is intentionally ahead of some implementations. These are the m
 * live transport coverage is currently limited by the `python-can` integration and configured interfaces
 * some protocol commands still rely on explicit sample/reference data providers instead of true transport-backed execution, although `j1939 monitor`, `uds scan`, and `uds trace` now have initial real backend paths when `python-can` is selected
 * the TUI is still a minimal text-mode shell, not yet the richer pane-driven dashboard described in [TUI plan](tui_plan.md)
-* reverse-engineering now has an initial shared analysis subsystem (`re counters`, `re entropy`), but signal inference and correlation remain unimplemented
+* reverse-engineering now has an initial shared analysis subsystem for heuristic ranking (`re counters`, `re entropy`) and provider-backed schema matching (`re match-dbc`, `re shortlist-dbc`), but signal inference and reference-series correlation remain unimplemented
 * plugin architecture is planned conceptually but not yet implemented as a stable extension boundary
 
 ## Future Plugin Boundary
@@ -332,6 +353,7 @@ Non-goal:
 The architecture is best understood as:
 
 * `python-can` plus scaffold backend for transport access
+* provider-backed DBC catalog, cache, and provenance handling above the transport layer and below command output shaping
 * explicit sample/reference providers for commands that are not yet truly transport-backed
 * typed frames and events as the internal contract
 * one command layer as the behavioral contract
