@@ -9,6 +9,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+* opendbc as an optional DBC provider backed by the `dbc_provider`, `dbc_provider_local`, `dbc_cache`, and `dbc_opendbc` modules; providers are selected via `--provider` flags and configured in `~/.canarchy/config.toml`.
+* CLI commands: `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list`, `dbc cache prune`, and `dbc cache refresh` for discovering, downloading, and managing DBC files from opendbc.
+* `--dbc opendbc:<name>` provider-ref syntax accepted by `decode`, `encode`, and `dbc inspect` for resolving DBC files directly from the opendbc cache.
+* `format_dbc_table` and `format_dbc_provider_table` helpers for `--table` output when listing DBC files and providers.
+* `comma:<name>` as a convenience alias for `opendbc:<name>` in provider refs (matches Comma.ai community naming).
+
 * `re match-dbc <capture> [--provider opendbc] [--limit 10]` — ranks all locally-cached DBC files against a capture file using a frequency-weighted ID coverage score; returns the top N candidates sorted by score descending.
 * `re shortlist-dbc <capture> --make <brand> [--provider opendbc] [--limit 10]` — same as `re match-dbc` but pre-filters candidates by vehicle brand before scoring.
 * `score_dbc_candidates()` scoring function in `reverse_engineering.py` — pure function that accepts a `capture_ids` frequency map and a pre-built catalog; no network calls or file I/O at score time.
