@@ -12,12 +12,16 @@ Implemented and verified in the current codebase:
 * deterministic `replay`
 * live `gateway` bridging between CAN interfaces via `python-can`
 * structured `export` for capture files and saved sessions
-* DBC-backed `decode` and `encode`
+* DBC-backed `decode`, `encode`, and `dbc inspect`
+* DBC provider workflows for `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list`, `dbc cache prune`, and `dbc cache refresh`
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
 * session `save`, `load`, and `show`
 * shell one-shot command execution
 * initial text-mode `tui` shell over the shared command layer
 * UDS `scan`, `trace`, and `services`
+* `config show` for effective transport configuration inspection
+* `re counters` and `re entropy` for passive file-backed analysis
+* `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
 * structured JSON and JSONL output
 * explicit error schema and exit codes
 
@@ -28,6 +32,8 @@ Important current behavior:
 * live transport-facing commands default to the `python-can` backend; set `backend = "scaffold"` in `~/.canarchy/config.toml` or export `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior
 * `capture`, `send`, and `gateway` use the selected transport backend, but `gateway` specifically requires `python-can`
 * the default `python-can` interface is `socketcan`; set `interface` in the config file or `CANARCHY_PYTHON_CAN_INTERFACE` to change it
+* DBC-backed commands accept local paths and provider refs such as `opendbc:<name>` or `comma:<name>`
+* `decode`, `encode`, and `dbc inspect` include `data.dbc_source` in structured output so callers can see the provider, logical DBC name, pinned version, and resolved local path
 * placeholder-only commands still return `status: planned` and `implementation: command surface scaffold`
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
 * specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
@@ -200,6 +206,11 @@ Example:
 canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
 ```
 
+Notes:
+
+* `--dbc` accepts a local file path or a provider ref such as `opendbc:<name>`
+* structured output includes a `dbc_source` object describing the provider-backed or local DBC resolution that was used
+
 ### encode
 
 Encode a DBC message into a frame payload.
@@ -213,6 +224,96 @@ Example:
 ```bash
 canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 OilTemp=65 Load=40 LampState=1 --json
 ```
+
+Notes:
+
+* `--dbc` accepts a local file path or a provider ref such as `opendbc:toyota_tnga_k_pt_generated`
+* structured output includes a `dbc_source` object describing the provider-backed or local DBC resolution that was used
+
+### dbc inspect
+
+Inspect database, message, and signal metadata for a DBC file or provider ref.
+
+```bash
+canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json|--jsonl|--table|--raw]
+```
+
+Examples:
+
+```bash
+canarchy dbc inspect tests/fixtures/sample.dbc --json
+canarchy dbc inspect opendbc:toyota_tnga_k_pt_generated --message STEER_TORQUE_SENSOR --json
+```
+
+Notes:
+
+* `<dbc>` accepts a local file path or a provider ref such as `opendbc:<name>` or `comma:<name>`
+* structured output includes `dbc_source` provenance alongside the inspection payload
+
+### dbc provider list
+
+List registered DBC providers.
+
+```bash
+canarchy dbc provider list [--json|--jsonl|--table|--raw]
+```
+
+### dbc search
+
+Search DBC catalogs across enabled providers.
+
+```bash
+canarchy dbc search <query> [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+```
+
+Example:
+
+```bash
+canarchy dbc search toyota --provider opendbc --limit 5 --json
+```
+
+### dbc fetch
+
+Fetch and cache a DBC file from a provider.
+
+```bash
+canarchy dbc fetch <ref> [--json|--jsonl|--table|--raw]
+```
+
+Example:
+
+```bash
+canarchy dbc fetch opendbc:toyota_tnga_k_pt_generated --json
+```
+
+### dbc cache list
+
+List cached provider manifests.
+
+```bash
+canarchy dbc cache list [--json|--jsonl|--table|--raw]
+```
+
+### dbc cache prune
+
+Remove stale cached provider snapshots while keeping the pinned commit.
+
+```bash
+canarchy dbc cache prune [--provider <name>] [--json|--jsonl|--table|--raw]
+```
+
+### dbc cache refresh
+
+Refresh a provider catalog from upstream.
+
+```bash
+canarchy dbc cache refresh [--provider <name>] [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* the default provider is `opendbc`
+* refreshing updates the cached catalog manifest; individual DBC files are fetched on demand or through `dbc fetch`
 
 ### session save
 
@@ -416,6 +517,55 @@ Notes:
 * JSON output includes one candidate per arbitration ID plus a per-byte entropy breakdown inside each candidate
 * IDs with fewer than 10 observed frames are retained and marked with `low_sample: true`
 
+### re match-dbc
+
+Rank candidate DBC files against a capture using provider-backed catalog metadata.
+
+```bash
+canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* this command is passive and file-backed
+* candidates are scored by frequency-weighted arbitration-ID coverage against the capture
+* the default provider is `opendbc`
+
+### re shortlist-dbc
+
+Rank candidate DBC files against a capture after pre-filtering by vehicle make.
+
+```bash
+canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* this command is passive and file-backed
+* `--make` narrows provider-catalog candidates before scoring them against the capture
+* the default provider is `opendbc`
+
+### config show
+
+Inspect the effective transport configuration and the source of each setting.
+
+```bash
+canarchy config show [--json|--jsonl|--table|--raw]
+```
+
+### mcp serve
+
+Start the MCP server over stdio.
+
+```bash
+canarchy mcp serve
+```
+
+Notes:
+
+* this command does not accept output flags
+* the current MCP tool surface is a curated non-interactive subset of the CLI, not every implemented command
+
 ---
 
 ## Output Modes
@@ -549,6 +699,24 @@ canarchy j1939 monitor --pgn 65262 --json
 canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
 ```
 
+### DBC Provider Search
+
+```bash
+canarchy dbc search toyota --provider opendbc --json
+```
+
+### DBC Provider Decode
+
+```bash
+canarchy decode tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json
+```
+
+### Reverse-Engineering DBC Match
+
+```bash
+canarchy re match-dbc tests/fixtures/sample.candump --provider opendbc --limit 5 --json
+```
+
 ### DBC Encode
 
 ```bash
@@ -585,7 +753,7 @@ canarchy shell --command "capture can0 --raw"
 
 These commands are present in the CLI tree but not yet implemented end to end:
 
-* `re signals|correlate`
+* `re signals` and `re correlate`
 * `fuzz replay|mutate|id`
 
 These deeper capabilities are also not implemented yet even where the command surface exists:

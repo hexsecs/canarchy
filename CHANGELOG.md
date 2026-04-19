@@ -40,6 +40,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
+* Refreshed `docs/command_spec.md`, `docs/agents.md`, and related operator/spec docs to reflect the current DBC provider workflows, `dbc_source` provenance, reverse-engineering DBC matching commands, and the current curated MCP tool surface.
 * Added planning specs for a future `dbc inspect` command and a phased DBC runtime/schema split using a stable CANarchy facade.
 * Reorganized the docs site top navigation into header tabs, added a dedicated Tutorials section, and introduced a Tutorials landing page for the J1939 and generate/capture walkthroughs.
 * Migrated all design specs (`docs/design/*.md`) to EARS requirements syntax with an explicit Type column per requirement row.

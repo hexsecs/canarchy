@@ -21,11 +21,11 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | ID | Type | Requirement |
 |----|------|-------------|
 | `REQ-MCP-01` | Ubiquitous | The system shall provide a `canarchy mcp serve` subcommand that starts an MCP server over stdio. |
-| `REQ-MCP-02` | Ubiquitous | Each implemented CLI command shall surface as an MCP tool whose name is the command string with spaces replaced by underscores (e.g. `j1939 monitor` → `j1939_monitor`). |
+| `REQ-MCP-02` | Ubiquitous | Each command selected for the MCP surface shall surface as an MCP tool whose name is the command string with spaces replaced by underscores (e.g. `j1939 monitor` → `j1939_monitor`). |
 | `REQ-MCP-03` | Ubiquitous | Each MCP tool's input schema shall be derived from the argparse parameter definitions of the corresponding CLI command. |
 | `REQ-MCP-04` | Event-driven | When an MCP tool call is received, the system shall return the canonical command result envelope (`ok`, `command`, `data`, `warnings`, `errors`) serialised as JSON text content. |
 | `REQ-MCP-05` | Event-driven | When an MCP tool call is received with invalid inputs, the system shall return the same structured error codes as the equivalent CLI invocation. |
-| `REQ-MCP-06` | Event-driven | When a `list_tools` request is received, the system shall return all implemented tools with name, description, and input schema. |
+| `REQ-MCP-06` | Event-driven | When a `list_tools` request is received, the system shall return all registered MCP tools with name, description, and input schema. |
 | `REQ-MCP-07` | Ubiquitous | The MCP server shall use stdio transport only. |
 | `REQ-MCP-08` | Unwanted behaviour | If a `call_tool` request names an unregistered tool, the system shall raise an error indicating the tool is unknown. |
 | `REQ-MCP-09` | Ubiquitous | The `mcp` package shall be declared as a project dependency in `pyproject.toml`. |
@@ -38,6 +38,8 @@ canarchy mcp serve
 ```
 
 The `serve` subcommand accepts no positional arguments or output flags. The server runs until the stdio transport closes (client disconnect or EOF).
+
+The current MCP tool surface is a curated non-interactive subset of the CLI. It intentionally excludes interactive commands and some newer command families that do not yet have MCP adapters.
 
 ## Tool Naming Convention
 
@@ -109,7 +111,7 @@ In scope:
 
 * stdio MCP transport only
 * buffered (non-streaming) tool responses for all commands including live-capture variants (scaffold backend returns a fixed event batch)
-* full implemented command surface excluding interactive front ends (`shell`, `tui`)
+* a curated non-interactive CLI subset covering transport, protocol, export, session, and configuration workflows
 
 Out of scope:
 
@@ -117,3 +119,4 @@ Out of scope:
 * streaming tool responses / MCP notifications for live capture
 * authentication or access control
 * plugin or custom tool registration
+* exposing every implemented CLI command automatically
