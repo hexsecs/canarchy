@@ -859,7 +859,7 @@ def transport_payload(
                 "implementation": implementation,
             },
             transport.generate_events(args.interface, frames, gap_ms=args.gap),
-            ["Frame generation is an active transmission workflow; use intentionally on a controlled bus."],
+            [],
         )
     if args.command == "filter":
         frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)

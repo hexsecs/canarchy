@@ -1255,6 +1255,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["mode"], "active")
         self.assertEqual(payload["data"]["frame_count"], 1)
         self.assertEqual(payload["data"]["transport_backend"], "scaffold")
+        self.assertEqual(payload["warnings"], [])
         alert_event = payload["data"]["events"][0]
         self.assertEqual(alert_event["event_type"], "alert")
         self.assertEqual(alert_event["payload"]["code"], "ACTIVE_TRANSMIT")
