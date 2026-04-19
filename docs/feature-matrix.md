@@ -33,6 +33,7 @@ Legend:
 | Frame gateway / bridge workflow | Yes | Partial | No | No | Partial | No | No | No | No | No |
 | DBC decode | Yes | No | No | Yes | Yes | No | No | No | Partial | No |
 | DBC encode | Yes | No | No | Yes | Partial | No | No | No | Partial | No |
+| Provider-backed DBC discovery / cache workflow | Yes | No | No | No | No | No | No | No | No | No |
 | J1939-first operator workflows | Yes | Partial | No | No | Partial | No | Yes | Partial | No | No |
 | UDS discovery / trace workflows | Yes | Partial | No | No | No | Yes | No | Yes | Partial | Yes |
 | Security research / fuzzing emphasis | Partial | No | No | No | Partial | Yes | Partial | Yes | No | No |
@@ -50,7 +51,7 @@ The workflow matrix above is useful for operator-facing comparison, but several 
 | Plotting / visualization depth | No | No | No | Yes | Yes | No | No | No | Partial | No |
 | Code generation | No | No | No | Yes | No | No | No | No | No | No |
 | Extensibility via plugins / modules | Planned | No | Yes | Partial | Partial | Yes | Yes | Partial | Partial | Partial |
-| Reverse-engineering workflow depth | Planned | Partial | No | Partial | Yes | Yes | Partial | Yes | Partial | No |
+| Reverse-engineering workflow depth | Partial | Partial | No | Partial | Yes | Yes | Partial | Yes | Partial | No |
 | Protocol breadth beyond raw CAN | Partial | Yes | Partial | Partial | Partial | Yes | Partial | Yes | Yes | No |
 | Session / bookmark / saved analysis workflow | Partial | No | Partial | No | Partial | Partial | Partial | Yes | Yes | No |
 | Embedded-library ergonomics | No | No | Yes | Yes | No | No | No | Partial | No | Yes |
@@ -85,6 +86,7 @@ The workflow matrix does not fully capture several important reasons someone mig
 
 * `python-can` excels at hardware abstraction, interface coverage, and embedded Python integration.
 * `cantools` excels at database-heavy engineering: multiple schema formats, inspection, plotting, monitor workflows, and C code generation.
+* CANarchy now includes provider-backed DBC discovery plus initial reverse-engineering DBC matching, but it is still much earlier in depth than mature database-centric or visual RE tools.
 * SavvyCAN excels at visual exploration and reverse-engineering-oriented desktop analysis.
 * Caring Caribou excels at automotive security workflows, including UDS fuzzing, DoIP, and XCP-oriented work.
 * TruckDevil excels at truck and J1939-focused ECU assessment workflows.

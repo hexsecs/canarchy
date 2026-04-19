@@ -52,6 +52,8 @@ The terminal blocks and waits. Each arriving frame prints as a `candump`-style l
 
 ## Terminal 2 — Generate Frames
 
+If your `~/.canarchy/config.toml` enables `[safety].require_active_ack = true`, add `--ack-active` and reply `YES` when prompted before the transmit step begins.
+
 ### Random frames
 
 ```bash
