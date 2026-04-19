@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-19
+
 ### Added
 
 * opendbc as an optional DBC provider backed by the `dbc_provider`, `dbc_provider_local`, `dbc_cache`, and `dbc_opendbc` modules; providers are selected via `--provider` flags and configured in `~/.canarchy/config.toml`.
@@ -29,14 +31,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * `dbc inspect` now uses the internal `cantools` runtime adapter while preserving the existing CLI, MCP, and structured output contracts for the current fixtures.
 * Added an internal `cantools`-backed DBC runtime adapter that maps database metadata into CANarchy-owned types for fixture-level comparison work.
 * The DBC inspection path now uses CANarchy-owned metadata types internally so command-layer outputs no longer depend directly on third-party database objects.
+* Active transmit commands now emit their safety prompt to `stderr` before transmission begins, and `--ack-active` triggers an explicit confirmation prompt before transmission proceeds.
 
 ### Fixed
 
 * Invalid signal assignments for `encode --dbc ...` now return the documented `DBC_SIGNAL_INVALID` error code instead of a generic encode failure.
-
-### Changed
-
-* Active transmit commands now emit their safety prompt to `stderr` before transmission begins, and `--ack-active` triggers an explicit confirmation prompt before transmission proceeds.
 
 ### Documentation
 
