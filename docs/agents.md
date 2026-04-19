@@ -45,7 +45,7 @@ With `uv` in a project environment:
 
 ### Available Tools
 
-Every implemented CLI command is exposed as an MCP tool. Spaces in command names become underscores:
+The current MCP surface exposes a curated non-interactive subset of the CLI. Spaces in command names become underscores:
 
 | MCP tool | CLI equivalent |
 |----------|---------------|
@@ -73,6 +73,12 @@ Every implemented CLI command is exposed as an MCP tool. Spaces in command names
 | `uds_trace` | `canarchy uds trace` |
 | `uds_services` | `canarchy uds services` |
 | `config_show` | `canarchy config show` |
+
+Current exclusions:
+
+* DBC provider and cache commands such as `dbc search` and `dbc fetch`
+* reverse-engineering helpers such as `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc`
+* interactive or service commands such as `shell`, `tui`, and `mcp serve`
 
 ### Response Format
 
@@ -105,6 +111,6 @@ tool: send {"interface": "vcan0", "frame_id": "0x7DF", "data": "0201F1"}
 
 ### Notes
 
-- Streaming is not supported in v1 — live-capture tools (`capture`, `gateway`) return a buffered batch from the active backend.
-- `shell` and `tui` are not exposed as MCP tools.
-- Error codes are identical to the CLI, so existing JSON-parsing logic transfers without changes.
+* Streaming is not supported in v1 — live-capture tools (`capture`, `gateway`) return a buffered batch from the active backend.
+* `shell`, `tui`, and `mcp serve` are not exposed as MCP tools.
+* Error codes are identical to the CLI, so existing JSON-parsing logic transfers without changes.

@@ -15,15 +15,18 @@ Implemented and exercised in the current codebase:
 
 * `python-can`-backed live transport workflows plus deterministic scaffold transport for `capture` and `send`
 * file-backed `filter`, `stats`, `decode`, `j1939 decode`, and `replay` using candump logs
-* DBC-backed decode and encode
+* DBC-backed `decode`, `encode`, and `dbc inspect`, including provider-ref resolution and `dbc_source` provenance in structured output
+* DBC provider and cache workflows for catalog search, fetch, and refresh through the optional opendbc integration
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
 * UDS `scan`, `trace`, and `services`
 * `re counters` for file-backed likely-counter detection
 * `re entropy` for file-backed per-ID and per-byte entropy ranking
+* `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
 * session `save`, `load`, and `show`
 * structured `export` for capture files and saved sessions
 * shell command reuse through `canarchy shell --command ...`
 * initial text-mode `tui` shell over the shared command layer
+* `config show` for effective transport configuration inspection
 * structured `--json`, `--jsonl`, `--table`, and `--raw` output modes
 
 Some protocol-oriented commands still use explicit sample/reference providers rather than true transport-backed execution. See [Architecture](architecture.md) and [Command Spec](command_spec.md) for the current boundary.

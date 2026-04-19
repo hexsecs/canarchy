@@ -13,11 +13,11 @@
 | REQ ID | Description | TEST IDs |
 |--------|-------------|----------|
 | REQ-MCP-01 | `mcp serve` subcommand starts MCP server | TEST-MCP-01 |
-| REQ-MCP-02 | Each CLI command surfaces as an MCP tool | TEST-MCP-02, TEST-MCP-03 |
+| REQ-MCP-02 | Each selected CLI command surfaces as an MCP tool | TEST-MCP-02, TEST-MCP-03 |
 | REQ-MCP-03 | Input schemas derived from argparse definitions | TEST-MCP-04 |
 | REQ-MCP-04 | Tool responses use canonical event envelope | TEST-MCP-05, TEST-MCP-06 |
 | REQ-MCP-05 | Invalid inputs return same error codes as CLI | TEST-MCP-07, TEST-MCP-08 |
-| REQ-MCP-06 | Tool discovery returns all tools with metadata | TEST-MCP-02, TEST-MCP-03 |
+| REQ-MCP-06 | Tool discovery returns all registered MCP tools with metadata | TEST-MCP-02, TEST-MCP-03 |
 | REQ-MCP-07 | stdio transport only | TEST-MCP-01 |
 | REQ-MCP-08 | Unknown tool name raises error | TEST-MCP-09 |
 | REQ-MCP-09 | `mcp` declared in pyproject.toml | TEST-MCP-10 |
@@ -50,12 +50,12 @@ Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `
 
 ---
 
-### `TEST-MCP-03` — Tool count matches implemented command surface
+### `TEST-MCP-03` — Tool count matches the registered MCP surface
 
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   at least 24 tools shall be returned — one per implemented non-interactive command
+Then   at least 24 tools shall be returned — one per registered MCP tool in the current curated surface
 ```
 
 **Fixture:** none.
@@ -166,7 +166,22 @@ And    `"tui"` shall not appear in the set of tool names
 
 ---
 
-### `TEST-MCP-12` — `_build_argv` produces correct argv for representative tools
+### `TEST-MCP-12` — Unregistered implemented commands are excluded from MCP
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_list_tools()` is called
+Then   `"dbc_search"` shall not appear in the set of tool names
+And    `"dbc_fetch"` shall not appear in the set of tool names
+And    `"re_counters"` shall not appear in the set of tool names
+And    `"re_match_dbc"` shall not appear in the set of tool names
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-13` — `_build_argv` produces correct argv for representative tools
 
 ```gherkin
 Given  the `_build_argv` helper is available
@@ -191,7 +206,7 @@ And    `"--json"` shall be the final element in each case
 
 ---
 
-### `TEST-MCP-13` — `_build_argv` raises for unknown tool
+### `TEST-MCP-14` — `_build_argv` raises for unknown tool
 
 ```gherkin
 Given  the `_build_argv` helper is available
