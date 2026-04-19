@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from math import log2
+from typing import Any
 
 from canarchy.models import CanFrame
 
@@ -231,3 +232,46 @@ def _entropy_byte_summary(
         entropy=round(entropy, 3),
         unique_values=len(counts),
     )
+
+
+def score_dbc_candidates(
+    capture_ids: dict[int, int],
+    catalog: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Score each catalog DBC by how well it covers the capture's arbitration IDs.
+
+    capture_ids maps arbitration_id -> frame_count.
+    Each catalog entry must have: name, source_ref, message_ids (list[int]).
+    Score = fraction of total captured frames whose ID is known to the DBC.
+    """
+    if not capture_ids or not catalog:
+        return []
+
+    total_capture_ids = len(capture_ids)
+    total_frames = sum(capture_ids.values()) or 1
+
+    results: list[dict[str, Any]] = []
+    for entry in catalog:
+        message_ids: set[int] = set(entry.get("message_ids", []))
+        if not message_ids:
+            continue
+
+        matched_ids = {arb_id for arb_id in capture_ids if arb_id in message_ids}
+        if not matched_ids:
+            continue
+
+        matched_frames = sum(capture_ids[arb_id] for arb_id in matched_ids)
+        score = round(matched_frames / total_frames, 2)
+
+        results.append(
+            {
+                "name": entry["name"],
+                "source_ref": entry.get("source_ref", f"opendbc:{entry['name']}"),
+                "score": score,
+                "matched_ids": len(matched_ids),
+                "total_capture_ids": total_capture_ids,
+            }
+        )
+
+    results.sort(key=lambda x: (-x["score"], x["name"]))
+    return results

@@ -22,7 +22,7 @@ from canarchy.models import (
     serialize_events,
 )
 from canarchy.replay import build_replay_plan
-from canarchy.reverse_engineering import counter_candidates, entropy_candidates
+from canarchy.reverse_engineering import counter_candidates, entropy_candidates, score_dbc_candidates
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.transport import (
     LocalTransport,
@@ -46,7 +46,7 @@ J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
-RE_COMMANDS = {"re counters", "re entropy"}
+RE_COMMANDS = {"re counters", "re entropy", "re match-dbc", "re shortlist-dbc"}
 ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
 IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
@@ -382,6 +382,21 @@ def build_parser() -> CanarchyArgumentParser:
     re_correlate.add_argument("file")
     add_output_arguments(re_correlate)
     re_correlate.set_defaults(command="re correlate")
+
+    re_match_dbc = re_subparsers.add_parser("match-dbc", help="rank candidate DBCs against a capture")
+    re_match_dbc.add_argument("capture", help="capture file to analyse")
+    re_match_dbc.add_argument("--provider", default="opendbc", help="DBC provider catalog to search (default: opendbc)")
+    re_match_dbc.add_argument("--limit", type=int, default=10, help="maximum candidates to return (default: 10)")
+    add_output_arguments(re_match_dbc)
+    re_match_dbc.set_defaults(command="re match-dbc")
+
+    re_shortlist_dbc = re_subparsers.add_parser("shortlist-dbc", help="rank candidate DBCs filtered by vehicle make")
+    re_shortlist_dbc.add_argument("capture", help="capture file to analyse")
+    re_shortlist_dbc.add_argument("--make", required=True, help="vehicle make to pre-filter candidates (e.g. toyota)")
+    re_shortlist_dbc.add_argument("--provider", default="opendbc", help="DBC provider catalog to search (default: opendbc)")
+    re_shortlist_dbc.add_argument("--limit", type=int, default=10, help="maximum candidates to return (default: 10)")
+    add_output_arguments(re_shortlist_dbc)
+    re_shortlist_dbc.set_defaults(command="re shortlist-dbc")
 
     fuzz = subparsers.add_parser("fuzz", help="active fuzzing workflows")
     fuzz_subparsers = fuzz.add_subparsers(dest="fuzz_action", required=True)
@@ -1443,6 +1458,58 @@ def session_payload(
     raise AssertionError(f"unsupported session command: {args.command}")
 
 
+def _build_match_catalog(
+    provider_name: str,
+    make_filter: str | None = None,
+) -> list[dict[str, Any]]:
+    """Build a catalog of {name, source_ref, message_ids} from cached DBC files.
+
+    Only entries with a cached DBC file on disk are included — no network calls.
+    """
+    from pathlib import Path as _Path
+    import cantools as _cantools
+    from canarchy.dbc_cache import load_manifest, cached_file_path
+    from canarchy.dbc_opendbc import _infer_brand
+
+    manifest = load_manifest(provider_name)
+    if manifest is None:
+        return []
+
+    commit = manifest.get("commit", "")
+    catalog_entries: list[dict[str, str]] = manifest.get("dbcs", [])
+
+    result: list[dict[str, Any]] = []
+    for entry in catalog_entries:
+        name = entry["name"]
+
+        if make_filter:
+            brand = _infer_brand(name)
+            if brand != make_filter.lower():
+                continue
+
+        filename = _Path(entry["path"]).name
+        cached = cached_file_path(provider_name, commit, filename)
+        if not cached.exists():
+            continue
+
+        try:
+            db = _cantools.database.load_file(str(cached))
+            message_ids = [int(msg.frame_id) for msg in db.messages]
+        except Exception:
+            continue
+
+        result.append(
+            {
+                "name": name,
+                "source_ref": f"{provider_name}:{name}",
+                "message_ids": message_ids,
+                "metadata": {"brand": _infer_brand(name)},
+            }
+        )
+
+    return result
+
+
 def reverse_engineering_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -1483,6 +1550,47 @@ def reverse_engineering_payload(
             [],
             warnings,
         )
+    if args.command in {"re match-dbc", "re shortlist-dbc"}:
+        capture_file = args.capture
+        provider_name = getattr(args, "provider", "opendbc")
+        limit = getattr(args, "limit", 10)
+        make_filter = getattr(args, "make", None)
+
+        frames = transport.frames_from_file(capture_file)
+        capture_id_counts: dict[int, int] = {}
+        for frame in frames:
+            if not frame.is_remote_frame and not frame.is_error_frame:
+                capture_id_counts[frame.arbitration_id] = (
+                    capture_id_counts.get(frame.arbitration_id, 0) + 1
+                )
+
+        catalog = _build_match_catalog(provider_name, make_filter=make_filter)
+        candidates = score_dbc_candidates(capture_id_counts, catalog)[:limit]
+
+        warnings: list[str] = []
+        if not catalog:
+            warnings.append(
+                f"No cached DBC files found for provider '{provider_name}'. "
+                "Run `canarchy dbc cache refresh --provider opendbc` then fetch DBCs with `canarchy dbc fetch`."
+            )
+        elif not candidates:
+            filter_note = f" matching make '{make_filter}'" if make_filter else ""
+            warnings.append(
+                f"No candidate DBCs{filter_note} scored above zero against this capture."
+            )
+
+        command_label = "re match-dbc" if args.command == "re match-dbc" else "re shortlist-dbc"
+        data: dict[str, Any] = {
+            "capture": capture_file,
+            "provider": provider_name,
+            "candidate_count": len(candidates),
+            "candidates": candidates,
+            "events": [],
+        }
+        if make_filter:
+            data["make"] = make_filter
+        return (data, [], warnings)
+
     raise AssertionError(f"unsupported reverse-engineering command: {args.command}")
 
 
@@ -1769,6 +1877,28 @@ def format_uds_table(result: CommandResult) -> list[str]:
 
 def format_re_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
+
+    if result.command in {"re match-dbc", "re shortlist-dbc"}:
+        lines.append(f"capture: {result.data.get('capture')}")
+        lines.append(f"provider: {result.data.get('provider')}")
+        if result.command == "re shortlist-dbc":
+            lines.append(f"make: {result.data.get('make')}")
+        lines.append(f"candidate_count: {result.data.get('candidate_count', 0)}")
+        lines.append("candidates:")
+        candidates = result.data.get("candidates", [])
+        if not candidates:
+            lines.append("- no matching candidates")
+            return lines
+        for candidate in candidates:
+            lines.append(
+                "- "
+                f"name={candidate['name']} "
+                f"score={candidate['score']} "
+                f"matched={candidate['matched_ids']}/{candidate['total_capture_ids']} "
+                f"ref={candidate['source_ref']}"
+            )
+        return lines
+
     lines.append(f"file: {result.data.get('file')}")
     lines.append(f"analysis: {result.data.get('analysis')}")
     lines.append(f"candidate_count: {result.data.get('candidate_count', 0)}")

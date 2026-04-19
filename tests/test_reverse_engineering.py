@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from canarchy.reverse_engineering import counter_candidates, entropy_candidates
+from canarchy.reverse_engineering import counter_candidates, entropy_candidates, score_dbc_candidates
 from canarchy.transport import LocalTransport
 
 
@@ -89,3 +90,181 @@ class ReverseEngineeringTests(unittest.TestCase):
         low_sample = next(candidate for candidate in candidates if candidate["arbitration_id"] == 0x103)
         self.assertTrue(low_sample["low_sample"])
         self.assertEqual(low_sample["frame_count"], 5)
+
+
+class ScoreDbcCandidatesTests(unittest.TestCase):
+    def _make_catalog(self) -> list[dict]:
+        return [
+            {
+                "name": "toyota_tnga_k_pt_generated",
+                "source_ref": "opendbc:toyota_tnga_k_pt_generated",
+                "message_ids": [0x100, 0x200, 0x300, 0x400, 0x500],
+            },
+            {
+                "name": "toyota_nodsu_pt_generated",
+                "source_ref": "opendbc:toyota_nodsu_pt_generated",
+                "message_ids": [0x100, 0x200, 0x600],
+            },
+            {
+                "name": "honda_accord",
+                "source_ref": "opendbc:honda_accord",
+                "message_ids": [0xAA0, 0xAA1, 0xAA2],
+            },
+        ]
+
+    def test_score_returns_candidates_sorted_by_score_descending(self) -> None:
+        # 0x100–0x500 are capture IDs; toyota_tnga matches 5/5, nodsu matches 2/5
+        capture_ids = {0x100: 10, 0x200: 10, 0x300: 10, 0x400: 10, 0x500: 10}
+
+        results = score_dbc_candidates(capture_ids, self._make_catalog())
+
+        self.assertEqual(results[0]["name"], "toyota_tnga_k_pt_generated")
+        self.assertGreater(results[0]["score"], results[1]["score"])
+
+    def test_score_excludes_zero_match_candidates(self) -> None:
+        capture_ids = {0x100: 1, 0x200: 1}
+
+        results = score_dbc_candidates(capture_ids, self._make_catalog())
+
+        names = [r["name"] for r in results]
+        self.assertNotIn("honda_accord", names)
+
+    def test_score_output_shape(self) -> None:
+        capture_ids = {0x100: 5, 0x200: 5, 0x999: 40}
+
+        results = score_dbc_candidates(capture_ids, self._make_catalog())
+
+        self.assertTrue(results)
+        top = results[0]
+        self.assertIn("name", top)
+        self.assertIn("source_ref", top)
+        self.assertIn("score", top)
+        self.assertIn("matched_ids", top)
+        self.assertIn("total_capture_ids", top)
+        self.assertEqual(top["total_capture_ids"], 3)
+
+    def test_score_frequency_weighted(self) -> None:
+        # toyota_tnga matches 0x100 (1 frame) and 0x200 (99 frames)
+        # honda matches 0xAA0 (50 frames)
+        capture_ids = {0x100: 1, 0x200: 99, 0xAA0: 50}
+
+        results = score_dbc_candidates(capture_ids, self._make_catalog())
+
+        tnga = next(r for r in results if r["name"] == "toyota_tnga_k_pt_generated")
+        honda = next(r for r in results if r["name"] == "honda_accord")
+        # toyota accounts for 100/150 frames, honda for 50/150
+        self.assertGreater(tnga["score"], honda["score"])
+
+    def test_score_empty_catalog_returns_empty(self) -> None:
+        self.assertEqual(score_dbc_candidates({0x100: 1}, []), [])
+
+    def test_score_empty_capture_ids_returns_empty(self) -> None:
+        self.assertEqual(score_dbc_candidates({}, self._make_catalog()), [])
+
+    def test_score_skips_catalog_entries_without_message_ids(self) -> None:
+        catalog = [{"name": "no_ids", "source_ref": "opendbc:no_ids", "message_ids": []}]
+        self.assertEqual(score_dbc_candidates({0x100: 1}, catalog), [])
+
+
+class MatchDbcCliTests(unittest.TestCase):
+    """Test CLI output shape for re match-dbc and re shortlist-dbc using mocked catalog."""
+
+    _MOCK_CATALOG = [
+        {
+            "name": "toyota_tnga_k_pt_generated",
+            "source_ref": "opendbc:toyota_tnga_k_pt_generated",
+            "message_ids": [0x18FEEE31, 0x18F00431],
+        },
+        {
+            "name": "honda_accord",
+            "source_ref": "opendbc:honda_accord",
+            "message_ids": [0x1234],
+        },
+    ]
+
+    def test_re_match_dbc_json_output_shape(self) -> None:
+        from canarchy.cli import execute_command
+
+        with patch("canarchy.cli._build_match_catalog", return_value=self._MOCK_CATALOG):
+            exit_code, result = execute_command(
+                ["re", "match-dbc", str(FIXTURES / "sample.candump"), "--json"]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertTrue(result.ok)
+        self.assertEqual(result.command, "re match-dbc")
+        data = result.data
+        self.assertIn("capture", data)
+        self.assertIn("provider", data)
+        self.assertIn("candidate_count", data)
+        self.assertIn("candidates", data)
+        self.assertIn("events", data)
+
+    def test_re_match_dbc_candidates_structure(self) -> None:
+        from canarchy.cli import execute_command
+
+        with patch("canarchy.cli._build_match_catalog", return_value=self._MOCK_CATALOG):
+            _, result = execute_command(
+                ["re", "match-dbc", str(FIXTURES / "sample.candump"), "--json"]
+            )
+
+        assert result is not None
+        candidates = result.data["candidates"]
+        self.assertTrue(len(candidates) > 0)
+        top = candidates[0]
+        self.assertIn("name", top)
+        self.assertIn("source_ref", top)
+        self.assertIn("score", top)
+        self.assertIn("matched_ids", top)
+        self.assertIn("total_capture_ids", top)
+
+    def test_re_shortlist_dbc_json_output_shape(self) -> None:
+        from canarchy.cli import execute_command
+
+        with patch("canarchy.cli._build_match_catalog", return_value=self._MOCK_CATALOG):
+            exit_code, result = execute_command(
+                ["re", "shortlist-dbc", str(FIXTURES / "sample.candump"), "--make", "toyota", "--json"]
+            )
+
+        self.assertEqual(exit_code, 0)
+        assert result is not None
+        self.assertTrue(result.ok)
+        self.assertEqual(result.command, "re shortlist-dbc")
+        self.assertIn("make", result.data)
+        self.assertEqual(result.data["make"], "toyota")
+
+    def test_re_match_dbc_empty_catalog_emits_warning(self) -> None:
+        from canarchy.cli import execute_command
+
+        with patch("canarchy.cli._build_match_catalog", return_value=[]):
+            _, result = execute_command(
+                ["re", "match-dbc", str(FIXTURES / "sample.candump"), "--json"]
+            )
+
+        assert result is not None
+        self.assertTrue(result.ok)
+        self.assertIsNotNone(result.warnings)
+        assert result.warnings is not None
+        self.assertTrue(len(result.warnings) > 0)
+
+    def test_re_match_dbc_limit_respected(self) -> None:
+        from canarchy.cli import execute_command
+
+        catalog = [
+            {
+                "name": f"dbc_{i}",
+                "source_ref": f"opendbc:dbc_{i}",
+                "message_ids": [0x18FEEE31, 0x18F00431],
+            }
+            for i in range(20)
+        ]
+
+        with patch("canarchy.cli._build_match_catalog", return_value=catalog):
+            _, result = execute_command(
+                ["re", "match-dbc", str(FIXTURES / "sample.candump"), "--limit", "3", "--json"]
+            )
+
+        assert result is not None
+        self.assertLessEqual(len(result.data["candidates"]), 3)
