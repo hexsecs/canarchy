@@ -76,6 +76,7 @@ nav:
       - Docs Workflow: docs_site.md
       - Release Workflow: release.md
       - TUI Plan: tui_plan.md
+      - Spec Template: spec-template.md
       - Design Specs:
           - Transport Core Commands: design/transport-core-commands.md
           - DBC Command Workflows: design/dbc-command-workflows.md
@@ -107,6 +108,7 @@ nav:
           - UDS Services Command: tests/uds-services-command.md
           - Shell Command: tests/shell-command.md
           - TUI Shell: tests/tui-shell.md
+          - Composition: tests/composition.md
   - Agents:
       - Agent Guide: agents.md
 

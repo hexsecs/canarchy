@@ -541,7 +541,7 @@ Describe the test strategy and coverage expectations for a component or feature.
 
 ### Spec language standard
 
-All design specs and test specs must use the formats defined in [`docs/spec-template.md`](docs/spec-template.md).
+All design specs and test specs must use the formats defined in [`docs/spec-template.md`](spec-template.md).
 
 **Design specs** shall write requirements using EARS (Easy Approach to Requirements Syntax):
 
