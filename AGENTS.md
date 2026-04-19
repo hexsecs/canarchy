@@ -39,6 +39,19 @@ The only exceptions are:
 * typo/whitespace-only changes in docs or comments
 * changes to `.gitignore` or other non-functional config
 
+### Changelog policy
+
+`CHANGELOG.md` follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. Every non-trivial change must be recorded in the `[Unreleased]` section before or alongside the commit that introduces it.
+
+**This is a hard rule, not a suggestion.**
+
+* Every new feature, bug fix, behaviour change, or significant documentation update must have a corresponding `CHANGELOG.md` entry under `[Unreleased]`.
+* Group entries under the standard headings: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`, or `Documentation`.
+* Write entries from the operator's perspective — describe what changed and why it matters, not what files were edited.
+* Changelog entries must be committed in the same commit or PR as the change they describe. Do not leave the changelog update for a separate follow-up.
+* When a release is cut, the `[Unreleased]` section is promoted to a versioned heading. Do not manually create versioned headings outside of the release workflow.
+* The only exceptions are: typo/whitespace-only changes in docs or comments, changes to `.gitignore` or other non-functional config, and MkDocs nav or theme-only changes.
+
 ### Other issue rules
 
 * Use GitHub Issues to track planned work rather than ad hoc task lists in docs.
