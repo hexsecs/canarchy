@@ -14,22 +14,22 @@ Provide evidence-driven reverse-engineering helpers over recorded CAN traffic so
 
 ## User-Facing Motivation
 
-Operators analyzing unknown traffic need repeatable helpers that summarize likely structure in captures, highlight rationale, and expose confidence rather than forcing manual byte-by-byte inspection from raw frames alone.
+Operators analysing unknown traffic need repeatable helpers that summarise likely structure in captures, highlight rationale, and expose confidence rather than forcing manual byte-by-byte inspection from raw frames alone.
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-RE-01` | The system shall provide `re signals`, `re counters`, `re entropy`, and `re correlate` commands over capture files. |
-| `REQ-RE-02` | Each reverse-engineering command shall operate passively on recorded traffic and shall not transmit frames. |
-| `REQ-RE-03` | `re signals` shall return candidate field boundaries with supporting rationale and confidence metadata. |
-| `REQ-RE-04` | `re counters` shall identify byte or bit fields that behave like likely counters and shall expose rollover or monotonicity evidence. |
-| `REQ-RE-05` | `re entropy` shall rank arbitration IDs or candidate fields by entropy-related characteristics derived from observed values. |
-| `REQ-RE-06` | `re correlate` shall correlate candidate fields against a supplied reference series file and shall report correlation strength. |
-| `REQ-RE-07` | Reverse-engineering output shall distinguish heuristics from facts by including confidence, score, or rationale fields. |
-| `REQ-RE-08` | The commands shall support structured JSON output suitable for downstream automation and human-readable table summaries. |
-| `REQ-RE-09` | `re correlate` shall require an explicit `--reference <file>` input whose samples are timestamped numeric values. |
-| `REQ-RE-10` | Invalid inputs or unsupported correlation sources shall return structured user or analysis errors. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-RE-01` | Ubiquitous | The system shall provide `re signals`, `re counters`, `re entropy`, and `re correlate` commands over capture files. |
+| `REQ-RE-02` | Ubiquitous | Each reverse-engineering command shall operate passively on recorded traffic and shall not transmit frames. |
+| `REQ-RE-03` | Event-driven | When `re signals <file>` is invoked, the system shall return candidate field boundaries with supporting rationale and confidence metadata. |
+| `REQ-RE-04` | Event-driven | When `re counters <file>` is invoked, the system shall return candidate fields that exhibit monotonic incrementing behaviour, including rollover detection and monotonicity evidence. |
+| `REQ-RE-05` | Event-driven | When `re entropy <file>` is invoked, the system shall rank arbitration IDs and candidate fields by Shannon entropy derived from observed value distributions. |
+| `REQ-RE-06` | Event-driven | When `re correlate <file> --reference <ref>` is invoked, the system shall correlate candidate bit fields against the reference series and return ranked correlation results. |
+| `REQ-RE-07` | Ubiquitous | Reverse-engineering output shall include confidence, score, or rationale fields that distinguish heuristic inferences from established facts. |
+| `REQ-RE-08` | Ubiquitous | The commands shall support `--json`, `--jsonl`, and `--table` output modes. |
+| `REQ-RE-09` | Unwanted behaviour | If `re correlate` is invoked without `--reference`, the system shall return a structured error with code `RE_REFERENCE_REQUIRED` and exit code 1. |
+| `REQ-RE-10` | Unwanted behaviour | If the reference file is missing, malformed, or does not match the required timestamped numeric sample schema, the system shall return a structured error with code `RE_REFERENCE_INVALID` and exit code 1. |
 
 ## Command Surface
 
@@ -60,11 +60,11 @@ Out of scope:
 
 ## Data Model
 
-The initial command family should use explicit result objects under `data` rather than inventing a new global event type immediately.
+The initial command family uses explicit result objects under `data` rather than inventing a new global event type.
 
 ### Common fields
 
-All reverse-engineering commands should return:
+All reverse-engineering commands shall return:
 
 * `mode: passive`
 * `file`
@@ -72,7 +72,7 @@ All reverse-engineering commands should return:
 * `candidate_count`
 * `candidates`
 
-Each candidate should include at least:
+Each candidate shall include at least:
 
 * `arbitration_id`
 * `score` or `confidence`
@@ -80,7 +80,7 @@ Each candidate should include at least:
 
 ### `re signals`
 
-Signal candidates should include:
+Signal candidates shall include:
 
 * `start_bit`
 * `bit_length`
@@ -89,7 +89,7 @@ Signal candidates should include:
 
 ### `re counters`
 
-Counter candidates should include:
+Counter candidates shall include:
 
 * `start_bit`
 * `bit_length`
@@ -100,11 +100,11 @@ Current implementation note:
 
 * `re counters` is implemented as a deterministic file-backed helper
 * the initial heuristic scans nibble- and byte-sized candidate fields at nibble-aligned start bits
-* current scoring is based on adjacent monotonic increments, explicit rollover detection, and observed value spread
+* scoring is based on adjacent monotonic increments, explicit rollover detection, and observed value spread
 
 ### `re entropy`
 
-Entropy candidates should include:
+Entropy candidates shall include:
 
 * `scope` such as arbitration ID, byte index, or bit range
 * `entropy`
@@ -138,29 +138,7 @@ Optional fields:
 * `name`: series name when not supplied by the outer `.json` object
 * `units`: operator-facing units metadata
 
-Representative `.json` form:
-
-```json
-{
-  "name": "vehicle_speed",
-  "units": "kph",
-  "samples": [
-    {"timestamp": 0.0, "value": 0.0},
-    {"timestamp": 0.1, "value": 2.0}
-  ]
-}
-```
-
-Representative `.jsonl` form:
-
-```jsonl
-{"name":"vehicle_speed","timestamp":0.0,"value":0.0}
-{"name":"vehicle_speed","timestamp":0.1,"value":2.0}
-```
-
-The implementation should treat the reference series as an ordered numeric time series and align candidate field samples against it using the chosen correlation strategy.
-
-Correlation candidates should include:
+Correlation candidates shall include:
 
 * `reference_name`
 * `correlation`
@@ -171,28 +149,17 @@ Correlation candidates should include:
 
 ### JSON
 
-Commands should return the standard CANarchy result envelope.
+Commands shall return the standard CANarchy result envelope.
 
 ### JSONL
 
-The initial implementation may either:
-
-* emit a single result object line when using result-only output, or
-* emit one candidate object per line if the implementation adopts candidate-event streaming
-
-The chosen behavior should be documented and tested consistently at implementation time.
+The initial implementation may either emit a single result object line or one candidate object per line. The chosen behavior shall be documented and tested consistently at implementation time.
 
 ### Table
 
-Table output should present compact ranked candidate summaries with confidence/score and rationale visible.
-
-### Raw
-
-Raw output should follow the standard command-success/error behavior unless a stronger operator need emerges.
+Table output shall present compact ranked candidate summaries with confidence/score and rationale visible.
 
 ## Error Contracts
-
-Planned structured errors include:
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|
@@ -204,6 +171,6 @@ Planned structured errors include:
 
 ## Deferred Decisions
 
-* exact candidate schemas and whether they should also be modeled as typed events
+* exact candidate schemas and whether they should also be modelled as typed events
 * whether `re signals` should emit contiguous-field suggestions, bitfield suggestions, or both in the first version
 * threshold and scoring models for counter and entropy ranking

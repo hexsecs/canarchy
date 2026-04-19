@@ -18,20 +18,22 @@ Operators need a deterministic way to persist machine-readable results from curr
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-EXPORT-01` | The system shall provide a `canarchy export <source> <destination>` command. |
-| `REQ-EXPORT-02` | The command shall support capture-file sources and saved-session sources. |
-| `REQ-EXPORT-03` | The command shall support `.json` artifact output that preserves the command-style envelope. |
-| `REQ-EXPORT-04` | The command shall support `.jsonl` output for event-capable sources. |
-| `REQ-EXPORT-05` | The command shall return structured errors for unsupported sources, unsupported destination formats, and unsupported `.jsonl` requests. |
-| `REQ-EXPORT-06` | The command result shall describe the artifact written using stable metadata fields. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-EXPORT-01` | Ubiquitous | The system shall provide a `canarchy export <source> <destination>` command for structured artifact persistence. |
+| `REQ-EXPORT-02` | Event-driven | When `export` is invoked with a capture file source, the system shall write a structured event-stream artifact to the destination path. |
+| `REQ-EXPORT-03` | Event-driven | When `export` is invoked with a `session:<name>` source, the system shall write a structured session record artifact to the destination path. |
+| `REQ-EXPORT-04` | Event-driven | When the destination path ends in `.json`, the system shall write a full command-result envelope preserving event and session structure. |
+| `REQ-EXPORT-05` | Event-driven | When the destination path ends in `.jsonl` and the source produces events, the system shall write one serialised event per line with no outer envelope. |
+| `REQ-EXPORT-06` | Ubiquitous | The command result shall describe the artifact written using stable metadata fields including `source`, `destination`, `artifact_type`, and `export_format`. |
+| `REQ-EXPORT-07` | Unwanted behaviour | If the source is neither a readable capture file nor a valid `session:<name>` reference, the system shall return a structured error with code `EXPORT_SOURCE_UNSUPPORTED` and exit code 1. |
+| `REQ-EXPORT-08` | Unwanted behaviour | If the destination suffix is not `.json` or `.jsonl`, the system shall return a structured error with code `EXPORT_FORMAT_UNSUPPORTED` and exit code 1. |
+| `REQ-EXPORT-09` | Unwanted behaviour | If `.jsonl` output is requested for a source that produces no events, the system shall return a structured error with code `EXPORT_EVENTS_UNAVAILABLE` and exit code 1. |
 
 ## Command Surface
 
 ```text
-canarchy export <source> <destination>
-                 [--json] [--jsonl] [--table] [--raw]
+canarchy export <source> <destination> [--json] [--jsonl] [--table] [--raw]
 ```
 
 ### Supported source forms
@@ -46,7 +48,7 @@ canarchy export <source> <destination>
 | Suffix | Shape |
 |--------|-------|
 | `.json` | full structured artifact envelope |
-| `.jsonl` | one serialized event per line |
+| `.jsonl` | one serialised event per line |
 
 `.jsonl` is only supported for sources that produce `events`.
 
@@ -90,34 +92,11 @@ Writes a full command-style envelope:
 
 ### Capture file to `.jsonl`
 
-Writes each serialized event as one JSON line. No outer envelope is written.
+Writes each serialised event as one JSON line. No outer envelope is written.
 
 ### Session to `.json`
 
 Writes a full command-style envelope with a `session` payload and no `events` list.
-
-## Command Result Contract
-
-The `export` command itself returns a standard CANarchy result describing the write operation.
-
-Returned fields include:
-
-* `source`
-* `destination`
-* `source_kind`
-* `artifact_type`
-* `export_format`
-* `exported_events`
-
-## Output Contracts
-
-### JSON and JSONL
-
-The command result uses the existing CANarchy envelope shape. The written artifact depends on the destination suffix.
-
-### Table and raw
-
-Table and raw remain command-result views and do not change the artifact shape written to disk.
 
 ## Error Contracts
 

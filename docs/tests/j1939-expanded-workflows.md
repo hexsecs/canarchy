@@ -35,33 +35,72 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 
 ## Representative Test Cases
 
-### `TEST-J1939-01` SPN capture-file requirement
+### `TEST-J1939-01` — SPN capture-file requirement
 
-Action: run `canarchy j1939 spn 110 --json`.  
-Assert: exit code `1` and `errors[0].code == "CAPTURE_FILE_REQUIRED"`.
+```gherkin
+Given  no capture file is provided
+When   the operator runs `canarchy j1939 spn 110 --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"CAPTURE_FILE_REQUIRED"`
+```
 
-### `TEST-J1939-02` SPN observation extraction
+**Fixture:** none required.
 
-Setup: use a capture fixture containing PGN `65262`.  
-Action: run `canarchy j1939 spn 110 --file sample.candump --json`.  
-Assert: one observation is returned with the expected SPN, PGN, source address, decoded value, and units.
+---
 
-### `TEST-J1939-03` TP BAM session summary
+### `TEST-J1939-02` — SPN observation extraction
 
-Setup: use a fixture containing TP.CM BAM and TP.DT frames for a DM1 payload.  
-Action: run `canarchy j1939 tp j1939_dm1_tp.candump --json`.  
-Assert: one complete BAM session is returned with the expected transferred PGN, packet count, and reassembled payload bytes.
+```gherkin
+Given  a capture fixture containing PGN `65262` is available
+When   the operator runs `canarchy j1939 spn 110 --file sample.candump --json`
+Then   exactly one observation shall be returned
+And    the observation shall include the expected SPN, PGN, source address, decoded value, and units
+```
 
-### `TEST-J1939-04` DM1 direct and transported parsing
+**Fixture:** `tests/fixtures/sample.candump`.
 
-Setup: use a fixture containing one direct DM1 and one TP-reassembled DM1.  
-Action: run `canarchy j1939 dm1 j1939_dm1_tp.candump --json`.  
-Assert: both messages are returned; the TP message has two DTCs and the direct message preserves its source address and FMI.
+---
 
-### `TEST-J1939-05` DM1 table output
+### `TEST-J1939-03` — TP BAM session summary
 
-Action: run `canarchy j1939 dm1 j1939_dm1_tp.candump --table`.  
-Assert: output includes the command header, message section, transport label, and DTC summaries.
+```gherkin
+Given  the fixture `j1939_dm1_tp.candump` contains TP.CM BAM and TP.DT frames for a DM1 payload
+When   the operator runs `canarchy j1939 tp j1939_dm1_tp.candump --json`
+Then   exactly one complete BAM session shall be returned
+And    the session shall include the expected transferred PGN, packet count, and reassembled payload bytes
+```
+
+**Fixture:** `tests/fixtures/j1939_dm1_tp.candump`.
+
+---
+
+### `TEST-J1939-04` — DM1 direct and transported parsing
+
+```gherkin
+Given  the fixture `j1939_dm1_tp.candump` contains one direct DM1 and one TP-reassembled DM1
+When   the operator runs `canarchy j1939 dm1 j1939_dm1_tp.candump --json`
+Then   both DM1 messages shall be returned
+And    the TP-reassembled message shall have two DTCs
+And    the direct message shall preserve its source address and FMI
+```
+
+**Fixture:** `tests/fixtures/j1939_dm1_tp.candump`.
+
+---
+
+### `TEST-J1939-05` — DM1 table output
+
+```gherkin
+Given  the fixture `j1939_dm1_tp.candump` is available
+When   the operator runs `canarchy j1939 dm1 j1939_dm1_tp.candump --table`
+Then   the output shall include the command header
+And    the output shall include a message section with a transport label
+And    the output shall include DTC summaries for each message
+```
+
+**Fixture:** `tests/fixtures/j1939_dm1_tp.candump`.
+
+---
 
 ## Fixtures And Environment
 

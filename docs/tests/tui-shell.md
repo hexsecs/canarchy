@@ -31,25 +31,55 @@ Validate that the initial TUI shell starts correctly, reuses the shared command 
 
 ## Representative Test Cases
 
-### `TEST-TUI-01` TUI startup
+### `TEST-TUI-01` — TUI startup
 
-Action: run `canarchy tui` with EOF on input.  
-Assert: startup output contains the shell header plus bus status, live traffic, alerts, and command-entry sections.
+```gherkin
+Given  EOF is supplied on stdin
+When   the operator runs `canarchy tui`
+Then   the startup output shall contain the shell header
+And    the output shall contain bus status, live traffic, alerts, and command-entry sections
+```
 
-### `TEST-TUI-02` One-shot command execution
+**Fixture:** mocked input (EOF).
 
-Action: run `canarchy tui --command "j1939 monitor --pgn 65262"`.  
-Assert: output reflects the shared command result, including command and mode state plus recent traffic content.
+---
 
-### `TEST-TUI-03` Shared error surface
+### `TEST-TUI-02` — One-shot command execution
 
-Action: run `canarchy tui --command "j1939 pgn 300000"`.  
-Assert: output contains the structured `INVALID_PGN` error in the alerts pane.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy tui --command "j1939 monitor --pgn 65262"`
+Then   the output shall reflect the shared command result
+And    the output shall include command and mode state plus recent traffic content
+```
 
-### `TEST-TUI-04` Nested front ends rejected
+**Fixture:** scaffold backend (no file required).
 
-Action: run `canarchy tui --command "shell --command 'capture can0 --raw'"`.  
-Assert: output contains `TUI_COMMAND_UNSUPPORTED`.
+---
+
+### `TEST-TUI-03` — Shared error surface
+
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy tui --command "j1939 pgn 300000"`
+Then   the output shall contain a structured `INVALID_PGN` error in the alerts pane
+```
+
+**Fixture:** scaffold backend (no file required).
+
+---
+
+### `TEST-TUI-04` — Nested front ends rejected
+
+```gherkin
+Given  the TUI is running
+When   the operator submits the command `shell --command 'capture can0 --raw'` from TUI input
+Then   the output shall contain `TUI_COMMAND_UNSUPPORTED`
+```
+
+**Fixture:** mocked TUI command input.
+
+---
 
 ## Fixtures And Environment
 

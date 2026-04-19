@@ -34,30 +34,71 @@ The current implementation covers both transport-backed single-frame behavior on
 
 ## Representative Test Cases
 
-### `TEST-UDS-TX-01` Scan JSON output
+### `TEST-UDS-TX-01` — Scan JSON output
 
-Action: run `canarchy uds scan can0 --json`.  
-Assert: output includes active mode, responder count, transaction events, and the active scan warning.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy uds scan can0 --json`
+Then   the result shall indicate active mode
+And    the result shall include a responder count and structured transaction events
+And    the result shall include an active scan warning alert
+```
 
-### `TEST-UDS-TX-02` Trace JSON output
+**Fixture:** scaffold backend (no file required).
 
-Action: run `canarchy uds trace can0 --json`.  
-Assert: output includes passive mode, transaction count, and structured transaction events.
+---
 
-### `TEST-UDS-TX-03` Scan table output
+### `TEST-UDS-TX-02` — Trace JSON output
 
-Action: run `canarchy uds scan can0 --table`.  
-Assert: output includes responder and transaction sections with protocol-aware service metadata.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy uds trace can0 --json`
+Then   the result shall indicate passive mode
+And    the result shall include a transaction count and structured transaction events
+```
 
-### `TEST-UDS-TX-04` Trace table output
+**Fixture:** scaffold backend (no file required).
 
-Action: run `canarchy uds trace can0 --table`.  
-Assert: output includes traced transaction summaries with service and identifier information.
+---
 
-### `TEST-UDS-TX-05` Transport error
+### `TEST-UDS-TX-03` — Scan table output
 
-Action: run `canarchy uds scan offline0 --json`.  
-Assert: exit code `2` and `errors[0].code == "TRANSPORT_UNAVAILABLE"`.
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy uds scan can0 --table`
+Then   the output shall include responder and transaction sections
+And    the output shall include protocol-aware service metadata
+```
+
+**Fixture:** scaffold backend (no file required).
+
+---
+
+### `TEST-UDS-TX-04` — Trace table output
+
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy uds trace can0 --table`
+Then   the output shall include traced transaction summaries
+And    the output shall include service and identifier information for each transaction
+```
+
+**Fixture:** scaffold backend (no file required).
+
+---
+
+### `TEST-UDS-TX-05` — Transport error
+
+```gherkin
+Given  the interface `offline0` is not available
+When   the operator runs `canarchy uds scan offline0 --json`
+Then   the command shall exit with code `2`
+And    `errors[0].code` shall equal `"TRANSPORT_UNAVAILABLE"`
+```
+
+**Fixture:** none (unavailable interface name).
+
+---
 
 ## Fixtures And Environment
 

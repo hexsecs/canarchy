@@ -18,13 +18,12 @@ UDS workflows are easier to script and reason about when the command surface inc
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-UDS-SVC-01` | The system shall provide a `canarchy uds services` command. |
-| `REQ-UDS-SVC-02` | The command shall return a stable catalog of known UDS services with names and service identifiers. |
-| `REQ-UDS-SVC-03` | The command shall include protocol-relevant metadata for each service, including positive-response service identifier and subfunction expectations. |
-| `REQ-UDS-SVC-04` | The command shall remain reference-only and shall not require a transport interface or live bus activity. |
-| `REQ-UDS-SVC-05` | The command shall support standard CANarchy output modes with protocol-aware table output. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-UDS-SVC-01` | Ubiquitous | The system shall provide a `canarchy uds services` command. |
+| `REQ-UDS-SVC-02` | Event-driven | When `uds services` is invoked, the system shall return a stable catalogue of UDS services including service identifier, name, positive-response service identifier, category, and subfunction requirements. |
+| `REQ-UDS-SVC-03` | Ubiquitous | The `uds services` command shall require no transport interface or live bus connection. |
+| `REQ-UDS-SVC-04` | Ubiquitous | The command shall support standard CANarchy output modes with protocol-aware table output. |
 
 ## Command Surface
 
@@ -36,19 +35,19 @@ canarchy uds services [--json] [--jsonl] [--table] [--raw]
 
 In scope:
 
-* stable UDS service catalog output
+* stable UDS service catalogue output
 * mapping service identifiers to names and positive-response identifiers
 * lightweight protocol metadata for operator reference
 
 Out of scope:
 
 * ECU-specific service discovery
-* negative-response code catalogs
+* negative-response code catalogues
 * live probing or transport interaction
 
 ## Data Model
 
-Each catalog entry includes:
+Each catalogue entry includes:
 
 * `service`
 * `name`
@@ -64,7 +63,7 @@ Because `uds services` is reference-only and does not emit an event stream, both
 
 ### Table
 
-Table output presents a compact service catalog with service identifier, positive-response identifier, category, and subfunction requirement.
+Table output presents a compact service catalogue with service identifier, positive-response identifier, category, and subfunction requirement.
 
 ### Raw
 
@@ -77,5 +76,5 @@ This command has no command-specific error cases beyond standard CLI usage error
 ## Deferred Decisions
 
 * negative-response code reference output
-* extended service metadata beyond the initial curated catalog
+* extended service metadata beyond the initial curated catalogue
 * OEM or profile-specific service overlays

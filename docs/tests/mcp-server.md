@@ -23,147 +23,177 @@
 | REQ-MCP-09 | `mcp` declared in pyproject.toml | TEST-MCP-10 |
 | REQ-MCP-10 | `shell` and `tui` not exposed as MCP tools | TEST-MCP-11 |
 
-## Test Cases
+## Representative Test Cases
 
-### TEST-MCP-01 — Server entry point is callable
+### `TEST-MCP-01` — Server entry point is callable
 
-**Fixture:** none  
-**Steps:**
-1. Import `run_server` from `canarchy.mcp_server`.
-2. Assert it is callable.
-3. Assert `canarchy mcp serve --help` exits cleanly (exit code 0).
+```gherkin
+Given  the `canarchy.mcp_server` module is importable
+When   `run_server` is retrieved from the module
+Then   it shall be callable
+And    `canarchy mcp serve --help` shall exit with code `0`
+```
 
-**Expected:** No import errors; help text exits 0.
-
----
-
-### TEST-MCP-02 — Tool discovery returns expected tool names
-
-**Fixture:** none  
-**Steps:**
-1. Call `asyncio.run(handle_list_tools())`.
-2. Collect `{tool.name for tool in result}`.
-
-**Expected:** Set contains at minimum: `capture`, `send`, `filter`, `stats`, `decode`, `encode`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`.
+**Fixture:** none.
 
 ---
 
-### TEST-MCP-03 — Tool count matches implemented command surface
+### `TEST-MCP-02` — Tool discovery returns expected tool names
 
-**Fixture:** none  
-**Steps:**
-1. Call `handle_list_tools()`.
-2. Count returned tools.
+```gherkin
+Given  the MCP server is initialised
+When   `handle_list_tools()` is called
+Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `decode`, `encode`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`
+```
 
-**Expected:** At least 23 tools returned (one per implemented non-interactive command).
-
----
-
-### TEST-MCP-04 — Each tool has a non-empty description and a valid inputSchema
-
-**Fixture:** none  
-**Steps:**
-1. Call `handle_list_tools()`.
-2. For each tool, assert `tool.description` is a non-empty string.
-3. Assert `tool.inputSchema` is a dict with a `"type"` key.
-
-**Expected:** All tools pass both assertions.
+**Fixture:** none.
 
 ---
 
-### TEST-MCP-05 — `config_show` returns structured result
+### `TEST-MCP-03` — Tool count matches implemented command surface
 
-**Fixture:** none (config show requires no files)  
-**Steps:**
-1. Call `asyncio.run(handle_call_tool("config_show", {}))`.
-2. Parse `results[0].text` as JSON.
+```gherkin
+Given  the MCP server is initialised
+When   `handle_list_tools()` is called
+Then   at least 23 tools shall be returned — one per implemented non-interactive command
+```
 
-**Expected:** `payload["ok"] == True`, `payload["command"] == "config show"`, `"backend"` key present in `payload["data"]`.
-
----
-
-### TEST-MCP-06 — `uds_services` returns service catalogue
-
-**Fixture:** none  
-**Steps:**
-1. Call `asyncio.run(handle_call_tool("uds_services", {}))`.
-2. Parse the response JSON.
-
-**Expected:** `payload["ok"] == True`, `payload["data"]["service_count"] > 0`.
+**Fixture:** none.
 
 ---
 
-### TEST-MCP-07 — `send` with invalid frame_id returns structured error
+### `TEST-MCP-04` — Each tool has a non-empty description and a valid inputSchema
 
-**Fixture:** none  
-**Steps:**
-1. Call `handle_call_tool("send", {"interface": "can0", "frame_id": "not_hex", "data": "1122"})`.
-2. Parse response.
+```gherkin
+Given  the MCP server is initialised
+When   `handle_list_tools()` is called
+Then   every tool shall have a non-empty string `description`
+And    every tool `inputSchema` shall be a dict containing a `"type"` key
+```
 
-**Expected:** `payload["ok"] == False`, at least one error with `code == "INVALID_FRAME_ID"`.
-
----
-
-### TEST-MCP-08 — `replay` with zero rate returns structured error
-
-**Fixture:** any candump file path  
-**Steps:**
-1. Call `handle_call_tool("replay", {"file": "any.candump", "rate": 0.0})`.
-2. Parse response.
-
-**Expected:** `payload["ok"] == False`, error code `"INVALID_RATE"`.
+**Fixture:** none.
 
 ---
 
-### TEST-MCP-09 — Unknown tool name raises ValueError
+### `TEST-MCP-05` — `config_show` returns structured result
 
-**Fixture:** none  
-**Steps:**
-1. Call `handle_call_tool("nonexistent_tool", {})`.
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("config_show", {})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"config show"`
+And    `data` shall contain a `"backend"` key
+```
 
-**Expected:** `ValueError` raised with message referencing the unknown tool name.
-
----
-
-### TEST-MCP-10 — `mcp` dependency declared in pyproject.toml
-
-**Fixture:** `pyproject.toml`  
-**Steps:**
-1. Read `pyproject.toml`.
-2. Check `[project.dependencies]` list.
-
-**Expected:** An entry matching `mcp>=...` is present.
+**Fixture:** none (config show requires no files).
 
 ---
 
-### TEST-MCP-11 — `shell` and `tui` are not MCP tools
+### `TEST-MCP-06` — `uds_services` returns service catalogue
 
-**Fixture:** none  
-**Steps:**
-1. Call `handle_list_tools()`.
-2. Collect tool names.
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("uds_services", {})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `data.service_count` shall be greater than `0`
+```
 
-**Expected:** `"shell"` and `"tui"` are not in the set.
-
----
-
-### TEST-MCP-12 — `_build_argv` produces correct argv for representative tools
-
-**Fixture:** none  
-**Steps:**
-1. `_build_argv("capture", {"interface": "can0"})` → `["capture", "can0", "--json"]`
-2. `_build_argv("j1939_monitor", {"interface": "can0", "pgn": 60160})` → contains `["j1939", "monitor", "can0", "--pgn", "60160"]` elements in order.
-3. `_build_argv("encode", {"dbc": "t.dbc", "message": "Msg", "signals": ["RPM=1000"]})` → contains `"--dbc"`, `"t.dbc"`, `"Msg"`, `"RPM=1000"`.
-4. `_build_argv("j1939_pgn", {"pgn": 61444, "file": "trace.candump"})` → contains `["j1939", "pgn", "61444", "--file", "trace.candump"]`.
-
-**Expected:** Each assertion passes; `--json` is always the final element.
+**Fixture:** none.
 
 ---
 
-### TEST-MCP-13 — `_build_argv` raises for unknown tool
+### `TEST-MCP-07` — `send` with invalid frame_id returns structured error
 
-**Fixture:** none  
-**Steps:**
-1. Call `_build_argv("bad_tool", {})`.
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("send", {"interface": "can0", "frame_id": "not_hex", "data": "1122"})` is called
+Then   the response shall parse as JSON with `ok` equal to `false`
+And    at least one error shall have `code` equal to `"INVALID_FRAME_ID"`
+```
 
-**Expected:** `ValueError` raised.
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-08` — `replay` with zero rate returns structured error
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("replay", {"file": "any.candump", "rate": 0.0})` is called
+Then   the response shall parse as JSON with `ok` equal to `false`
+And    `errors[0].code` shall equal `"INVALID_RATE"`
+```
+
+**Fixture:** any candump file path.
+
+---
+
+### `TEST-MCP-09` — Unknown tool name raises ValueError
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("nonexistent_tool", {})` is called
+Then   a `ValueError` shall be raised
+And    the error message shall reference the unknown tool name
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-10` — `mcp` dependency declared in pyproject.toml
+
+```gherkin
+Given  `pyproject.toml` is available in the repository root
+When   the `[project.dependencies]` list is read
+Then   an entry matching `mcp>=...` shall be present
+```
+
+**Fixture:** `pyproject.toml`.
+
+---
+
+### `TEST-MCP-11` — `shell` and `tui` are not MCP tools
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_list_tools()` is called
+Then   `"shell"` shall not appear in the set of tool names
+And    `"tui"` shall not appear in the set of tool names
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-12` — `_build_argv` produces correct argv for representative tools
+
+```gherkin
+Given  the `_build_argv` helper is available
+When   called with `("capture", {"interface": "can0"})`
+Then   the result shall equal `["capture", "can0", "--json"]`
+
+When   called with `("j1939_monitor", {"interface": "can0", "pgn": 60160})`
+Then   the result shall contain `["j1939", "monitor", "can0", "--pgn", "60160"]` in order
+
+When   called with `("encode", {"dbc": "t.dbc", "message": "Msg", "signals": ["RPM=1000"]})`
+Then   the result shall contain `"--dbc"`, `"t.dbc"`, `"Msg"`, and `"RPM=1000"`
+
+When   called with `("j1939_pgn", {"pgn": 61444, "file": "trace.candump"})`
+Then   the result shall contain `["j1939", "pgn", "61444", "--file", "trace.candump"]` in order
+And    `"--json"` shall be the final element in each case
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-13` — `_build_argv` raises for unknown tool
+
+```gherkin
+Given  the `_build_argv` helper is available
+When   called with `("bad_tool", {})`
+Then   a `ValueError` shall be raised
+```
+
+**Fixture:** none.

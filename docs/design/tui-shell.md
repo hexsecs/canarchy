@@ -18,13 +18,13 @@ Operators need a compact interactive view that can surface recent traffic, comma
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-TUI-01` | The system shall provide a `canarchy tui` command that starts the initial text-mode shell. |
-| `REQ-TUI-02` | The initial TUI shall render bus status, live traffic, alerts, and command-entry sections. |
-| `REQ-TUI-03` | TUI command entry shall execute existing CANarchy commands through the shared parser and result path. |
-| `REQ-TUI-04` | The TUI shall not introduce separate transport, protocol, or session logic. |
-| `REQ-TUI-05` | The TUI shall reject nested interactive front ends from command entry with a structured error. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-TUI-01` | Ubiquitous | The system shall provide a `canarchy tui` command that starts the initial text-mode shell. |
+| `REQ-TUI-02` | Event-driven | When `canarchy tui` starts, the system shall render bus status, live traffic, alerts, and command-entry sections. |
+| `REQ-TUI-03` | Event-driven | When a command is submitted via TUI command entry, the system shall execute it through the shared CLI parser and result path. |
+| `REQ-TUI-04` | Ubiquitous | The TUI shall not introduce transport, protocol, or session logic separate from the shared command layer. |
+| `REQ-TUI-05` | Unwanted behaviour | If `shell` or `tui` is submitted via TUI command entry, the system shall return a structured error with code `TUI_COMMAND_UNSUPPORTED` and exit code 1. |
 
 ## Command Surface
 

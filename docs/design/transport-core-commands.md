@@ -18,17 +18,18 @@ Operators need a stable base command set that supports passive live observation,
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-TRANSPORT-01` | The system shall provide a `capture` command for passive transport observation. |
-| `REQ-TRANSPORT-02` | The system shall provide a `send` command for intentional active transmit. |
-| `REQ-TRANSPORT-03` | The system shall provide `filter` and `stats` commands for file-backed capture analysis. |
-| `REQ-TRANSPORT-04` | `capture` and `send` shall use the selected transport backend, default to `python-can`, and expose effective backend metadata. |
-| `REQ-TRANSPORT-05` | `capture` shall stream frames through the live capture path for every output format. |
-| `REQ-TRANSPORT-06` | `send` shall emit an active-transmit warning distinct from passive workflows. |
-| `REQ-TRANSPORT-07` | `filter` shall emit matching frame events from file-backed captures. |
-| `REQ-TRANSPORT-08` | `stats` shall return deterministic file-backed summary fields such as total frame count and unique arbitration ID count. |
-| `REQ-TRANSPORT-09` | Transport and file-parse failures shall return structured transport errors. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-TRANSPORT-01` | Ubiquitous | The system shall provide `capture`, `send`, `filter`, and `stats` commands as the foundational transport command set. |
+| `REQ-TRANSPORT-02` | Event-driven | When `capture <interface>` is invoked, the system shall stream frame events through the live capture path for all output formats. |
+| `REQ-TRANSPORT-03` | Event-driven | When `send <interface> <frame-id> <data>` is invoked, the system shall transmit the specified frame and emit an active-transmit warning distinct from passive workflows. |
+| `REQ-TRANSPORT-04` | Event-driven | When `filter <file> <expression>` is invoked, the system shall return only the frame events from the capture file that satisfy the expression. |
+| `REQ-TRANSPORT-05` | Event-driven | When `stats <file>` is invoked, the system shall return a deterministic summary including total frame count and unique arbitration ID count. |
+| `REQ-TRANSPORT-06` | Event-driven | When `capture` or `send` is invoked, the system shall expose the effective transport backend name and configuration metadata in the result. |
+| `REQ-TRANSPORT-07` | Unwanted behaviour | If a transport interface is unavailable or a backend open fails, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
+| `REQ-TRANSPORT-08` | Unwanted behaviour | If a capture file cannot be parsed, the system shall return a structured error with code `CAPTURE_SOURCE_INVALID` and exit code 2. |
+| `REQ-TRANSPORT-09` | Unwanted behaviour | If a capture file format is unsupported, the system shall return a structured error with code `CAPTURE_FORMAT_UNSUPPORTED` and exit code 2. |
+| `REQ-TRANSPORT-10` | Unwanted behaviour | If `filter` receives an unsupported expression, the system shall return a structured error with code `FILTER_EXPRESSION_UNSUPPORTED` and exit code 2. |
 
 ## Command Surface
 
@@ -56,7 +57,7 @@ Out of scope:
 
 ## Data Model
 
-Transport-facing commands return serialized frame events and transport metadata. File-backed analysis returns frame events or summary fields derived from parsed candump inputs.
+Transport-facing commands return serialised frame events and transport metadata. File-backed analysis returns frame events or summary fields derived from parsed candump inputs.
 
 Relevant shared fields include:
 
@@ -76,7 +77,7 @@ Current backend note:
 
 ### JSON
 
-Live `capture` emits one serialized event per line, matching JSONL semantics. Other transport commands return the standard CANarchy command envelope with events or summary fields under `data`.
+Live `capture` emits one serialised event per line, matching JSONL semantics. Other transport commands return the standard CANarchy command envelope with events or summary fields under `data`.
 
 ### JSONL
 

@@ -18,15 +18,15 @@ Operators and coding agents should be able to connect commands with pipes instea
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| `REQ-COMP-01` | `decode`, `filter`, and `j1939 decode` shall accept `--stdin` to read JSONL events from stdin. |
-| `REQ-COMP-02` | When `--stdin` is used, the command shall reject a positional capture file. |
-| `REQ-COMP-03` | When `--stdin` is not used, the command shall continue to use the existing file-backed path. |
-| `REQ-COMP-04` | Stdin lines shall be validated as canonical frame events before command-specific processing begins. |
-| `REQ-COMP-05` | Invalid JSON, invalid event shape, or non-frame events on stdin shall return `INVALID_STREAM_EVENT`. |
-| `REQ-COMP-06` | Empty stdin shall return `NO_STREAM_EVENTS`. |
-| `REQ-COMP-07` | JSONL output shall preserve the existing event-stream contract of the consuming command. |
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-COMP-01` | Optional feature | Where `--stdin` is specified, `decode`, `filter`, and `j1939 decode` shall read JSONL frame events from stdin instead of a positional capture file. |
+| `REQ-COMP-02` | Unwanted behaviour | If `--stdin` is specified alongside a positional capture file, the system shall return a structured error with code `STDIN_AND_FILE_SPECIFIED` and exit code 1. |
+| `REQ-COMP-03` | Unwanted behaviour | If neither `--stdin` nor a capture file is provided for a command that requires one, the system shall return a structured error with code `MISSING_INPUT` and exit code 1. |
+| `REQ-COMP-04` | Event-driven | When `--stdin` is in use, the system shall validate each non-empty line as a canonical frame event before command-specific processing begins. |
+| `REQ-COMP-05` | Unwanted behaviour | If a stdin line is malformed JSON, is not a frame event, or does not decode into a valid frame, the system shall return a structured error with code `INVALID_STREAM_EVENT` and exit code 1. |
+| `REQ-COMP-06` | Unwanted behaviour | If stdin contains no valid non-empty frame events, the system shall return a structured error with code `NO_STREAM_EVENTS` and exit code 1. |
+| `REQ-COMP-07` | Ubiquitous | When `--stdin` is used, JSONL output shall preserve the existing event-stream contract of the consuming command. |
 
 ## Command Surface
 
