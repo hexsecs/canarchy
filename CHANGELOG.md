@@ -9,6 +9,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+* `re match-dbc <capture> [--provider opendbc] [--limit 10]` — ranks all locally-cached DBC files against a capture file using a frequency-weighted ID coverage score; returns the top N candidates sorted by score descending.
+* `re shortlist-dbc <capture> --make <brand> [--provider opendbc] [--limit 10]` — same as `re match-dbc` but pre-filters candidates by vehicle brand before scoring.
+* `score_dbc_candidates()` scoring function in `reverse_engineering.py` — pure function that accepts a `capture_ids` frequency map and a pre-built catalog; no network calls or file I/O at score time.
+
 * `DBC_CACHE_MISS` error now includes a copy-pasteable `canarchy dbc cache refresh --provider opendbc` command and a hint about the `auto_refresh` config option.
 * `auto_refresh` opt-in for `[dbc.providers.opendbc]` in `~/.canarchy/config.toml`: when `true`, the first `resolve()` call on a cold cache triggers `refresh()` automatically instead of raising `DBC_CACHE_MISS`. Defaults to `false` for offline safety.
 
