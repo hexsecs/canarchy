@@ -50,7 +50,7 @@ Verify the wheel installs and the entry point works:
 ```bash
 tmpdir=$(mktemp -d)
 uv venv "$tmpdir/.venv"
-"$tmpdir/.venv/bin/pip" install dist/*.whl
+uv pip install --python "$tmpdir/.venv/bin/python" dist/*.whl
 "$tmpdir/.venv/bin/canarchy" --version
 ```
 
@@ -70,6 +70,24 @@ Recommended for the first public release:
 3. Install from TestPyPI.
 4. Verify `canarchy --version` and a small representative command such as `canarchy config show --json`.
 5. Only then publish the same release to PyPI.
+
+## GitHub Actions Publish Workflow
+
+The repository includes a manual GitHub Actions workflow at `.github/workflows/publish.yml`.
+
+How to use it:
+
+1. Open the `publish` workflow in GitHub Actions.
+2. Run it manually with `repository=testpypi` for the first dry run.
+3. Verify the published package from TestPyPI.
+4. Run it again with `repository=pypi` for the real publication.
+
+Workflow behavior:
+
+* builds sdist and wheel artifacts with `uv build`
+* runs `twine check` before any upload
+* publishes to separate GitHub environments for `testpypi` and `pypi`
+* is structured for PyPI trusted publishing via GitHub OIDC
 
 ## Trusted Publishing
 
