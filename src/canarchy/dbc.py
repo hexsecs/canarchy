@@ -164,37 +164,9 @@ def inspect_database(
     message_name: str | None = None,
     signals_only: bool = False,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    database = load_database(dbc_path)
+    from canarchy.dbc_runtime import inspect_database_runtime
 
-    if message_name is not None:
-        message = database.frame_by_name(message_name)
-        if message is None:
-            raise DbcError(
-                code="DBC_MESSAGE_NOT_FOUND",
-                message=f"DBC message '{message_name}' was not found.",
-                hint="Use a message name that exists in the selected DBC.",
-            )
-        selected_messages = [message]
-    else:
-        selected_messages = sorted(database.frames, key=lambda frame: frame.name)
-
-    messages = [message_metadata(message) for message in selected_messages]
-    database_nodes = getattr(database, "boardUnits", None)
-    node_count = len(database_nodes) if database_nodes else len(
-        {sender for message in messages for sender in message.senders}
-    )
-    inspection = DatabaseInspection(
-        database=DatabaseInfo(
-            format="dbc",
-            message_count=len(database.frames),
-            node_count=node_count,
-            path=dbc_path,
-            signal_count=sum(len(frame.signals) for frame in database.frames),
-        ),
-        messages=messages,
-        selected_message=message_name,
-    )
-
+    inspection = inspect_database_runtime(dbc_path, message_name=message_name)
     return inspection.to_payload(signals_only=signals_only), inspection.to_events()
 def encode_message(
     dbc_path: str,
