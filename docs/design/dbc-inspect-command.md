@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Planned |
+| Status | Implemented |
 | Command surface | `canarchy dbc inspect` |
 | Primary area | CLI, DBC |
 | Related specs | `docs/design/dbc-command-workflows.md`, `docs/design/dbc-runtime-schema-split.md` |
@@ -120,14 +120,14 @@ Representative response:
     "database": {
       "format": "dbc",
       "message_count": 2,
-      "node_count": 1,
+      "node_count": 0,
       "path": "tests/fixtures/sample.dbc",
       "signal_count": 6
     },
     "messages": [
       {
-        "arbitration_id": 2566843953,
-        "arbitration_id_hex": "0x98FEEE31",
+        "arbitration_id": 419360305,
+        "arbitration_id_hex": "0x18FEEE31",
         "cycle_time_ms": null,
         "is_extended_id": true,
         "length": 4,
@@ -166,8 +166,8 @@ Representative response:
 Representative lines:
 
 ```json
-{"event_type":"dbc_database","source":"dbc.inspect","payload":{"path":"tests/fixtures/sample.dbc","format":"dbc","message_count":2,"signal_count":6,"node_count":1}}
-{"event_type":"dbc_message","source":"dbc.inspect","payload":{"name":"EngineStatus1","arbitration_id":2566843953,"is_extended_id":true,"length":4,"signal_count":4}}
+{"event_type":"dbc_database","source":"dbc.inspect","payload":{"path":"tests/fixtures/sample.dbc","format":"dbc","message_count":2,"signal_count":6,"node_count":0}}
+{"event_type":"dbc_message","source":"dbc.inspect","payload":{"name":"EngineStatus1","arbitration_id":419360305,"is_extended_id":true,"length":4,"signal_count":4}}
 {"event_type":"dbc_signal","source":"dbc.inspect","payload":{"message_name":"EngineStatus1","name":"CoolantTemp","start_bit":0,"length":8,"scale":1,"offset":-40,"unit":"degC"}}
 ```
 

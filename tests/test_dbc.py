@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from canarchy.cli import EXIT_DECODE_ERROR, EXIT_OK, main
-from canarchy.dbc import decode_frames, encode_message, load_database
+from canarchy.dbc import decode_frames, encode_message, inspect_database, load_database
 from canarchy.transport import LocalTransport
 
 
@@ -46,6 +46,14 @@ class DbcTests(unittest.TestCase):
         self.assertEqual(frame.arbitration_id, 0x18FEEE31)
         self.assertTrue(frame.is_extended_id)
         self.assertEqual(events[0]["event_type"], "frame")
+
+    def test_inspect_database_returns_metadata(self) -> None:
+        data, events = inspect_database(str(FIXTURES / "sample.dbc"))
+
+        self.assertEqual(data["database"]["format"], "dbc")
+        self.assertEqual(data["database"]["message_count"], 2)
+        self.assertEqual(data["messages"][0]["name"], "EngineSpeed1")
+        self.assertEqual(events[0]["event_type"], "dbc_database")
 
     def test_decode_cli_returns_structured_results(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -108,3 +116,33 @@ class DbcTests(unittest.TestCase):
 
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "DBC_SIGNAL_INVALID")
+
+    def test_dbc_inspect_cli_returns_structured_metadata(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "dbc inspect")
+        self.assertEqual(payload["data"]["database"]["message_count"], 2)
+        self.assertEqual(payload["data"]["messages"][0]["name"], "EngineSpeed1")
+
+    def test_dbc_inspect_unknown_message_returns_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--message",
+            "DoesNotExist",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_DECODE_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "DBC_MESSAGE_NOT_FOUND")

@@ -143,6 +143,23 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="dbc_inspect",
+        description="Inspect CAN database metadata from a DBC file.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "dbc": {"type": "string", "description": "Path to DBC file"},
+                "message": {"type": "string", "description": "Restrict results to a single message name"},
+                "signals_only": {
+                    "type": "boolean",
+                    "description": "Return signal-centric metadata without full message definitions",
+                    "default": False,
+                },
+            },
+            "required": ["dbc"],
+        },
+    ),
+    types.Tool(
         name="export",
         description="Export session data or a capture file to a destination path.",
         inputSchema={
@@ -346,6 +363,13 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
         case "encode":
             argv = ["encode", "--dbc", a["dbc"], a["message"]]
             argv += a.get("signals", [])
+            return argv + ["--json"]
+        case "dbc_inspect":
+            argv = ["dbc", "inspect", a["dbc"]]
+            if a.get("message"):
+                argv += ["--message", a["message"]]
+            if a.get("signals_only"):
+                argv.append("--signals-only")
             return argv + ["--json"]
         case "export":
             return ["export", a["source"], a["destination"], "--json"]

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Draft |
+| Status | Implemented |
 | Related design spec | `docs/design/dbc-inspect-command.md` |
 | Primary test area | CLI, DBC |
 

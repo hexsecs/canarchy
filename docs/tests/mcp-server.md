@@ -43,7 +43,7 @@ And    `canarchy mcp serve --help` shall exit with code `0`
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `decode`, `encode`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`
+Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `decode`, `encode`, `dbc_inspect`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`
 ```
 
 **Fixture:** none.
@@ -55,7 +55,7 @@ Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   at least 23 tools shall be returned — one per implemented non-interactive command
+Then   at least 24 tools shall be returned — one per implemented non-interactive command
 ```
 
 **Fixture:** none.
@@ -178,6 +178,9 @@ Then   the result shall contain `["j1939", "monitor", "can0", "--pgn", "60160"]`
 
 When   called with `("encode", {"dbc": "t.dbc", "message": "Msg", "signals": ["RPM=1000"]})`
 Then   the result shall contain `"--dbc"`, `"t.dbc"`, `"Msg"`, and `"RPM=1000"`
+
+When   called with `("dbc_inspect", {"dbc": "t.dbc", "message": "Msg", "signals_only": true})`
+Then   the result shall contain `"dbc"`, `"inspect"`, `"t.dbc"`, `"--message"`, `"Msg"`, and `"--signals-only"`
 
 When   called with `("j1939_pgn", {"pgn": 61444, "file": "trace.candump"})`
 Then   the result shall contain `["j1939", "pgn", "61444", "--file", "trace.candump"]` in order

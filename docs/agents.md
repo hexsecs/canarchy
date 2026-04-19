@@ -58,6 +58,7 @@ Every implemented CLI command is exposed as an MCP tool. Spaces in command names
 | `stats` | `canarchy stats` |
 | `decode` | `canarchy decode` |
 | `encode` | `canarchy encode` |
+| `dbc_inspect` | `canarchy dbc inspect` |
 | `export` | `canarchy export` |
 | `session_save` | `canarchy session save` |
 | `session_load` | `canarchy session load` |

@@ -2115,6 +2115,13 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("--pgn", names)
         self.assertIn("--json", names)
 
+    def test_dbc_inspect_flags_include_message_and_signals_only(self) -> None:
+        results = self._completions("dbc inspect tests/fixtures/sample.dbc ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--message", names)
+        self.assertIn("--signals-only", names)
+        self.assertIn("--json", names)
+
     def test_j1939_pgn_flags_include_file(self) -> None:
         results = self._completions("j1939 pgn 65262 ", "")
         names = [r.strip() for r in results]

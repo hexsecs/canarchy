@@ -13,7 +13,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 _EXPECTED_TOOLS = {
     "capture", "send", "generate", "gateway", "replay", "filter", "stats",
-    "decode", "encode", "export",
+    "decode", "encode", "dbc_inspect", "export",
     "session_save", "session_load", "session_show",
     "j1939_monitor", "j1939_decode", "j1939_pgn", "j1939_spn", "j1939_tp", "j1939_dm1",
     "uds_scan", "uds_trace", "uds_services",
@@ -37,7 +37,7 @@ def test_list_tools_returns_expected_names():
 
 def test_list_tools_count():
     tools = asyncio.run(handle_list_tools())
-    assert len(tools) >= 23
+    assert len(tools) >= 24
 
 
 # --- TEST-MCP-04: tool metadata validity -----------------------------------
@@ -136,6 +136,18 @@ def test_build_argv_encode_with_signals():
     assert "test.dbc" in argv
     assert "EngineData" in argv
     assert "RPM=1000" in argv
+    assert argv[-1] == "--json"
+
+
+def test_build_argv_dbc_inspect_with_options():
+    argv = _build_argv(
+        "dbc_inspect",
+        {"dbc": "test.dbc", "message": "EngineData", "signals_only": True},
+    )
+    assert argv[:3] == ["dbc", "inspect", "test.dbc"]
+    assert "--message" in argv
+    assert "EngineData" in argv
+    assert "--signals-only" in argv
     assert argv[-1] == "--json"
 
 

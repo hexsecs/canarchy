@@ -162,6 +162,83 @@ Emitted by: `decode`
 
 ---
 
+### `dbc_database`
+
+A DBC database summary emitted by `dbc inspect` before message and signal metadata.
+
+Emitted by: `dbc inspect`
+
+```json
+{
+  "event_type": "dbc_database",
+  "source": "dbc.inspect",
+  "timestamp": null,
+  "payload": {
+    "format": "dbc",
+    "message_count": 2,
+    "node_count": 0,
+    "path": "tests/fixtures/sample.dbc",
+    "signal_count": 6
+  }
+}
+```
+
+### `dbc_message`
+
+DBC message metadata emitted by `dbc inspect`.
+
+Emitted by: `dbc inspect`
+
+```json
+{
+  "event_type": "dbc_message",
+  "source": "dbc.inspect",
+  "timestamp": null,
+  "payload": {
+    "arbitration_id": 419360305,
+    "arbitration_id_hex": "0x18FEEE31",
+    "cycle_time_ms": null,
+    "is_extended_id": true,
+    "length": 4,
+    "name": "EngineStatus1",
+    "senders": [],
+    "signal_count": 4
+  }
+}
+```
+
+### `dbc_signal`
+
+DBC signal metadata emitted by `dbc inspect`.
+
+Emitted by: `dbc inspect`
+
+```json
+{
+  "event_type": "dbc_signal",
+  "source": "dbc.inspect",
+  "timestamp": null,
+  "payload": {
+    "byte_order": "little_endian",
+    "choices": null,
+    "is_multiplexer": false,
+    "is_signed": false,
+    "length": 8,
+    "maximum": 210,
+    "message_name": "EngineStatus1",
+    "minimum": 0,
+    "multiplexer_ids": null,
+    "name": "CoolantTemp",
+    "offset": -40,
+    "scale": 1,
+    "start_bit": 0,
+    "unit": "degC"
+  }
+}
+```
+
+---
+
 ### `j1939_pgn`
 
 A J1939 frame observation with decomposed identifier fields.

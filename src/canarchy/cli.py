@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from canarchy.dbc import DbcError, decode_frames, encode_message
+from canarchy.dbc import DbcError, decode_frames, encode_message, inspect_database
 from canarchy import __version__
 from canarchy.exporter import ExportError, export_artifact
 from canarchy.j1939 import SUPPORTED_SPN_DEFINITIONS, dm1_messages, spn_observations, transport_protocol_sessions, decompose_arbitration_id
@@ -40,7 +40,7 @@ EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate"}
-DBC_COMMANDS = {"decode", "encode"}
+DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
@@ -224,6 +224,23 @@ def build_parser() -> CanarchyArgumentParser:
     encode.add_argument("signals", nargs="*", help="key=value signal assignments")
     add_output_arguments(encode)
     encode.set_defaults(command="encode")
+
+    dbc = subparsers.add_parser("dbc", help="inspect DBC metadata")
+    dbc_subparsers = dbc.add_subparsers(dest="dbc_action", required=True)
+
+    dbc_inspect = dbc_subparsers.add_parser(
+        "inspect",
+        help="inspect database, message, and signal metadata",
+    )
+    dbc_inspect.add_argument("dbc")
+    dbc_inspect.add_argument("--message", help="restrict output to a single message name")
+    dbc_inspect.add_argument(
+        "--signals-only",
+        action="store_true",
+        help="emit signal-centric metadata instead of full message definitions",
+    )
+    add_output_arguments(dbc_inspect)
+    dbc_inspect.set_defaults(command="dbc inspect")
 
     export = subparsers.add_parser("export", help="export session data")
     export.add_argument("source")
@@ -1136,6 +1153,13 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "Encoding prepares an active transmit frame; send it intentionally via a transmit workflow."
             ],
         )
+    if args.command == "dbc inspect":
+        data, events = inspect_database(
+            args.dbc,
+            message_name=args.message,
+            signals_only=args.signals_only,
+        )
+        return (data, events, [])
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
 
@@ -1534,8 +1558,6 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             f"data={frame['data']}"
         )
     return lines
-
-
 def format_uds_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
     if result.command == "uds services":
@@ -1779,6 +1801,9 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         return
 
     if output_format == "raw":
+        if result.ok and result.command == "dbc inspect":
+            print(result.data.get("database", {}).get("path", result.command))
+            return
         if result.ok and result.command == "gateway":
             for line in format_gateway_lines(result):
                 print(line)
@@ -1814,6 +1839,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "table" and result.ok and result.command in J1939_COMMANDS:
         for line in format_j1939_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command == "dbc inspect":
+        for line in format_dbc_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

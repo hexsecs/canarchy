@@ -52,6 +52,7 @@ The `serve` subcommand accepts no positional arguments or output flags. The serv
 | `stats` | `stats` |
 | `decode` | `decode` |
 | `encode` | `encode` |
+| `dbc inspect` | `dbc_inspect` |
 | `export` | `export` |
 | `session save` | `session_save` |
 | `session load` | `session_load` |
