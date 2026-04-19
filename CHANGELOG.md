@@ -9,6 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+* Added an internal `cantools`-backed DBC runtime adapter that maps database metadata into CANarchy-owned types for fixture-level comparison work.
 * The DBC inspection path now uses CANarchy-owned metadata types internally so command-layer outputs no longer depend directly on third-party database objects.
 
 ### Fixed

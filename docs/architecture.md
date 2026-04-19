@@ -77,6 +77,7 @@ Relevant modules:
 * `src/canarchy/models.py`
 * `src/canarchy/j1939.py`
 * `src/canarchy/dbc.py`
+* `src/canarchy/dbc_runtime.py`
 * `src/canarchy/dbc_types.py`
 * `src/canarchy/reverse_engineering.py`
 * `src/canarchy/replay.py`
