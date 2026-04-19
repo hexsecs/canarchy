@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Documentation
+
+* Migrated all design specs (`docs/design/*.md`) to EARS requirements syntax with an explicit Type column per requirement row.
+* Migrated all test specs (`docs/tests/*.md`) to Gherkin Given/When/Then format with fixture annotations.
+* Added `docs/spec-template.md` as the canonical template for all future design and test specs.
+* Added `docs/tests/composition.md` — new test spec for the stdin piping composition feature.
+* Updated `AGENTS.md` to reference `docs/spec-template.md` and document the EARS + Gherkin standard as the required format for new specs.
+
 ## [0.1.2] - 2026-04-19
 
 ### Added
