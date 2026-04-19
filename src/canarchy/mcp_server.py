@@ -11,10 +11,11 @@ import mcp.types as types
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
+from canarchy import __version__
 from canarchy.cli import execute_command
 
 _SERVER_NAME = "canarchy"
-_SERVER_VERSION = "0.1.0"
+_SERVER_VERSION = __version__
 
 server = Server(_SERVER_NAME)
 

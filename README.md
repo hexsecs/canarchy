@@ -102,6 +102,32 @@ uv tool install --editable .
 canarchy --help
 ```
 
+### Versioning Policy
+
+CANarchy uses Semantic Versioning.
+
+Rules:
+
+* `MAJOR` for intentional breaking changes to the CLI contract, structured output contract, or other documented public behavior
+* `MINOR` for backward-compatible new commands, new output fields, or new capabilities
+* `PATCH` for backward-compatible fixes, documentation corrections, and implementation improvements that do not intentionally break the public contract
+
+Prereleases:
+
+* prereleases should use standard SemVer prerelease identifiers such as `0.2.0a1`, `0.2.0b1`, or `0.2.0rc1`
+* prereleases are appropriate when command behavior, output contracts, or packaging flows need release-candidate validation before a stable tag
+
+Release tags:
+
+* Git tags should match the package version exactly, prefixed with `v`, for example `v0.1.0`
+* `canarchy --version`, package metadata, and release tags should always agree
+
+Current implementation:
+
+* `src/canarchy/__init__.py` is the authoritative version source
+* package metadata is derived from that version during build
+* CLI and MCP server version reporting reuse the same version value
+
 ### Example Usage
 
 ```bash

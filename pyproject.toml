@@ -1,6 +1,6 @@
 [project]
 name = "canarchy"
-version = "0.1.0"
+dynamic = ["version"]
 description = "CLI-first CAN security research toolkit"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -34,6 +34,9 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 package = true
+
+[tool.hatch.version]
+path = "src/canarchy/__init__.py"
 
 [tool.ruff]
 line-length = 100

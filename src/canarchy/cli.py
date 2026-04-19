@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from canarchy.dbc import DbcError, decode_frames, encode_message
+from canarchy import __version__
 from canarchy.exporter import ExportError, export_artifact
 from canarchy.j1939 import SUPPORTED_SPN_DEFINITIONS, dm1_messages, spn_observations, transport_protocol_sessions, decompose_arbitration_id
 from canarchy.models import (
@@ -132,7 +133,7 @@ def build_parser() -> CanarchyArgumentParser:
     parser = CanarchyArgumentParser(
         prog="canarchy", description="CLI-first CAN security research toolkit"
     )
-    parser.add_argument("--version", action="version", version="canarchy 0.1.0")
+    parser.add_argument("--version", action="version", version=f"canarchy {__version__}")
 
     subparsers = parser.add_subparsers(dest="command_name", required=True)
 
