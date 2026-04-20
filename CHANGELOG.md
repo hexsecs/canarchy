@@ -19,6 +19,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added optional J1939 DBC enrichment for `j1939 decode`, `j1939 pgn`, and `j1939 spn`, including `dbc_source` provenance, extra decoded `dbc_events`, and a reusable default J1939 DBC setting via `CANARCHY_J1939_DBC` or `[j1939].dbc` in `~/.canarchy/config.toml`.
 * Expanded `j1939 spn` beyond the curated starter map by resolving non-curated SPNs from J1939 DBC signal `SPN` metadata when a matching DBC is supplied or configured as the default J1939 database.
 * Extended the same J1939 DBC coverage idea into `j1939 dm1` so DTC names and units can be enriched from DBC signal `SPN` metadata, with the same `--dbc` and default J1939 DBC config path used by other J1939 decode workflows.
+* Deepened the J1939 transport and DM1 path beyond the earlier BAM-only starter behavior so `j1939 tp` and `j1939 dm1` now handle RTS/CTS sessions in addition to BAM, including reassembly and session-level acknowledgement metadata.
 
 ### Documentation
 

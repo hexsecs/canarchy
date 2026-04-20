@@ -724,6 +724,29 @@ class CliTests(unittest.TestCase):
         self.assertEqual(session["packet_count"], 2)
         self.assertEqual(session["reassembled_data"], "000000006e000501be000702")
 
+    def test_j1939_tp_returns_rts_cts_session_summary(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            str(FIXTURES / "j1939_dm1_rts_cts.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["session_count"], 1)
+        session = payload["data"]["sessions"][0]
+        self.assertEqual(session["session_type"], "rts_cts")
+        self.assertEqual(session["transfer_pgn"], 65226)
+        self.assertEqual(session["source_address"], 0x31)
+        self.assertEqual(session["destination_address"], 0x22)
+        self.assertTrue(session["complete"])
+        self.assertTrue(session["acknowledged"])
+        self.assertEqual(session["cts_count"], 1)
+        self.assertEqual(session["packet_count"], 2)
+        self.assertEqual(session["reassembled_data"], "00000000af000501")
+
     def test_j1939_dm1_returns_direct_and_transport_messages(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
@@ -746,6 +769,26 @@ class CliTests(unittest.TestCase):
         self.assertEqual(direct_message["transport"], "direct")
         self.assertEqual(direct_message["source_address"], 0x22)
         self.assertEqual(direct_message["dtcs"][0]["fmi"], 3)
+
+    def test_j1939_dm1_returns_rts_cts_transport_message(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "dm1",
+            str(FIXTURES / "j1939_dm1_rts_cts.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["message_count"], 1)
+        message = payload["data"]["messages"][0]
+        self.assertEqual(message["transport"], "tp")
+        self.assertEqual(message["source_address"], 0x31)
+        self.assertEqual(message["destination_address"], 0x22)
+        self.assertEqual(message["active_dtc_count"], 1)
+        self.assertEqual(message["dtcs"][0]["spn"], 175)
+        self.assertEqual(message["dtcs"][0]["fmi"], 5)
 
     def test_j1939_dm1_with_dbc_enriches_non_curated_dtc_names(self) -> None:
         exit_code, stdout, stderr = run_cli(
