@@ -539,6 +539,8 @@ class CliTests(unittest.TestCase):
                     "source_address": 0x31,
                     "destination_address": 255,
                     "session_type": "bam",
+                    "payload_label": "component_identification",
+                    "heuristic": True,
                 }
             ],
         )
@@ -785,6 +787,9 @@ class CliTests(unittest.TestCase):
         self.assertTrue(session["complete"])
         self.assertEqual(session["packet_count"], 2)
         self.assertEqual(session["reassembled_data"], "000000006e000501be000702")
+        self.assertIsNone(session["decoded_text"])
+        self.assertFalse(session["decoded_text_heuristic"])
+        self.assertIsNone(session["payload_label"])
 
     def test_j1939_tp_returns_rts_cts_session_summary(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -808,6 +813,38 @@ class CliTests(unittest.TestCase):
         self.assertEqual(session["cts_count"], 1)
         self.assertEqual(session["packet_count"], 2)
         self.assertEqual(session["reassembled_data"], "00000000af000501")
+        self.assertIsNone(session["decoded_text"])
+
+    def test_j1939_tp_surfaces_printable_identification_text(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            str(FIXTURES / "j1939_tp_printable_id.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        session = payload["data"]["sessions"][0]
+        self.assertEqual(session["transfer_pgn"], 65259)
+        self.assertEqual(session["payload_label"], "component_identification")
+        self.assertEqual(session["payload_label_source"], "known_transfer_pgn")
+        self.assertEqual(session["decoded_text"], "VIN1234")
+        self.assertEqual(session["decoded_text_encoding"], "ascii")
+        self.assertTrue(session["decoded_text_heuristic"])
+
+    def test_j1939_tp_table_output_shows_printable_text_when_present(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            str(FIXTURES / "j1939_tp_printable_id.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("label=component_identification", stdout)
+        self.assertIn("text=VIN1234", stdout)
 
     def test_j1939_dm1_returns_direct_and_transport_messages(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -1833,8 +1870,13 @@ class CliTests(unittest.TestCase):
         sessions = [{
             "complete": True,
             "control": 32,
+            "decoded_text": None,
+            "decoded_text_encoding": None,
+            "decoded_text_heuristic": False,
             "destination_address": 255,
             "packet_count": 2,
+            "payload_label": None,
+            "payload_label_source": None,
             "priority": 6,
             "reassembled_data": "000000006e000501be000702",
             "session_type": "bam",

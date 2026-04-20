@@ -985,6 +985,42 @@ def _top_counts(counter: Counter[int], *, limit: int = 5) -> list[dict[str, int]
     return [{"value": value, "frame_count": count} for value, count in counter.most_common(limit)]
 
 
+def _tp_payload_label(transfer_pgn: int) -> str | None:
+    labels = {
+        65242: "software_identification",
+        65259: "component_identification",
+        65260: "vehicle_identification",
+    }
+    return labels.get(transfer_pgn)
+
+
+def _enrich_tp_session(session: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(session)
+    transfer_pgn = int(enriched["transfer_pgn"])
+    enriched["payload_label"] = _tp_payload_label(transfer_pgn)
+    enriched["payload_label_source"] = "known_transfer_pgn" if enriched["payload_label"] is not None else None
+    enriched["decoded_text"] = None
+    enriched["decoded_text_encoding"] = None
+    enriched["decoded_text_heuristic"] = False
+
+    if not bool(enriched.get("complete", False)):
+        return enriched
+
+    try:
+        payload = bytes.fromhex(str(enriched["reassembled_data"]))
+    except ValueError:
+        return enriched
+
+    text = _extract_printable_text(payload)
+    if text is None:
+        return enriched
+
+    enriched["decoded_text"] = text
+    enriched["decoded_text_encoding"] = "ascii"
+    enriched["decoded_text_heuristic"] = True
+    return enriched
+
+
 def _j1939_summary(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[dict[str, Any], list[str]]:
     if not frames:
         return (
@@ -1023,17 +1059,13 @@ def _j1939_summary(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[
     interfaces = sorted({frame.interface or "unknown" for frame in frames})
     timestamps = [frame.timestamp for frame in frames]
     dm1_messages = decoder.dm1_messages(frames)
-    tp_sessions = decoder.transport_protocol_sessions(frames)
+    tp_sessions = [_enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)]
     session_types = Counter(str(session["session_type"]) for session in tp_sessions)
     printable_identifiers: list[dict[str, object]] = []
     for session in tp_sessions:
         if not bool(session.get("complete", False)):
             continue
-        try:
-            payload = bytes.fromhex(str(session["reassembled_data"]))
-        except ValueError:
-            continue
-        text = _extract_printable_text(payload)
+        text = session.get("decoded_text")
         if text is None:
             continue
         printable_identifiers.append(
@@ -1043,6 +1075,8 @@ def _j1939_summary(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[
                 "source_address": int(session["source_address"]),
                 "destination_address": session["destination_address"],
                 "session_type": str(session["session_type"]),
+                "payload_label": session.get("payload_label"),
+                "heuristic": bool(session.get("decoded_text_heuristic", False)),
             }
         )
 
@@ -1440,9 +1474,12 @@ def j1939_payload(
         )
     if args.command == "j1939 tp":
         decoder = get_j1939_decoder()
-        sessions = decoder.transport_protocol_sessions(
-            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
-        )
+        sessions = [
+            _enrich_tp_session(session)
+            for session in decoder.transport_protocol_sessions(
+                transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+            )
+        ]
         warnings = []
         if not sessions:
             warnings.append("No J1939 transport protocol sessions were found in the capture.")
@@ -2077,6 +2114,10 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         for session in sessions:
             destination = session["destination_address"]
             destination_text = f"0x{destination:02X}" if destination is not None else "broadcast"
+            decoded_text = session.get("decoded_text")
+            decoded_suffix = f" text={decoded_text}" if decoded_text else ""
+            label = session.get("payload_label")
+            label_suffix = f" label={label}" if label else ""
             lines.append(
                 "- "
                 f"type={session['session_type']} "
@@ -2086,6 +2127,8 @@ def format_j1939_table(result: CommandResult) -> list[str]:
                 f"bytes={session['total_bytes']} "
                 f"packets={session['packet_count']}/{session['total_packets']} "
                 f"complete={session['complete']}"
+                f"{label_suffix}"
+                f"{decoded_suffix}"
             )
         return lines
 
