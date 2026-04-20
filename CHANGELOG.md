@@ -16,6 +16,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added dedicated design and test specs for the provider-backed DBC workflow, covering provider listing, catalog search, fetch, cache management, provider-ref resolution, `dbc_source` provenance, and `auto_refresh` behavior.
 * Updated the command reference to document the shipped `generate` command plus current `--stdin` and `--ack-active` command-surface details where the docs had drifted from the implementation.
 * Corrected several requirement-to-test traceability tables so the current spec set no longer overstates coverage for transport, UDS, J1939, shell, gateway, and generate workflows.
+* Updated the J1939 heavy-vehicle tutorial so its `jq` example matches the current `j1939 spn --jsonl` output shape and no longer queries stale `.payload.*` fields.
 
 ## [0.2.0] - 2026-04-19
 
