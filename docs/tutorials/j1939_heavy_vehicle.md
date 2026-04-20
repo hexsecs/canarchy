@@ -105,7 +105,7 @@ The ECU has already flagged both the coolant overheat and engine speed anomaly. 
 
 ## Machine-Readable Output
 
-All three commands support `--json` for a full structured envelope or `--jsonl` for a streaming event-per-line format. JSONL is suitable for piping into further analysis tools:
+All three commands support `--json` for a full structured envelope or `--jsonl` for one structured record per line. `j1939 decode` emits J1939 observation events, while `j1939 spn`, `j1939 tp`, and `j1939 dm1` emit the decoded observation, session, or message objects directly. JSONL is suitable for piping into further analysis tools:
 
 ```bash
 # Stream all J1939 observations as JSONL
@@ -113,7 +113,7 @@ canarchy j1939 decode tests/fixtures/j1939_heavy_vehicle.candump --jsonl
 
 # Extract just the coolant temperature values with jq
 canarchy j1939 spn 110 --file tests/fixtures/j1939_heavy_vehicle.candump --jsonl \
-  | jq '[.payload.spn, .payload.value, .payload.units, .payload.timestamp]'
+  | jq '[.spn, .value, .units, .timestamp]'
 ```
 
 ```text
@@ -122,7 +122,7 @@ canarchy j1939 spn 110 --file tests/fixtures/j1939_heavy_vehicle.candump --jsonl
 [110, 87.0, "degC", 0.55]
 ```
 
-See the [Event Schema](../event-schema.md) for the full structure of each event type.
+See the [Event Schema](../event-schema.md) for the streamed event types such as `j1939 decode`.
 
 ---
 
