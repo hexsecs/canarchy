@@ -10,6 +10,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Fixed
 
 * Fixed `--jsonl` output for `j1939 spn`, `j1939 tp`, and `j1939 dm1` commands to emit one line per observation/session/message instead of falling back to full JSON payload. The JSONL emitter now checks for `observations`, `sessions`, and `messages` in addition to `events`.
+* Fixed `j1939 dm1 --json` and `--jsonl` to keep deprecated SPN conversion-mode warnings out of plain-text stdout output. DM1 now reports that condition once through structured warnings while preserving the parsed `conversion_method` field per DTC.
 
 ### Changed
 

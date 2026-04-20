@@ -279,16 +279,19 @@ def _parse_dtcs(payload: bytes) -> list[dict[str, object]]:
     dtcs: list[dict[str, object]] = []
     for offset in range(0, len(payload) - (len(payload) % 4), 4):
         raw = payload[offset : offset + 4]
-        parsed = can_j1939.DTC(dtc=int.from_bytes(raw, byteorder="little"))
-        spn = parsed.spn
+        dtc = int.from_bytes(raw, byteorder="little")
+        spn = (dtc & 0xFFFF) | ((dtc >> 5) & 0x70000)
+        fmi = (dtc >> 16) & 0x1F
+        occurrence_count = (dtc >> 24) & 0x7F
+        conversion_method = (dtc >> 31) & 0x01
         definition = SUPPORTED_SPN_DEFINITIONS.get(spn)
         dtcs.append(
             {
                 "spn": spn,
                 "name": definition.name if definition is not None else None,
-                "fmi": parsed.fmi,
-                "occurrence_count": parsed.oc,
-                "conversion_method": parsed.cm,
+                "fmi": fmi,
+                "occurrence_count": occurrence_count,
+                "conversion_method": conversion_method,
             }
         )
     return dtcs
