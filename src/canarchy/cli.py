@@ -2116,6 +2116,20 @@ def emit_live_gateway(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _emit_warnings_jsonl(payload: dict[str, Any], result: CommandResult) -> None:
+    for warning in payload["warnings"]:
+        print(
+            json.dumps(
+                AlertEvent(
+                    level="warning",
+                    message=warning,
+                    source=f"cli.{result.command}",
+                ).to_event().to_payload(),
+                sort_keys=True,
+            )
+        )
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     if output_format == "json":
@@ -2123,21 +2137,30 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         return
 
     if output_format == "jsonl":
-        events = payload.get("data", {}).get("events")
+        data = payload.get("data", {})
+        events = data.get("events")
         if result.ok and isinstance(events, list) and events:
             for event in events:
                 print(json.dumps(event, sort_keys=True))
-            for warning in payload["warnings"]:
-                print(
-                    json.dumps(
-                        AlertEvent(
-                            level="warning",
-                            message=warning,
-                            source=f"cli.{result.command}",
-                        ).to_event().to_payload(),
-                        sort_keys=True,
-                    )
-                )
+            _emit_warnings_jsonl(payload, result)
+            return
+        observations = data.get("observations")
+        if result.ok and isinstance(observations, list) and observations:
+            for observation in observations:
+                print(json.dumps(observation, sort_keys=True))
+            _emit_warnings_jsonl(payload, result)
+            return
+        sessions = data.get("sessions")
+        if result.ok and isinstance(sessions, list) and sessions:
+            for session in sessions:
+                print(json.dumps(session, sort_keys=True))
+            _emit_warnings_jsonl(payload, result)
+            return
+        messages = data.get("messages")
+        if result.ok and isinstance(messages, list) and messages:
+            for message in messages:
+                print(json.dumps(message, sort_keys=True))
+            _emit_warnings_jsonl(payload, result)
             return
         print(json.dumps(payload, sort_keys=True))
         return
