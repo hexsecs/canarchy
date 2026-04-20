@@ -495,6 +495,68 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(payload["data"]["events"]), 1)
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
 
+    def test_j1939_summary_returns_capture_reconnaissance_fields(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "summary",
+            str(FIXTURES / "j1939_heavy_vehicle.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["total_frames"], 8)
+        self.assertEqual(payload["data"]["interfaces"], ["can0"])
+        self.assertEqual(payload["data"]["unique_arbitration_ids"], 4)
+        self.assertEqual(payload["data"]["first_timestamp"], 0.0)
+        self.assertEqual(payload["data"]["last_timestamp"], 0.55)
+        self.assertEqual(payload["data"]["top_pgns"][0], {"pgn": 65262, "frame_count": 3})
+        self.assertEqual(payload["data"]["top_source_addresses"][0], {"source_address": 0x31, "frame_count": 8})
+        self.assertTrue(payload["data"]["dm1"]["present"])
+        self.assertEqual(payload["data"]["dm1"]["message_count"], 1)
+        self.assertEqual(payload["data"]["dm1"]["active_dtc_count"], 2)
+        self.assertEqual(payload["data"]["tp"]["session_count"], 1)
+        self.assertEqual(payload["data"]["tp"]["complete_session_count"], 1)
+
+    def test_j1939_summary_surfaces_printable_tp_identifiers(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "summary",
+            str(FIXTURES / "j1939_tp_printable_id.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(
+            payload["data"]["tp"]["printable_identifiers"],
+            [
+                {
+                    "text": "VIN1234",
+                    "transfer_pgn": 65259,
+                    "source_address": 0x31,
+                    "destination_address": 255,
+                    "session_type": "bam",
+                }
+            ],
+        )
+
+    def test_j1939_summary_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "summary",
+            str(FIXTURES / "j1939_tp_printable_id.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 summary", stdout)
+        self.assertIn("top_pgns:", stdout)
+        self.assertIn("printable_identifiers:", stdout)
+        self.assertIn("text=VIN1234", stdout)
+
     def test_j1939_decode_returns_j1939_events(self) -> None:
         exit_code, stdout, _ = run_cli(
             "j1939", "decode", str(FIXTURES / "sample.candump"), "--json"
@@ -2684,6 +2746,12 @@ class CompletionTests(unittest.TestCase):
         results = self._completions("j1939 dm1 tests/fixtures/j1939_dm1_spn175.candump ", "")
         names = [r.strip() for r in results]
         self.assertIn("--dbc", names)
+        self.assertIn("--max-frames", names)
+        self.assertIn("--seconds", names)
+
+    def test_j1939_summary_flags_include_bounds(self) -> None:
+        results = self._completions("j1939 summary ", "")
+        names = [r.strip() for r in results]
         self.assertIn("--max-frames", names)
         self.assertIn("--seconds", names)
 
