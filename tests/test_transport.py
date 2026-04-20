@@ -18,6 +18,7 @@ from canarchy.transport import (
     TransportBackendConfig,
     TransportError,
     build_live_backend,
+    iter_candump_file,
     load_candump_file,
     parse_candump_line,
     python_can,
@@ -90,6 +91,18 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(frames[1].arbitration_id, 0x18F00431)
         self.assertTrue(frames[1].is_extended_id)
         self.assertEqual(frames[2].interface, "can1")
+
+    def test_load_candump_file_streams_without_read_text(self) -> None:
+        with patch.object(Path, "read_text", side_effect=AssertionError("read_text should not be used")):
+            frames = load_candump_file(FIXTURES / "sample.candump")
+
+        self.assertEqual(len(frames), 3)
+
+    def test_iter_candump_file_yields_real_frames(self) -> None:
+        frames = list(iter_candump_file(FIXTURES / "sample.candump"))
+
+        self.assertEqual(len(frames), 3)
+        self.assertEqual(frames[0].interface, "can0")
 
     def test_parse_candump_line_rejects_malformed_lines(self) -> None:
         with self.assertRaises(TransportError) as ctx:

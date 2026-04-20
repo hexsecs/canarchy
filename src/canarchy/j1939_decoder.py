@@ -8,7 +8,7 @@ decoder without reshaping command handlers first.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Iterable, Protocol
 
 import j1939 as can_j1939
 
@@ -19,15 +19,15 @@ from canarchy.models import CanFrame, J1939ObservationEvent
 class J1939Decoder(Protocol):
     def supported_spns(self) -> set[int]: ...
 
-    def decode_events(self, frames: list[CanFrame]) -> list[J1939ObservationEvent]: ...
+    def decode_events(self, frames: Iterable[CanFrame]) -> list[J1939ObservationEvent]: ...
 
-    def decode_pgn_events(self, frames: list[CanFrame], pgn: int) -> list[J1939ObservationEvent]: ...
+    def decode_pgn_events(self, frames: Iterable[CanFrame], pgn: int) -> list[J1939ObservationEvent]: ...
 
-    def spn_observations(self, frames: list[CanFrame], spn: int) -> list[dict[str, object]]: ...
+    def spn_observations(self, frames: Iterable[CanFrame], spn: int) -> list[dict[str, object]]: ...
 
-    def transport_protocol_sessions(self, frames: list[CanFrame]) -> list[dict[str, object]]: ...
+    def transport_protocol_sessions(self, frames: Iterable[CanFrame]) -> list[dict[str, object]]: ...
 
-    def dm1_messages(self, frames: list[CanFrame]) -> list[dict[str, object]]: ...
+    def dm1_messages(self, frames: Iterable[CanFrame]) -> list[dict[str, object]]: ...
 
 
 @dataclass(slots=True)
@@ -43,13 +43,13 @@ class CanJ1939Decoder:
     def supported_spns(self) -> set[int]:
         return set(SUPPORTED_SPN_DEFINITIONS)
 
-    def decode_events(self, frames: list[CanFrame]) -> list[J1939ObservationEvent]:
+    def decode_events(self, frames: Iterable[CanFrame]) -> list[J1939ObservationEvent]:
         return self._decode_events(frames, pgn=None)
 
-    def decode_pgn_events(self, frames: list[CanFrame], pgn: int) -> list[J1939ObservationEvent]:
+    def decode_pgn_events(self, frames: Iterable[CanFrame], pgn: int) -> list[J1939ObservationEvent]:
         return self._decode_events(frames, pgn=pgn)
 
-    def _decode_events(self, frames: list[CanFrame], pgn: int | None) -> list[J1939ObservationEvent]:
+    def _decode_events(self, frames: Iterable[CanFrame], pgn: int | None) -> list[J1939ObservationEvent]:
         events: list[J1939ObservationEvent] = []
         for frame in frames:
             if not frame.is_extended_id:
@@ -69,7 +69,7 @@ class CanJ1939Decoder:
             )
         return events
 
-    def spn_observations(self, frames: list[CanFrame], spn: int) -> list[dict[str, object]]:
+    def spn_observations(self, frames: Iterable[CanFrame], spn: int) -> list[dict[str, object]]:
         definition = SUPPORTED_SPN_DEFINITIONS[spn]
         observations: list[dict[str, object]] = []
         for frame in frames:
@@ -99,7 +99,7 @@ class CanJ1939Decoder:
             )
         return observations
 
-    def transport_protocol_sessions(self, frames: list[CanFrame]) -> list[dict[str, object]]:
+    def transport_protocol_sessions(self, frames: Iterable[CanFrame]) -> list[dict[str, object]]:
         sessions: list[dict[str, object]] = []
         open_sessions: dict[tuple[int, int | None], dict[str, object]] = {}
         tp_cm_pgn = can_j1939.ParameterGroupNumber.PGN.TP_CM
@@ -183,14 +183,55 @@ class CanJ1939Decoder:
             )
         return summaries
 
-    def dm1_messages(self, frames: list[CanFrame]) -> list[dict[str, object]]:
+    def dm1_messages(self, frames: Iterable[CanFrame]) -> list[dict[str, object]]:
         messages: list[dict[str, object]] = []
+        open_sessions: dict[tuple[int, int | None], dict[str, object]] = {}
+        tp_sessions: list[dict[str, object]] = []
+        tp_cm_pgn = can_j1939.ParameterGroupNumber.PGN.TP_CM
+        tp_dt_pgn = can_j1939.ParameterGroupNumber.PGN.DATATRANSFER
+
         for frame in frames:
             if not frame.is_extended_id:
                 continue
             identifier = decompose_arbitration_id(frame.arbitration_id)
             if identifier.pgn != DM1_PGN:
+                if identifier.pgn == tp_cm_pgn and len(frame.data) >= 8:
+                    control = frame.data[0]
+                    if control in {self.TP_CM_BAM, self.TP_CM_RTS}:
+                        transfer_pgn = frame.data[5] | (frame.data[6] << 8) | (frame.data[7] << 16)
+                        if transfer_pgn != DM1_PGN:
+                            continue
+                        session = {
+                            "destination_address": identifier.destination_address,
+                            "packets": {},
+                            "source_address": identifier.source_address,
+                            "timestamp": frame.timestamp,
+                            "total_bytes": frame.data[1] | (frame.data[2] << 8),
+                            "total_packets": frame.data[3],
+                            "transfer_pgn": transfer_pgn,
+                        }
+                        open_sessions[(identifier.source_address, identifier.destination_address)] = session
+                        tp_sessions.append(session)
+                        continue
+
+                    reverse_key = (identifier.destination_address, identifier.source_address)
+                    session = open_sessions.get(reverse_key)
+                    if session is None:
+                        continue
+                    if control == self.TP_CM_ABORT:
+                        session["aborted"] = True
+                    continue
+
+                if identifier.pgn == tp_dt_pgn and len(frame.data) >= 2:
+                    key = (identifier.source_address, identifier.destination_address)
+                    session = open_sessions.get(key)
+                    if session is None:
+                        continue
+                    packets = session["packets"]
+                    assert isinstance(packets, dict)
+                    packets[frame.data[0]] = frame.data[1:]
                 continue
+
             messages.append(
                 self._build_dm1_message(
                     payload=frame.data,
@@ -201,10 +242,16 @@ class CanJ1939Decoder:
                 )
             )
 
-        for session in self.transport_protocol_sessions(frames):
-            if session["transfer_pgn"] != DM1_PGN or not session["complete"]:
+        for session in tp_sessions:
+            packets = session.pop("packets")
+            assert isinstance(packets, dict)
+            total_packets = int(session["total_packets"])
+            packet_count = len(packets)
+            reassembled = b"".join(packets[index] for index in range(1, total_packets + 1) if index in packets)
+            total_bytes = int(session["total_bytes"])
+            payload = reassembled[:total_bytes]
+            if bool(session.get("aborted", False)) or len(payload) < total_bytes or packet_count < total_packets:
                 continue
-            payload = bytes.fromhex(str(session["reassembled_data"]))
             messages.append(
                 self._build_dm1_message(
                     payload=payload,

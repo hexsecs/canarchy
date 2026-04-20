@@ -515,7 +515,18 @@ class LocalTransport:
         )
 
     def frames_from_file(self, file_name: str) -> list[CanFrame]:
-        return self._frames_for_file(file_name)
+        return list(self.iter_frames_from_file(file_name))
+
+    def iter_frames_from_file(self, file_name: str) -> Iterator[CanFrame]:
+        path = self._capture_file_path(file_name)
+        try:
+            yield from iter_candump_file(path)
+        except OSError as exc:
+            raise TransportError(
+                "CAPTURE_SOURCE_UNAVAILABLE",
+                f"Capture source '{file_name}' could not be read.",
+                "Check file permissions and try again.",
+            ) from exc
 
     def capture_events(self, interface: str) -> list[dict[str, object]]:
         frames = self.capture(interface)
@@ -768,6 +779,9 @@ class LocalTransport:
         ScaffoldCanBackend()._require_interface(interface)
 
     def _frames_for_file(self, file_name: str) -> list[CanFrame]:
+        return list(self.iter_frames_from_file(file_name))
+
+    def _capture_file_path(self, file_name: str) -> Path:
         path = Path(file_name)
         if file_name.lower() in {"missing.log", "missing", "offline.log"} or not path.exists():
             raise TransportError(
@@ -788,15 +802,7 @@ class LocalTransport:
                 f"Capture source '{file_name}' uses an unsupported file format.",
                 f"Use a candump log file with one of these suffixes: {supported_formats}.",
             )
-
-        try:
-            return load_candump_file(path)
-        except OSError as exc:
-            raise TransportError(
-                "CAPTURE_SOURCE_UNAVAILABLE",
-                f"Capture source '{file_name}' could not be read.",
-                "Check file permissions and try again.",
-            ) from exc
+        return path
 
     def _pgn(self, frame: CanFrame) -> int:
         return decompose_arbitration_id(frame.arbitration_id).pgn
@@ -826,13 +832,19 @@ class LocalTransport:
         return events
 
 
+def iter_candump_file(path: Path) -> Iterator[CanFrame]:
+    with path.open(encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            yield parse_candump_line(stripped, path=path, line_number=line_number)
+
+
 def load_candump_file(path: Path) -> list[CanFrame]:
     frames: list[CanFrame] = []
-    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        stripped = raw_line.strip()
-        if not stripped:
-            continue
-        frames.append(parse_candump_line(stripped, path=path, line_number=line_number))
+    for frame in iter_candump_file(path):
+        frames.append(frame)
     return frames
 
 

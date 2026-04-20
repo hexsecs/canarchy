@@ -1163,8 +1163,16 @@ def j1939_payload(
         )
     if args.command == "j1939 decode":
         decoder = get_j1939_decoder()
-        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)
-        events = decoder.decode_events(frames)
+        dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
+        if args.stdin:
+            frames = frames_from_stdin(command=args.command)
+            events = decoder.decode_events(frames)
+        elif dbc_ref:
+            frames = transport.frames_from_file(args.file)
+            events = decoder.decode_events(frames)
+        else:
+            events = decoder.decode_events(transport.iter_frames_from_file(args.file))
+            frames = []
         warnings = []
         if not events:
             warnings.append("No J1939 extended ID frames were found in the input.")
@@ -1184,8 +1192,7 @@ def j1939_payload(
         )
     if args.command == "j1939 pgn":
         decoder = get_j1939_decoder()
-        frames = transport.frames_from_file(args.file)
-        event_objects = decoder.decode_pgn_events(frames, args.pgn)
+        event_objects = decoder.decode_pgn_events(transport.iter_frames_from_file(args.file), args.pgn)
         matched_frames = [frame for frame in (getattr(event, "frame", None) for event in event_objects) if frame is not None]
         data, dbc_warnings = enrich_with_dbc(
             {"mode": "passive", "pgn": args.pgn, "file": args.file},
@@ -1198,26 +1205,31 @@ def j1939_payload(
         )
     if args.command == "j1939 spn":
         decoder = get_j1939_decoder()
-        frames = transport.frames_from_file(args.file)
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
-        if args.spn in decoder.supported_spns():
-            observations = decoder.spn_observations(frames, args.spn)
+        if args.spn in decoder.supported_spns() and not dbc_ref:
+            observations = decoder.spn_observations(transport.iter_frames_from_file(args.file), args.spn)
             decoder_name = "curated_spn_map"
-        elif dbc_ref:
-            observations = decode_j1939_spn(frames, dbc_ref, args.spn)
-            decoder_name = "dbc_spn_map"
+            matching_frames: list[Any] = []
         else:
-            observations = []
-            decoder_name = "curated_spn_map"
+            frames = transport.frames_from_file(args.file)
+            if args.spn in decoder.supported_spns():
+                observations = decoder.spn_observations(frames, args.spn)
+                decoder_name = "curated_spn_map"
+            elif dbc_ref:
+                observations = decode_j1939_spn(frames, dbc_ref, args.spn)
+                decoder_name = "dbc_spn_map"
+            else:
+                observations = []
+                decoder_name = "curated_spn_map"
+            matched_pgns = {int(observation["pgn"]) for observation in observations}
+            matching_frames = [
+                frame
+                for frame in frames
+                if frame.is_extended_id and decompose_arbitration_id(frame.arbitration_id).pgn in matched_pgns
+            ]
         warnings = []
         if not observations:
             warnings.append("No observations for the selected SPN were found in the capture.")
-        matched_pgns = {int(observation["pgn"]) for observation in observations}
-        matching_frames = [
-            frame
-            for frame in frames
-            if frame.is_extended_id and decompose_arbitration_id(frame.arbitration_id).pgn in matched_pgns
-        ]
         data, dbc_warnings = enrich_with_dbc(
             {
                 "mode": "passive",
@@ -1237,7 +1249,7 @@ def j1939_payload(
         )
     if args.command == "j1939 tp":
         decoder = get_j1939_decoder()
-        sessions = decoder.transport_protocol_sessions(transport.frames_from_file(args.file))
+        sessions = decoder.transport_protocol_sessions(transport.iter_frames_from_file(args.file))
         warnings = []
         if not sessions:
             warnings.append("No J1939 transport protocol sessions were found in the capture.")
@@ -1253,7 +1265,7 @@ def j1939_payload(
         )
     if args.command == "j1939 dm1":
         decoder = get_j1939_decoder()
-        messages = decoder.dm1_messages(transport.frames_from_file(args.file))
+        messages = decoder.dm1_messages(transport.iter_frames_from_file(args.file))
         warnings = dm1_warnings(messages)
         data, dbc_warnings = enrich_dm1_with_dbc(
             {
