@@ -28,10 +28,12 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 | `REQ-J1939-02` | `TEST-J1939-02` |
 | `REQ-J1939-03` | `TEST-J1939-03` |
 | `REQ-J1939-04` | `TEST-J1939-04` |
-| `REQ-J1939-05` | `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05` |
+| `REQ-J1939-05` | `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05`, `TEST-J1939-06`, `TEST-J1939-07` |
 | `REQ-J1939-06` | `TEST-J1939-01` |
 | `REQ-J1939-07` | Deferred |
 | `REQ-J1939-08` | Deferred |
+| `REQ-J1939-09` | `TEST-J1939-06`, `TEST-J1939-07` |
+| `REQ-J1939-10` | `TEST-J1939-06`, `TEST-J1939-07` |
 
 ## Representative Test Cases
 
@@ -102,10 +104,38 @@ And    the output shall include DTC summaries for each message
 
 ---
 
+### `TEST-J1939-06` — TP printable identification text
+
+```gherkin
+Given  the fixture `j1939_tp_printable_id.candump` contains a completed TP payload with obvious printable ASCII identification text
+When   the operator runs `canarchy j1939 tp j1939_tp_printable_id.candump --json`
+Then   the returned TP session shall preserve `reassembled_data`
+And    the session shall include `decoded_text` plus a heuristic flag
+And    the session shall include a stable payload label when the transferred PGN is known to be identification-style data
+```
+
+**Fixture:** `tests/fixtures/j1939_tp_printable_id.candump`.
+
+---
+
+### `TEST-J1939-07` — TP table output surfaces printable identification text
+
+```gherkin
+Given  the fixture `j1939_tp_printable_id.candump` contains a printable TP identification payload
+When   the operator runs `canarchy j1939 tp j1939_tp_printable_id.candump --table`
+Then   the operator-facing output shall include the payload label when available
+And    the operator-facing output shall include the decoded printable text without hiding the TP session summary context
+```
+
+**Fixture:** `tests/fixtures/j1939_tp_printable_id.candump`.
+
+---
+
 ## Fixtures And Environment
 
 * existing `sample.candump`
 * `j1939_dm1_tp.candump` for TP and DM1 coverage
+* `j1939_tp_printable_id.candump` for printable TP identification coverage
 
 ## Explicit Non-Coverage
 

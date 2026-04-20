@@ -24,6 +24,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * File-backed J1939 decode paths now stream candump input line-by-line instead of reading the whole capture text into memory up front, and the hot `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, and `j1939 dm1` paths now use single-pass iteration where DBC enrichment does not require a retained frame list.
 * File-backed `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, and `j1939 dm1` now accept `--max-frames` and `--seconds` bounds so operators can scope large-capture analysis to an initial frame window or time window without scanning the entire file.
 * Added `j1939 summary` for capture reconnaissance, including top PGNs and source addresses, DM1 and TP presence metrics, timestamp coverage, and candidate printable TP payload identifiers when completed sessions contain obvious ASCII text.
+* Enhanced `j1939 tp` to expose heuristic printable-text decoding and known identification-style payload labels alongside the existing raw reassembled TP payload hex.
 
 ### Documentation
 
