@@ -845,6 +845,97 @@ class CliTests(unittest.TestCase):
         self.assertIn("transport=tp", stdout)
         self.assertIn("spn=110/fmi=5", stdout)
 
+    def test_j1939_decode_max_frames_limits_analysis(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "decode",
+            str(FIXTURES / "j1939_heavy_vehicle.candump"),
+            "--max-frames",
+            "3",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 3)
+
+    def test_j1939_tp_seconds_limits_analysis_window(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--seconds",
+            "0.08",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["session_count"], 1)
+        self.assertFalse(payload["data"]["sessions"][0]["complete"])
+        self.assertEqual(payload["data"]["sessions"][0]["packet_count"], 1)
+
+    def test_j1939_decode_rejects_window_flags_with_stdin(self) -> None:
+        event = {
+            "event_type": "frame",
+            "payload": {
+                "frame": CanFrame(
+                    arbitration_id=0x18FEEE31,
+                    data=bytes.fromhex("7DFFFFFF"),
+                    timestamp=0.0,
+                    is_extended_id=True,
+                ).to_payload()
+            },
+            "source": "test.stdin",
+            "timestamp": 0.0,
+        }
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "decode",
+            "--stdin",
+            "--seconds",
+            "1.0",
+            "--json",
+            input=json.dumps(event) + "\n",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "ANALYSIS_WINDOW_REQUIRES_FILE")
+
+    def test_j1939_dm1_rejects_invalid_max_frames(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "dm1",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--max-frames",
+            "0",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_MAX_FRAMES")
+
+    def test_j1939_tp_rejects_invalid_seconds(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--seconds",
+            "-1",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_ANALYSIS_SECONDS")
+
     def test_j1939_dm1_json_keeps_deprecated_conversion_warning_structured(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
@@ -2579,16 +2670,22 @@ class CompletionTests(unittest.TestCase):
         names = [r.strip() for r in results]
         self.assertIn("--file", names)
         self.assertIn("--dbc", names)
+        self.assertIn("--max-frames", names)
+        self.assertIn("--seconds", names)
 
     def test_j1939_decode_flags_include_dbc(self) -> None:
         results = self._completions("j1939 decode ", "")
         names = [r.strip() for r in results]
         self.assertIn("--dbc", names)
+        self.assertIn("--max-frames", names)
+        self.assertIn("--seconds", names)
 
     def test_j1939_dm1_flags_include_dbc(self) -> None:
         results = self._completions("j1939 dm1 tests/fixtures/j1939_dm1_spn175.candump ", "")
         names = [r.strip() for r in results]
         self.assertIn("--dbc", names)
+        self.assertIn("--max-frames", names)
+        self.assertIn("--seconds", names)
 
     def test_session_save_flags_include_interface_and_dbc(self) -> None:
         results = self._completions("session save mylab ", "")

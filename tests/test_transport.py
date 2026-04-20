@@ -104,6 +104,18 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(len(frames), 3)
         self.assertEqual(frames[0].interface, "can0")
 
+    def test_iter_candump_file_respects_max_frames(self) -> None:
+        frames = list(iter_candump_file(FIXTURES / "j1939_heavy_vehicle.candump", max_frames=3))
+
+        self.assertEqual(len(frames), 3)
+        self.assertEqual(frames[-1].timestamp, 0.2)
+
+    def test_iter_candump_file_respects_seconds_window(self) -> None:
+        frames = list(iter_candump_file(FIXTURES / "j1939_heavy_vehicle.candump", seconds=0.15))
+
+        self.assertEqual(len(frames), 2)
+        self.assertEqual([frame.timestamp for frame in frames], [0.0, 0.1])
+
     def test_parse_candump_line_rejects_malformed_lines(self) -> None:
         with self.assertRaises(TransportError) as ctx:
             parse_candump_line(
