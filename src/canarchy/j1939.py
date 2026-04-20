@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import j1939 as can_j1939
 
+from canarchy.j1939_metadata import spn_lookup
 from canarchy.models import CanFrame
 
 TP_CM_PGN = 0x00EC00
@@ -25,31 +26,6 @@ class SpnDefinition:
     units: str
     byteorder: str = "little"
 
-
-SUPPORTED_SPN_DEFINITIONS = {
-    110: SpnDefinition(
-        spn=110,
-        name="Engine Coolant Temperature",
-        pgn=0x00FEEE,
-        start=0,
-        length=1,
-        resolution=1.0,
-        offset=-40.0,
-        units="degC",
-        byteorder="little",
-    ),
-    190: SpnDefinition(
-        spn=190,
-        name="Engine Speed",
-        pgn=0x00F004,
-        start=3,
-        length=2,
-        resolution=0.125,
-        offset=0.0,
-        units="rpm",
-        byteorder="little",
-    ),
-}
 
 
 @dataclass(slots=True, frozen=True)
@@ -111,7 +87,20 @@ def decompose_arbitration_id(arbitration_id: int) -> J1939Identifier:
 
 
 def spn_observations(frames: list[CanFrame], spn: int) -> list[dict[str, object]]:
-    definition = SUPPORTED_SPN_DEFINITIONS[spn]
+    meta = spn_lookup(spn)
+    if meta is None:
+        return []
+    definition = SpnDefinition(
+        spn=spn,
+        name=meta["name"],
+        pgn=meta["pgn"],
+        start=meta["start"],
+        length=meta["length"],
+        resolution=meta["resolution"],
+        offset=meta["offset"],
+        units=meta["units"],
+        byteorder=meta.get("byteorder", "little"),
+    )
     observations: list[dict[str, object]] = []
     for frame in frames:
         if not frame.is_extended_id:
@@ -284,11 +273,11 @@ def _parse_dtcs(payload: bytes) -> list[dict[str, object]]:
         fmi = (dtc >> 16) & 0x1F
         occurrence_count = (dtc >> 24) & 0x7F
         conversion_method = (dtc >> 31) & 0x01
-        definition = SUPPORTED_SPN_DEFINITIONS.get(spn)
+        meta = spn_lookup(spn)
         dtcs.append(
             {
                 "spn": spn,
-                "name": definition.name if definition is not None else None,
+                "name": meta["name"] if meta is not None else None,
                 "fmi": fmi,
                 "occurrence_count": occurrence_count,
                 "conversion_method": conversion_method,

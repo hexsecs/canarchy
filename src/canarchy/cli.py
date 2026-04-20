@@ -1336,8 +1336,7 @@ def j1939_payload(
                 metadata = lookup_j1939_spn_metadata(str(resolution.local_path), int(dtc["spn"]))
                 if metadata is not None:
                     matched_dtcs += 1
-                    if enriched_dtc.get("name") is None:
-                        enriched_dtc["name"] = metadata["signal_name"]
+                    enriched_dtc["name"] = metadata["signal_name"]
                     enriched_dtc["dbc_signal_name"] = metadata["signal_name"]
                     enriched_dtc["dbc_message_name"] = metadata["message_name"]
                     enriched_dtc["units"] = metadata["units"]

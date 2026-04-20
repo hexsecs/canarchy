@@ -12,7 +12,8 @@ from typing import Iterable, Protocol
 
 import j1939 as can_j1939
 
-from canarchy.j1939 import DM1_PGN, SUPPORTED_SPN_DEFINITIONS, decompose_arbitration_id
+from canarchy.j1939 import DM1_PGN, SpnDefinition, decompose_arbitration_id
+from canarchy.j1939_metadata import decodable_spns, spn_lookup
 from canarchy.models import CanFrame, J1939ObservationEvent
 
 
@@ -41,7 +42,7 @@ class CanJ1939Decoder:
     TP_CM_ABORT = 0xFF
 
     def supported_spns(self) -> set[int]:
-        return set(SUPPORTED_SPN_DEFINITIONS)
+        return decodable_spns()
 
     def decode_events(self, frames: Iterable[CanFrame]) -> list[J1939ObservationEvent]:
         return self._decode_events(frames, pgn=None)
@@ -70,7 +71,20 @@ class CanJ1939Decoder:
         return events
 
     def spn_observations(self, frames: Iterable[CanFrame], spn: int) -> list[dict[str, object]]:
-        definition = SUPPORTED_SPN_DEFINITIONS[spn]
+        meta = spn_lookup(spn)
+        if meta is None:
+            return []
+        definition = SpnDefinition(
+            spn=spn,
+            name=meta["name"],
+            pgn=meta["pgn"],
+            start=meta["start"],
+            length=meta["length"],
+            resolution=meta["resolution"],
+            offset=meta["offset"],
+            units=meta["units"],
+            byteorder=meta.get("byteorder", "little"),
+        )
         observations: list[dict[str, object]] = []
         for frame in frames:
             if not frame.is_extended_id:
@@ -310,11 +324,11 @@ class CanJ1939Decoder:
             fmi = (dtc >> 16) & 0x1F
             occurrence_count = (dtc >> 24) & 0x7F
             conversion_method = (dtc >> 31) & 0x01
-            definition = SUPPORTED_SPN_DEFINITIONS.get(spn)
+            spn_meta = spn_lookup(spn)
             dtcs.append(
                 {
                     "spn": spn,
-                    "name": definition.name if definition is not None else None,
+                    "name": spn_meta["name"] if spn_meta is not None else None,
                     "fmi": fmi,
                     "occurrence_count": occurrence_count,
                     "conversion_method": conversion_method,
