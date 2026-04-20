@@ -55,6 +55,7 @@ SUBCOMMANDS: dict[str, list[str]] = {
 
 # Output format flags shared by every command.
 _OUTPUT = ["--json", "--jsonl", "--raw", "--table"]
+_J1939_FILE_BOUNDS = ["--max-frames", "--seconds"]
 
 # Per-command (or per-subcommand) flag lists.
 # Keys for subcommand groups use the "group subcommand" form.
@@ -82,12 +83,12 @@ FLAGS: dict[str, list[str]] = {
         "--gap",
         "--id",
     ] + _OUTPUT,
-    "j1939 decode": ["--dbc"] + _OUTPUT,
-    "j1939 dm1": ["--dbc"] + _OUTPUT,
+    "j1939 decode": ["--dbc"] + _J1939_FILE_BOUNDS + _OUTPUT,
+    "j1939 dm1": ["--dbc"] + _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 monitor": ["--pgn"] + _OUTPUT,
-    "j1939 pgn": ["--dbc", "--file"] + _OUTPUT,
-    "j1939 spn": ["--dbc", "--file"] + _OUTPUT,
-    "j1939 tp": _OUTPUT,
+    "j1939 pgn": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
+    "j1939 spn": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
+    "j1939 tp": _J1939_FILE_BOUNDS + _OUTPUT,
     "re correlate": _OUTPUT,
     "re counters": _OUTPUT,
     "re entropy": _OUTPUT,

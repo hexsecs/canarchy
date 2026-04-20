@@ -514,13 +514,25 @@ class LocalTransport:
             interfaces=sorted({frame.interface or "unknown" for frame in frames}),
         )
 
-    def frames_from_file(self, file_name: str) -> list[CanFrame]:
-        return list(self.iter_frames_from_file(file_name))
+    def frames_from_file(
+        self,
+        file_name: str,
+        *,
+        max_frames: int | None = None,
+        seconds: float | None = None,
+    ) -> list[CanFrame]:
+        return list(self.iter_frames_from_file(file_name, max_frames=max_frames, seconds=seconds))
 
-    def iter_frames_from_file(self, file_name: str) -> Iterator[CanFrame]:
+    def iter_frames_from_file(
+        self,
+        file_name: str,
+        *,
+        max_frames: int | None = None,
+        seconds: float | None = None,
+    ) -> Iterator[CanFrame]:
         path = self._capture_file_path(file_name)
         try:
-            yield from iter_candump_file(path)
+            yield from iter_candump_file(path, max_frames=max_frames, seconds=seconds)
         except OSError as exc:
             raise TransportError(
                 "CAPTURE_SOURCE_UNAVAILABLE",
@@ -832,13 +844,28 @@ class LocalTransport:
         return events
 
 
-def iter_candump_file(path: Path) -> Iterator[CanFrame]:
+def iter_candump_file(
+    path: Path,
+    *,
+    max_frames: int | None = None,
+    seconds: float | None = None,
+) -> Iterator[CanFrame]:
+    yielded = 0
+    start_timestamp: float | None = None
     with path.open(encoding="utf-8") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
             stripped = raw_line.strip()
             if not stripped:
                 continue
-            yield parse_candump_line(stripped, path=path, line_number=line_number)
+            frame = parse_candump_line(stripped, path=path, line_number=line_number)
+            if start_timestamp is None:
+                start_timestamp = frame.timestamp
+            if seconds is not None and start_timestamp is not None and frame.timestamp - start_timestamp > seconds:
+                break
+            yield frame
+            yielded += 1
+            if max_frames is not None and yielded >= max_frames:
+                break
 
 
 def load_candump_file(path: Path) -> list[CanFrame]:

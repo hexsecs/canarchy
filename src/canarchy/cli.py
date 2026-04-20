@@ -147,6 +147,19 @@ def add_active_ack_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_j1939_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--max-frames",
+        type=int,
+        help="limit analysis to the first N frames from the capture file",
+    )
+    parser.add_argument(
+        "--seconds",
+        type=float,
+        help="limit analysis to the first N seconds from the capture start timestamp",
+    )
+
+
 def build_parser() -> CanarchyArgumentParser:
     parser = CanarchyArgumentParser(
         prog="canarchy", description="CLI-first CAN security research toolkit"
@@ -320,6 +333,7 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_decode.add_argument("file", nargs="?", default=None)
     j1939_decode.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
     j1939_decode.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
+    add_j1939_file_analysis_arguments(j1939_decode)
     add_output_arguments(j1939_decode)
     j1939_decode.set_defaults(command="j1939 decode")
 
@@ -327,6 +341,7 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_pgn.add_argument("pgn", type=int)
     j1939_pgn.add_argument("--file", help="inspect the PGN within a capture file")
     j1939_pgn.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
+    add_j1939_file_analysis_arguments(j1939_pgn)
     add_output_arguments(j1939_pgn)
     j1939_pgn.set_defaults(command="j1939 pgn")
 
@@ -334,17 +349,20 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_spn.add_argument("spn", type=int)
     j1939_spn.add_argument("--file", help="inspect the SPN within a capture file")
     j1939_spn.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
+    add_j1939_file_analysis_arguments(j1939_spn)
     add_output_arguments(j1939_spn)
     j1939_spn.set_defaults(command="j1939 spn")
 
     j1939_tp = j1939_subparsers.add_parser("tp", help="inspect J1939 transport protocol")
     j1939_tp.add_argument("file")
+    add_j1939_file_analysis_arguments(j1939_tp)
     add_output_arguments(j1939_tp)
     j1939_tp.set_defaults(command="j1939 tp")
 
     j1939_dm1 = j1939_subparsers.add_parser("dm1", help="inspect J1939 DM1 traffic")
     j1939_dm1.add_argument("file")
     j1939_dm1.add_argument("--dbc", help="enrich DM1 DTC names with a local DBC path or provider ref")
+    add_j1939_file_analysis_arguments(j1939_dm1)
     add_output_arguments(j1939_dm1)
     j1939_dm1.set_defaults(command="j1939 dm1")
 
@@ -786,6 +804,48 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
+    if args.command in {"j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1"}:
+        max_frames = getattr(args, "max_frames", None)
+        seconds = getattr(args, "seconds", None)
+        if max_frames is not None and max_frames < 1:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_MAX_FRAMES",
+                        message="Maximum frame bound must be at least 1.",
+                        hint="Pass a positive integer to --max-frames.",
+                    )
+                ],
+                data={"max_frames": max_frames},
+            )
+        if seconds is not None and seconds < 0:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_ANALYSIS_SECONDS",
+                        message="Analysis time bound must be zero or greater.",
+                        hint="Pass a non-negative value to --seconds.",
+                    )
+                ],
+                data={"seconds": seconds},
+            )
+        if args.command == "j1939 decode" and getattr(args, "stdin", False) and (max_frames is not None or seconds is not None):
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="ANALYSIS_WINDOW_REQUIRES_FILE",
+                        message="J1939 bounded-analysis flags currently require a capture file.",
+                        hint="Use a capture file for --max-frames or --seconds, or remove those flags when using --stdin.",
+                    )
+                ],
+            )
+
     if args.command == "encode":
         for assignment in args.signals:
             if "=" not in assignment:
@@ -895,6 +955,13 @@ def frames_from_stdin(*, command: str) -> list[CanFrame]:
             ],
         )
     return frames
+
+
+def j1939_file_analysis_kwargs(args: argparse.Namespace) -> dict[str, int | float | None]:
+    return {
+        "max_frames": getattr(args, "max_frames", None),
+        "seconds": getattr(args, "seconds", None),
+    }
 
 
 def sample_frame(*, interface: str | None = None, frame_format: str = "can") -> CanFrame:
@@ -1164,14 +1231,15 @@ def j1939_payload(
     if args.command == "j1939 decode":
         decoder = get_j1939_decoder()
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
+        analysis_kwargs = j1939_file_analysis_kwargs(args)
         if args.stdin:
             frames = frames_from_stdin(command=args.command)
             events = decoder.decode_events(frames)
         elif dbc_ref:
-            frames = transport.frames_from_file(args.file)
+            frames = transport.frames_from_file(args.file, **analysis_kwargs)
             events = decoder.decode_events(frames)
         else:
-            events = decoder.decode_events(transport.iter_frames_from_file(args.file))
+            events = decoder.decode_events(transport.iter_frames_from_file(args.file, **analysis_kwargs))
             frames = []
         warnings = []
         if not events:
@@ -1192,7 +1260,10 @@ def j1939_payload(
         )
     if args.command == "j1939 pgn":
         decoder = get_j1939_decoder()
-        event_objects = decoder.decode_pgn_events(transport.iter_frames_from_file(args.file), args.pgn)
+        event_objects = decoder.decode_pgn_events(
+            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
+            args.pgn,
+        )
         matched_frames = [frame for frame in (getattr(event, "frame", None) for event in event_objects) if frame is not None]
         data, dbc_warnings = enrich_with_dbc(
             {"mode": "passive", "pgn": args.pgn, "file": args.file},
@@ -1206,12 +1277,13 @@ def j1939_payload(
     if args.command == "j1939 spn":
         decoder = get_j1939_decoder()
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
+        analysis_kwargs = j1939_file_analysis_kwargs(args)
         if args.spn in decoder.supported_spns() and not dbc_ref:
-            observations = decoder.spn_observations(transport.iter_frames_from_file(args.file), args.spn)
+            observations = decoder.spn_observations(transport.iter_frames_from_file(args.file, **analysis_kwargs), args.spn)
             decoder_name = "curated_spn_map"
             matching_frames: list[Any] = []
         else:
-            frames = transport.frames_from_file(args.file)
+            frames = transport.frames_from_file(args.file, **analysis_kwargs)
             if args.spn in decoder.supported_spns():
                 observations = decoder.spn_observations(frames, args.spn)
                 decoder_name = "curated_spn_map"
@@ -1249,7 +1321,9 @@ def j1939_payload(
         )
     if args.command == "j1939 tp":
         decoder = get_j1939_decoder()
-        sessions = decoder.transport_protocol_sessions(transport.iter_frames_from_file(args.file))
+        sessions = decoder.transport_protocol_sessions(
+            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+        )
         warnings = []
         if not sessions:
             warnings.append("No J1939 transport protocol sessions were found in the capture.")
@@ -1265,7 +1339,9 @@ def j1939_payload(
         )
     if args.command == "j1939 dm1":
         decoder = get_j1939_decoder()
-        messages = decoder.dm1_messages(transport.iter_frames_from_file(args.file))
+        messages = decoder.dm1_messages(
+            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+        )
         warnings = dm1_warnings(messages)
         data, dbc_warnings = enrich_dm1_with_dbc(
             {
