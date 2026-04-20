@@ -6,6 +6,7 @@ import argparse
 import json
 import shlex
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -44,7 +45,7 @@ EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
-J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1"}
+J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
@@ -365,6 +366,12 @@ def build_parser() -> CanarchyArgumentParser:
     add_j1939_file_analysis_arguments(j1939_dm1)
     add_output_arguments(j1939_dm1)
     j1939_dm1.set_defaults(command="j1939 dm1")
+
+    j1939_summary = j1939_subparsers.add_parser("summary", help="summarize J1939 capture content")
+    j1939_summary.add_argument("file")
+    add_j1939_file_analysis_arguments(j1939_summary)
+    add_output_arguments(j1939_summary)
+    j1939_summary.set_defaults(command="j1939 summary")
 
     uds = subparsers.add_parser("uds", help="UDS protocol workflows")
     uds_subparsers = uds.add_subparsers(dest="uds_action", required=True)
@@ -804,7 +811,7 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command in {"j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1"}:
+    if args.command in {"j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary"}:
         max_frames = getattr(args, "max_frames", None)
         seconds = getattr(args, "seconds", None)
         if max_frames is not None and max_frames < 1:
@@ -962,6 +969,118 @@ def j1939_file_analysis_kwargs(args: argparse.Namespace) -> dict[str, int | floa
         "max_frames": getattr(args, "max_frames", None),
         "seconds": getattr(args, "seconds", None),
     }
+
+
+def _extract_printable_text(payload: bytes) -> str | None:
+    stripped = payload.rstrip(b"\x00\xff ")
+    if len(stripped) < 4:
+        return None
+    if not all(0x20 <= byte <= 0x7E for byte in stripped):
+        return None
+    text = stripped.decode("ascii", errors="ignore").strip()
+    return text or None
+
+
+def _top_counts(counter: Counter[int], *, limit: int = 5) -> list[dict[str, int]]:
+    return [{"value": value, "frame_count": count} for value, count in counter.most_common(limit)]
+
+
+def _j1939_summary(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[dict[str, Any], list[str]]:
+    if not frames:
+        return (
+            {
+                "mode": "passive",
+                "file": file,
+                "total_frames": 0,
+                "interfaces": [],
+                "unique_arbitration_ids": 0,
+                "first_timestamp": None,
+                "last_timestamp": None,
+                "duration_seconds": 0.0,
+                "j1939_frame_count": 0,
+                "unique_pgns": 0,
+                "top_pgns": [],
+                "top_source_addresses": [],
+                "dm1": {
+                    "present": False,
+                    "message_count": 0,
+                    "active_dtc_count": 0,
+                    "source_addresses": [],
+                },
+                "tp": {
+                    "session_count": 0,
+                    "complete_session_count": 0,
+                    "session_types": {},
+                    "printable_identifiers": [],
+                },
+            },
+            ["No frames were found in the capture."],
+        )
+
+    identifiers = [decompose_arbitration_id(frame.arbitration_id) for frame in frames if frame.is_extended_id]
+    pgn_counts: Counter[int] = Counter(identifier.pgn for identifier in identifiers)
+    source_counts: Counter[int] = Counter(identifier.source_address for identifier in identifiers)
+    interfaces = sorted({frame.interface or "unknown" for frame in frames})
+    timestamps = [frame.timestamp for frame in frames]
+    dm1_messages = decoder.dm1_messages(frames)
+    tp_sessions = decoder.transport_protocol_sessions(frames)
+    session_types = Counter(str(session["session_type"]) for session in tp_sessions)
+    printable_identifiers: list[dict[str, object]] = []
+    for session in tp_sessions:
+        if not bool(session.get("complete", False)):
+            continue
+        try:
+            payload = bytes.fromhex(str(session["reassembled_data"]))
+        except ValueError:
+            continue
+        text = _extract_printable_text(payload)
+        if text is None:
+            continue
+        printable_identifiers.append(
+            {
+                "text": text,
+                "transfer_pgn": int(session["transfer_pgn"]),
+                "source_address": int(session["source_address"]),
+                "destination_address": session["destination_address"],
+                "session_type": str(session["session_type"]),
+            }
+        )
+
+    return (
+        {
+            "mode": "passive",
+            "file": file,
+            "total_frames": len(frames),
+            "interfaces": interfaces,
+            "unique_arbitration_ids": len({frame.arbitration_id for frame in frames}),
+            "first_timestamp": timestamps[0],
+            "last_timestamp": timestamps[-1],
+            "duration_seconds": timestamps[-1] - timestamps[0],
+            "j1939_frame_count": len(identifiers),
+            "unique_pgns": len(pgn_counts),
+            "top_pgns": [
+                {"pgn": entry["value"], "frame_count": entry["frame_count"]}
+                for entry in _top_counts(pgn_counts)
+            ],
+            "top_source_addresses": [
+                {"source_address": entry["value"], "frame_count": entry["frame_count"]}
+                for entry in _top_counts(source_counts)
+            ],
+            "dm1": {
+                "present": bool(dm1_messages),
+                "message_count": len(dm1_messages),
+                "active_dtc_count": sum(int(message["active_dtc_count"]) for message in dm1_messages),
+                "source_addresses": sorted({int(message["source_address"]) for message in dm1_messages}),
+            },
+            "tp": {
+                "session_count": len(tp_sessions),
+                "complete_session_count": sum(1 for session in tp_sessions if bool(session.get("complete", False))),
+                "session_types": dict(sorted(session_types.items())),
+                "printable_identifiers": printable_identifiers,
+            },
+        },
+        [],
+    )
 
 
 def sample_frame(*, interface: str | None = None, frame_format: str = "can") -> CanFrame:
@@ -1359,6 +1478,14 @@ def j1939_payload(
             [],
             warnings,
         )
+    if args.command == "j1939 summary":
+        decoder = get_j1939_decoder()
+        data, warnings = _j1939_summary(
+            transport.frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
+            file=args.file,
+            decoder=decoder,
+        )
+        return (data, [], warnings)
     raise AssertionError(f"unsupported j1939 command: {args.command}")
 
 
@@ -1982,6 +2109,50 @@ def format_j1939_table(result: CommandResult) -> list[str]:
                 f"amber={message['lamp_status']['amber_warning']} "
                 f"codes={dtc_text}"
             )
+        return lines
+
+    if result.command == "j1939 summary":
+        lines.append(f"file: {result.data['file']}")
+        lines.append(f"total_frames: {result.data['total_frames']}")
+        lines.append(f"interfaces: {', '.join(result.data['interfaces']) or 'none'}")
+        lines.append(f"unique_arbitration_ids: {result.data['unique_arbitration_ids']}")
+        lines.append(f"j1939_frames: {result.data['j1939_frame_count']}")
+        lines.append(f"timestamps: {result.data['first_timestamp']}..{result.data['last_timestamp']}")
+        lines.append(
+            f"dm1: present={result.data['dm1']['present']} messages={result.data['dm1']['message_count']} active_dtcs={result.data['dm1']['active_dtc_count']}"
+        )
+        lines.append(
+            f"tp: sessions={result.data['tp']['session_count']} complete={result.data['tp']['complete_session_count']}"
+        )
+        lines.append("top_pgns:")
+        top_pgns = result.data.get("top_pgns", [])
+        if not top_pgns:
+            lines.append("- no j1939 pgn activity")
+        else:
+            for entry in top_pgns:
+                lines.append(f"- pgn={entry['pgn']} frames={entry['frame_count']}")
+        lines.append("top_source_addresses:")
+        top_sources = result.data.get("top_source_addresses", [])
+        if not top_sources:
+            lines.append("- no j1939 source-address activity")
+        else:
+            for entry in top_sources:
+                lines.append(f"- sa=0x{entry['source_address']:02X} frames={entry['frame_count']}")
+        lines.append("printable_identifiers:")
+        printable_identifiers = result.data.get("tp", {}).get("printable_identifiers", [])
+        if not printable_identifiers:
+            lines.append("- none")
+        else:
+            for entry in printable_identifiers:
+                destination = entry["destination_address"]
+                destination_text = f"0x{destination:02X}" if destination is not None else "broadcast"
+                lines.append(
+                    "- "
+                    f"text={entry['text']} "
+                    f"pgn={entry['transfer_pgn']} "
+                    f"sa=0x{entry['source_address']:02X} "
+                    f"da={destination_text}"
+                )
         return lines
 
     lines.append("observations:")

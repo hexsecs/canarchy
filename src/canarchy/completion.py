@@ -88,6 +88,7 @@ FLAGS: dict[str, list[str]] = {
     "j1939 monitor": ["--pgn"] + _OUTPUT,
     "j1939 pgn": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 spn": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
+    "j1939 summary": _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 tp": _J1939_FILE_BOUNDS + _OUTPUT,
     "re correlate": _OUTPUT,
     "re counters": _OUTPUT,
