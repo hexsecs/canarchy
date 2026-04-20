@@ -46,13 +46,13 @@ This returns provider-catalog matches without downloading every DBC file.
 Once you have a likely candidate, fetch it by provider ref:
 
 ```bash
-canarchy dbc fetch opendbc:toyota_tnga_k_pt_generated --json
+canarchy dbc fetch opendbc:toyota_tnga_k_pt --json
 ```
 
 Provider refs can also use the `comma:` alias:
 
 ```bash
-canarchy dbc fetch comma:toyota_tnga_k_pt_generated --json
+canarchy dbc fetch comma:toyota_tnga_k_pt --json
 ```
 
 ## Step 4 — Inspect the DBC Before Decoding
@@ -60,13 +60,13 @@ canarchy dbc fetch comma:toyota_tnga_k_pt_generated --json
 Inspect the database metadata directly from the provider ref:
 
 ```bash
-canarchy dbc inspect opendbc:toyota_tnga_k_pt_generated --json
+canarchy dbc inspect opendbc:toyota_tnga_k_pt --json
 ```
 
 Restrict the result to a single message when needed:
 
 ```bash
-canarchy dbc inspect opendbc:toyota_tnga_k_pt_generated --message STEER_TORQUE_SENSOR --table
+canarchy dbc inspect opendbc:toyota_tnga_k_pt --message STEER_TORQUE_SENSOR --table
 ```
 
 Structured output includes `data.dbc_source`, which records the provider, logical DBC name, pinned version, and resolved local cache path.
@@ -76,7 +76,7 @@ Structured output includes `data.dbc_source`, which records the provider, logica
 Use the same provider ref directly with `decode`:
 
 ```bash
-canarchy decode tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json
+canarchy decode tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt --json
 ```
 
 This avoids copying or hard-coding a separate local path.
