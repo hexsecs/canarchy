@@ -667,13 +667,13 @@ class CliTests(unittest.TestCase):
         signal_events = [event for event in payload["data"]["dbc_events"] if event["event_type"] == "signal"]
         self.assertTrue(any(event["payload"]["signal_name"] == "EngineCoolantTemp" for event in signal_events))
 
-    def test_j1939_spn_supports_non_curated_spn_via_dbc_flag(self) -> None:
+    def test_j1939_spn_dbc_flag_used_for_spn_not_in_built_in_metadata(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "spn",
-            "175",
+            "1234",
             "--file",
-            str(FIXTURES / "sample.candump"),
+            str(FIXTURES / "j1939_nonbyte.candump"),
             "--dbc",
             str(FIXTURES / "j1939_sample.dbc"),
             "--json",
@@ -685,12 +685,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["decoder"], "dbc_spn_map")
         self.assertEqual(payload["data"]["observation_count"], 1)
         observation = payload["data"]["observations"][0]
-        self.assertEqual(observation["spn"], 175)
-        self.assertEqual(observation["name"], "EngineOilTemp")
-        self.assertEqual(observation["value"], -6)
-        self.assertEqual(observation["raw"], "22")
+        self.assertEqual(observation["spn"], 1234)
+        self.assertEqual(observation["name"], "NibbleSignal")
 
-    def test_j1939_spn_supports_non_curated_spn_via_default_dbc(self) -> None:
+    def test_j1939_spn_default_dbc_used_for_spn_not_in_built_in_metadata(self) -> None:
         with patch(
             "canarchy.transport._load_user_config",
             return_value={"CANARCHY_J1939_DBC": str(FIXTURES / "j1939_sample.dbc")},
@@ -698,9 +696,9 @@ class CliTests(unittest.TestCase):
             exit_code, stdout, stderr = run_cli(
                 "j1939",
                 "spn",
-                "175",
+                "1234",
                 "--file",
-                str(FIXTURES / "sample.candump"),
+                str(FIXTURES / "j1939_nonbyte.candump"),
                 "--json",
             )
 
@@ -708,7 +706,42 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["decoder"], "dbc_spn_map")
-        self.assertEqual(payload["data"]["observations"][0]["name"], "EngineOilTemp")
+        self.assertEqual(payload["data"]["observations"][0]["name"], "NibbleSignal")
+
+    def test_j1939_spn_built_in_metadata_decodes_spn_without_dbc(self) -> None:
+        with patch("canarchy.transport._load_user_config", return_value={}):
+            exit_code, stdout, stderr = run_cli(
+                "j1939",
+                "spn",
+                "174",
+                "--file",
+                str(FIXTURES / "sample.candump"),
+                "--json",
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["decoder"], "curated_spn_map")
+        observation = payload["data"]["observations"][0]
+        self.assertEqual(observation["spn"], 174)
+        self.assertEqual(observation["name"], "Engine Fuel 1 Temperature 1")
+        self.assertEqual(observation["pgn"], 65262)
+        self.assertEqual(observation["units"], "degC")
+
+    def test_j1939_dm1_built_in_metadata_names_dtc_spn_without_dbc(self) -> None:
+        with patch("canarchy.transport._load_user_config", return_value={}):
+            exit_code, stdout, stderr = run_cli(
+                "j1939",
+                "dm1",
+                str(FIXTURES / "j1939_dm1_spn175.candump"),
+                "--json",
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        dtc = payload["data"]["messages"][0]["dtcs"][0]
+        self.assertEqual(dtc["spn"], 175)
+        self.assertEqual(dtc["name"], "Engine Oil Temperature 1")
 
     def test_j1939_spn_extracts_raw_for_non_byte_aligned_dbc_signal(self) -> None:
         exit_code, stdout, stderr = run_cli(
