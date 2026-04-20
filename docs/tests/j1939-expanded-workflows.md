@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented |
+| Status | Partial |
 | Related design spec | `docs/design/j1939-expanded-workflows.md` |
 | Primary test area | CLI, protocol |
 
@@ -24,14 +24,14 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 
 | Requirement ID | Covered by test IDs |
 |----------------|---------------------|
-| `REQ-J1939-01` | `TEST-J1939-01`, `TEST-J1939-02` |
-| `REQ-J1939-02` | `TEST-J1939-03` |
-| `REQ-J1939-03` | `TEST-J1939-04`, `TEST-J1939-05` |
-| `REQ-J1939-04` | `TEST-J1939-02` |
-| `REQ-J1939-05` | `TEST-J1939-03` |
-| `REQ-J1939-06` | `TEST-J1939-04`, `TEST-J1939-05` |
-| `REQ-J1939-07` | `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-05` |
-| `REQ-J1939-08` | `TEST-J1939-01` |
+| `REQ-J1939-01` | `TEST-J1939-01`, `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05` |
+| `REQ-J1939-02` | `TEST-J1939-02` |
+| `REQ-J1939-03` | `TEST-J1939-03` |
+| `REQ-J1939-04` | `TEST-J1939-04` |
+| `REQ-J1939-05` | `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05` |
+| `REQ-J1939-06` | `TEST-J1939-01` |
+| `REQ-J1939-07` | Deferred |
+| `REQ-J1939-08` | Deferred |
 
 ## Representative Test Cases
 

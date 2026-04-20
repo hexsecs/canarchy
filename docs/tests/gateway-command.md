@@ -31,10 +31,11 @@ Validate that `gateway` forwards frames correctly, preserves structured directio
 | `REQ-GATEWAY-01` | `TEST-GATEWAY-01`, `TEST-GATEWAY-02` |
 | `REQ-GATEWAY-02` | `TEST-GATEWAY-03` |
 | `REQ-GATEWAY-03` | `TEST-GATEWAY-02` |
-| `REQ-GATEWAY-04` | `TEST-GATEWAY-04`, `TEST-GATEWAY-06` |
+| `REQ-GATEWAY-04` | `TEST-GATEWAY-04` |
 | `REQ-GATEWAY-05` | `TEST-GATEWAY-07` |
 | `REQ-GATEWAY-06` | `TEST-GATEWAY-05` |
 | `REQ-GATEWAY-07` | `TEST-GATEWAY-08` |
+| `REQ-GATEWAY-08` | `TEST-GATEWAY-06` |
 
 ## Representative Test Cases
 

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented |
+| Status | Partial |
 | Related design spec | `docs/design/generate-command.md` |
 | Primary test area | CLI, active transmit |
 
@@ -28,7 +28,13 @@ Validate that `generate` produces deterministic frame sequences, emits active-tr
 | `REQ-GENERATE-02` | `TEST-GENERATE-01`, `TEST-GENERATE-02`, `TEST-GENERATE-03` |
 | `REQ-GENERATE-03` | `TEST-GENERATE-01`, `TEST-GENERATE-03` |
 | `REQ-GENERATE-04` | `TEST-GENERATE-01` |
-| `REQ-GENERATE-05` | `TEST-GENERATE-04`, `TEST-GENERATE-05`, `TEST-GENERATE-06`, `TEST-GENERATE-07`, `TEST-GENERATE-08` |
+| `REQ-GENERATE-10` | Deferred |
+| `REQ-GENERATE-11` | Deferred |
+| `REQ-GENERATE-05` | `TEST-GENERATE-04` |
+| `REQ-GENERATE-06` | `TEST-GENERATE-05` |
+| `REQ-GENERATE-07` | `TEST-GENERATE-06` |
+| `REQ-GENERATE-08` | `TEST-GENERATE-07` |
+| `REQ-GENERATE-09` | `TEST-GENERATE-08` |
 
 ## Representative Test Cases
 

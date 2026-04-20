@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented |
+| Status | Partial |
 | Related design spec | `docs/design/shell-command.md` |
 | Primary test area | Front end |
 
@@ -22,7 +22,7 @@ Validate the one-shot shared-parser behavior of `shell` and document the current
 |----------------|---------------------|
 | `REQ-SHELL-01` | `TEST-SHELL-01` |
 | `REQ-SHELL-02` | `TEST-SHELL-01` |
-| `REQ-SHELL-03` | `TEST-SHELL-01` |
+| `REQ-SHELL-03` | Deferred |
 | `REQ-SHELL-04` | `TEST-SHELL-01` |
 
 ## Representative Test Cases
