@@ -222,6 +222,7 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref (e.g. opendbc:toyota_tnga_k_pt_generated)"},
             },
             "required": ["file"],
         },
@@ -234,6 +235,7 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "pgn": {"type": "integer", "description": "J1939 PGN value (0–262143)"},
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref"},
             },
             "required": ["pgn", "file"],
         },
@@ -246,6 +248,7 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "spn": {"type": "integer", "description": "J1939 SPN value (non-negative integer)"},
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref"},
             },
             "required": ["spn", "file"],
         },
@@ -264,6 +267,18 @@ _TOOLS: list[types.Tool] = [
     types.Tool(
         name="j1939_dm1",
         description="Inspect J1939 DM1 diagnostic messages in a capture file.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+                "dbc": {"type": "string", "description": "Enrich DM1 DTC names with a local DBC path or provider ref"},
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
+        name="j1939_summary",
+        description="Summarize J1939 capture content: PGN distribution, source addresses, and transport sessions.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -308,6 +323,115 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {},
+        },
+    ),
+    types.Tool(
+        name="dbc_provider_list",
+        description="List all registered DBC providers.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
+        name="dbc_search",
+        description="Search for DBC files across registered providers by name, make, or keyword.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query (name, make, or keyword)"},
+                "provider": {"type": "string", "description": "Restrict search to a specific provider"},
+                "limit": {"type": "integer", "description": "Maximum results to return", "default": 20},
+            },
+            "required": ["query"],
+        },
+    ),
+    types.Tool(
+        name="dbc_fetch",
+        description="Fetch and cache a DBC file by provider ref (e.g. opendbc:toyota_tnga_k_pt_generated).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ref": {"type": "string", "description": "DBC ref in the form provider:name (e.g. opendbc:toyota_tnga_k_pt_generated)"},
+            },
+            "required": ["ref"],
+        },
+    ),
+    types.Tool(
+        name="dbc_cache_list",
+        description="List all locally cached DBC providers and their entries.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
+        name="dbc_cache_prune",
+        description="Remove stale cached DBC commits.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "provider": {"type": "string", "description": "Restrict pruning to a specific provider"},
+            },
+        },
+    ),
+    types.Tool(
+        name="dbc_cache_refresh",
+        description="Refresh the DBC catalog from upstream for a provider.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "provider": {"type": "string", "description": "Provider to refresh", "default": "opendbc"},
+            },
+        },
+    ),
+    types.Tool(
+        name="re_counters",
+        description="Detect likely counter fields in CAN frames from a capture file.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
+        name="re_entropy",
+        description="Rank payload bytes by Shannon entropy to surface high-activity signal candidates.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
+        name="re_match_dbc",
+        description="Rank candidate DBC files from a provider catalog by how well they match a capture.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "capture": {"type": "string", "description": "Path to candump capture file"},
+                "provider": {"type": "string", "description": "DBC provider catalog to search", "default": "opendbc"},
+                "limit": {"type": "integer", "description": "Maximum candidates to return", "default": 10},
+            },
+            "required": ["capture"],
+        },
+    ),
+    types.Tool(
+        name="re_shortlist_dbc",
+        description="Rank DBC candidates pre-filtered by vehicle make against a capture.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "capture": {"type": "string", "description": "Path to candump capture file"},
+                "make": {"type": "string", "description": "Vehicle make to pre-filter candidates (e.g. toyota)"},
+                "provider": {"type": "string", "description": "DBC provider catalog to search", "default": "opendbc"},
+                "limit": {"type": "integer", "description": "Maximum candidates to return", "default": 10},
+            },
+            "required": ["capture", "make"],
         },
     ),
 ]
@@ -394,15 +518,29 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--pgn", str(a["pgn"])]
             return argv + ["--json"]
         case "j1939_decode":
-            return ["j1939", "decode", a["file"], "--json"]
+            argv = ["j1939", "decode", a["file"]]
+            if a.get("dbc"):
+                argv += ["--dbc", a["dbc"]]
+            return argv + ["--json"]
         case "j1939_pgn":
-            return ["j1939", "pgn", str(a["pgn"]), "--file", a["file"], "--json"]
+            argv = ["j1939", "pgn", str(a["pgn"]), "--file", a["file"]]
+            if a.get("dbc"):
+                argv += ["--dbc", a["dbc"]]
+            return argv + ["--json"]
         case "j1939_spn":
-            return ["j1939", "spn", str(a["spn"]), "--file", a["file"], "--json"]
+            argv = ["j1939", "spn", str(a["spn"]), "--file", a["file"]]
+            if a.get("dbc"):
+                argv += ["--dbc", a["dbc"]]
+            return argv + ["--json"]
         case "j1939_tp":
             return ["j1939", "tp", a["file"], "--json"]
         case "j1939_dm1":
-            return ["j1939", "dm1", a["file"], "--json"]
+            argv = ["j1939", "dm1", a["file"]]
+            if a.get("dbc"):
+                argv += ["--dbc", a["dbc"]]
+            return argv + ["--json"]
+        case "j1939_summary":
+            return ["j1939", "summary", a["file"], "--json"]
         case "uds_scan":
             return ["uds", "scan", a["interface"], "--json"]
         case "uds_trace":
@@ -411,6 +549,47 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return ["uds", "services", "--json"]
         case "config_show":
             return ["config", "show", "--json"]
+        case "dbc_provider_list":
+            return ["dbc", "provider", "list", "--json"]
+        case "dbc_search":
+            argv = ["dbc", "search", a["query"]]
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            if "limit" in a:
+                argv += ["--limit", str(a["limit"])]
+            return argv + ["--json"]
+        case "dbc_fetch":
+            return ["dbc", "fetch", a["ref"], "--json"]
+        case "dbc_cache_list":
+            return ["dbc", "cache", "list", "--json"]
+        case "dbc_cache_prune":
+            argv = ["dbc", "cache", "prune"]
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            return argv + ["--json"]
+        case "dbc_cache_refresh":
+            argv = ["dbc", "cache", "refresh"]
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            return argv + ["--json"]
+        case "re_counters":
+            return ["re", "counters", a["file"], "--json"]
+        case "re_entropy":
+            return ["re", "entropy", a["file"], "--json"]
+        case "re_match_dbc":
+            argv = ["re", "match-dbc", a["capture"]]
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            if "limit" in a:
+                argv += ["--limit", str(a["limit"])]
+            return argv + ["--json"]
+        case "re_shortlist_dbc":
+            argv = ["re", "shortlist-dbc", a["capture"], "--make", a["make"]]
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            if "limit" in a:
+                argv += ["--limit", str(a["limit"])]
+            return argv + ["--json"]
         case _:
             raise ValueError(f"Unknown tool: {tool_name!r}")
 
