@@ -222,12 +222,8 @@ dependencies = [
     { name = "cantools" },
     { name = "mcp" },
     { name = "msgpack" },
-    { name = "python-can" },
-]
-
-[package.optional-dependencies]
-j1939-pretty = [
     { name = "pretty-j1939" },
+    { name = "python-can" },
 ]
 
 [package.dev-dependencies]
@@ -247,10 +243,9 @@ requires-dist = [
     { name = "cantools", specifier = ">=39.4" },
     { name = "mcp", specifier = ">=1.27.0" },
     { name = "msgpack", specifier = ">=1.1.2" },
-    { name = "pretty-j1939", marker = "extra == 'j1939-pretty'", specifier = ">=0.0.6" },
+    { name = "pretty-j1939", specifier = ">=0.0.6" },
     { name = "python-can", specifier = ">=4.4" },
 ]
-provides-extras = ["j1939-pretty"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.3" }]

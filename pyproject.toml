@@ -29,6 +29,7 @@ dependencies = [
     "cantools>=39.4",
     "mcp>=1.27.0",
     "msgpack>=1.1.2",
+    "pretty-j1939>=0.0.6",
     "python-can>=4.4",
 ]
 
@@ -40,11 +41,6 @@ docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
     "pymdown-extensions>=10.14",
-]
-
-[project.optional-dependencies]
-j1939-pretty = [
-    "pretty-j1939>=0.0.6",
 ]
 
 [project.scripts]
