@@ -58,13 +58,14 @@ class EventTests(unittest.TestCase):
             frame=frame,
             signals={"rpm": 621.0},
         ).to_event()
-        signal = SignalValueEvent(signal_name="rpm", value=621.0, units="rpm").to_event()
+        signal = SignalValueEvent(signal_name="rpm", value=621.0, units="rpm", raw="026d").to_event()
 
         payloads = serialize_events([decoded, signal])
 
         self.assertEqual(payloads[0]["event_type"], "decoded_message")
         self.assertEqual(payloads[0]["payload"]["signals"]["rpm"], 621.0)
         self.assertEqual(payloads[1]["event_type"], "signal")
+        self.assertEqual(payloads[1]["payload"]["raw"], "026d")
         self.assertEqual(payloads[1]["payload"]["units"], "rpm")
 
     def test_j1939_event_validates_pgn_range(self) -> None:

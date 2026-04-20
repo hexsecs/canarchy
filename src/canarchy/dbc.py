@@ -89,6 +89,24 @@ def decode_frames(frames: list[CanFrame], dbc_path: str) -> list[dict[str, Any]]
     return decode_frames_runtime(frames, dbc_path)
 
 
+def dbc_supports_spn(dbc_path: str, spn: int) -> bool:
+    from canarchy.dbc_runtime import dbc_supports_spn_runtime
+
+    return dbc_supports_spn_runtime(dbc_path, spn)
+
+
+def decode_j1939_spn(frames: list[CanFrame], dbc_path: str, spn: int) -> list[dict[str, Any]]:
+    from canarchy.dbc_runtime import decode_j1939_spn_runtime
+
+    return decode_j1939_spn_runtime(frames, dbc_path, spn)
+
+
+def lookup_j1939_spn_metadata(dbc_path: str, spn: int) -> dict[str, Any] | None:
+    from canarchy.dbc_runtime import lookup_j1939_spn_metadata_runtime
+
+    return lookup_j1939_spn_metadata_runtime(dbc_path, spn)
+
+
 def inspect_database(
     dbc_path: str,
     *,

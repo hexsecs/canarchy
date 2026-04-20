@@ -160,6 +160,7 @@ class SignalValueEvent:
     signal_name: str
     value: Any
     units: str | None = None
+    raw: str | None = None
     message_name: str | None = None
     source: str = "decoder"
     timestamp: float | None = None
@@ -168,6 +169,7 @@ class SignalValueEvent:
         payload = {
             "message_name": self.message_name,
             "signal_name": self.signal_name,
+            "raw": self.raw,
             "units": self.units,
             "value": self.value,
         }

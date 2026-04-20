@@ -263,6 +263,10 @@ def _load_user_config() -> dict[str, str]:
     Supported keys under ``[safety]``:
 
     * ``require_active_ack`` → ``CANARCHY_REQUIRE_ACTIVE_ACK``
+
+    Supported keys under ``[j1939]``:
+
+    * ``dbc`` → ``CANARCHY_J1939_DBC``
     """
     import tomllib
 
@@ -277,6 +281,7 @@ def _load_user_config() -> dict[str, str]:
 
     transport = raw.get("transport", {})
     safety = raw.get("safety", {})
+    j1939 = raw.get("j1939", {})
     key_map = {
         "backend": "CANARCHY_TRANSPORT_BACKEND",
         "interface": "CANARCHY_PYTHON_CAN_INTERFACE",
@@ -290,7 +295,14 @@ def _load_user_config() -> dict[str, str]:
     }
     if "require_active_ack" in safety:
         file_config["CANARCHY_REQUIRE_ACTIVE_ACK"] = str(safety["require_active_ack"])
+    if "dbc" in j1939:
+        file_config["CANARCHY_J1939_DBC"] = str(j1939["dbc"])
     return file_config
+
+
+def default_j1939_dbc() -> str | None:
+    file_config = _load_user_config()
+    return os.environ.get("CANARCHY_J1939_DBC") or file_config.get("CANARCHY_J1939_DBC")
 
 
 def active_ack_required() -> bool:
@@ -336,6 +348,7 @@ def config_show_payload() -> dict[str, object]:
         "capture_limit": ("CANARCHY_CAPTURE_LIMIT", "2"),
         "capture_timeout": ("CANARCHY_CAPTURE_TIMEOUT", "0.05"),
         "require_active_ack": ("CANARCHY_REQUIRE_ACTIVE_ACK", "false"),
+        "j1939_dbc": ("CANARCHY_J1939_DBC", ""),
     }
 
     config = transport_backend_config()
@@ -345,6 +358,7 @@ def config_show_payload() -> dict[str, object]:
         "capture_limit": config.capture_limit,
         "capture_timeout": config.capture_timeout,
         "require_active_ack": active_ack_required(),
+        "j1939_dbc": default_j1939_dbc(),
     }
 
     sources: dict[str, str] = {}
