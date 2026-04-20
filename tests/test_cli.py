@@ -593,6 +593,50 @@ class CliTests(unittest.TestCase):
         self.assertIn("pgn=61444", stdout)
         self.assertIn("sa=0x31", stdout)
 
+    def test_j1939_decode_table_includes_pgn_label_and_sa_name(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "j1939", "decode", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--table"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("pgn=65262 [ET1]", stdout)
+        self.assertIn("pgn=61444 [EEC1]", stdout)
+        self.assertIn("sa=0x31 [Cab Controller - Primary]", stdout)
+
+    def test_j1939_decode_table_includes_pretty_j1939_spn_values(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "j1939", "decode", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--table"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("Engine Coolant Temperature:", stdout)
+        self.assertIn("Engine Speed:", stdout)
+
+    def test_j1939_decode_json_is_unaffected_by_pretty_j1939(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "j1939", "decode", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertIn("events", payload["data"])
+        first_event = payload["data"]["events"][0]["payload"]
+        self.assertEqual(first_event["pgn"], 65262)
+        self.assertNotIn("Engine Coolant Temperature", str(payload))
+
+    def test_j1939_dm1_table_includes_sa_name(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "j1939", "dm1", str(FIXTURES / "j1939_dm1_tp.candump"), "--table"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("sa=0x31 [Cab Controller - Primary]", stdout)
+
+    def test_j1939_summary_table_includes_pgn_labels_and_sa_names(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "j1939", "summary", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--table"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("pgn=65262 [ET1]", stdout)
+        self.assertIn("pgn=61444 [EEC1]", stdout)
+        self.assertIn("sa=0x31 [Cab Controller - Primary]", stdout)
+
     def test_j1939_decode_with_dbc_adds_provenance_and_dbc_events(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
