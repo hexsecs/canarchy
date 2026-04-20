@@ -16,6 +16,8 @@ from canarchy import __version__
 from canarchy.exporter import ExportError, export_artifact
 from canarchy.j1939 import decompose_arbitration_id
 from canarchy.j1939_decoder import get_j1939_decoder
+from canarchy.j1939_metadata import pgn_lookup, source_address_lookup
+from canarchy import pretty_j1939_support
 from canarchy.models import (
     AlertEvent,
     CanFrame,
@@ -2142,9 +2144,12 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             dtc_text = ",".join(
                 f"spn={dtc['spn']}/fmi={dtc['fmi']}" for dtc in message["dtcs"]
             ) or "none"
+            sa = message["source_address"]
+            sa_name = source_address_lookup(sa)
+            sa_label = f" [{sa_name}]" if sa_name else ""
             lines.append(
                 "- "
-                f"sa=0x{message['source_address']:02X} "
+                f"sa=0x{sa:02X}{sa_label} "
                 f"transport={message['transport']} "
                 f"dtcs={message['active_dtc_count']} "
                 f"mil={message['lamp_status']['mil']} "
@@ -2172,14 +2177,20 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             lines.append("- no j1939 pgn activity")
         else:
             for entry in top_pgns:
-                lines.append(f"- pgn={entry['pgn']} frames={entry['frame_count']}")
+                pgn = entry["pgn"]
+                pgn_meta = pgn_lookup(pgn)
+                pgn_label = f" [{pgn_meta['label']}]" if pgn_meta else ""
+                lines.append(f"- pgn={pgn}{pgn_label} frames={entry['frame_count']}")
         lines.append("top_source_addresses:")
         top_sources = result.data.get("top_source_addresses", [])
         if not top_sources:
             lines.append("- no j1939 source-address activity")
         else:
             for entry in top_sources:
-                lines.append(f"- sa=0x{entry['source_address']:02X} frames={entry['frame_count']}")
+                sa = entry["source_address"]
+                sa_name = source_address_lookup(sa)
+                sa_label = f" [{sa_name}]" if sa_name else ""
+                lines.append(f"- sa=0x{sa:02X}{sa_label} frames={entry['frame_count']}")
         lines.append("printable_identifiers:")
         printable_identifiers = result.data.get("tp", {}).get("printable_identifiers", [])
         if not printable_identifiers:
@@ -2202,20 +2213,31 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         lines.append("- no j1939 observations")
         return lines
 
+    describer = pretty_j1939_support.get_describer()
     for event in events:
         payload = event["payload"]
         frame = payload["frame"]
+        pgn = payload["pgn"]
+        sa = payload["source_address"]
         destination = payload["destination_address"]
         destination_text = f"0x{destination:02X}" if destination is not None else "broadcast"
+        pgn_meta = pgn_lookup(pgn)
+        pgn_label = f" [{pgn_meta['label']}]" if pgn_meta else ""
+        sa_name = source_address_lookup(sa)
+        sa_label = f" [{sa_name}]" if sa_name else ""
         lines.append(
             "- "
-            f"pgn={payload['pgn']} "
-            f"sa=0x{payload['source_address']:02X} "
+            f"pgn={pgn}{pgn_label} "
+            f"sa=0x{sa:02X}{sa_label} "
             f"da={destination_text} "
             f"prio={payload['priority']} "
             f"id=0x{frame['arbitration_id']:08X} "
             f"data={frame['data']}"
         )
+        decoded = pretty_j1939_support.describe_frame(describer, frame["arbitration_id"], frame["data"])
+        if decoded:
+            for field_name, field_value in decoded.items():
+                lines.append(f"  {field_name}: {field_value}")
     return lines
 def format_dbc_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]

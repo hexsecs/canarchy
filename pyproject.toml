@@ -42,6 +42,11 @@ docs = [
     "pymdown-extensions>=10.14",
 ]
 
+[project.optional-dependencies]
+j1939-pretty = [
+    "pretty-j1939>=0.0.6",
+]
+
 [project.scripts]
 canarchy = "canarchy.cli:main"
 
