@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+* Fixed `--jsonl` output for `j1939 spn`, `j1939 tp`, and `j1939 dm1` commands to emit one line per observation/session/message instead of falling back to full JSON payload. The JSONL emitter now checks for `observations`, `sessions`, and `messages` in addition to `events`.
+
 ### Documentation
 
 * Added dedicated design and test specs for the provider-backed DBC workflow, covering provider listing, catalog search, fetch, cache management, provider-ref resolution, `dbc_source` provenance, and `auto_refresh` behavior.
