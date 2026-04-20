@@ -34,6 +34,12 @@ class J1939Decoder(Protocol):
 class CanJ1939Decoder:
     """J1939 decoder backed by can-j1939 primitives and curated SPN metadata."""
 
+    TP_CM_RTS = 0x10
+    TP_CM_CTS = 0x11
+    TP_CM_EOM_ACK = 0x13
+    TP_CM_BAM = 0x20
+    TP_CM_ABORT = 0xFF
+
     def supported_spns(self) -> set[int]:
         return set(SUPPORTED_SPN_DEFINITIONS)
 
@@ -105,25 +111,47 @@ class CanJ1939Decoder:
             identifier = decompose_arbitration_id(frame.arbitration_id)
             if identifier.pgn == tp_cm_pgn and len(frame.data) >= 8:
                 control = frame.data[0]
-                if control != 0x20:
+                if control in {self.TP_CM_BAM, self.TP_CM_RTS}:
+                    transfer_pgn = frame.data[5] | (frame.data[6] << 8) | (frame.data[7] << 16)
+                    session = {
+                        "session_type": "bam" if control == self.TP_CM_BAM else "rts_cts",
+                        "acknowledged": False,
+                        "control": control,
+                        "cts_count": 0,
+                        "destination_address": identifier.destination_address,
+                        "packet_count": 0,
+                        "packets": {},
+                        "priority": identifier.priority,
+                        "source_address": identifier.source_address,
+                        "timestamp": frame.timestamp,
+                        "total_bytes": frame.data[1] | (frame.data[2] << 8),
+                        "total_packets": frame.data[3],
+                        "transfer_pgn": transfer_pgn,
+                    }
+                    if control == self.TP_CM_RTS:
+                        session["max_packets_per_cts"] = frame.data[4]
+                    open_sessions[(identifier.source_address, identifier.destination_address)] = session
+                    sessions.append(session)
                     continue
-                transfer_pgn = frame.data[5] | (frame.data[6] << 8) | (frame.data[7] << 16)
-                session = {
-                    "session_type": "bam",
-                    "control": control,
-                    "destination_address": identifier.destination_address,
-                    "packet_count": 0,
-                    "packets": {},
-                    "priority": identifier.priority,
-                    "source_address": identifier.source_address,
-                    "timestamp": frame.timestamp,
-                    "total_bytes": frame.data[1] | (frame.data[2] << 8),
-                    "total_packets": frame.data[3],
-                    "transfer_pgn": transfer_pgn,
-                }
-                open_sessions[(identifier.source_address, identifier.destination_address)] = session
-                sessions.append(session)
-                continue
+
+                reverse_key = (identifier.destination_address, identifier.source_address)
+                session = open_sessions.get(reverse_key)
+                if session is None:
+                    continue
+                if control == self.TP_CM_CTS:
+                    session["cts_count"] = int(session.get("cts_count", 0)) + 1
+                    session["last_cts_next_packet"] = frame.data[2]
+                    session["last_cts_window"] = frame.data[1]
+                    continue
+                if control == self.TP_CM_EOM_ACK:
+                    session["acknowledged"] = True
+                    session["ack_timestamp"] = frame.timestamp
+                    continue
+                if control == self.TP_CM_ABORT:
+                    session["aborted"] = True
+                    session["abort_reason"] = frame.data[1]
+                    session["complete"] = False
+                    continue
 
             if identifier.pgn == tp_dt_pgn and len(frame.data) >= 2:
                 key = (identifier.source_address, identifier.destination_address)
@@ -147,6 +175,7 @@ class CanJ1939Decoder:
             summaries.append(
                 {
                     **session,
+                    "aborted": bool(session.get("aborted", False)),
                     "complete": len(payload) >= total_bytes and packet_count >= total_packets,
                     "packet_count": packet_count,
                     "reassembled_data": payload.hex(),
