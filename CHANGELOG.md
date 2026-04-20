@@ -21,6 +21,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Expanded `j1939 spn` beyond the curated starter map by resolving non-curated SPNs from J1939 DBC signal `SPN` metadata when a matching DBC is supplied or configured as the default J1939 database.
 * Extended the same J1939 DBC coverage idea into `j1939 dm1` so DTC names and units can be enriched from DBC signal `SPN` metadata, with the same `--dbc` and default J1939 DBC config path used by other J1939 decode workflows.
 * Deepened the J1939 transport and DM1 path beyond the earlier BAM-only starter behavior so `j1939 tp` and `j1939 dm1` now handle RTS/CTS sessions in addition to BAM, including reassembly and session-level acknowledgement metadata.
+* File-backed J1939 decode paths now stream candump input line-by-line instead of reading the whole capture text into memory up front, and the hot `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, and `j1939 dm1` paths now use single-pass iteration where DBC enrichment does not require a retained frame list.
 
 ### Documentation
 

@@ -1619,7 +1619,7 @@ class CliTests(unittest.TestCase):
 
         with (
             patch("canarchy.cli.get_j1939_decoder", return_value=fake_decoder),
-            patch("canarchy.cli.LocalTransport.frames_from_file", return_value=[frame]),
+            patch("canarchy.cli.LocalTransport.iter_frames_from_file", return_value=iter([frame])),
         ):
             exit_code, stdout, stderr = run_cli(
                 "j1939",
@@ -1658,7 +1658,7 @@ class CliTests(unittest.TestCase):
 
         with (
             patch("canarchy.cli.get_j1939_decoder", return_value=fake_decoder),
-            patch("canarchy.cli.LocalTransport.frames_from_file", return_value=[frame]),
+            patch("canarchy.cli.LocalTransport.iter_frames_from_file", return_value=iter([frame])),
         ):
             exit_code, stdout, stderr = run_cli(
                 "j1939",
@@ -1711,7 +1711,7 @@ class CliTests(unittest.TestCase):
 
         with (
             patch("canarchy.cli.get_j1939_decoder", return_value=fake_decoder),
-            patch("canarchy.cli.LocalTransport.frames_from_file", return_value=[frame]),
+            patch("canarchy.cli.LocalTransport.iter_frames_from_file", return_value=iter([frame])),
         ):
             tp_exit_code, tp_stdout, tp_stderr = run_cli(
                 "j1939",
@@ -1760,7 +1760,7 @@ class CliTests(unittest.TestCase):
 
         with (
             patch("canarchy.cli.get_j1939_decoder", return_value=fake_decoder),
-            patch("canarchy.cli.LocalTransport.frames_from_file", return_value=[frame]),
+            patch("canarchy.cli.LocalTransport.iter_frames_from_file", return_value=iter([frame])),
         ):
             exit_code, stdout, stderr = run_cli(
                 "j1939",
