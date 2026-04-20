@@ -1135,6 +1135,20 @@ def j1939_payload(
             [] if matched_dtcs else ["No DM1 DTCs matched SPNs from the selected DBC."],
         )
 
+    def dm1_warnings(messages: list[dict[str, Any]]) -> list[str]:
+        warnings: list[str] = []
+        if not messages:
+            warnings.append("No J1939 DM1 messages were found in the capture.")
+        if any(
+            int(dtc.get("conversion_method", 0)) != 0
+            for message in messages
+            for dtc in message.get("dtcs", [])
+        ):
+            warnings.append(
+                "One or more DM1 DTCs use deprecated SPN conversion modes; conversion details are reported in structured output."
+            )
+        return warnings
+
     if args.command == "j1939 monitor":
         implementation = "transport-backed" if args.interface else "sample/reference provider"
         return (
@@ -1240,9 +1254,7 @@ def j1939_payload(
     if args.command == "j1939 dm1":
         decoder = get_j1939_decoder()
         messages = decoder.dm1_messages(transport.frames_from_file(args.file))
-        warnings = []
-        if not messages:
-            warnings.append("No J1939 DM1 messages were found in the capture.")
+        warnings = dm1_warnings(messages)
         data, dbc_warnings = enrich_dm1_with_dbc(
             {
                 "mode": "passive",

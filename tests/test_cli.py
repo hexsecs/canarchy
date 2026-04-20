@@ -845,6 +845,43 @@ class CliTests(unittest.TestCase):
         self.assertIn("transport=tp", stdout)
         self.assertIn("spn=110/fmi=5", stdout)
 
+    def test_j1939_dm1_json_keeps_deprecated_conversion_warning_structured(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "dm1",
+            str(FIXTURES / "j1939_dm1_deprecated_conversion.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["message_count"], 2)
+        self.assertEqual(
+            payload["warnings"],
+            [
+                "One or more DM1 DTCs use deprecated SPN conversion modes; conversion details are reported in structured output."
+            ],
+        )
+        self.assertEqual(payload["data"]["messages"][0]["dtcs"][0]["conversion_method"], 1)
+
+    def test_j1939_dm1_jsonl_emits_json_records_when_warning_present(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "dm1",
+            str(FIXTURES / "j1939_dm1_deprecated_conversion.candump"),
+            "--jsonl",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        records = [json.loads(line) for line in stdout.splitlines()]
+        self.assertEqual(len(records), 3)
+        self.assertEqual(records[0]["transport"], "direct")
+        self.assertEqual(records[1]["transport"], "direct")
+        self.assertEqual(records[2]["event_type"], "alert")
+        self.assertEqual(records[2]["payload"]["level"], "warning")
+
     def test_uds_scan_returns_transaction_events(self) -> None:
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
             exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--json")
