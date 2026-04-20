@@ -68,13 +68,13 @@ And    the returned session shall report the transferred PGN and completion stat
 ### TEST-J1939F-04 — DM1 decodes direct and TP-carried payloads through the new backend
 
 ```gherkin
-Given  the fixture `tests/fixtures/j1939_dm1_tp.candump` contains one direct DM1 and one TP-carried DM1
-When   the operator runs `canarchy j1939 dm1 tests/fixtures/j1939_dm1_tp.candump --json`
-Then   the system shall return both DM1 messages with structured lamp and DTC data
-And    the TP-carried DM1 shall depend on a reassembled session rather than the legacy BAM-only parser
+Given  the fixtures `tests/fixtures/j1939_dm1_tp.candump` and `tests/fixtures/j1939_dm1_rts_cts.candump` contain BAM-carried and RTS/CTS-carried DM1 payloads
+When   the operator runs `canarchy j1939 dm1 <fixture> --json`
+Then   the system shall return TP-carried DM1 messages with structured lamp and DTC data
+And    the TP-carried DM1 shall support both BAM and RTS/CTS transport flows rather than only the legacy BAM-only parser path
 ```
 
-**Fixture:** `tests/fixtures/j1939_dm1_tp.candump`.
+**Fixture:** `tests/fixtures/j1939_dm1_tp.candump` and `tests/fixtures/j1939_dm1_rts_cts.candump`.
 
 ---
 
@@ -161,9 +161,10 @@ And    the returned DTC shall include the DBC-derived signal name and units
 * existing `tests/fixtures/j1939_dm1_tp.candump`
 * `tests/fixtures/j1939_sample.dbc` for PGN, SPN, and DM1 enrichment tests
 * `tests/fixtures/j1939_dm1_spn175.candump` for non-curated DM1 DTC enrichment tests
+* `tests/fixtures/j1939_dm1_rts_cts.candump` for RTS/CTS transport coverage
 * mocked decoder backends for abstraction and error-path coverage
 
-Phase 1 currently covers the abstraction boundary with mocked decoder backends. Phase 2 currently covers decoder-backed routing for `j1939 decode` and `j1939 pgn`. Phase 3 currently routes `j1939 spn`, `j1939 tp`, and `j1939 dm1` through the decoder adapter as well. Phase 4 currently covers direct `--dbc` enrichment for `j1939 decode`, `j1939 pgn`, `j1939 spn`, and `j1939 dm1`, config-backed default J1939 DBC selection, and DBC-backed resolution for non-curated SPNs and DM1 DTC names; broader library-backed transport semantics and richer DBC-enrichment coverage remain planned.
+Phase 1 currently covers the abstraction boundary with mocked decoder backends. Phase 2 currently covers decoder-backed routing for `j1939 decode` and `j1939 pgn`. Phase 3 currently routes `j1939 spn`, `j1939 tp`, and `j1939 dm1` through the decoder adapter as well, with TP/DM1 coverage now including BAM and RTS/CTS flows. Phase 4 currently covers direct `--dbc` enrichment for `j1939 decode`, `j1939 pgn`, `j1939 spn`, and `j1939 dm1`, config-backed default J1939 DBC selection, and DBC-backed resolution for non-curated SPNs and DM1 DTC names; broader library-backed transport semantics and richer DBC-enrichment coverage remain planned.
 
 ## Explicit Non-Coverage
 
