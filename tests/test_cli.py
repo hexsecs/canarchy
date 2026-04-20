@@ -7,6 +7,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from canarchy.cli import EXIT_OK, EXIT_TRANSPORT_ERROR, EXIT_USER_ERROR, main
@@ -528,6 +529,28 @@ class CliTests(unittest.TestCase):
         self.assertIn("pgn=61444", stdout)
         self.assertIn("sa=0x31", stdout)
 
+    def test_j1939_decode_with_dbc_adds_provenance_and_dbc_events(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "decode",
+            str(FIXTURES / "sample.candump"),
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["dbc"], str(FIXTURES / "j1939_sample.dbc"))
+        self.assertEqual(payload["data"]["dbc_source"]["provider"], "local")
+        self.assertEqual(payload["data"]["dbc_matched_messages"], 2)
+        decoded_events = [
+            event for event in payload["data"]["dbc_events"] if event["event_type"] == "decoded_message"
+        ]
+        self.assertEqual(len(decoded_events), 2)
+        self.assertEqual(decoded_events[0]["payload"]["message_name"], "EngineTemperature1")
+
     def test_j1939_spn_requires_capture_file(self) -> None:
         exit_code, stdout, stderr = run_cli("j1939", "spn", "110", "--json")
         self.assertEqual(exit_code, EXIT_USER_ERROR)
@@ -557,6 +580,129 @@ class CliTests(unittest.TestCase):
         self.assertEqual(observation["source_address"], 0x31)
         self.assertEqual(observation["value"], -23.0)
         self.assertEqual(observation["units"], "degC")
+
+    def test_j1939_spn_uses_configured_default_dbc_when_flag_absent(self) -> None:
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_J1939_DBC": str(FIXTURES / "j1939_sample.dbc")},
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "j1939",
+                "spn",
+                "110",
+                "--file",
+                str(FIXTURES / "sample.candump"),
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["dbc_source"]["provider"], "local")
+        self.assertEqual(payload["data"]["dbc_matched_messages"], 1)
+        signal_events = [event for event in payload["data"]["dbc_events"] if event["event_type"] == "signal"]
+        self.assertTrue(any(event["payload"]["signal_name"] == "EngineCoolantTemp" for event in signal_events))
+
+    def test_j1939_spn_supports_non_curated_spn_via_dbc_flag(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "spn",
+            "175",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "--json",
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["decoder"], "dbc_spn_map")
+        self.assertEqual(payload["data"]["observation_count"], 1)
+        observation = payload["data"]["observations"][0]
+        self.assertEqual(observation["spn"], 175)
+        self.assertEqual(observation["name"], "EngineOilTemp")
+        self.assertEqual(observation["value"], -6)
+        self.assertEqual(observation["raw"], "22")
+
+    def test_j1939_spn_supports_non_curated_spn_via_default_dbc(self) -> None:
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_J1939_DBC": str(FIXTURES / "j1939_sample.dbc")},
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "j1939",
+                "spn",
+                "175",
+                "--file",
+                str(FIXTURES / "sample.candump"),
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["decoder"], "dbc_spn_map")
+        self.assertEqual(payload["data"]["observations"][0]["name"], "EngineOilTemp")
+
+    def test_j1939_spn_extracts_raw_for_non_byte_aligned_dbc_signal(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "spn",
+            "1234",
+            "--file",
+            str(FIXTURES / "j1939_nonbyte.candump"),
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "--json",
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        observation = payload["data"]["observations"][0]
+        self.assertEqual(payload["data"]["decoder"], "dbc_spn_map")
+        self.assertEqual(observation["name"], "NibbleSignal")
+        self.assertEqual(observation["value"], 291)
+        self.assertEqual(observation["raw"], "123")
+
+    def test_j1939_pgn_with_dbc_adds_dbc_events(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "pgn",
+            "65262",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["dbc_matched_messages"], 1)
+        self.assertEqual(payload["data"]["dbc_events"][0]["payload"]["message_name"], "EngineTemperature1")
+
+    def test_j1939_pgn_with_dbc_signal_events_include_non_byte_aligned_raw(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "pgn",
+            "61444",
+            "--file",
+            str(FIXTURES / "j1939_nonbyte.candump"),
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        signal_events = [event for event in payload["data"]["dbc_events"] if event["event_type"] == "signal"]
+        nibble = next(event for event in signal_events if event["payload"]["signal_name"] == "NibbleSignal")
+        self.assertEqual(nibble["payload"]["raw"], "123")
+        self.assertEqual(nibble["payload"]["value"], 291)
 
     def test_j1939_tp_returns_bam_session_summary(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -600,6 +746,47 @@ class CliTests(unittest.TestCase):
         self.assertEqual(direct_message["transport"], "direct")
         self.assertEqual(direct_message["source_address"], 0x22)
         self.assertEqual(direct_message["dtcs"][0]["fmi"], 3)
+
+    def test_j1939_dm1_with_dbc_enriches_non_curated_dtc_names(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "dm1",
+            str(FIXTURES / "j1939_dm1_spn175.candump"),
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["dbc_source"]["provider"], "local")
+        self.assertEqual(payload["data"]["dbc_spn_matches"], 1)
+        dtc = payload["data"]["messages"][0]["dtcs"][0]
+        self.assertEqual(dtc["spn"], 175)
+        self.assertEqual(dtc["name"], "EngineOilTemp")
+        self.assertEqual(dtc["dbc_signal_name"], "EngineOilTemp")
+        self.assertEqual(dtc["dbc_message_name"], "EngineTemperature1")
+        self.assertEqual(dtc["units"], "degC")
+
+    def test_j1939_dm1_uses_configured_default_dbc(self) -> None:
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_J1939_DBC": str(FIXTURES / "j1939_sample.dbc")},
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "j1939",
+                "dm1",
+                str(FIXTURES / "j1939_dm1_spn175.candump"),
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        dtc = payload["data"]["messages"][0]["dtcs"][0]
+        self.assertEqual(payload["data"]["dbc_spn_matches"], 1)
+        self.assertEqual(dtc["name"], "EngineOilTemp")
 
     def test_j1939_dm1_table_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -1324,6 +1511,191 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["file"], str(FIXTURES / "sample.candump"))
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
+
+    def test_j1939_decode_routes_through_decoder_abstraction(self) -> None:
+        frame = CanFrame(arbitration_id=0x18FEEE31, data=bytes.fromhex("7DFFFFFF"), timestamp=0.0, is_extended_id=True)
+        event = SimpleNamespace(
+            to_payload=lambda: {
+                "event_type": "j1939_pgn",
+                "payload": {
+                    "destination_address": None,
+                    "frame": frame.to_payload(),
+                    "pgn": 65262,
+                    "priority": 6,
+                    "source_address": 49,
+                },
+                "source": "test.decoder",
+                "timestamp": 0.0,
+            }
+        )
+        fake_decoder = SimpleNamespace(
+            supported_spns=lambda: {110},
+            decode_events=lambda frames: [event],
+            decode_pgn_events=lambda frames, pgn: [],
+            spn_observations=lambda frames, spn: [],
+            transport_protocol_sessions=lambda frames: [],
+            dm1_messages=lambda frames: [],
+        )
+
+        with (
+            patch("canarchy.cli.get_j1939_decoder", return_value=fake_decoder),
+            patch("canarchy.cli.LocalTransport.frames_from_file", return_value=[frame]),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "j1939",
+                "decode",
+                str(FIXTURES / "j1939_heavy_vehicle.candump"),
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["events"][0]["source"], "test.decoder")
+        self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
+
+    def test_j1939_spn_routes_through_decoder_abstraction(self) -> None:
+        frame = CanFrame(arbitration_id=0x18FEEE31, data=bytes.fromhex("7DFFFFFF"), timestamp=0.0, is_extended_id=True)
+        observations = [{
+            "destination_address": None,
+            "name": "Engine Coolant Temperature",
+            "pgn": 65262,
+            "raw": "7d",
+            "source_address": 49,
+            "spn": 110,
+            "timestamp": 0.0,
+            "units": "degC",
+            "value": 85.0,
+        }]
+        fake_decoder = SimpleNamespace(
+            supported_spns=lambda: {110},
+            decode_events=lambda frames: [],
+            decode_pgn_events=lambda frames, pgn: [],
+            spn_observations=lambda frames, spn: observations,
+            transport_protocol_sessions=lambda frames: [],
+            dm1_messages=lambda frames: [],
+        )
+
+        with (
+            patch("canarchy.cli.get_j1939_decoder", return_value=fake_decoder),
+            patch("canarchy.cli.LocalTransport.frames_from_file", return_value=[frame]),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "j1939",
+                "spn",
+                "110",
+                "--file",
+                str(FIXTURES / "j1939_heavy_vehicle.candump"),
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["decoder"], "curated_spn_map")
+        self.assertEqual(payload["data"]["observations"], observations)
+
+    def test_j1939_tp_and_dm1_route_through_decoder_abstraction(self) -> None:
+        frame = CanFrame(arbitration_id=0x18ECFF31, data=bytes.fromhex("200C0002FFCAFE00"), timestamp=0.0, is_extended_id=True)
+        sessions = [{
+            "complete": True,
+            "control": 32,
+            "destination_address": 255,
+            "packet_count": 2,
+            "priority": 6,
+            "reassembled_data": "000000006e000501be000702",
+            "session_type": "bam",
+            "source_address": 49,
+            "timestamp": 0.0,
+            "total_bytes": 12,
+            "total_packets": 2,
+            "transfer_pgn": 65226,
+        }]
+        messages = [{
+            "active_dtc_count": 2,
+            "destination_address": 255,
+            "dtcs": [],
+            "lamp_status": {"amber_warning": "off", "mil": "off", "protect": "off", "red_stop": "off"},
+            "source_address": 49,
+            "timestamp": 0.0,
+            "transport": "tp",
+        }]
+        fake_decoder = SimpleNamespace(
+            supported_spns=lambda: {110},
+            decode_events=lambda frames: [],
+            decode_pgn_events=lambda frames, pgn: [],
+            spn_observations=lambda frames, spn: [],
+            transport_protocol_sessions=lambda frames: sessions,
+            dm1_messages=lambda frames: messages,
+        )
+
+        with (
+            patch("canarchy.cli.get_j1939_decoder", return_value=fake_decoder),
+            patch("canarchy.cli.LocalTransport.frames_from_file", return_value=[frame]),
+        ):
+            tp_exit_code, tp_stdout, tp_stderr = run_cli(
+                "j1939",
+                "tp",
+                str(FIXTURES / "j1939_dm1_tp.candump"),
+                "--json",
+            )
+            dm1_exit_code, dm1_stdout, dm1_stderr = run_cli(
+                "j1939",
+                "dm1",
+                str(FIXTURES / "j1939_dm1_tp.candump"),
+                "--json",
+            )
+
+        self.assertEqual(tp_exit_code, EXIT_OK)
+        self.assertEqual(tp_stderr, "")
+        self.assertEqual(json.loads(tp_stdout)["data"]["sessions"], sessions)
+        self.assertEqual(dm1_exit_code, EXIT_OK)
+        self.assertEqual(dm1_stderr, "")
+        self.assertEqual(json.loads(dm1_stdout)["data"]["messages"], messages)
+
+    def test_j1939_pgn_routes_through_decoder_abstraction(self) -> None:
+        frame = CanFrame(arbitration_id=0x18FEEE31, data=bytes.fromhex("7DFFFFFF"), timestamp=0.0, is_extended_id=True)
+        event = SimpleNamespace(
+            to_payload=lambda: {
+                "event_type": "j1939_pgn",
+                "payload": {
+                    "destination_address": None,
+                    "frame": frame.to_payload(),
+                    "pgn": 65262,
+                    "priority": 6,
+                    "source_address": 49,
+                },
+                "source": "test.decoder",
+                "timestamp": 0.0,
+            }
+        )
+        fake_decoder = SimpleNamespace(
+            supported_spns=lambda: {110},
+            decode_events=lambda frames: [],
+            decode_pgn_events=lambda frames, pgn: [event],
+            spn_observations=lambda frames, spn: [],
+            transport_protocol_sessions=lambda frames: [],
+            dm1_messages=lambda frames: [],
+        )
+
+        with (
+            patch("canarchy.cli.get_j1939_decoder", return_value=fake_decoder),
+            patch("canarchy.cli.LocalTransport.frames_from_file", return_value=[frame]),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "j1939",
+                "pgn",
+                "65262",
+                "--file",
+                str(FIXTURES / "j1939_heavy_vehicle.candump"),
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["pgn"], 65262)
+        self.assertEqual(payload["data"]["events"][0]["source"], "test.decoder")
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_fixed_id_and_data_returns_frame_events(self, _mock_cfg) -> None:
@@ -2126,6 +2498,17 @@ class CompletionTests(unittest.TestCase):
         results = self._completions("j1939 pgn 65262 ", "")
         names = [r.strip() for r in results]
         self.assertIn("--file", names)
+        self.assertIn("--dbc", names)
+
+    def test_j1939_decode_flags_include_dbc(self) -> None:
+        results = self._completions("j1939 decode ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--dbc", names)
+
+    def test_j1939_dm1_flags_include_dbc(self) -> None:
+        results = self._completions("j1939 dm1 tests/fixtures/j1939_dm1_spn175.candump ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--dbc", names)
 
     def test_session_save_flags_include_interface_and_dbc(self) -> None:
         results = self._completions("session save mylab ", "")
@@ -2226,12 +2609,14 @@ class ConfigShowTests(unittest.TestCase):
         self.assertEqual(payload["data"]["interface"], "socketcan")
         self.assertEqual(payload["data"]["capture_limit"], 2)
         self.assertFalse(payload["data"]["require_active_ack"])
+        self.assertIsNone(payload["data"]["j1939_dbc"])
         sources = payload["data"]["sources"]
         self.assertEqual(sources["backend"], "default")
         self.assertEqual(sources["interface"], "default")
         self.assertEqual(sources["capture_limit"], "default")
         self.assertEqual(sources["capture_timeout"], "default")
         self.assertEqual(sources["require_active_ack"], "default")
+        self.assertEqual(sources["j1939_dbc"], "default")
 
     def test_config_show_file_config_overrides_default(self) -> None:
         """Values set in the config file appear with source=file."""
@@ -2289,6 +2674,7 @@ class ConfigShowTests(unittest.TestCase):
         self.assertIn("backend: python-can", stdout)
         self.assertIn("interface: socketcan", stdout)
         self.assertIn("require_active_ack: False", stdout)
+        self.assertIn("j1939_dbc: None", stdout)
         self.assertIn("config file:", stdout)
 
     def test_config_show_config_file_found_false_when_missing(self) -> None:
@@ -2335,6 +2721,19 @@ class ConfigShowTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertTrue(payload["data"]["require_active_ack"])
         self.assertEqual(payload["data"]["sources"]["require_active_ack"], "file")
+
+    def test_config_show_j1939_dbc_from_file(self) -> None:
+        file_cfg = {"CANARCHY_J1939_DBC": "tests/fixtures/j1939_sample.dbc"}
+        with (
+            patch("canarchy.transport._load_user_config", return_value=file_cfg),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            exit_code, stdout, _ = run_cli("config", "show", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["j1939_dbc"], "tests/fixtures/j1939_sample.dbc")
+        self.assertEqual(payload["data"]["sources"]["j1939_dbc"], "file")
 
 
 if __name__ == "__main__":

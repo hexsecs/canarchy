@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Any
 
 import cantools
+from cantools.database.utils import create_encode_decode_formats, decode_data
 
 from canarchy.dbc import DbcError, normalize_value
 from canarchy.dbc_types import DatabaseInfo, DatabaseInspection, MessageInfo, SignalInfo
+from canarchy.j1939 import decompose_arbitration_id
 from canarchy.models import CanFrame, DecodedMessageEvent, FrameEvent, SignalValueEvent, serialize_events
 
 
@@ -144,6 +146,7 @@ def decode_frames_runtime(frames: list[CanFrame], dbc_path: str) -> list[dict[st
                 SignalValueEvent(
                     message_name=message.name,
                     signal_name=signal_name,
+                    raw=_signal_raw_hex(message, signal, frame.data),
                     value=value,
                     units=signal.unit,
                     source="dbc.decode",
@@ -151,6 +154,108 @@ def decode_frames_runtime(frames: list[CanFrame], dbc_path: str) -> list[dict[st
             )
 
     return serialize_events(events)
+
+
+def dbc_supports_spn_runtime(dbc_path: str, spn: int) -> bool:
+    database = load_runtime_database(dbc_path)
+    for message in database.messages:
+        for signal in message.signals:
+            if getattr(signal, "spn", None) == spn:
+                return True
+    return False
+
+
+def lookup_j1939_spn_metadata_runtime(dbc_path: str, spn: int) -> dict[str, Any] | None:
+    database = load_runtime_database(dbc_path)
+    for message in database.messages:
+        for signal in message.signals:
+            if getattr(signal, "spn", None) != spn:
+                continue
+            return {
+                "message_name": message.name,
+                "signal_name": signal.name,
+                "units": signal.unit or None,
+                "frame_id": int(message.frame_id),
+            }
+    return None
+
+
+def decode_j1939_spn_runtime(frames: list[CanFrame], dbc_path: str, spn: int) -> list[dict[str, Any]]:
+    database = load_runtime_database(dbc_path)
+    matching_signals: dict[int, Any] = {}
+    for message in database.messages:
+        for signal in message.signals:
+            if getattr(signal, "spn", None) == spn:
+                matching_signals[int(message.frame_id)] = signal
+                break
+
+    observations: list[dict[str, Any]] = []
+    for frame in frames:
+        signal = matching_signals.get(frame.arbitration_id)
+        if signal is None:
+            continue
+        try:
+            message = database.get_message_by_frame_id(frame.arbitration_id)
+            decoded = message.decode(frame.data)
+        except Exception as exc:  # pragma: no cover
+            raise DbcError(
+                code="DBC_DECODE_FAILED",
+                message=f"Failed to decode frame 0x{frame.arbitration_id:X} with the selected DBC.",
+                hint="Check that the capture and DBC definitions match the same protocol and message layout.",
+            ) from exc
+
+        identifier = decompose_arbitration_id(frame.arbitration_id)
+        value = normalize_value(decoded[signal.name])
+        raw = _signal_raw_hex(message, signal, frame.data)
+        observations.append(
+            {
+                "spn": spn,
+                "name": signal.name,
+                "pgn": identifier.pgn,
+                "source_address": identifier.source_address,
+                "destination_address": identifier.destination_address,
+                "units": signal.unit or None,
+                "raw": raw,
+                "value": value,
+                "timestamp": frame.timestamp,
+            }
+        )
+    return observations
+
+
+def _signal_raw_hex(message: Any, signal: Any, data: bytes) -> str | None:
+    if signal.start % 8 == 0 and signal.length % 8 == 0:
+        start = signal.start // 8
+        end = start + (signal.length // 8)
+        return data[start:end].hex()
+
+    try:
+        formats = create_encode_decode_formats([signal], message.length)
+        raw_values = decode_data(
+            data,
+            message.length,
+            [signal],
+            formats,
+            decode_choices=False,
+            scaling=False,
+            allow_truncated=False,
+            allow_excess=False,
+        )
+    except Exception as exc:  # pragma: no cover
+        raise DbcError(
+            code="DBC_DECODE_FAILED",
+            message=f"Failed to extract raw signal '{signal.name}' from the selected DBC.",
+            hint="Check that the DBC signal definition matches the captured frame layout.",
+        ) from exc
+
+    raw_value = raw_values.get(signal.name)
+    if raw_value is None:
+        return None
+    if isinstance(raw_value, int):
+        width = max((signal.length + 3) // 4, 1)
+        masked = raw_value & ((1 << signal.length) - 1)
+        return f"{masked:0{width}x}"
+    return str(raw_value)
 
 
 def encode_message_runtime(

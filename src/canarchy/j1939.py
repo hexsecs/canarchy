@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import j1939 as can_j1939
+
 from canarchy.models import CanFrame
 
 TP_CM_PGN = 0x00EC00
@@ -78,18 +80,22 @@ def decompose_arbitration_id(arbitration_id: int) -> J1939Identifier:
     if arbitration_id < 0 or arbitration_id > 0x1FFFFFFF:
         raise ValueError("J1939 arbitration_id must be a 29-bit CAN identifier")
 
-    priority = (arbitration_id >> 26) & 0x7
-    reserved = (arbitration_id >> 25) & 0x1
-    data_page = (arbitration_id >> 24) & 0x1
-    pdu_format = (arbitration_id >> 16) & 0xFF
-    pdu_specific = (arbitration_id >> 8) & 0xFF
-    source_address = arbitration_id & 0xFF
+    message_id = can_j1939.MessageId(can_id=arbitration_id)
+    parameter_group_number = can_j1939.ParameterGroupNumber()
+    parameter_group_number.from_message_id(message_id)
 
-    if pdu_format < 240:
+    priority = message_id.priority
+    reserved = 0
+    data_page = parameter_group_number.data_page
+    pdu_format = parameter_group_number.pdu_format
+    pdu_specific = parameter_group_number.pdu_specific
+    source_address = message_id.source_address
+
+    if parameter_group_number.is_pdu1_format:
         pgn = (data_page << 16) | (pdu_format << 8)
         destination_address = pdu_specific
     else:
-        pgn = (data_page << 16) | (pdu_format << 8) | pdu_specific
+        pgn = parameter_group_number.value
         destination_address = None
 
     return J1939Identifier(
@@ -272,16 +278,17 @@ def _lamp_state(bits: int) -> str:
 def _parse_dtcs(payload: bytes) -> list[dict[str, object]]:
     dtcs: list[dict[str, object]] = []
     for offset in range(0, len(payload) - (len(payload) % 4), 4):
-        b1, b2, b3, b4 = payload[offset : offset + 4]
-        spn = b1 | (b2 << 8) | (((b3 & 0xE0) >> 5) << 16)
+        raw = payload[offset : offset + 4]
+        parsed = can_j1939.DTC(dtc=int.from_bytes(raw, byteorder="little"))
+        spn = parsed.spn
         definition = SUPPORTED_SPN_DEFINITIONS.get(spn)
         dtcs.append(
             {
                 "spn": spn,
                 "name": definition.name if definition is not None else None,
-                "fmi": b3 & 0x1F,
-                "occurrence_count": b4 & 0x7F,
-                "conversion_method": (b4 >> 7) & 0x1,
+                "fmi": parsed.fmi,
+                "occurrence_count": parsed.oc,
+                "conversion_method": parsed.cm,
             }
         )
     return dtcs

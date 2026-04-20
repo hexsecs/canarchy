@@ -10,10 +10,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from canarchy.dbc import DbcError, decode_frames, encode_message, inspect_database
+from canarchy.dbc import DbcError, dbc_supports_spn, decode_frames, decode_j1939_spn, encode_message, inspect_database, lookup_j1939_spn_metadata
 from canarchy import __version__
 from canarchy.exporter import ExportError, export_artifact
-from canarchy.j1939 import SUPPORTED_SPN_DEFINITIONS, dm1_messages, spn_observations, transport_protocol_sessions, decompose_arbitration_id
+from canarchy.j1939 import decompose_arbitration_id
+from canarchy.j1939_decoder import get_j1939_decoder
 from canarchy.models import (
     AlertEvent,
     CanFrame,
@@ -29,6 +30,7 @@ from canarchy.transport import (
     TransportError,
     active_ack_required,
     config_show_payload,
+    default_j1939_dbc,
     generate_frames,
 )
 from canarchy.tui import run_tui
@@ -317,18 +319,21 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_decode = j1939_subparsers.add_parser("decode", help="decode J1939 traffic")
     j1939_decode.add_argument("file", nargs="?", default=None)
     j1939_decode.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
+    j1939_decode.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
     add_output_arguments(j1939_decode)
     j1939_decode.set_defaults(command="j1939 decode")
 
     j1939_pgn = j1939_subparsers.add_parser("pgn", help="inspect a J1939 PGN")
     j1939_pgn.add_argument("pgn", type=int)
     j1939_pgn.add_argument("--file", help="inspect the PGN within a capture file")
+    j1939_pgn.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
     add_output_arguments(j1939_pgn)
     j1939_pgn.set_defaults(command="j1939 pgn")
 
     j1939_spn = j1939_subparsers.add_parser("spn", help="inspect a J1939 SPN")
     j1939_spn.add_argument("spn", type=int)
     j1939_spn.add_argument("--file", help="inspect the SPN within a capture file")
+    j1939_spn.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
     add_output_arguments(j1939_spn)
     j1939_spn.set_defaults(command="j1939 spn")
 
@@ -339,6 +344,7 @@ def build_parser() -> CanarchyArgumentParser:
 
     j1939_dm1 = j1939_subparsers.add_parser("dm1", help="inspect J1939 DM1 traffic")
     j1939_dm1.add_argument("file")
+    j1939_dm1.add_argument("--dbc", help="enrich DM1 DTC names with a local DBC path or provider ref")
     add_output_arguments(j1939_dm1)
     j1939_dm1.set_defaults(command="j1939 dm1")
 
@@ -763,7 +769,10 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command == "j1939 spn" and args.spn not in SUPPORTED_SPN_DEFINITIONS:
+    if args.command == "j1939 spn" and args.spn not in get_j1939_decoder().supported_spns():
+        dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
+        if dbc_ref and dbc_supports_spn(dbc_ref, args.spn):
+            return
         raise CommandError(
             command=args.command,
             exit_code=EXIT_USER_ERROR,
@@ -771,7 +780,7 @@ def validate_args(args: argparse.Namespace) -> None:
                 ErrorDetail(
                     code="J1939_SPN_UNSUPPORTED",
                     message=f"J1939 SPN {args.spn} is not supported by the current decoder set.",
-                    hint="Use one of the currently supported SPNs or extend the curated decoder map.",
+                    hint="Use a supported SPN, or provide a J1939 DBC via --dbc or CANARCHY_J1939_DBC that defines the requested SPN.",
                 )
             ],
             data={"spn": args.spn},
@@ -1064,6 +1073,68 @@ def j1939_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
+
+    def enrich_with_dbc(data: dict[str, Any], frames: list[CanFrame]) -> tuple[dict[str, Any], list[str]]:
+        dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
+        if not dbc_ref:
+            return data, []
+
+        from canarchy.dbc_provider import get_registry
+
+        resolution = get_registry().resolve(dbc_ref)
+        dbc_events = decode_frames(frames, str(resolution.local_path))
+        warnings: list[str] = []
+        if not dbc_events:
+            warnings.append("No frames in the J1939 selection matched messages from the selected DBC.")
+        return (
+            {
+                **data,
+                "dbc": dbc_ref,
+                "dbc_source": _build_dbc_source(resolution),
+                "dbc_events": dbc_events,
+                "dbc_matched_messages": len(
+                    [event for event in dbc_events if event["event_type"] == "decoded_message"]
+                ),
+            },
+            warnings,
+        )
+
+    def enrich_dm1_with_dbc(data: dict[str, Any], messages: list[dict[str, Any]]) -> tuple[dict[str, Any], list[str]]:
+        dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
+        if not dbc_ref:
+            return data, []
+
+        from canarchy.dbc_provider import get_registry
+
+        resolution = get_registry().resolve(dbc_ref)
+        enriched_messages: list[dict[str, Any]] = []
+        matched_dtcs = 0
+        for message in messages:
+            dtcs = []
+            for dtc in message["dtcs"]:
+                enriched_dtc = dict(dtc)
+                metadata = lookup_j1939_spn_metadata(str(resolution.local_path), int(dtc["spn"]))
+                if metadata is not None:
+                    matched_dtcs += 1
+                    if enriched_dtc.get("name") is None:
+                        enriched_dtc["name"] = metadata["signal_name"]
+                    enriched_dtc["dbc_signal_name"] = metadata["signal_name"]
+                    enriched_dtc["dbc_message_name"] = metadata["message_name"]
+                    enriched_dtc["units"] = metadata["units"]
+                dtcs.append(enriched_dtc)
+            enriched_messages.append({**message, "dtcs": dtcs})
+
+        return (
+            {
+                **data,
+                "dbc": dbc_ref,
+                "dbc_source": _build_dbc_source(resolution),
+                "dbc_spn_matches": matched_dtcs,
+                "messages": enriched_messages,
+            },
+            [] if matched_dtcs else ["No DM1 DTCs matched SPNs from the selected DBC."],
+        )
+
     if args.command == "j1939 monitor":
         implementation = "transport-backed" if args.interface else "sample/reference provider"
         return (
@@ -1077,63 +1148,82 @@ def j1939_payload(
             [],
         )
     if args.command == "j1939 decode":
+        decoder = get_j1939_decoder()
         frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)
-
-        # Filter to only extended ID frames for J1939
-        j1939_frames = [frame for frame in frames if frame.is_extended_id]
-        
-        # Build J1939 events from our frames
-        events = []
-        for frame in j1939_frames:
-            identifier = decompose_arbitration_id(frame.arbitration_id)
-            events.append(
-                J1939ObservationEvent(
-                    pgn=identifier.pgn,
-                    source_address=identifier.source_address,
-                    destination_address=identifier.destination_address,
-                    priority=identifier.priority,
-                    frame=frame,
-                    source="transport.j1939.decode",
-                )
-            )
-        
+        events = decoder.decode_events(frames)
         warnings = []
         if not events:
             warnings.append("No J1939 extended ID frames were found in the input.")
-        return (
+        data, dbc_warnings = enrich_with_dbc(
             {
                 "mode": "passive",
                 "file": args.file,
                 "input": "stdin" if args.stdin else "file",
             },
+            frames,
+        )
+        warnings.extend(dbc_warnings)
+        return (
+            data,
             serialize_events(events),
             warnings,
         )
     if args.command == "j1939 pgn":
-        return (
+        decoder = get_j1939_decoder()
+        frames = transport.frames_from_file(args.file)
+        event_objects = decoder.decode_pgn_events(frames, args.pgn)
+        matched_frames = [frame for frame in (getattr(event, "frame", None) for event in event_objects) if frame is not None]
+        data, dbc_warnings = enrich_with_dbc(
             {"mode": "passive", "pgn": args.pgn, "file": args.file},
-            transport.j1939_decode_events(args.file, args.pgn),
-            [],
+            matched_frames,
+        )
+        return (
+            data,
+            serialize_events(event_objects),
+            dbc_warnings,
         )
     if args.command == "j1939 spn":
-        observations = spn_observations(transport.frames_from_file(args.file), args.spn)
+        decoder = get_j1939_decoder()
+        frames = transport.frames_from_file(args.file)
+        dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
+        if args.spn in decoder.supported_spns():
+            observations = decoder.spn_observations(frames, args.spn)
+            decoder_name = "curated_spn_map"
+        elif dbc_ref:
+            observations = decode_j1939_spn(frames, dbc_ref, args.spn)
+            decoder_name = "dbc_spn_map"
+        else:
+            observations = []
+            decoder_name = "curated_spn_map"
         warnings = []
         if not observations:
             warnings.append("No observations for the selected SPN were found in the capture.")
-        return (
+        matched_pgns = {int(observation["pgn"]) for observation in observations}
+        matching_frames = [
+            frame
+            for frame in frames
+            if frame.is_extended_id and decompose_arbitration_id(frame.arbitration_id).pgn in matched_pgns
+        ]
+        data, dbc_warnings = enrich_with_dbc(
             {
                 "mode": "passive",
                 "spn": args.spn,
                 "file": args.file,
-                "decoder": "curated_spn_map",
+                "decoder": decoder_name,
                 "observation_count": len(observations),
                 "observations": observations,
             },
+            matching_frames,
+        )
+        warnings.extend(dbc_warnings)
+        return (
+            data,
             [],
             warnings,
         )
     if args.command == "j1939 tp":
-        sessions = transport_protocol_sessions(transport.frames_from_file(args.file))
+        decoder = get_j1939_decoder()
+        sessions = decoder.transport_protocol_sessions(transport.frames_from_file(args.file))
         warnings = []
         if not sessions:
             warnings.append("No J1939 transport protocol sessions were found in the capture.")
@@ -1148,11 +1238,12 @@ def j1939_payload(
             warnings,
         )
     if args.command == "j1939 dm1":
-        messages = dm1_messages(transport.frames_from_file(args.file))
+        decoder = get_j1939_decoder()
+        messages = decoder.dm1_messages(transport.frames_from_file(args.file))
         warnings = []
         if not messages:
             warnings.append("No J1939 DM1 messages were found in the capture.")
-        return (
+        data, dbc_warnings = enrich_dm1_with_dbc(
             {
                 "mode": "passive",
                 "file": args.file,
@@ -1160,6 +1251,11 @@ def j1939_payload(
                 "messages": messages,
                 "source_count": len({message["source_address"] for message in messages}),
             },
+            messages,
+        )
+        warnings.extend(dbc_warnings)
+        return (
+            data,
             [],
             warnings,
         )
@@ -2256,6 +2352,10 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         print(
             "  require_active_ack: "
             f"{result.data.get('require_active_ack')}  [{sources.get('require_active_ack', '?')}]"
+        )
+        print(
+            "  j1939_dbc: "
+            f"{result.data.get('j1939_dbc')}  [{sources.get('j1939_dbc', '?')}]"
         )
         config_file = result.data.get("config_file", "")
         found = result.data.get("config_file_found", False)

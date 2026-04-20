@@ -11,8 +11,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 * Fixed `--jsonl` output for `j1939 spn`, `j1939 tp`, and `j1939 dm1` commands to emit one line per observation/session/message instead of falling back to full JSON payload. The JSONL emitter now checks for `observations`, `sessions`, and `messages` in addition to `events`.
 
+### Changed
+
+* Introduced a J1939 decoder abstraction between the CLI and the current curated helper implementation so `j1939 decode`, `j1939 spn`, `j1939 tp`, and `j1939 dm1` can move to a library-backed decoder in follow-on work without changing the command surface.
+* Switched J1939 identifier decomposition and DM1 DTC parsing to use `can-j1939` helpers under the existing command surface, and routed file-backed `j1939 pgn` through the new decoder abstraction.
+* Moved `j1939 spn`, `j1939 tp`, and `j1939 dm1` execution into the `can-j1939` decoder adapter so all file-backed J1939 decode commands now run through the same backend boundary even though SPN coverage and TP semantics remain intentionally limited.
+* Added optional J1939 DBC enrichment for `j1939 decode`, `j1939 pgn`, and `j1939 spn`, including `dbc_source` provenance, extra decoded `dbc_events`, and a reusable default J1939 DBC setting via `CANARCHY_J1939_DBC` or `[j1939].dbc` in `~/.canarchy/config.toml`.
+* Expanded `j1939 spn` beyond the curated starter map by resolving non-curated SPNs from J1939 DBC signal `SPN` metadata when a matching DBC is supplied or configured as the default J1939 database.
+* Extended the same J1939 DBC coverage idea into `j1939 dm1` so DTC names and units can be enriched from DBC signal `SPN` metadata, with the same `--dbc` and default J1939 DBC config path used by other J1939 decode workflows.
+
 ### Documentation
 
+* Added planned design and test specs for moving J1939 onto a first-class library-backed decoder with optional J1939 DBC enrichment, documenting the intended `can-j1939` integration path and CLI/test expectations.
 * Added dedicated design and test specs for the provider-backed DBC workflow, covering provider listing, catalog search, fetch, cache management, provider-ref resolution, `dbc_source` provenance, and `auto_refresh` behavior.
 * Updated the command reference to document the shipped `generate` command plus current `--stdin` and `--ack-active` command-surface details where the docs had drifted from the implementation.
 * Corrected several requirement-to-test traceability tables so the current spec set no longer overstates coverage for transport, UDS, J1939, shell, gateway, and generate workflows.

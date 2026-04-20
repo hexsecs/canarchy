@@ -24,6 +24,7 @@ authors = [
   { name = "hexsecs" },
 ]
 dependencies = [
+    "can-j1939>=2.0.12",
     "canmatrix>=1.2",
     "cantools>=39.4",
     "mcp>=1.27.0",
