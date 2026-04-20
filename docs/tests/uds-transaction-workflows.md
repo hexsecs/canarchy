@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented |
+| Status | Partial |
 | Related design spec | `docs/design/uds-transaction-workflows.md` |
 | Primary test area | CLI, protocol |
 
@@ -26,9 +26,11 @@ The current implementation covers both transport-backed single-frame behavior on
 | Requirement ID | Covered by test IDs |
 |----------------|---------------------|
 | `REQ-UDS-TX-01` | `TEST-UDS-TX-01`, `TEST-UDS-TX-02` |
-| `REQ-UDS-TX-02` | `TEST-UDS-TX-01`, `TEST-UDS-TX-03` |
-| `REQ-UDS-TX-03` | `TEST-UDS-TX-02`, `TEST-UDS-TX-04` |
-| `REQ-UDS-TX-04` | `TEST-UDS-TX-01` |
+| `REQ-UDS-TX-02` | `TEST-UDS-TX-01` |
+| `REQ-UDS-TX-03` | `TEST-UDS-TX-01` |
+| `REQ-UDS-TX-07` | Deferred |
+| `REQ-UDS-TX-08` | Deferred |
+| `REQ-UDS-TX-04` | `TEST-UDS-TX-02` |
 | `REQ-UDS-TX-05` | `TEST-UDS-TX-03`, `TEST-UDS-TX-04` |
 | `REQ-UDS-TX-06` | `TEST-UDS-TX-05` |
 

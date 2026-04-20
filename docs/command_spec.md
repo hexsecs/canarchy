@@ -6,7 +6,7 @@ This document describes the current implemented CLI contract.
 
 Implemented and verified in the current codebase:
 
-* live and deterministic transport workflows for `capture` and `send`
+* live and deterministic transport workflows for `capture`, `send`, and `generate`
 * file-backed `filter` and `stats` over candump capture logs
 * default `python-can` support for `capture` and `send`
 * deterministic `replay`
@@ -102,7 +102,7 @@ Supported file input today:
 Prepare an active transmit frame.
 
 ```bash
-canarchy send <interface> <frame-id> <hex-data> [--json|--jsonl|--table|--raw]
+canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json|--jsonl|--table|--raw]
 ```
 
 Example:
@@ -111,12 +111,17 @@ Example:
 canarchy send can0 0x123 11223344 --json
 ```
 
+Notes:
+
+* `--ack-active` requests an interactive `YES` confirmation before the frame is transmitted
+* when active acknowledgement is required by configuration, omitting `--ack-active` returns a structured `ACTIVE_ACK_REQUIRED` error
+
 ### filter
 
 Filter a capture source by a simple expression.
 
 ```bash
-canarchy filter <file> <expression> [--json|--jsonl|--table|--raw]
+canarchy filter <file> <expression> [--stdin] [--json|--jsonl|--table|--raw]
 ```
 
 Supported expressions today:
@@ -125,6 +130,10 @@ Supported expressions today:
 * `id==0x18FEEE31`
 * `pgn==65262`
 
+Notes:
+
+* `--stdin` reads JSONL `frame` events from standard input instead of a positional capture file
+
 ### stats
 
 Summarize a capture source.
@@ -132,6 +141,28 @@ Summarize a capture source.
 ```bash
 canarchy stats <file> [--json|--jsonl|--table|--raw]
 ```
+
+### generate
+
+Generate CAN frames from explicit, random, or incrementing inputs.
+
+```bash
+canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>] [--count <n>] [--gap <ms>] [--extended] [--ack-active] [--json|--jsonl|--table|--raw]
+```
+
+Examples:
+
+```bash
+canarchy generate can0 --id 0x123 --dlc 4 --data 11223344 --count 2 --gap 100 --json
+canarchy generate can0 --data I --count 4 --table
+```
+
+Notes:
+
+* `--id`, `--dlc`, and `--data` accept `R` for random generation, and `--data I` enables a deterministic incrementing payload pattern
+* `--ack-active` requests an interactive `YES` confirmation before generated frames are transmitted
+* when active acknowledgement is required by configuration, omitting `--ack-active` returns a structured `ACTIVE_ACK_REQUIRED` error
+* generated JSON output includes an active-transmit alert followed by generated frame events
 
 ### replay
 
@@ -152,7 +183,7 @@ canarchy replay tests/fixtures/sample.candump --rate 2.0 --json
 Bridge frames from one live CAN interface to another through the `python-can` backend.
 
 ```bash
-canarchy gateway <src> <dst> [--src-backend <type>] [--dst-backend <type>] [--bidirectional] [--count <n>] [--json|--jsonl|--table|--raw]
+canarchy gateway <src> <dst> [--src-backend <type>] [--dst-backend <type>] [--bidirectional] [--count <n>] [--ack-active] [--json|--jsonl|--table|--raw]
 ```
 
 Examples:
@@ -166,6 +197,7 @@ Notes:
 
 * `gateway` requires the `python-can` backend (set in `~/.canarchy/config.toml` or via `CANARCHY_TRANSPORT_BACKEND=python-can`)
 * `--src-backend` and `--dst-backend` default to the configured `interface` value
+* `--ack-active` requests an interactive `YES` confirmation before forwarding begins
 * default table and raw output use candump-style forwarded frame lines with direction labels such as `[src->dst]`
 * `--json` returns a standard command envelope; `--jsonl` emits one forwarded event per line for `gateway`
 
@@ -197,7 +229,7 @@ Notes:
 Decode frames from a capture source using a DBC file.
 
 ```bash
-canarchy decode <file> --dbc <file> [--json|--jsonl|--table|--raw]
+canarchy decode <file> --dbc <file> [--stdin] [--json|--jsonl|--table|--raw]
 ```
 
 Example:
@@ -209,6 +241,7 @@ canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --
 Notes:
 
 * `--dbc` accepts a local file path or a provider ref such as `opendbc:<name>`
+* `--stdin` reads JSONL `frame` events from standard input instead of a positional capture file
 * structured output includes a `dbc_source` object describing the provider-backed or local DBC resolution that was used
 
 ### encode
@@ -314,6 +347,7 @@ Notes:
 
 * the default provider is `opendbc`
 * refreshing updates the cached catalog manifest; individual DBC files are fetched on demand or through `dbc fetch`
+* provider-backed decode, encode, and inspect commands return `DBC_CACHE_MISS` by default when the provider cache is cold; enabling `[dbc.providers.opendbc].auto_refresh = true` allows first-use refresh on resolution
 
 ### session save
 
@@ -373,8 +407,12 @@ Notes:
 Decode a capture source into J1939 PGN observations.
 
 ```bash
-canarchy j1939 decode <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 decode <file> [--stdin] [--json|--jsonl|--table|--raw]
 ```
+
+Notes:
+
+* `--stdin` reads JSONL `frame` events from standard input instead of a positional capture file
 
 ### j1939 pgn
 
@@ -453,13 +491,14 @@ Notes:
 Inspect representative UDS responder discovery transactions.
 
 ```bash
-canarchy uds scan <interface> [--json|--jsonl|--table|--raw]
+canarchy uds scan <interface> [--ack-active] [--json|--jsonl|--table|--raw]
 ```
 
 Notes:
 
 * with the `python-can` backend, this command sends a single-frame functional DiagnosticSessionControl request and summarizes any single-frame responses it captures
 * with the `scaffold` backend, this command emits explicit sample/reference UDS transaction data
+* `--ack-active` requests an interactive `YES` confirmation before the diagnostic request is sent
 * this is an initial transport-backed step, not a full ISO-TP or ECU-specific diagnostic scan implementation
 
 ### uds trace
