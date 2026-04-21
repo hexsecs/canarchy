@@ -223,6 +223,8 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref (e.g. opendbc:toyota_tnga_k_pt_generated)"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
             "required": ["file"],
         },
@@ -236,6 +238,8 @@ _TOOLS: list[types.Tool] = [
                 "pgn": {"type": "integer", "description": "J1939 PGN value (0–262143)"},
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
             "required": ["pgn", "file"],
         },
@@ -249,6 +253,8 @@ _TOOLS: list[types.Tool] = [
                 "spn": {"type": "integer", "description": "J1939 SPN value (non-negative integer)"},
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
             "required": ["spn", "file"],
         },
@@ -260,6 +266,8 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
             "required": ["file"],
         },
@@ -272,6 +280,8 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Enrich DM1 DTC names with a local DBC path or provider ref"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
             "required": ["file"],
         },
@@ -283,6 +293,8 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
             "required": ["file"],
         },
@@ -521,26 +533,52 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["j1939", "decode", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_pgn":
             argv = ["j1939", "pgn", str(a["pgn"]), "--file", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_spn":
             argv = ["j1939", "spn", str(a["spn"]), "--file", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_tp":
-            return ["j1939", "tp", a["file"], "--json"]
+            argv = ["j1939", "tp", a["file"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
         case "j1939_dm1":
             argv = ["j1939", "dm1", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_summary":
-            return ["j1939", "summary", a["file"], "--json"]
+            argv = ["j1939", "summary", a["file"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
         case "uds_scan":
             return ["uds", "scan", a["interface"], "--json"]
         case "uds_trace":
@@ -606,7 +644,7 @@ async def handle_call_tool(
     if name not in _TOOL_NAMES:
         raise ValueError(f"Unknown tool: {name!r}")
     argv = _build_argv(name, arguments or {})
-    _, result = execute_command(argv)
+    _, result = await asyncio.to_thread(execute_command, argv)
     if result is None:
         payload: dict[str, Any] = {
             "ok": False,
