@@ -2573,9 +2573,30 @@ def _emit_warnings_jsonl(payload: dict[str, Any], result: CommandResult) -> None
         )
 
 
+def _flatten_frame_event(event: dict[str, Any]) -> dict[str, Any]:
+    frame = event.get("payload", {}).get("frame", {})
+    return {
+        "timestamp": event.get("timestamp"),
+        "interface": frame.get("interface"),
+        "arbitration_id": frame.get("arbitration_id"),
+        "data": frame.get("data"),
+        "dlc": frame.get("dlc"),
+        "is_extended_id": frame.get("is_extended_id"),
+    }
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
+    _J1939_SESSION_COMMANDS = {"j1939 tp", "j1939 dm1", "j1939 summary"}
     if output_format == "json":
+        data = payload.get("data", {})
+        if result.command == "filter":
+            events = data.pop("events", [])
+            flat = [_flatten_frame_event(e) for e in events if e.get("event_type") == "frame"]
+            data["frame_count"] = len(flat)
+            data["frames"] = flat
+        elif result.command in _J1939_SESSION_COMMANDS and "events" in data and not data["events"]:
+            del data["events"]
         print(json.dumps(payload, sort_keys=True))
         return
 
