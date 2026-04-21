@@ -444,10 +444,16 @@ class CliTests(unittest.TestCase):
 
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "passive")
-        self.assertEqual(len(payload["data"]["events"]), 1)
-        self.assertEqual(
-            payload["data"]["events"][0]["payload"]["frame"]["arbitration_id"], 0x18FEEE31
-        )
+        self.assertNotIn("events", payload["data"])
+        self.assertEqual(payload["data"]["frame_count"], 1)
+        self.assertEqual(len(payload["data"]["frames"]), 1)
+        frame = payload["data"]["frames"][0]
+        self.assertEqual(frame["arbitration_id"], 0x18FEEE31)
+        self.assertIn("timestamp", frame)
+        self.assertIn("interface", frame)
+        self.assertIn("data", frame)
+        self.assertIn("dlc", frame)
+        self.assertIn("is_extended_id", frame)
 
     def test_stats_json_output_returns_summary(self) -> None:
         exit_code, stdout, _ = run_cli("stats", str(FIXTURES / "sample.candump"), "--json")

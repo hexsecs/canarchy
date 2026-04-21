@@ -191,11 +191,19 @@ class CanJ1939Decoder:
             payload = reassembled[:total_bytes]
             summaries.append(
                 {
-                    **session,
-                    "aborted": bool(session.get("aborted", False)),
-                    "complete": len(payload) >= total_bytes and packet_count >= total_packets,
+                    "session_type": session["session_type"],
+                    "source_address": int(session["source_address"]),
+                    "destination_address": session["destination_address"],
+                    "transfer_pgn": int(session["transfer_pgn"]),
+                    "total_bytes": total_bytes,
+                    "total_packets": total_packets,
                     "packet_count": packet_count,
+                    "complete": len(payload) >= total_bytes and packet_count >= total_packets,
+                    "aborted": bool(session.get("aborted", False)),
+                    "acknowledged": bool(session.get("acknowledged", False)),
+                    "cts_count": int(session.get("cts_count", 0)),
                     "reassembled_data": payload.hex(),
+                    "timestamp": session.get("timestamp"),
                 }
             )
         return summaries
