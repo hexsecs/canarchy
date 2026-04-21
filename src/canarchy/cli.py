@@ -1423,9 +1423,21 @@ def j1939_payload(
             {"mode": "passive", "pgn": args.pgn, "file": args.file},
             matched_frames,
         )
+        describer = pretty_j1939_support.get_describer()
+        serialized: list[dict[str, Any]] = []
+        for event in event_objects:
+            event_dict = event.to_payload()
+            frame_payload = event_dict.get("payload", {}).get("frame")
+            if frame_payload:
+                decoded = pretty_j1939_support.describe_frame(
+                    describer, frame_payload["arbitration_id"], frame_payload["data"]
+                )
+                if decoded:
+                    event_dict["payload"]["decoded_signals"] = decoded
+            serialized.append(event_dict)
         return (
             data,
-            serialize_events(event_objects),
+            serialized,
             dbc_warnings,
         )
     if args.command == "j1939 spn":

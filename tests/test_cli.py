@@ -2085,6 +2085,27 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["pgn"], 65262)
         self.assertEqual(payload["data"]["events"][0]["source"], "test.decoder")
 
+    def test_j1939_pgn_json_includes_decoded_signals(self) -> None:
+        # j1939_heavy_vehicle.candump has PGN 65262 frames; the first frame
+        # data 7DFFFFFF decodes Engine Coolant Temperature = 85.0 degC via pretty_j1939.
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "pgn",
+            "65262",
+            "--file",
+            str(FIXTURES / "j1939_heavy_vehicle.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        first_event = payload["data"]["events"][0]
+        self.assertIn("decoded_signals", first_event["payload"])
+        decoded = first_event["payload"]["decoded_signals"]
+        self.assertIn("Engine Coolant Temperature", decoded)
+        self.assertIn("85.0", decoded["Engine Coolant Temperature"])
+
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_generate_fixed_id_and_data_returns_frame_events(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
