@@ -519,6 +519,23 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["tp"]["session_count"], 1)
         self.assertEqual(payload["data"]["tp"]["complete_session_count"], 1)
 
+    def test_j1939_summary_no_fault_dm1_reports_zero_active_dtcs(self) -> None:
+        # Verify that a capture where every DM1 message contains only no-fault
+        # filler DTCs (SPN=255, FMI=0) reports active_dtc_count=0.
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "summary",
+            str(FIXTURES / "j1939_dm1_no_fault.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["dm1"]["present"], True)
+        self.assertEqual(payload["data"]["dm1"]["message_count"], 1)
+        self.assertEqual(payload["data"]["dm1"]["active_dtc_count"], 0)
+
     def test_j1939_summary_surfaces_printable_tp_identifiers(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
@@ -965,6 +982,25 @@ class CliTests(unittest.TestCase):
         self.assertEqual(message["active_dtc_count"], 1)
         self.assertEqual(message["dtcs"][0]["spn"], 175)
         self.assertEqual(message["dtcs"][0]["fmi"], 5)
+
+    def test_j1939_dm1_no_fault_sentinel_reports_zero_active_dtcs(self) -> None:
+        # DTC bytes FF 00 00 00 = SPN=255, FMI=0, a common OEM no-fault filler.
+        # active_dtc_count must be 0; the DTC slot should still appear in dtcs[].
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "dm1",
+            str(FIXTURES / "j1939_dm1_no_fault.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        message = payload["data"]["messages"][0]
+        self.assertEqual(message["active_dtc_count"], 0)
+        self.assertEqual(len(message["dtcs"]), 1)
+        self.assertEqual(message["dtcs"][0]["spn"], 255)
+        self.assertEqual(message["dtcs"][0]["fmi"], 0)
 
     def test_j1939_dm1_with_dbc_enriches_non_curated_dtc_names(self) -> None:
         exit_code, stdout, stderr = run_cli(
