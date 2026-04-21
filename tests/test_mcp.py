@@ -286,3 +286,32 @@ def test_j1939_tool_schemas_have_frame_limit_params():
         props = schema.get("properties", {})
         assert "max_frames" in props, f"{tool_name} missing max_frames"
         assert "seconds" in props, f"{tool_name} missing seconds"
+
+
+# --- TEST-MCP-18: run_server handles signals without traceback --------------
+
+def test_run_server_handles_sigint():
+    """run_server should not raise AttributeError or traceback on SIGINT."""
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "canarchy", "mcp", "serve"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    time.sleep(0.5)
+    proc.send_signal(signal.SIGINT)
+    time.sleep(0.5)
+
+    proc.terminate()
+    stdout, stderr = proc.communicate(timeout=5)
+
+    assert "AttributeError" not in stderr, f"Got AttributeError in stderr: {stderr}"
+    assert "Traceback" not in stderr, f"Got traceback in stderr: {stderr}"
+    assert "KeyboardInterrupt" not in stderr, f"Got KeyboardInterrupt in stderr: {stderr}"
