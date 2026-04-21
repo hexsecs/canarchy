@@ -10,7 +10,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Protocol
+from typing import Callable, Iterator, NoReturn, Protocol
 
 try:
     import can as python_can
@@ -395,6 +395,66 @@ def build_live_backend(config: TransportBackendConfig | None = None) -> LiveCanB
     )
 
 
+def _compile_filter(expression: str) -> Callable[[CanFrame], bool]:
+    """Compile a filter expression into a frame predicate. && binds tighter than ||."""
+    or_parts = expression.split(" || ")
+    if len(or_parts) > 1:
+        preds = [_compile_filter(p.strip()) for p in or_parts]
+        return lambda frame, ps=preds: any(p(frame) for p in ps)
+    and_parts = expression.split(" && ")
+    if len(and_parts) > 1:
+        preds = [_compile_filter(p.strip()) for p in and_parts]
+        return lambda frame, ps=preds: all(p(frame) for p in ps)
+    return _compile_filter_atom(expression.strip())
+
+
+def _compile_filter_atom(expr: str) -> Callable[[CanFrame], bool]:
+    n = expr.lower()
+    if n == "all":
+        return lambda frame: True
+    if n.startswith("id=="):
+        try:
+            wanted = int(n[4:], 0)
+            return lambda frame, w=wanted: frame.arbitration_id == w
+        except ValueError:
+            pass
+    elif n.startswith("pgn=="):
+        try:
+            wanted = int(n[5:], 0)
+            return lambda frame, w=wanted: (
+                frame.is_extended_id
+                and decompose_arbitration_id(frame.arbitration_id).pgn == w
+            )
+        except ValueError:
+            pass
+    elif n.startswith("dlc>"):
+        try:
+            threshold = int(n[4:])
+            return lambda frame, t=threshold: frame.dlc > t
+        except ValueError:
+            pass
+    elif n.startswith("data~="):
+        try:
+            pattern = bytes.fromhex(n[6:])
+            return lambda frame, p=pattern: p in frame.data
+        except ValueError:
+            pass
+    elif n == "extended":
+        return lambda frame: frame.is_extended_id
+    elif n == "standard":
+        return lambda frame: not frame.is_extended_id
+    _raise_invalid_filter(expr)
+
+
+def _raise_invalid_filter(expr: str) -> NoReturn:
+    raise TransportError(
+        "INVALID_FILTER_EXPRESSION",
+        f"Filter expression '{expr}' is not recognised.",
+        "Supported: all, id==<hex>, pgn==<hex>, dlc><n>, data~=<hex>, extended, standard. "
+        "Combine with && (AND) or || (OR).",
+    )
+
+
 class LocalTransport:
     """Local transport facade that selects a live CAN backend when available."""
 
@@ -491,20 +551,8 @@ class LocalTransport:
     def filter(self, file_name: str, expression: str, frames: list[CanFrame] | None = None) -> list[CanFrame]:
         if frames is None:
             frames = self._frames_for_file(file_name)
-        normalized = expression.strip().lower()
-        if normalized.startswith("id=="):
-            wanted_id = int(normalized.split("==", 1)[1], 0)
-            return [frame for frame in frames if frame.arbitration_id == wanted_id]
-        if normalized.startswith("pgn=="):
-            wanted_pgn = int(normalized.split("==", 1)[1], 0)
-            return [frame for frame in frames if self._pgn(frame) == wanted_pgn]
-        if normalized == "all":
-            return frames
-        raise TransportError(
-            "FILTER_EXPRESSION_UNSUPPORTED",
-            "Filter expression is not supported by the current transport scaffold.",
-            "Use `all`, `id==0x...`, or `pgn==...` until the full filter engine is implemented.",
-        )
+        predicate = _compile_filter(expression)
+        return [frame for frame in frames if predicate(frame)]
 
     def stats(self, file_name: str) -> TransportStats:
         frames = self._frames_for_file(file_name)

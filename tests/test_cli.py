@@ -455,6 +455,85 @@ class CliTests(unittest.TestCase):
         self.assertIn("dlc", frame)
         self.assertIn("is_extended_id", frame)
 
+    def test_filter_dlc_gt_returns_frames_above_threshold(self) -> None:
+        # sample.candump: two 4-byte frames and one 8-byte frame
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"), "dlc>4", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 1)
+        self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["dlc"], 8)
+
+    def test_filter_data_contains_returns_matching_frame(self) -> None:
+        # Frame 18FEEE31 data is 11223344; pattern 1122 is a substring
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"), "data~=1122", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 1)
+        self.assertEqual(
+            payload["data"]["events"][0]["payload"]["frame"]["arbitration_id"], 0x18FEEE31
+        )
+
+    def test_filter_extended_returns_all_extended_frames(self) -> None:
+        # All frames in sample.candump are extended
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"), "extended", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 3)
+
+    def test_filter_standard_returns_no_frames_from_j1939_capture(self) -> None:
+        # All frames in sample.candump are extended; standard returns none
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"), "standard", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 0)
+
+    def test_filter_and_compound_narrows_results(self) -> None:
+        # extended && dlc>4 should return only the one 8-byte frame
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"), "extended && dlc>4", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 1)
+        self.assertEqual(payload["data"]["events"][0]["payload"]["frame"]["dlc"], 8)
+
+    def test_filter_or_compound_broadens_results(self) -> None:
+        # id==0x18FEEE31 || id==0x18F00431 should return exactly 2 frames
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"),
+            "id==0x18FEEE31 || id==0x18F00431", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 2)
+
+    def test_filter_and_has_higher_precedence_than_or(self) -> None:
+        # (id==0x18FEEE31 && dlc>4) || extended
+        # The AND clause matches nothing (dlc=4, not >4), so only OR arm (all 3 extended) applies
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"),
+            "id==0x18FEEE31 && dlc>4 || extended", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 3)
+
+    def test_filter_unknown_expression_returns_invalid_filter_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "filter", str(FIXTURES / "sample.candump"), "badexpr", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_FILTER_EXPRESSION")
+
     def test_stats_json_output_returns_summary(self) -> None:
         exit_code, stdout, _ = run_cli("stats", str(FIXTURES / "sample.candump"), "--json")
         self.assertEqual(exit_code, EXIT_OK)
@@ -2760,7 +2839,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
 
         payload = json.loads(stdout)
-        self.assertEqual(payload["errors"][0]["code"], "FILTER_EXPRESSION_UNSUPPORTED")
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_FILTER_EXPRESSION")
 
     def test_invalid_candump_file_returns_structured_transport_error(self) -> None:
         exit_code, stdout, stderr = run_cli("stats", str(FIXTURES / "invalid.candump"), "--json")
