@@ -30,6 +30,8 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-08` | Unwanted behaviour | If a `call_tool` request names an unregistered tool, the system shall raise an error indicating the tool is unknown. |
 | `REQ-MCP-09` | Ubiquitous | The `mcp` package shall be declared as a project dependency in `pyproject.toml`. |
 | `REQ-MCP-10` | Ubiquitous | The server shall not expose `shell` or `tui` as MCP tools; those are interactive front-end commands with no RPC equivalent. |
+| `REQ-MCP-11` | Event-driven | The `call_tool` handler shall execute `execute_command` in a thread pool via `asyncio.to_thread` so that the asyncio event loop is not blocked during file I/O or analysis, preventing MCP keepalive timeouts on large captures. |
+| `REQ-MCP-12` | Ubiquitous | File-backed J1939 tools (`j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`) shall expose optional `max_frames` (integer) and `seconds` (number) parameters that bound analysis to the first N frames or first T seconds of the capture, respectively. |
 
 ## Command Surface
 
@@ -65,6 +67,7 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `j1939 spn` | `j1939_spn` |
 | `j1939 tp` | `j1939_tp` |
 | `j1939 dm1` | `j1939_dm1` |
+| `j1939 summary` | `j1939_summary` |
 | `uds scan` | `uds_scan` |
 | `uds trace` | `uds_trace` |
 | `uds services` | `uds_services` |
@@ -95,15 +98,18 @@ Agent / MCP client
 canarchy mcp serve
   └─ mcp_server.py
        ├─ list_tools()     → returns _TOOLS catalogue
-       └─ call_tool(name, args)
+       └─ call_tool(name, args)          [async]
             ├─ _build_argv(name, args) → CLI argv list
-            └─ execute_command(argv)  → CommandResult
-                                          │ .to_payload()
-                                          ▼
-                                     TextContent(JSON)
+            └─ asyncio.to_thread(execute_command, argv)
+                 └─ execute_command(argv)  → CommandResult   [thread pool]
+                                               │ .to_payload()
+                                               ▼
+                                          TextContent(JSON)
 ```
 
 The server delegates directly to `execute_command()` from `cli.py`, so all validation, error handling, and output formatting logic is shared with the CLI. No protocol logic is duplicated.
+
+`execute_command` runs in a thread pool via `asyncio.to_thread` so the asyncio event loop remains live during file I/O. Without this, processing a large capture file would block the event loop, preventing MCP keepalive messages from being handled and causing client-side timeout errors (`-32001`/`-32000`).
 
 ## Responsibilities And Boundaries
 

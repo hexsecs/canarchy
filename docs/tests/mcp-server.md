@@ -22,6 +22,8 @@
 | REQ-MCP-08 | Unknown tool name raises error | TEST-MCP-09 |
 | REQ-MCP-09 | `mcp` declared in pyproject.toml | TEST-MCP-10 |
 | REQ-MCP-10 | `shell` and `tui` not exposed as MCP tools | TEST-MCP-11 |
+| REQ-MCP-11 | `call_tool` handler runs `execute_command` in a thread pool | TEST-MCP-15 |
+| REQ-MCP-12 | File-backed J1939 tools expose `max_frames` and `seconds` parameters | TEST-MCP-16, TEST-MCP-17 |
 
 ## Representative Test Cases
 
@@ -212,6 +214,53 @@ And    `"--json"` shall be the final element in each case
 Given  the `_build_argv` helper is available
 When   called with `("bad_tool", {})`
 Then   a `ValueError` shall be raised
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-15` — `handle_call_tool` does not block the event loop
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool` is awaited for any tool that delegates to `execute_command`
+Then   the asyncio event loop shall remain live during execution
+And    a concurrently scheduled coroutine shall be able to run while the tool executes
+```
+
+**Fixture:** none (uses `config_show` which requires no files).
+
+---
+
+### `TEST-MCP-16` — `_build_argv` threads `max_frames` and `seconds` through for J1939 file tools
+
+```gherkin
+Given  the `_build_argv` helper is available
+When   called with a J1939 file tool and `max_frames` set to N
+Then   the returned argv shall contain `["--max-frames", str(N)]`
+
+When   called with a J1939 file tool and `seconds` set to T
+Then   the returned argv shall contain `["--seconds", str(T)]`
+
+When   called with a J1939 file tool and neither limit is supplied
+Then   neither `"--max-frames"` nor `"--seconds"` shall appear in the returned argv
+```
+
+Applies to: `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`.
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-17` — File-backed J1939 tool schemas expose `max_frames` and `seconds`
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_list_tools()` is called
+Then   for each of `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`
+       the tool's `inputSchema.properties` shall contain `"max_frames"` of type `"integer"`
+       and `"seconds"` of type `"number"`
 ```
 
 **Fixture:** none.

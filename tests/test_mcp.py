@@ -202,7 +202,7 @@ def test_tool_names_set_matches_tools_list():
     assert _TOOL_NAMES == {tool.name for tool in _TOOLS}
 
 
-# --- TEST-MCP-14: handle_call_tool does not block the event loop -----------
+# --- TEST-MCP-15: handle_call_tool does not block the event loop -----------
 
 def test_handle_call_tool_is_nonblocking():
     """execute_command must run in a thread so the event loop stays alive."""
@@ -223,7 +223,7 @@ def test_handle_call_tool_is_nonblocking():
     assert event_loop_ran.is_set(), "Event loop was blocked during handle_call_tool"
 
 
-# --- TEST-MCP-15: _build_argv threads max_frames and seconds through -------
+# --- TEST-MCP-16: _build_argv threads max_frames and seconds through -------
 
 def test_build_argv_j1939_summary_max_frames():
     argv = _build_argv("j1939_summary", {"file": "big.log", "max_frames": 5000})
@@ -276,7 +276,7 @@ def test_build_argv_j1939_summary_no_limits():
     assert "--seconds" not in argv
 
 
-# --- TEST-MCP-16: file-based J1939 tool schemas expose max_frames/seconds --
+# --- TEST-MCP-17: file-based J1939 tool schemas expose max_frames/seconds --
 
 def test_j1939_tool_schemas_have_frame_limit_params():
     tools_by_name = {t.name: t for t in asyncio.run(handle_list_tools())}
