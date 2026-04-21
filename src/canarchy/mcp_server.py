@@ -659,20 +659,37 @@ async def handle_call_tool(
 
 
 def run_server() -> None:
-    asyncio.run(_amain())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
+    stop_event = asyncio.Event()
 
-async def _amain() -> None:
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name=_SERVER_NAME,
-                server_version=_SERVER_VERSION,
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
+    def signal_handler() -> None:
+        stop_event.set()
+
+    for sig in (asyncio.SIGINT, asyncio.SIGTERM):
+        loop.add_signal_handler(sig, signal_handler)
+
+    async def run_with_shutdown() -> None:
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            server_task = asyncio.create_task(
+                server.run(
+                    read_stream,
+                    write_stream,
+                    InitializationOptions(
+                        server_name=_SERVER_NAME,
+                        server_version=_SERVER_VERSION,
+                        capabilities=server.get_capabilities(
+                            notification_options=NotificationOptions(),
+                            experimental_capabilities={},
+                        ),
+                    ),
+                )
+            )
+
+            await asyncio.gather(server_task, stop_event.wait())
+
+    try:
+        loop.run_until_complete(run_with_shutdown())
+    finally:
+        loop.close()
