@@ -1,5 +1,7 @@
 # README.md
 
+![CANarchy](assets/banner.png)
+
 ## CANarchy
 
 CANarchy is a stream-first CAN analysis and manipulation runtime designed for automation, security research, and agent-driven workflows.
