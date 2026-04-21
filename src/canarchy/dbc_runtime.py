@@ -207,6 +207,8 @@ def decode_j1939_spn_runtime(frames: list[CanFrame], dbc_path: str, spn: int) ->
         identifier = decompose_arbitration_id(frame.arbitration_id)
         value = normalize_value(decoded[signal.name])
         raw = _signal_raw_hex(message, signal, frame.data)
+        if raw is not None and int(raw, 16) == (1 << signal.length) - 1:
+            value = None
         observations.append(
             {
                 "spn": spn,

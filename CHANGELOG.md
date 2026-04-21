@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+* J1939 signal decoding now returns `null`/`None` for the `value` field when the raw signal data matches the J1939 not-available pattern (0xFF for 8-bit, 0xFFFF for 16-bit, 0xFFFFFFFF for 32-bit signals) instead of converting the error sentinel into a physically impossible reading. This fix applies to both the curated SPN decoder and the DBC-backed runtime decoder.
+
 ## [0.3.0] - 2026-04-20
 
 ### Fixed

@@ -5,10 +5,12 @@ from pathlib import Path
 from canarchy.dbc import decode_frames, encode_message, inspect_database
 from canarchy.dbc_runtime import (
     decode_frames_runtime,
+    decode_j1939_spn_runtime,
     encode_message_runtime,
     inspect_database_runtime,
     load_runtime_database,
 )
+from canarchy.models import CanFrame
 from canarchy.transport import LocalTransport
 
 
@@ -111,3 +113,31 @@ def test_complex_dbc_fixture_encode_preserves_message_identity() -> None:
 
     assert current_frame.arbitration_id == runtime_frame.arbitration_id
     assert current_frame.dlc == runtime_frame.dlc
+
+
+def test_decode_j1939_spn_runtime_error_value_returns_none() -> None:
+    # j1939_sample.dbc: SPN 175 = EngineOilTemp, signal at bit 8, length 8, (1,-40) degC
+    # 0xFF at byte 1 is the J1939 not-available indicator for an 8-bit signal
+    frame = CanFrame(
+        arbitration_id=0x18FEEE31,
+        data=bytes([0x00, 0xFF, 0x00, 0x00]),
+        timestamp=0.0,
+        is_extended_id=True,
+    )
+    obs = decode_j1939_spn_runtime([frame], str(FIXTURES / "j1939_sample.dbc"), 175)
+    assert len(obs) == 1
+    assert obs[0]["value"] is None
+
+
+def test_decode_j1939_spn_runtime_valid_value_returns_scaled_result() -> None:
+    # j1939_sample.dbc: SPN 175 = EngineOilTemp, signal at bit 8, length 8, (1,-40) degC
+    # raw 0x8C = 140 -> value = 140 * 1 + (-40) = 100.0 degC
+    frame = CanFrame(
+        arbitration_id=0x18FEEE31,
+        data=bytes([0x00, 0x8C, 0x00, 0x00]),
+        timestamp=0.0,
+        is_extended_id=True,
+    )
+    obs = decode_j1939_spn_runtime([frame], str(FIXTURES / "j1939_sample.dbc"), 175)
+    assert len(obs) == 1
+    assert obs[0]["value"] == 100.0

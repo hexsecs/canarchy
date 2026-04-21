@@ -113,7 +113,10 @@ def spn_observations(frames: list[CanFrame], spn: int) -> list[dict[str, object]
             continue
         raw = frame.data[definition.start:end]
         raw_value = int.from_bytes(raw, byteorder=definition.byteorder)
-        value = (raw_value * definition.resolution) + definition.offset
+        if raw_value == (1 << (len(raw) * 8)) - 1:
+            value = None
+        else:
+            value = (raw_value * definition.resolution) + definition.offset
         observations.append(
             {
                 "spn": definition.spn,
