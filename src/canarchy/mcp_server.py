@@ -217,7 +217,7 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="j1939_decode",
-        description="Decode J1939 frames from a candump capture file.",
+        description="Decode J1939 frames from a candump capture file. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -231,7 +231,7 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="j1939_pgn",
-        description="Inspect a specific J1939 PGN within a capture file.",
+        description="Inspect a specific J1939 PGN within a capture file. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -246,7 +246,7 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="j1939_spn",
-        description="Inspect a specific J1939 SPN within a capture file.",
+        description="Inspect a specific J1939 SPN within a capture file. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -261,7 +261,7 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="j1939_tp",
-        description="Inspect J1939 transport protocol sessions in a capture file.",
+        description="Inspect J1939 transport protocol sessions in a capture file. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -274,7 +274,7 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="j1939_dm1",
-        description="Inspect J1939 DM1 diagnostic messages in a capture file.",
+        description="Inspect J1939 DM1 diagnostic messages in a capture file. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -288,7 +288,7 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="j1939_summary",
-        description="Summarize J1939 capture content: PGN distribution, source addresses, and transport sessions.",
+        description="Summarize J1939 capture content: PGN distribution, source addresses, and transport sessions. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
             "type": "object",
             "properties": {
