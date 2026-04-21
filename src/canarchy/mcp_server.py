@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import signal
 from typing import Any
 
 import mcp.server.stdio
@@ -667,7 +668,7 @@ def run_server() -> None:
     def signal_handler() -> None:
         stop_event.set()
 
-    for sig in (asyncio.SIGINT, asyncio.SIGTERM):
+    for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, signal_handler)
 
     async def run_with_shutdown() -> None:
