@@ -52,6 +52,24 @@ The only exceptions are:
 * When a release is cut, the `[Unreleased]` section is promoted to a versioned heading. Do not manually create versioned headings outside of the release workflow.
 * The only exceptions are: typo/whitespace-only changes in docs or comments, changes to `.gitignore` or other non-functional config, and MkDocs nav or theme-only changes.
 
+### PR acceptance criteria
+
+**A PR is not ready to merge until all of the following are true.**
+
+This is a hard rule, not a suggestion.
+
+| # | Gate | Notes |
+|---|------|-------|
+| 1 | Issue referenced | Commit message contains `closes #N`, `fixes #N`, or `refs #N` |
+| 2 | Tests pass | All existing tests pass; new behaviour has new tests |
+| 3 | Changelog updated | `[Unreleased]` section reflects the change (see Changelog policy) |
+| 4 | Design spec current | Any touched `docs/design/` spec reflects the implemented behaviour — requirements updated, no stale wording |
+| 5 | Test spec current | Any touched `docs/tests/` spec reflects the actual test coverage — new `TEST-*` IDs added, traceability table updated |
+| 6 | Agent guide current | If the change affects the command surface, MCP tools, output schema, or any workflow an agent would follow, `AGENTS.md` and `docs/agents.md` are updated |
+| 7 | No stale documentation left | Verify that no other doc (architecture docs, tutorials, `command_spec.md`) references old behaviour that the PR changes |
+
+When reviewing your own work before committing or pushing, explicitly check each gate in order. Do not defer documentation updates to a follow-up commit.
+
 ### Other issue rules
 
 * Use GitHub Issues to track planned work rather than ad hoc task lists in docs.
@@ -578,6 +596,7 @@ Each requirement row in the table shall include a `Type` column identifying whic
 * After implementing a feature, verify the test spec in `docs/tests/` matches what was actually tested, includes test IDs (`TEST-<AREA>-NN`), uses Gherkin Given/When/Then, and traces back to the design-spec requirement IDs. Update it if coverage changed.
 * Specs are living documents. Update them when the implementation changes rather than letting them drift.
 * Do not create specs for trivial changes (single-function fixes, minor output tweaks). Reserve them for features that affect the command surface, data model, or module boundaries.
+* Before marking work complete or opening a PR, run through the **PR acceptance criteria** checklist above. Documentation currency (gates 4–7) is a required part of acceptance, not optional follow-up work.
 
 ---
 

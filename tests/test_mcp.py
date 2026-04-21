@@ -200,3 +200,89 @@ def test_call_tool_j1939_monitor_returns_events():
 
 def test_tool_names_set_matches_tools_list():
     assert _TOOL_NAMES == {tool.name for tool in _TOOLS}
+
+
+# --- TEST-MCP-15: handle_call_tool does not block the event loop -----------
+
+def test_handle_call_tool_is_nonblocking():
+    """execute_command must run in a thread so the event loop stays alive."""
+    import threading
+
+    event_loop_ran = threading.Event()
+
+    async def _run():
+        async def _ticker():
+            event_loop_ran.set()
+            await asyncio.sleep(0)
+
+        ticker_task = asyncio.create_task(_ticker())
+        await handle_call_tool("config_show", {})
+        await ticker_task
+
+    asyncio.run(_run())
+    assert event_loop_ran.is_set(), "Event loop was blocked during handle_call_tool"
+
+
+# --- TEST-MCP-16: _build_argv threads max_frames and seconds through -------
+
+def test_build_argv_j1939_summary_max_frames():
+    argv = _build_argv("j1939_summary", {"file": "big.log", "max_frames": 5000})
+    assert "--max-frames" in argv
+    assert "5000" in argv
+    assert argv[-1] == "--json"
+
+
+def test_build_argv_j1939_summary_seconds():
+    argv = _build_argv("j1939_summary", {"file": "big.log", "seconds": 30.0})
+    assert "--seconds" in argv
+    assert "30.0" in argv
+    assert argv[-1] == "--json"
+
+
+def test_build_argv_j1939_decode_max_frames():
+    argv = _build_argv("j1939_decode", {"file": "big.log", "max_frames": 1000})
+    assert "--max-frames" in argv
+    assert "1000" in argv
+
+
+def test_build_argv_j1939_pgn_max_frames():
+    argv = _build_argv("j1939_pgn", {"pgn": 61444, "file": "big.log", "max_frames": 2000})
+    assert "--max-frames" in argv
+    assert "2000" in argv
+
+
+def test_build_argv_j1939_spn_seconds():
+    argv = _build_argv("j1939_spn", {"spn": 190, "file": "big.log", "seconds": 10.0})
+    assert "--seconds" in argv
+    assert "10.0" in argv
+
+
+def test_build_argv_j1939_tp_max_frames():
+    argv = _build_argv("j1939_tp", {"file": "big.log", "max_frames": 500})
+    assert "--max-frames" in argv
+    assert "500" in argv
+
+
+def test_build_argv_j1939_dm1_max_frames():
+    argv = _build_argv("j1939_dm1", {"file": "big.log", "max_frames": 100})
+    assert "--max-frames" in argv
+    assert "100" in argv
+
+
+def test_build_argv_j1939_summary_no_limits():
+    """When no limits provided, no extra flags are added."""
+    argv = _build_argv("j1939_summary", {"file": "small.log"})
+    assert "--max-frames" not in argv
+    assert "--seconds" not in argv
+
+
+# --- TEST-MCP-17: file-based J1939 tool schemas expose max_frames/seconds --
+
+def test_j1939_tool_schemas_have_frame_limit_params():
+    tools_by_name = {t.name: t for t in asyncio.run(handle_list_tools())}
+    file_tools = ["j1939_decode", "j1939_pgn", "j1939_spn", "j1939_tp", "j1939_dm1", "j1939_summary"]
+    for tool_name in file_tools:
+        schema = tools_by_name[tool_name].inputSchema
+        props = schema.get("properties", {})
+        assert "max_frames" in props, f"{tool_name} missing max_frames"
+        assert "seconds" in props, f"{tool_name} missing seconds"
