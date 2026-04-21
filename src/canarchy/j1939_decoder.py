@@ -292,7 +292,7 @@ class CanJ1939Decoder:
     ) -> dict[str, object]:
         dtcs = self._parse_dtcs(payload[4:])
         return {
-            "active_dtc_count": len(dtcs),
+            "active_dtc_count": sum(1 for d in dtcs if d["spn"] > 0 and d["fmi"] not in {0, 31}),
             "destination_address": destination_address,
             "dtcs": dtcs,
             "lamp_status": self._decode_lamp_status(payload[:2]),

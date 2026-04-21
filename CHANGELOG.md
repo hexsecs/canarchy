@@ -9,6 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+* `j1939 summary` and `j1939 dm1` now report `active_dtc_count` as the number of DTCs that represent actual fault conditions (SPN > 0, FMI not 0 or 31) instead of the total count of DTC slots in the DM1 payload. This prevents captures where every DM1 message contains only no-fault filler entries (e.g. SPN=255/FMI=0) from being reported as having hundreds of active faults.
 * J1939 signal decoding now returns `null`/`None` for the `value` field when the raw signal data matches the J1939 not-available pattern (0xFF for 8-bit, 0xFFFF for 16-bit, 0xFFFFFFFF for 32-bit signals) instead of converting the error sentinel into a physically impossible reading. This fix applies to both the curated SPN decoder and the DBC-backed runtime decoder.
 
 ## [0.3.0] - 2026-04-20

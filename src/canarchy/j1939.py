@@ -238,7 +238,7 @@ def _build_dm1_message(
 ) -> dict[str, object]:
     dtcs = _parse_dtcs(payload[4:])
     return {
-        "active_dtc_count": len(dtcs),
+        "active_dtc_count": sum(1 for d in dtcs if d["spn"] > 0 and d["fmi"] not in {0, 31}),
         "destination_address": destination_address,
         "dtcs": dtcs,
         "lamp_status": _decode_lamp_status(payload[:2]),
