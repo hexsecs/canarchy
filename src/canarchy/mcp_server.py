@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import signal
 from typing import Any
 
@@ -672,10 +673,13 @@ def run_server() -> None:
             stop_event.set()
             if server_task and not server_task.done():
                 server_task.cancel()
-            # Close stdin fd to unblock stdio_server's blocking stdin reader thread,
-            # which cannot be cancelled via asyncio task cancellation.
+            # anyio's to_thread.run_sync uses a shielded cancel scope, so the
+            # stdio_server's stdin reader thread cannot be cancelled — it blocks
+            # on readline() until stdin closes.  On macOS, os.close(0) does not
+            # interrupt a blocking read on a tty (unlike pipes), so we schedule
+            # a forced exit as a fallback in case graceful cleanup stalls.
+            loop.call_later(1.5, os._exit, 0)
             try:
-                import os
                 os.close(0)
             except OSError:
                 pass
