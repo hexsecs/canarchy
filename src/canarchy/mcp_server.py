@@ -672,6 +672,13 @@ def run_server() -> None:
             stop_event.set()
             if server_task and not server_task.done():
                 server_task.cancel()
+            # Close stdin fd to unblock stdio_server's blocking stdin reader thread,
+            # which cannot be cancelled via asyncio task cancellation.
+            try:
+                import os
+                os.close(0)
+            except OSError:
+                pass
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, signal_handler)
