@@ -664,14 +664,18 @@ def run_server() -> None:
     asyncio.set_event_loop(loop)
 
     stop_event = asyncio.Event()
+    server_task: asyncio.Task | None = None
 
     def signal_handler() -> None:
         stop_event.set()
+        if server_task and not server_task.done():
+            server_task.cancel()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, signal_handler)
 
     async def run_with_shutdown() -> None:
+        nonlocal server_task
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
             server_task = asyncio.create_task(
                 server.run(
@@ -688,7 +692,12 @@ def run_server() -> None:
                 )
             )
 
-            await asyncio.gather(server_task, stop_event.wait())
+            try:
+                await asyncio.gather(server_task, stop_event.wait())
+            except asyncio.CancelledError:
+                if server_task and not server_task.done():
+                    server_task.cancel()
+                raise
 
     try:
         loop.run_until_complete(run_with_shutdown())
