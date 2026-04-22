@@ -673,12 +673,13 @@ def run_server() -> None:
             stop_event.set()
             if server_task and not server_task.done():
                 server_task.cancel()
-            # anyio's to_thread.run_sync uses a shielded cancel scope, so the
-            # stdio_server's stdin reader thread cannot be cancelled — it blocks
-            # on readline() until stdin closes.  On macOS, os.close(0) does not
-            # interrupt a blocking read on a tty (unlike pipes), so we schedule
-            # a forced exit as a fallback in case graceful cleanup stalls.
-            loop.call_later(1.5, os._exit, 0)
+            # anyio's to_thread.run_sync wraps stdin readline() in a shielded
+            # cancel scope — cleanup blocks until readline() returns, which on a
+            # tty means waiting for the user to press Enter.  Use SIGALRM as an
+            # OS-level escape hatch: it fires unconditionally after 2 s and
+            # does not depend on the asyncio event loop processing callbacks.
+            signal.signal(signal.SIGALRM, lambda _s, _f: os._exit(0))
+            signal.alarm(2)
             try:
                 os.close(0)
             except OSError:
