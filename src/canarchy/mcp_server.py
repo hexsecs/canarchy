@@ -688,38 +688,46 @@ def run_server() -> None:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, signal_handler)
 
-        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-            server_task = asyncio.create_task(
-                server.run(
-                    read_stream,
-                    write_stream,
-                    InitializationOptions(
-                        server_name=_SERVER_NAME,
-                        server_version=_SERVER_VERSION,
-                        capabilities=server.get_capabilities(
-                            notification_options=NotificationOptions(),
-                            experimental_capabilities={},
+        try:
+            async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+                server_task = asyncio.create_task(
+                    server.run(
+                        read_stream,
+                        write_stream,
+                        InitializationOptions(
+                            server_name=_SERVER_NAME,
+                            server_version=_SERVER_VERSION,
+                            capabilities=server.get_capabilities(
+                                notification_options=NotificationOptions(),
+                                experimental_capabilities={},
+                            ),
                         ),
-                    ),
+                    )
                 )
-            )
 
-            stop_task = asyncio.create_task(stop_event.wait())
-            done, pending = await asyncio.wait(
-                [server_task, stop_task],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+                stop_task = asyncio.create_task(stop_event.wait())
+                done, pending = await asyncio.wait(
+                    [server_task, stop_task],
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
 
-            if server_task in done:
+                if server_task in done:
+                    stop_task.cancel()
+                    return
+
+                server_task.cancel()
                 stop_task.cancel()
-                return
-
-            server_task.cancel()
-            stop_task.cancel()
-            try:
-                await server_task
-            except asyncio.CancelledError:
-                pass
+                try:
+                    await server_task
+                except asyncio.CancelledError:
+                    pass
+        except BaseExceptionGroup:
+            # mcp's stdin_reader catches parse errors and tries to forward them
+            # into read_stream_writer; if server_task was already cancelled the
+            # stream is closed, raising BrokenResourceError.  The mcp library
+            # only guards against ClosedResourceError, so this leaks as a
+            # BaseExceptionGroup.  Suppress it — we're shutting down anyway.
+            pass
 
     try:
         loop.run_until_complete(run_with_shutdown())
