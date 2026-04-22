@@ -291,7 +291,7 @@ def test_j1939_tool_schemas_have_frame_limit_params():
 # --- TEST-MCP-18: run_server handles signals without traceback --------------
 
 def test_run_server_handles_sigint():
-    """run_server should not raise AttributeError or traceback on SIGINT."""
+    """run_server should exit cleanly on SIGINT without traceback."""
     import signal
     import subprocess
     import sys
@@ -307,10 +307,13 @@ def test_run_server_handles_sigint():
 
     time.sleep(0.5)
     proc.send_signal(signal.SIGINT)
-    time.sleep(0.5)
 
-    proc.terminate()
-    stdout, stderr = proc.communicate(timeout=5)
+    try:
+        stdout, stderr = proc.communicate(timeout=3)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        pytest.fail("run_server did not exit within 3s after SIGINT — process hung")
 
     assert "AttributeError" not in stderr, f"Got AttributeError in stderr: {stderr}"
     assert "Traceback" not in stderr, f"Got traceback in stderr: {stderr}"
