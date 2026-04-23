@@ -455,7 +455,18 @@ class CliTests(unittest.TestCase):
         self.assertIn("dlc", frame)
         self.assertIn("is_extended_id", frame)
 
-    def test_filter_dlc_gt_returns_frames_above_threshold(self) -> None:
+    def test_filter_compact_output_returns_one_frame_per_line(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "filter", "extended", "--file", str(FIXTURES / "sample.candump"), "--compact"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        lines = stdout.strip().split("\n")
+        self.assertEqual(len(lines), 3)
+        for line in lines:
+            frame = json.loads(line)
+            self.assertIn("timestamp", frame)
+            self.assertIn("interface", frame)
+            self.assertIn("data", frame)
         exit_code, stdout, _ = run_cli(
             "filter", "dlc>4", "--file", str(FIXTURES / "sample.candump"), "--json"
         )

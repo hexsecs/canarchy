@@ -67,7 +67,7 @@ FLAGS: dict[str, list[str]] = {
     "decode": ["--dbc", "--file"] + _OUTPUT,
     "encode": ["--dbc"] + _OUTPUT,
     "export": _OUTPUT,
-    "filter": ["--file"] + _OUTPUT,
+    "filter": ["--file", "--compact"] + _OUTPUT,
     "gateway": [
         "--ack-active",
         "--bidirectional",

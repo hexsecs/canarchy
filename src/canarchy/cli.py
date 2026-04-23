@@ -138,6 +138,7 @@ def add_output_arguments(parser: argparse.ArgumentParser) -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--json", action="store_true", help="emit JSON output")
     group.add_argument("--jsonl", action="store_true", help="emit JSONL output")
+    group.add_argument("--compact", action="store_true", help="emit compact JSON with frame data only")
     group.add_argument("--table", action="store_true", help="emit table output")
     group.add_argument("--raw", action="store_true", help="emit raw output")
 
@@ -509,7 +510,7 @@ def build_parser() -> CanarchyArgumentParser:
 
 
 def format_name(args: argparse.Namespace) -> str:
-    for name in ("json", "jsonl", "table", "raw"):
+    for name in ("json", "jsonl", "compact", "table", "raw"):
         if getattr(args, name, False):
             return name
     return "table"
@@ -519,7 +520,7 @@ def requested_output_format(argv: Sequence[str] | None) -> str:
     if argv is None:
         return "table"
 
-    for name in ("json", "jsonl", "table", "raw"):
+    for name in ("json", "jsonl", "compact", "table", "raw"):
         if f"--{name}" in argv:
             return name
     return "table"
@@ -2645,6 +2646,30 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             data["frames"] = flat
         elif result.command in _J1939_SESSION_COMMANDS and "events" in data and not data["events"]:
             del data["events"]
+        print(json.dumps(payload, sort_keys=True))
+        return
+
+    if output_format == "compact":
+        if result.command == "filter":
+            if not result.ok:
+                print(json.dumps(payload, sort_keys=True))
+                return
+            events = payload.get("data", {}).get("events", [])
+            flat = [_flatten_frame_event(e) for e in events if e.get("event_type") == "frame"]
+            for frame in flat:
+                print(json.dumps(frame, sort_keys=True))
+            for warning in payload["warnings"]:
+                print(
+                    json.dumps(
+                        AlertEvent(
+                            level="warning",
+                            message=warning,
+                            source=f"cli.{result.command}",
+                        ).to_event().to_payload(),
+                        sort_keys=True,
+                    )
+                )
+            return
         print(json.dumps(payload, sort_keys=True))
         return
 
