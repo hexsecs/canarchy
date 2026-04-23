@@ -520,7 +520,7 @@ def requested_output_format(argv: Sequence[str] | None) -> str:
     if argv is None:
         return "table"
 
-    for name in ("json", "jsonl", "table", "raw"):
+    for name in ("json", "jsonl", "compact", "table", "raw"):
         if f"--{name}" in argv:
             return name
     return "table"
@@ -2651,6 +2651,9 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "compact":
         if result.command == "filter":
+            if not result.ok:
+                print(json.dumps(payload, sort_keys=True))
+                return
             events = payload.get("data", {}).get("events", [])
             flat = [_flatten_frame_event(e) for e in events if e.get("event_type") == "frame"]
             for frame in flat:
