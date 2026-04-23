@@ -152,6 +152,12 @@ def add_active_ack_argument(parser: argparse.ArgumentParser) -> None:
 
 def add_j1939_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="skip the first N frames from the capture file",
+    )
+    parser.add_argument(
         "--max-frames",
         type=int,
         help="limit analysis to the first N frames from the capture file",
@@ -164,7 +170,13 @@ def add_j1939_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
-    """Shared --max-frames and --seconds arguments for file-backed commands."""
+    """Shared --offset, --max-frames, and --seconds arguments for file-backed commands."""
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="skip the first N frames from the capture file",
+    )
     parser.add_argument(
         "--max-frames",
         type=int,
@@ -991,6 +1003,7 @@ def frames_from_stdin(*, command: str) -> list[CanFrame]:
 
 def j1939_file_analysis_kwargs(args: argparse.Namespace) -> dict[str, int | float | None]:
     return {
+        "offset": getattr(args, "offset", 0),
         "max_frames": getattr(args, "max_frames", None),
         "seconds": getattr(args, "seconds", None),
     }
@@ -1285,7 +1298,7 @@ def transport_payload(
             [],
         )
     if args.command == "filter":
-        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file, max_frames=args.max_frames, seconds=args.seconds)
+        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
         return (
             {
                 "mode": "passive",
@@ -1299,7 +1312,7 @@ def transport_payload(
             [],
         )
     if args.command == "stats":
-        stats = transport.stats(args.file, max_frames=args.max_frames, seconds=args.seconds)
+        stats = transport.stats(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
         return (
             {
                 "mode": "passive",
@@ -1593,7 +1606,7 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     dbc_source = _build_dbc_source(resolution)
 
     if args.command == "decode":
-        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file, max_frames=args.max_frames, seconds=args.seconds)
+        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
 
         events = decode_frames(frames, dbc_path)
         warnings = []

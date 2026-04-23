@@ -1157,6 +1157,25 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(len(payload["data"]["events"]), 3)
 
+    def test_j1939_decode_offset_skips_initial_frames(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "decode",
+            str(FIXTURES / "j1939_heavy_vehicle.candump"),
+            "--offset",
+            "3",
+            "--max-frames",
+            "3",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["events"]), 3)
+        first_timestamp = payload["data"]["events"][0]["timestamp"]
+        self.assertGreaterEqual(first_timestamp, 0.3)
+
     def test_j1939_tp_seconds_limits_analysis_window(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",

@@ -99,6 +99,7 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "expression": {"type": "string", "description": "Filter expression (e.g. id==0x123 or dlc>4)"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
             },
@@ -112,6 +113,7 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
             },
@@ -137,6 +139,7 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Path to DBC file"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
             },
@@ -242,6 +245,7 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref (e.g. opendbc:toyota_tnga_k_pt_generated)"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
@@ -257,6 +261,7 @@ _TOOLS: list[types.Tool] = [
                 "pgn": {"type": "integer", "description": "J1939 PGN value (0–262143)"},
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
@@ -272,6 +277,7 @@ _TOOLS: list[types.Tool] = [
                 "spn": {"type": "integer", "description": "J1939 SPN value (non-negative integer)"},
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
@@ -285,6 +291,7 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
@@ -299,6 +306,7 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Enrich DM1 DTC names with a local DBC path or provider ref"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
@@ -312,6 +320,7 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
@@ -511,6 +520,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "filter":
             argv = ["filter", a["file"], a["expression"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
@@ -518,6 +529,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "stats":
             argv = ["stats", a["file"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
@@ -527,6 +540,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return ["capture-info", a["file"], "--json"]
         case "decode":
             argv = ["decode", a["file"], "--dbc", a["dbc"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
@@ -569,6 +584,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["j1939", "decode", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
@@ -578,6 +595,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["j1939", "pgn", str(a["pgn"]), "--file", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
@@ -587,6 +606,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["j1939", "spn", str(a["spn"]), "--file", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
@@ -594,6 +615,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "j1939_tp":
             argv = ["j1939", "tp", a["file"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
@@ -603,6 +626,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["j1939", "dm1", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
@@ -610,6 +635,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "j1939_summary":
             argv = ["j1939", "summary", a["file"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
