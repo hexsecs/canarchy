@@ -617,7 +617,6 @@ class CliProviderCommandTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "DBC_NOT_FOUND")
 
     def test_decode_accepts_resolved_opendbc_ref(self) -> None:
-        """decode --dbc opendbc:<name> resolves through the registry transparently."""
         mock = self._make_mock_opendbc_provider()
         with patch("canarchy.dbc_provider._build_default_registry") as mock_build:
             registry = ProviderRegistry()
@@ -628,6 +627,7 @@ class CliProviderCommandTests(unittest.TestCase):
             reset_registry()
             exit_code, stdout, _ = run_cli(
                 "decode",
+                "--file",
                 str(FIXTURES / "sample.candump"),
                 "--dbc",
                 "opendbc:toyota_tnga_k_pt_generated",
@@ -649,6 +649,7 @@ class CliProviderCommandTests(unittest.TestCase):
             reset_registry()
             exit_code, stdout, _ = run_cli(
                 "decode",
+                "--file",
                 str(FIXTURES / "sample.candump"),
                 "--dbc",
                 "opendbc:toyota_tnga_k_pt_generated",
@@ -666,6 +667,7 @@ class CliProviderCommandTests(unittest.TestCase):
     def test_decode_local_ref_includes_dbc_source_with_local_provider(self) -> None:
         exit_code, stdout, _ = run_cli(
             "decode",
+            "--file",
             str(FIXTURES / "sample.candump"),
             "--dbc",
             str(FIXTURES / "sample.dbc"),
