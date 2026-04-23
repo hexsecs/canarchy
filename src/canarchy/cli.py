@@ -163,6 +163,20 @@ def add_j1939_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
+    """Shared --max-frames and --seconds arguments for file-backed commands."""
+    parser.add_argument(
+        "--max-frames",
+        type=int,
+        help="limit analysis to the first N frames (useful for large captures)",
+    )
+    parser.add_argument(
+        "--seconds",
+        type=float,
+        help="limit analysis to the first N seconds from capture start",
+    )
+
+
 def build_parser() -> CanarchyArgumentParser:
     parser = CanarchyArgumentParser(
         prog="canarchy", description="CLI-first CAN security research toolkit"
@@ -222,11 +236,13 @@ def build_parser() -> CanarchyArgumentParser:
     filter_parser.add_argument("file", nargs="?", default=None)
     filter_parser.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
     filter_parser.add_argument("expression")
+    _add_file_analysis_arguments(filter_parser)
     add_output_arguments(filter_parser)
     filter_parser.set_defaults(command="filter")
 
     stats = subparsers.add_parser("stats", help="summarize traffic statistics")
     stats.add_argument("file")
+    _add_file_analysis_arguments(stats)
     add_output_arguments(stats)
     stats.set_defaults(command="stats")
 
@@ -240,6 +256,7 @@ def build_parser() -> CanarchyArgumentParser:
     decode.add_argument("file", nargs="?", default=None)
     decode.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
     decode.add_argument("--dbc", required=True)
+    _add_file_analysis_arguments(decode)
     add_output_arguments(decode)
     decode.set_defaults(command="decode")
 
@@ -1268,7 +1285,7 @@ def transport_payload(
             [],
         )
     if args.command == "filter":
-        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)
+        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file, max_frames=args.max_frames, seconds=args.seconds)
         return (
             {
                 "mode": "passive",
@@ -1282,7 +1299,7 @@ def transport_payload(
             [],
         )
     if args.command == "stats":
-        stats = transport.stats(args.file)
+        stats = transport.stats(args.file, max_frames=args.max_frames, seconds=args.seconds)
         return (
             {
                 "mode": "passive",
@@ -1576,7 +1593,7 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     dbc_source = _build_dbc_source(resolution)
 
     if args.command == "decode":
-        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file)
+        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file, max_frames=args.max_frames, seconds=args.seconds)
 
         events = decode_frames(frames, dbc_path)
         warnings = []

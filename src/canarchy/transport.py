@@ -574,8 +574,8 @@ class LocalTransport:
         predicate = _compile_filter(expression)
         return [frame for frame in frames if predicate(frame)]
 
-    def stats(self, file_name: str) -> TransportStats:
-        frames = self._frames_for_file(file_name)
+    def stats(self, file_name: str, *, max_frames: int | None = None, seconds: float | None = None) -> TransportStats:
+        frames = self.frames_from_file(file_name, max_frames=max_frames, seconds=seconds)
         return TransportStats(
             total_frames=len(frames),
             unique_arbitration_ids=len({frame.arbitration_id for frame in frames}),
