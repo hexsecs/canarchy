@@ -115,6 +115,17 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="capture_info",
+        description="Show capture file metadata (frame count, duration, IDs) without loading frames.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
         name="decode",
         description="Decode CAN traffic from a capture file using a DBC database.",
         inputSchema={
@@ -496,6 +507,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return ["filter", a["file"], a["expression"], "--json"]
         case "stats":
             return ["stats", a["file"], "--json"]
+        case "capture_info":
+            return ["capture-info", a["file"], "--json"]
         case "decode":
             return ["decode", a["file"], "--dbc", a["dbc"], "--json"]
         case "encode":

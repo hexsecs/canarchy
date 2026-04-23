@@ -52,6 +52,26 @@ class TransportStats:
         }
 
 
+@dataclass(slots=True)
+class CaptureMetadata:
+    frame_count: int
+    duration_seconds: float
+    unique_arbitration_ids: int
+    interfaces: list[str]
+    first_timestamp: float
+    last_timestamp: float
+
+    def to_payload(self) -> dict[str, int | float | list[str]]:
+        return {
+            "duration_seconds": self.duration_seconds,
+            "first_timestamp": self.first_timestamp,
+            "frame_count": self.frame_count,
+            "interfaces": self.interfaces,
+            "last_timestamp": self.last_timestamp,
+            "unique_arbitration_ids": self.unique_arbitration_ids,
+        }
+
+
 class TransportError(Exception):
     """Raised when a transport backend cannot complete a request."""
 
@@ -562,6 +582,10 @@ class LocalTransport:
             interfaces=sorted({frame.interface or "unknown" for frame in frames}),
         )
 
+    def capture_info(self, file_name: str, *, sample: bool = False) -> CaptureMetadata:
+        path = self._capture_file_path(file_name)
+        return capture_metadata(path, sample=sample)
+
     def frames_from_file(
         self,
         file_name: str,
@@ -921,6 +945,93 @@ def load_candump_file(path: Path) -> list[CanFrame]:
     for frame in iter_candump_file(path):
         frames.append(frame)
     return frames
+
+
+def capture_metadata(path: Path, *, sample: bool = False) -> CaptureMetadata:
+    timestamp_re = re.compile(r"^\((\d+\.\d+)\) (\w+) ([0-9A-Fa-f]+)#")
+
+    first_timestamp: float | None = None
+    last_timestamp: float | None = None
+    interfaces: set[str] = set()
+    arbitration_ids: set[int] = set()
+    frame_count = 0
+
+    if sample:
+        sample_size = 1000
+        with path.open(encoding="utf-8") as handle:
+            lines = list(handle)[:sample_size]
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            match = timestamp_re.match(stripped)
+            if not match:
+                continue
+            if first_timestamp is None:
+                first_timestamp = float(match.group(1))
+            frame_count += 1
+            interfaces.add(match.group(2))
+            arbitration_ids.add(int(match.group(3), 16))
+
+        with path.open(encoding="utf-8") as handle:
+            handle.seek(0)
+            last_lines = list(handle)[-sample_size:]
+        for line in reversed(last_lines):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            match = timestamp_re.match(stripped)
+            if not match:
+                continue
+            last_timestamp = float(match.group(1))
+            break
+
+        duration = (last_timestamp - first_timestamp) if first_timestamp and last_timestamp else 0
+        return CaptureMetadata(
+            frame_count=frame_count,
+            duration_seconds=duration,
+            unique_arbitration_ids=len(arbitration_ids),
+            interfaces=sorted(interfaces),
+            first_timestamp=first_timestamp or 0,
+            last_timestamp=last_timestamp or 0,
+        )
+
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            match = timestamp_re.match(stripped)
+            if not match:
+                continue
+
+            ts = float(match.group(1))
+            interface = match.group(2)
+            arbitration_id = int(match.group(3), 16)
+
+            if first_timestamp is None:
+                first_timestamp = ts
+            last_timestamp = ts
+            frame_count += 1
+            if interface:
+                interfaces.add(interface)
+            arbitration_ids.add(arbitration_id)
+
+    if first_timestamp is None or last_timestamp is None:
+        raise TransportError(
+            "CAPTURE_SOURCE_INVALID",
+            f"Capture source '{path}' contains no valid frames.",
+            "Verify the file is in candump format.",
+        )
+
+    return CaptureMetadata(
+        frame_count=frame_count,
+        duration_seconds=last_timestamp - first_timestamp,
+        unique_arbitration_ids=len(arbitration_ids),
+        interfaces=sorted(interfaces),
+        first_timestamp=first_timestamp,
+        last_timestamp=last_timestamp,
+    )
 
 
 def parse_candump_line(line: str, *, path: Path, line_number: int) -> CanFrame:

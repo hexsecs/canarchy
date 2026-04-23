@@ -44,7 +44,7 @@ EXIT_USER_ERROR = 1
 EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
-TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate"}
+TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary"}
@@ -229,6 +229,12 @@ def build_parser() -> CanarchyArgumentParser:
     stats.add_argument("file")
     add_output_arguments(stats)
     stats.set_defaults(command="stats")
+
+    capture_info = subparsers.add_parser("capture-info", help="show capture file metadata without loading frames")
+    capture_info.add_argument("file")
+    capture_info.add_argument("--sample", action="store_true", help="quick sample only (first/last 1000 lines)")
+    add_output_arguments(capture_info)
+    capture_info.set_defaults(command="capture-info")
 
     decode = subparsers.add_parser("decode", help="decode traffic using DBC")
     decode.add_argument("file", nargs="?", default=None)
@@ -1284,6 +1290,18 @@ def transport_payload(
                 **stats.to_payload(),
                 "status": "implemented",
                 "implementation": "file-backed analysis",
+            },
+            [],
+            [],
+        )
+    if args.command == "capture-info":
+        metadata = transport.capture_info(args.file, sample=args.sample)
+        return (
+            {
+                "file": args.file,
+                "status": "implemented",
+                "implementation": "fast-metadata-scan",
+                **metadata.to_payload(),
             },
             [],
             [],
