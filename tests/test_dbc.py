@@ -59,6 +59,7 @@ class DbcTests(unittest.TestCase):
     def test_decode_cli_returns_structured_results(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "decode",
+            "--file",
             str(FIXTURES / "sample.candump"),
             "--dbc",
             str(FIXTURES / "sample.dbc"),
@@ -93,6 +94,7 @@ class DbcTests(unittest.TestCase):
     def test_invalid_dbc_returns_decode_error(self) -> None:
         exit_code, stdout, _ = run_cli(
             "decode",
+            "--file",
             str(FIXTURES / "sample.candump"),
             "--dbc",
             str(FIXTURES / "invalid.dbc"),

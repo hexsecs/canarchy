@@ -514,7 +514,9 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--count", str(a["count"])]
             return argv + ["--json"]
         case "replay":
-            argv = ["replay", a["file"]]
+            argv = ["replay"]
+            if a.get("file"):
+                argv += ["--file", a["file"]]
             if "rate" in a:
                 argv += ["--rate", str(a["rate"])]
             return argv + ["--json"]

@@ -14,6 +14,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added `--max-frames` and `--seconds` parameters to `stats`, `filter`, and `decode` commands for working with large capture files. These mirror the existing parameters on J1939 commands.
 * Expanded the `filter` expression engine with six new operators: `dlc><n>` (DLC threshold), `data~=<hex>` (payload substring), `extended` (29-bit frames), `standard` (11-bit frames), `&&` (AND), and `||` (OR). All new operators are composable; `&&` binds tighter than `||`. Unrecognised expressions now return error code `INVALID_FILTER_EXPRESSION` instead of the old `FILTER_EXPRESSION_UNSUPPORTED`.
 
+### Changed
+
+* Standardized CLI argument ordering: all file-backed commands now use `--file` flag for capture file input instead of positional arguments. Affected commands: `filter`, `stats`, `capture-info`, `decode`, `replay`, `j1939 decode`, `j1939 tp`, `j1939 dm1`, `j1939 summary`. The `filter` command now uses `expression` as a positional argument followed by `--file`.
+
 ### Fixed
 
 * MCP server now handles SIGINT (Ctrl+C) and SIGTERM gracefully, without traceback or thread errors during shutdown.
