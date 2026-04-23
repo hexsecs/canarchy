@@ -3,6 +3,7 @@ from __future__ import annotations
 import multiprocessing
 import os
 import queue
+import tempfile
 import threading
 import time
 import uuid
@@ -115,6 +116,24 @@ class TransportBackendTests(unittest.TestCase):
 
         self.assertEqual(len(frames), 6)
         self.assertEqual(frames[0].timestamp, 0.2)
+
+    def test_iter_candump_file_offset_counts_parsed_frames_not_lines(self) -> None:
+        content = """# comment line
+(0.0) can0 100#
+(0.1) can0 200#
+(0.2) can0 300#
+(0.3) can0 400#
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".candump", delete=False) as f:
+            f.write(content)
+            f.flush()
+            try:
+                frames = list(iter_candump_file(Path(f.name), offset=2))
+                self.assertEqual(len(frames), 2)
+                self.assertEqual(frames[0].timestamp, 0.2)
+                self.assertEqual(frames[1].timestamp, 0.3)
+            finally:
+                Path(f.name).unlink()
 
     def test_iter_candump_file_respects_offset_and_max_frames(self) -> None:
         frames = list(iter_candump_file(FIXTURES / "j1939_heavy_vehicle.candump", offset=2, max_frames=2))

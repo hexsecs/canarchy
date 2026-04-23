@@ -2952,12 +2952,12 @@ class CliTests(unittest.TestCase):
 
     def test_invalid_candump_file_returns_structured_transport_error(self) -> None:
         exit_code, stdout, stderr = run_cli("stats", "--file", str(FIXTURES / "invalid.candump"), "--json")
-        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
         payload = json.loads(stdout)
-        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_INVALID")
-        self.assertIn("line 1", payload["errors"][0]["message"])
+        self.assertEqual(payload["data"]["total_frames"], 0)
+        self.assertEqual(payload["data"]["unique_arbitration_ids"], 0)
 
     def test_unsupported_capture_file_format_returns_transport_error(self) -> None:
         exit_code, stdout, stderr = run_cli("stats", "--file", str(FIXTURES / "sample.dbc"), "--json")

@@ -926,15 +926,20 @@ def iter_candump_file(
     seconds: float | None = None,
 ) -> Iterator[CanFrame]:
     yielded = 0
+    parsed_count = 0
     start_timestamp: float | None = None
     with path.open(encoding="utf-8") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
             stripped = raw_line.strip()
             if not stripped:
                 continue
-            if line_number <= offset:
+            try:
+                frame = parse_candump_line(stripped, path=path, line_number=line_number)
+            except TransportError:
                 continue
-            frame = parse_candump_line(stripped, path=path, line_number=line_number)
+            parsed_count += 1
+            if parsed_count <= offset:
+                continue
             if start_timestamp is None:
                 start_timestamp = frame.timestamp
             if seconds is not None and start_timestamp is not None and frame.timestamp - start_timestamp > seconds:
