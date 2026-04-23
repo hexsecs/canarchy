@@ -574,8 +574,8 @@ class LocalTransport:
         predicate = _compile_filter(expression)
         return [frame for frame in frames if predicate(frame)]
 
-    def stats(self, file_name: str, *, max_frames: int | None = None, seconds: float | None = None) -> TransportStats:
-        frames = self.frames_from_file(file_name, max_frames=max_frames, seconds=seconds)
+    def stats(self, file_name: str, *, offset: int = 0, max_frames: int | None = None, seconds: float | None = None) -> TransportStats:
+        frames = self.frames_from_file(file_name, offset=offset, max_frames=max_frames, seconds=seconds)
         return TransportStats(
             total_frames=len(frames),
             unique_arbitration_ids=len({frame.arbitration_id for frame in frames}),
@@ -590,21 +590,23 @@ class LocalTransport:
         self,
         file_name: str,
         *,
+        offset: int = 0,
         max_frames: int | None = None,
         seconds: float | None = None,
     ) -> list[CanFrame]:
-        return list(self.iter_frames_from_file(file_name, max_frames=max_frames, seconds=seconds))
+        return list(self.iter_frames_from_file(file_name, offset=offset, max_frames=max_frames, seconds=seconds))
 
     def iter_frames_from_file(
         self,
         file_name: str,
         *,
+        offset: int = 0,
         max_frames: int | None = None,
         seconds: float | None = None,
     ) -> Iterator[CanFrame]:
         path = self._capture_file_path(file_name)
         try:
-            yield from iter_candump_file(path, max_frames=max_frames, seconds=seconds)
+            yield from iter_candump_file(path, offset=offset, max_frames=max_frames, seconds=seconds)
         except OSError as exc:
             raise TransportError(
                 "CAPTURE_SOURCE_UNAVAILABLE",
@@ -919,6 +921,7 @@ class LocalTransport:
 def iter_candump_file(
     path: Path,
     *,
+    offset: int = 0,
     max_frames: int | None = None,
     seconds: float | None = None,
 ) -> Iterator[CanFrame]:
@@ -928,6 +931,8 @@ def iter_candump_file(
         for line_number, raw_line in enumerate(handle, start=1):
             stripped = raw_line.strip()
             if not stripped:
+                continue
+            if line_number <= offset:
                 continue
             frame = parse_candump_line(stripped, path=path, line_number=line_number)
             if start_timestamp is None:

@@ -110,6 +110,18 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(len(frames), 3)
         self.assertEqual(frames[-1].timestamp, 0.2)
 
+    def test_iter_candump_file_respects_offset(self) -> None:
+        frames = list(iter_candump_file(FIXTURES / "j1939_heavy_vehicle.candump", offset=2))
+
+        self.assertEqual(len(frames), 6)
+        self.assertEqual(frames[0].timestamp, 0.2)
+
+    def test_iter_candump_file_respects_offset_and_max_frames(self) -> None:
+        frames = list(iter_candump_file(FIXTURES / "j1939_heavy_vehicle.candump", offset=2, max_frames=2))
+
+        self.assertEqual(len(frames), 2)
+        self.assertEqual(frames[0].timestamp, 0.2)
+
     def test_iter_candump_file_respects_seconds_window(self) -> None:
         frames = list(iter_candump_file(FIXTURES / "j1939_heavy_vehicle.candump", seconds=0.15))
 
