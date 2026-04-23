@@ -848,7 +848,7 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command in {"j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary"}:
+    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary"}:
         max_frames = getattr(args, "max_frames", None)
         seconds = getattr(args, "seconds", None)
         if max_frames is not None and max_frames < 1:
@@ -877,14 +877,14 @@ def validate_args(args: argparse.Namespace) -> None:
                 ],
                 data={"seconds": seconds},
             )
-        if args.command == "j1939 decode" and getattr(args, "stdin", False) and (max_frames is not None or seconds is not None):
+        if getattr(args, "stdin", False) and (max_frames is not None or seconds is not None):
             raise CommandError(
                 command=args.command,
                 exit_code=EXIT_USER_ERROR,
                 errors=[
                     ErrorDetail(
                         code="ANALYSIS_WINDOW_REQUIRES_FILE",
-                        message="J1939 bounded-analysis flags currently require a capture file.",
+                        message="Bounded-analysis flags currently require a capture file.",
                         hint="Use a capture file for --max-frames or --seconds, or remove those flags when using --stdin.",
                     )
                 ],

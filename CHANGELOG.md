@@ -15,6 +15,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 * `--offset` now counts successfully parsed frames rather than file lines, correctly handling files with blank lines, comments, or malformed entries.
 * Unparseable candump lines are now silently skipped instead of causing an error, allowing analysis to proceed with valid frames only.
+* Added validation for `--max-frames` and `--seconds` on all file-backed commands (`filter`, `stats`, `decode`) to match J1939 command behavior. Invalid values now return `INVALID_MAX_FRAMES` or `INVALID_ANALYSIS_SECONDS` errors.
+* `--stdin` mode now rejects `--max-frames` and `--seconds` flags with `ANALYSIS_WINDOW_REQUIRES_FILE` error, since these bounds cannot be applied to stdin input.
 * New `capture-info` command returns fast metadata about capture files (frame count, duration, unique IDs, interfaces) without loading the full file into memory. This enables AI agents to inspect large capture files before deciding how to process them.
 * Added `--max-frames` and `--seconds` parameters to `stats`, `filter`, and `decode` commands for working with large capture files. These mirror the existing parameters on J1939 commands.
 * Expanded the `filter` expression engine with six new operators: `dlc><n>` (DLC threshold), `data~=<hex>` (payload substring), `extended` (29-bit frames), `standard` (11-bit frames), `&&` (AND), and `||` (OR). All new operators are composable; `&&` binds tighter than `||`. Unrecognised expressions now return error code `INVALID_FILTER_EXPRESSION` instead of the old `FILTER_EXPRESSION_UNSUPPORTED`.
