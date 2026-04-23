@@ -99,6 +99,8 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "expression": {"type": "string", "description": "Filter expression (e.g. id==0x123 or dlc>4)"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
             },
             "required": ["file", "expression"],
         },
@@ -110,6 +112,8 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
             },
             "required": ["file"],
         },
@@ -133,6 +137,8 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Path to DBC file"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
             },
             "required": ["file", "dbc"],
         },
@@ -504,13 +510,28 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--rate", str(a["rate"])]
             return argv + ["--json"]
         case "filter":
-            return ["filter", a["file"], a["expression"], "--json"]
+            argv = ["filter", a["file"], a["expression"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
         case "stats":
-            return ["stats", a["file"], "--json"]
+            argv = ["stats", a["file"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
         case "capture_info":
             return ["capture-info", a["file"], "--json"]
         case "decode":
-            return ["decode", a["file"], "--dbc", a["dbc"], "--json"]
+            argv = ["decode", a["file"], "--dbc", a["dbc"]]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
         case "encode":
             argv = ["encode", "--dbc", a["dbc"], a["message"]]
             argv += a.get("signals", [])
