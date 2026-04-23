@@ -16,7 +16,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-* Standardized CLI argument ordering: all file-backed commands now use `--file` flag for capture file input instead of positional arguments. Affected commands: `filter`, `stats`, `capture-info`, `decode`, `replay`, `j1939 decode`, `j1939 tp`, `j1939 dm1`, `j1939 summary`. The `filter` command now uses `expression` as a positional argument followed by `--file`.
+* Standardized CLI argument ordering: file-backed commands now use `--file` flag for capture file input instead of positional arguments. The `--file` argument is required for file-only commands (`stats`, `capture-info`, `replay`, `j1939 tp`, `j1939 dm1`, `j1939 summary`) to prevent unstructured crashes. Commands with stdin support (`filter`, `decode`, `j1939 decode`) can alternatively use `--stdin`.
 
 ### Fixed
 

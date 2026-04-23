@@ -239,7 +239,7 @@ def build_parser() -> CanarchyArgumentParser:
     gateway.set_defaults(command="gateway")
 
     replay = subparsers.add_parser("replay", help="replay recorded traffic")
-    replay.add_argument("--file", help="path to candump capture file")
+    replay.add_argument("--file", required=True, help="path to candump capture file")
     replay.add_argument("--rate", type=float, default=1.0)
     add_output_arguments(replay)
     replay.set_defaults(command="replay")
@@ -253,13 +253,13 @@ def build_parser() -> CanarchyArgumentParser:
     filter_parser.set_defaults(command="filter")
 
     stats = subparsers.add_parser("stats", help="summarize traffic statistics")
-    stats.add_argument("--file", help="path to candump capture file")
+    stats.add_argument("--file", required=True, help="path to candump capture file")
     _add_file_analysis_arguments(stats)
     add_output_arguments(stats)
     stats.set_defaults(command="stats")
 
     capture_info = subparsers.add_parser("capture-info", help="show capture file metadata without loading frames")
-    capture_info.add_argument("--file", help="path to candump capture file")
+    capture_info.add_argument("--file", required=True, help="path to candump capture file")
     capture_info.add_argument("--sample", action="store_true", help="quick sample only (first/last 1000 lines)")
     add_output_arguments(capture_info)
     capture_info.set_defaults(command="capture-info")
@@ -392,20 +392,20 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_spn.set_defaults(command="j1939 spn")
 
     j1939_tp = j1939_subparsers.add_parser("tp", help="inspect J1939 transport protocol")
-    j1939_tp.add_argument("--file", help="path to candump capture file")
+    j1939_tp.add_argument("--file", required=True, help="path to candump capture file")
     add_j1939_file_analysis_arguments(j1939_tp)
     add_output_arguments(j1939_tp)
     j1939_tp.set_defaults(command="j1939 tp")
 
     j1939_dm1 = j1939_subparsers.add_parser("dm1", help="inspect J1939 DM1 traffic")
-    j1939_dm1.add_argument("--file", help="path to candump capture file")
+    j1939_dm1.add_argument("--file", required=True, help="path to candump capture file")
     j1939_dm1.add_argument("--dbc", help="enrich DM1 DTC names with a local DBC path or provider ref")
     add_j1939_file_analysis_arguments(j1939_dm1)
     add_output_arguments(j1939_dm1)
     j1939_dm1.set_defaults(command="j1939 dm1")
 
     j1939_summary = j1939_subparsers.add_parser("summary", help="summarize J1939 capture content")
-    j1939_summary.add_argument("--file", help="path to candump capture file")
+    j1939_summary.add_argument("--file", required=True, help="path to candump capture file")
     add_j1939_file_analysis_arguments(j1939_summary)
     add_output_arguments(j1939_summary)
     j1939_summary.set_defaults(command="j1939 summary")
