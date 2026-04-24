@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CANarchy — CAN bus security for the humans and agents</title>
+  <meta name="description" content="CANarchy is a stream-first CAN and J1939 runtime for security research, red teams, and agent-driven automation. One schema, many doors, capture everything." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Archivo+Black&family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    html, body { margin: 0; padding: 0; background: #f3efe4; color: #0b0b0b; font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    #root { min-height: 100vh; }
+  </style>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+      <rect width="400" height="400" fill="#0b0b0b"/>
+      <rect x="40" y="40" width="320" height="320" fill="#ffd400"/>
+      <text x="200" y="185" text-anchor="middle" font-family="Archivo Black, sans-serif" font-size="72" font-weight="900" fill="#0b0b0b">CAN/</text>
+      <text x="200" y="265" text-anchor="middle" font-family="Archivo Black, sans-serif" font-size="72" font-weight="900" fill="#0b0b0b">ARCHY</text>
+      <rect x="40" y="300" width="320" height="20" fill="#0b0b0b"/>
+    </svg>
+  </template>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" src="site-brutalist.jsx"></script>
+  <script type="text/babel">
+    const { SiteBrutalist } = window;
+    ReactDOM.createRoot(document.getElementById('root')).render(<SiteBrutalist />);
+  </script>
+</body>
+</html>
