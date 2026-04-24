@@ -539,7 +539,7 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "capture_info":
-            return ["capture-info", a["file"], "--json"]
+            return ["capture-info", "--file", a["file"], "--json"]
         case "decode":
             argv = ["decode", a["file"], "--dbc", a["dbc"]]
             if a.get("offset") is not None and a["offset"] > 0:

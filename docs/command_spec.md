@@ -121,7 +121,7 @@ Notes:
 Filter a capture source by a simple expression.
 
 ```bash
-canarchy filter <file> <expression> [--stdin] [--json|--jsonl|--table|--raw]
+canarchy filter <expression> (--file <path> | --stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--compact|--table|--raw]
 ```
 
 Supported expressions today:
@@ -134,12 +134,31 @@ Notes:
 
 * `--stdin` reads JSONL `frame` events from standard input instead of a positional capture file
 
+### capture-info
+
+Inspect a candump capture quickly before running deeper analysis.
+
+```bash
+canarchy capture-info --file <path> [--json|--jsonl|--table|--raw]
+```
+
+Returns capture metadata only:
+
+* `frame_count`
+* `first_timestamp`
+* `last_timestamp`
+* `duration_seconds`
+* `unique_ids`
+* `interfaces`
+* `suggested_max_frames`
+* `suggested_seconds`
+
 ### stats
 
 Summarize a capture source.
 
 ```bash
-canarchy stats <file> [--json|--jsonl|--table|--raw]
+canarchy stats --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--table|--raw]
 ```
 
 ### generate
@@ -169,13 +188,13 @@ Notes:
 Replay a capture source with deterministic timing derived from relative frame timestamps.
 
 ```bash
-canarchy replay <file> [--rate <factor>] [--json|--jsonl|--table|--raw]
+canarchy replay --file <path> [--rate <factor>] [--json|--jsonl|--table|--raw]
 ```
 
 Example:
 
 ```bash
-canarchy replay tests/fixtures/sample.candump --rate 2.0 --json
+canarchy replay --file tests/fixtures/sample.candump --rate 2.0 --json
 ```
 
 ### gateway
@@ -711,13 +730,19 @@ canarchy capture can0 --json
 ### Transport Stats
 
 ```bash
-canarchy stats tests/fixtures/sample.candump --json
+canarchy stats --file tests/fixtures/sample.candump --json
+```
+
+### Capture Metadata
+
+```bash
+canarchy capture-info --file tests/fixtures/sample.candump --json
 ```
 
 ### Deterministic Replay
 
 ```bash
-canarchy replay tests/fixtures/sample.candump --rate 0.5 --json
+canarchy replay --file tests/fixtures/sample.candump --rate 0.5 --json
 ```
 
 ### J1939 Monitor
@@ -735,7 +760,7 @@ canarchy j1939 monitor --pgn 65262 --json
 ### DBC Decode
 
 ```bash
-canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
+canarchy decode --file tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
 ```
 
 ### DBC Provider Search

@@ -543,6 +543,37 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["total_frames"], 3)
         self.assertEqual(payload["data"]["unique_arbitration_ids"], 3)
 
+    def test_capture_info_json_output_returns_fast_metadata(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "capture-info", "--file", str(FIXTURES / "sample.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "capture-info")
+        self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["implementation"], "fast-metadata-scan")
+        self.assertEqual(payload["data"]["frame_count"], 3)
+        self.assertEqual(payload["data"]["unique_ids"], 3)
+        self.assertEqual(payload["data"]["interfaces"], ["can0", "can1"])
+        self.assertEqual(payload["data"]["first_timestamp"], 0.0)
+        self.assertEqual(payload["data"]["last_timestamp"], 0.2)
+        self.assertEqual(payload["data"]["duration_seconds"], 0.2)
+        self.assertEqual(payload["data"]["suggested_max_frames"], 3)
+        self.assertEqual(payload["data"]["suggested_seconds"], 0.2)
+
+    def test_capture_info_invalid_capture_returns_structured_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "capture-info", "--file", str(FIXTURES / "invalid.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "capture-info")
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_INVALID")
+
     def test_nested_j1939_command_works(self) -> None:
         exit_code, stdout, _ = run_cli("j1939", "monitor", "--pgn", "65262", "--raw")
         self.assertEqual(exit_code, EXIT_OK)

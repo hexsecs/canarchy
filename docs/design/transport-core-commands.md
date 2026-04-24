@@ -5,39 +5,41 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented |
-| Command surface | `canarchy capture`, `send`, `filter`, `stats` |
+| Command surface | `canarchy capture`, `send`, `filter`, `stats`, `capture-info` |
 | Primary area | CLI, transport |
 
 ## Goal
 
-Provide the foundational transport-facing CAN workflows for passive observation, active transmit, file-backed filtering, and capture summary statistics.
+Provide the foundational transport-facing CAN workflows for passive observation, active transmit, file-backed filtering, capture summary statistics, and low-cost capture reconnaissance.
 
 ## User-Facing Motivation
 
-Operators need a stable base command set that supports passive live observation, intentional active transmit, and deterministic file-backed analysis without leaving the CLI.
+Operators need a stable base command set that supports passive live observation, intentional active transmit, deterministic file-backed analysis, and fast preflight inspection of large captures without leaving the CLI.
 
 ## Requirements
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| `REQ-TRANSPORT-01` | Ubiquitous | The system shall provide `capture`, `send`, `filter`, and `stats` commands as the foundational transport command set. |
+| `REQ-TRANSPORT-01` | Ubiquitous | The system shall provide `capture`, `send`, `filter`, `stats`, and `capture-info` commands as the foundational transport command set. |
 | `REQ-TRANSPORT-02` | Event-driven | When `capture <interface>` is invoked, the system shall stream frame events through the live capture path for all output formats. |
 | `REQ-TRANSPORT-03` | Event-driven | When `send <interface> <frame-id> <data>` is invoked, the system shall emit a preflight active-transmit warning to `stderr` and then transmit the specified frame. |
-| `REQ-TRANSPORT-04` | Event-driven | When `filter <file> <expression>` is invoked, the system shall return only the frame events from the capture file that satisfy the expression. |
-| `REQ-TRANSPORT-05` | Event-driven | When `stats <file>` is invoked, the system shall return a deterministic summary including total frame count and unique arbitration ID count. |
+| `REQ-TRANSPORT-04` | Event-driven | When `filter <expression> --file <path>` is invoked, the system shall return only the frame events from the capture file that satisfy the expression. |
+| `REQ-TRANSPORT-05` | Event-driven | When `stats --file <path>` is invoked, the system shall return a deterministic summary including total frame count and unique arbitration ID count. |
 | `REQ-TRANSPORT-06` | Event-driven | When `capture` or `send` is invoked, the system shall expose the effective transport backend name and configuration metadata in the result. |
 | `REQ-TRANSPORT-07` | Unwanted behaviour | If a transport interface is unavailable or a backend open fails, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
 | `REQ-TRANSPORT-08` | Unwanted behaviour | If a capture file cannot be parsed, the system shall return a structured error with code `CAPTURE_SOURCE_INVALID` and exit code 2. |
 | `REQ-TRANSPORT-09` | Unwanted behaviour | If a capture file format is unsupported, the system shall return a structured error with code `CAPTURE_FORMAT_UNSUPPORTED` and exit code 2. |
-| `REQ-TRANSPORT-10` | Unwanted behaviour | If `filter` receives an unsupported expression, the system shall return a structured error with code `FILTER_EXPRESSION_UNSUPPORTED` and exit code 2. |
+| `REQ-TRANSPORT-10` | Unwanted behaviour | If `filter` receives an invalid expression, the system shall return a structured error with code `INVALID_FILTER_EXPRESSION` and exit code 2. |
+| `REQ-TRANSPORT-11` | Event-driven | When `capture-info --file <path>` is invoked, the system shall return capture metadata including frame count, first and last timestamps, duration, unique IDs, interfaces, and suggested `max_frames` and `seconds` bounds for follow-on analysis. |
 
 ## Command Surface
 
 ```text
 canarchy capture <interface> [--candump] [--json] [--jsonl] [--table] [--raw]
 canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--table] [--raw]
-canarchy filter <file> <expression> [--json] [--jsonl] [--table] [--raw]
-canarchy stats <file> [--json] [--jsonl] [--table] [--raw]
+canarchy filter <expression> --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--table] [--raw]
+canarchy stats --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--table] [--raw]
+canarchy capture-info --file <path> [--json] [--jsonl] [--table] [--raw]
 ```
 
 ## Responsibilities And Boundaries
@@ -50,6 +52,7 @@ In scope:
 * optional confirmation prompts for explicitly acknowledged active transmit commands
 * file-backed filtering by simple expressions
 * file-backed capture summary statistics
+* file-backed metadata reconnaissance for large captures
 
 Out of scope:
 
@@ -69,6 +72,17 @@ Relevant shared fields include:
 * `python_can_interface` when applicable
 * `status`
 * `implementation`
+
+`capture-info` additionally returns:
+
+* `frame_count`
+* `first_timestamp`
+* `last_timestamp`
+* `duration_seconds`
+* `unique_ids`
+* `interfaces`
+* `suggested_max_frames`
+* `suggested_seconds`
 
 Current backend note:
 
@@ -96,7 +110,7 @@ Event-producing commands emit one event per line. Event-less success and error p
 | `TRANSPORT_UNAVAILABLE` | interface or backend open/send fails | 2 |
 | `ACTIVE_ACK_REQUIRED` | active acknowledgement is required but `--ack-active` was omitted | 1 |
 | `ACTIVE_CONFIRMATION_DECLINED` | `--ack-active` was supplied but the confirmation response was not `YES` | 1 |
-| `FILTER_EXPRESSION_UNSUPPORTED` | `filter` receives an unsupported expression | 2 |
+| `INVALID_FILTER_EXPRESSION` | `filter` receives an invalid expression | 2 |
 | `CAPTURE_SOURCE_INVALID` | capture file cannot be parsed | 2 |
 | `CAPTURE_FORMAT_UNSUPPORTED` | file format is unsupported | 2 |
 

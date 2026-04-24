@@ -54,6 +54,7 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `replay` | `replay` |
 | `filter` | `filter` |
 | `stats` | `stats` |
+| `capture-info` | `capture_info` |
 | `decode` | `decode` |
 | `encode` | `encode` |
 | `dbc inspect` | `dbc_inspect` |

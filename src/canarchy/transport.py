@@ -56,10 +56,12 @@ class TransportStats:
 class CaptureMetadata:
     frame_count: int
     duration_seconds: float
-    unique_arbitration_ids: int
+    unique_ids: int
     interfaces: list[str]
     first_timestamp: float
     last_timestamp: float
+    suggested_max_frames: int
+    suggested_seconds: float
 
     def to_payload(self) -> dict[str, int | float | list[str]]:
         return {
@@ -68,7 +70,9 @@ class CaptureMetadata:
             "frame_count": self.frame_count,
             "interfaces": self.interfaces,
             "last_timestamp": self.last_timestamp,
-            "unique_arbitration_ids": self.unique_arbitration_ids,
+            "suggested_max_frames": self.suggested_max_frames,
+            "suggested_seconds": self.suggested_seconds,
+            "unique_ids": self.unique_ids,
         }
 
 
@@ -91,6 +95,8 @@ CANDUMP_FD_LINE_RE = re.compile(
 SUPPORTED_CAPTURE_SUFFIXES = {".candump", ".log"}
 CAN_ERR_FLAG = 0x20000000
 SUPPORTED_CANDUMP_FD_FLAGS = 0x3
+CAPTURE_INFO_MAX_FRAMES_HINT = 500_000
+CAPTURE_INFO_MAX_SECONDS_HINT = 3600.0
 
 
 @dataclass(slots=True, frozen=True)
@@ -582,9 +588,9 @@ class LocalTransport:
             interfaces=sorted({frame.interface or "unknown" for frame in frames}),
         )
 
-    def capture_info(self, file_name: str, *, sample: bool = False) -> CaptureMetadata:
+    def capture_info(self, file_name: str) -> CaptureMetadata:
         path = self._capture_file_path(file_name)
-        return capture_metadata(path, sample=sample)
+        return capture_metadata(path)
 
     def frames_from_file(
         self,
@@ -957,75 +963,37 @@ def load_candump_file(path: Path) -> list[CanFrame]:
     return frames
 
 
-def capture_metadata(path: Path, *, sample: bool = False) -> CaptureMetadata:
-    timestamp_re = re.compile(r"^\((\d+\.\d+)\) (\w+) ([0-9A-Fa-f]+)#")
+def _capture_info_suggestions(frame_count: int, duration_seconds: float) -> tuple[int, float]:
+    return (
+        min(frame_count, CAPTURE_INFO_MAX_FRAMES_HINT),
+        min(duration_seconds, CAPTURE_INFO_MAX_SECONDS_HINT),
+    )
 
+
+def capture_metadata(path: Path) -> CaptureMetadata:
     first_timestamp: float | None = None
     last_timestamp: float | None = None
     interfaces: set[str] = set()
     arbitration_ids: set[int] = set()
     frame_count = 0
 
-    if sample:
-        sample_size = 1000
-        with path.open(encoding="utf-8") as handle:
-            lines = list(handle)[:sample_size]
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            match = timestamp_re.match(stripped)
-            if not match:
-                continue
-            if first_timestamp is None:
-                first_timestamp = float(match.group(1))
-            frame_count += 1
-            interfaces.add(match.group(2))
-            arbitration_ids.add(int(match.group(3), 16))
-
-        with path.open(encoding="utf-8") as handle:
-            handle.seek(0)
-            last_lines = list(handle)[-sample_size:]
-        for line in reversed(last_lines):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            match = timestamp_re.match(stripped)
-            if not match:
-                continue
-            last_timestamp = float(match.group(1))
-            break
-
-        duration = (last_timestamp - first_timestamp) if first_timestamp and last_timestamp else 0
-        return CaptureMetadata(
-            frame_count=frame_count,
-            duration_seconds=duration,
-            unique_arbitration_ids=len(arbitration_ids),
-            interfaces=sorted(interfaces),
-            first_timestamp=first_timestamp or 0,
-            last_timestamp=last_timestamp or 0,
-        )
-
     with path.open(encoding="utf-8") as handle:
-        for line in handle:
+        for line_number, line in enumerate(handle, start=1):
             stripped = line.strip()
             if not stripped:
                 continue
-            match = timestamp_re.match(stripped)
-            if not match:
+
+            try:
+                frame = parse_candump_line(stripped, path=path, line_number=line_number)
+            except TransportError:
                 continue
 
-            ts = float(match.group(1))
-            interface = match.group(2)
-            arbitration_id = int(match.group(3), 16)
-
             if first_timestamp is None:
-                first_timestamp = ts
-            last_timestamp = ts
+                first_timestamp = frame.timestamp
+            last_timestamp = frame.timestamp
             frame_count += 1
-            if interface:
-                interfaces.add(interface)
-            arbitration_ids.add(arbitration_id)
+            interfaces.add(frame.interface or "unknown")
+            arbitration_ids.add(frame.arbitration_id)
 
     if first_timestamp is None or last_timestamp is None:
         raise TransportError(
@@ -1034,13 +1002,18 @@ def capture_metadata(path: Path, *, sample: bool = False) -> CaptureMetadata:
             "Verify the file is in candump format.",
         )
 
+    duration_seconds = max(0.0, last_timestamp - first_timestamp)
+    suggested_max_frames, suggested_seconds = _capture_info_suggestions(frame_count, duration_seconds)
+
     return CaptureMetadata(
         frame_count=frame_count,
-        duration_seconds=last_timestamp - first_timestamp,
-        unique_arbitration_ids=len(arbitration_ids),
+        duration_seconds=duration_seconds,
+        unique_ids=len(arbitration_ids),
         interfaces=sorted(interfaces),
         first_timestamp=first_timestamp,
         last_timestamp=last_timestamp,
+        suggested_max_frames=suggested_max_frames,
+        suggested_seconds=suggested_seconds,
     )
 
 

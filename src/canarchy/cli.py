@@ -261,7 +261,6 @@ def build_parser() -> CanarchyArgumentParser:
 
     capture_info = subparsers.add_parser("capture-info", help="show capture file metadata without loading frames")
     capture_info.add_argument("--file", required=True, help="path to candump capture file")
-    capture_info.add_argument("--sample", action="store_true", help="quick sample only (first/last 1000 lines)")
     add_output_arguments(capture_info)
     capture_info.set_defaults(command="capture-info")
 
@@ -1326,9 +1325,10 @@ def transport_payload(
             [],
         )
     if args.command == "capture-info":
-        metadata = transport.capture_info(args.file, sample=args.sample)
+        metadata = transport.capture_info(args.file)
         return (
             {
+                "mode": "passive",
                 "file": args.file,
                 "status": "implemented",
                 "implementation": "fast-metadata-scan",

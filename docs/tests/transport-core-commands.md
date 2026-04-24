@@ -19,13 +19,14 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 * default `python-can` and scaffold capture streaming paths
 * filter matching behavior
 * stats summary behavior
+* capture metadata reconnaissance behavior
 * structured transport/file errors
 
 ## Requirement Traceability
 
 | Requirement ID | Covered by test IDs |
 |----------------|---------------------|
-| `REQ-TRANSPORT-01` | `TEST-TRANSPORT-01`, `TEST-TRANSPORT-02`, `TEST-TRANSPORT-05`, `TEST-TRANSPORT-06` |
+| `REQ-TRANSPORT-01` | `TEST-TRANSPORT-01`, `TEST-TRANSPORT-02`, `TEST-TRANSPORT-05`, `TEST-TRANSPORT-06`, `TEST-TRANSPORT-13` |
 | `REQ-TRANSPORT-02` | `TEST-TRANSPORT-01`, `TEST-TRANSPORT-03`, `TEST-TRANSPORT-04`, `TEST-TRANSPORT-08`, `TEST-TRANSPORT-09` |
 | `REQ-TRANSPORT-03` | `TEST-TRANSPORT-02` |
 | `REQ-TRANSPORT-04` | `TEST-TRANSPORT-05` |
@@ -35,6 +36,7 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 | `REQ-TRANSPORT-08` | `TEST-TRANSPORT-11` |
 | `REQ-TRANSPORT-09` | `TEST-TRANSPORT-12` |
 | `REQ-TRANSPORT-10` | `TEST-TRANSPORT-10` |
+| `REQ-TRANSPORT-11` | `TEST-TRANSPORT-13`, `TEST-TRANSPORT-14` |
 
 ## Representative Test Cases
 
@@ -93,7 +95,7 @@ Then   the system shall emit one serialized frame event per output line
 
 ```gherkin
 Given  the file `tests/fixtures/sample.candump` is available
-When   the operator runs `canarchy filter sample.candump id==0x18FEEE31 --json`
+When   the operator runs `canarchy filter id==0x18FEEE31 --file tests/fixtures/sample.candump --json`
 Then   the result shall contain exactly one frame event matching arbitration ID `0x18FEEE31`
 ```
 
@@ -105,7 +107,7 @@ Then   the result shall contain exactly one frame event matching arbitration ID 
 
 ```gherkin
 Given  the file `tests/fixtures/sample.candump` is available
-When   the operator runs `canarchy stats sample.candump --json`
+When   the operator runs `canarchy stats --file tests/fixtures/sample.candump --json`
 Then   the result shall include deterministic summary fields
 And    the summary shall include a total frame count and an arbitration-ID count
 ```
@@ -155,9 +157,9 @@ Then   the system shall render each special frame type correctly in candump form
 
 ```gherkin
 Given  the file `tests/fixtures/sample.candump` is available
-When   the operator runs `canarchy filter sample.candump unsupported_expr --json`
+When   the operator runs `canarchy filter unsupported_expr --file tests/fixtures/sample.candump --json`
 Then   the command shall exit with code `2`
-And    `errors[0].code` shall equal `"FILTER_EXPRESSION_UNSUPPORTED"`
+And    `errors[0].code` shall equal `"INVALID_FILTER_EXPRESSION"`
 ```
 
 **Fixture:** `tests/fixtures/sample.candump`.
@@ -168,7 +170,7 @@ And    `errors[0].code` shall equal `"FILTER_EXPRESSION_UNSUPPORTED"`
 
 ```gherkin
 Given  the file `tests/fixtures/invalid.candump` contains unparseable content
-When   the operator runs `canarchy stats invalid.candump --json`
+When   the operator runs `canarchy stats --file tests/fixtures/invalid.candump --json`
 Then   the command shall exit with code `2`
 And    `errors[0].code` shall equal `"CAPTURE_SOURCE_INVALID"`
 ```
@@ -181,12 +183,38 @@ And    `errors[0].code` shall equal `"CAPTURE_SOURCE_INVALID"`
 
 ```gherkin
 Given  a file with an unsupported extension is present
-When   the operator runs `canarchy stats file.xyz --json`
+When   the operator runs `canarchy stats --file file.xyz --json`
 Then   the command shall exit with code `2`
 And    `errors[0].code` shall equal `"CAPTURE_FORMAT_UNSUPPORTED"`
 ```
 
 **Fixture:** file with an unsupported format suffix.
+
+---
+
+### `TEST-TRANSPORT-13` — Capture-info returns fast capture metadata
+
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy capture-info --file tests/fixtures/sample.candump --json`
+Then   the result shall include `frame_count`, `first_timestamp`, `last_timestamp`, `duration_seconds`, `unique_ids`, and `interfaces`
+And    the result shall include suggested `max_frames` and `seconds` bounds for follow-on analysis
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-TRANSPORT-14` — Capture-info reports invalid capture files consistently
+
+```gherkin
+Given  the file `tests/fixtures/invalid.candump` contains no valid candump frames
+When   the operator runs `canarchy capture-info --file tests/fixtures/invalid.candump --json`
+Then   the command shall exit with code `2`
+And    `errors[0].code` shall equal `"CAPTURE_SOURCE_INVALID"`
+```
+
+**Fixture:** `tests/fixtures/invalid.candump`.
 
 ---
 
