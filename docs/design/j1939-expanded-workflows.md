@@ -5,12 +5,12 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented |
-| Command surface | `canarchy j1939 spn`, `j1939 tp`, `j1939 dm1` |
+| Command surface | `canarchy j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 inventory` |
 | Primary area | CLI, protocol |
 
 ## Goal
 
-Expand the J1939 command surface beyond PGN-only views so operators can inspect SPN values, transport-protocol sessions, and DM1 fault traffic using protocol-aware commands.
+Expand the J1939 command surface beyond PGN-only views so operators can inspect SPN values, transport-protocol sessions, DM1 fault traffic, and source-address inventories using protocol-aware commands.
 
 ## User-Facing Motivation
 
@@ -20,13 +20,17 @@ Heavy-vehicle workflows should remain PGN and SPN first rather than forcing oper
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| `REQ-J1939-01` | Ubiquitous | The system shall provide `j1939 spn`, `j1939 tp`, and `j1939 dm1` commands for SPN, transport-protocol, and fault-traffic inspection over capture files. |
+| `REQ-J1939-01` | Ubiquitous | The system shall provide `j1939 spn`, `j1939 tp`, `j1939 dm1`, and `j1939 inventory` commands for SPN, transport-protocol, fault-traffic, and source-address inventory inspection over capture files. |
 | `REQ-J1939-02` | Event-driven | When `j1939 spn <spn> --file <file>` is invoked, the system shall decode supported SPNs into structured observations including value, units, PGN, and addressing metadata. |
 | `REQ-J1939-03` | Event-driven | When `j1939 tp <file>` is invoked, the system shall summarise BAM-based transport-protocol sessions including reassembled payload data. |
 | `REQ-J1939-04` | Event-driven | When `j1939 dm1 <file>` is invoked, the system shall parse direct and TP-reassembled DM1 messages into structured fault records with lamp status and DTC details. |
 | `REQ-J1939-05` | Ubiquitous | J1939 command output shall present PGN and SPN identifiers rather than raw 29-bit arbitration IDs wherever protocol-aware views are available. |
 | `REQ-J1939-09` | Optional feature | Where a completed `j1939 tp` payload decodes cleanly as printable ASCII text, the system shall include the decoded text alongside the raw reassembled payload and mark it as heuristic. |
 | `REQ-J1939-10` | Optional feature | Where the transferred PGN is known to carry identification-style J1939 data, the system shall include a stable payload label in `j1939 tp` output without removing the raw payload bytes. |
+| `REQ-J1939-11` | Event-driven | When `j1939 inventory --file <file>` is invoked, the system shall report per-source-address inventory rows that include source address, observed frame count, first and last timestamps, and top PGNs within the analysed capture window. |
+| `REQ-J1939-12` | Optional feature | Where `j1939 inventory` observes printable TP payloads for J1939 component-identification or vehicle-identification transfers, the system shall associate those identifiers with the reporting source address and surface them in structured output. |
+| `REQ-J1939-13` | Event-driven | When `j1939 inventory --file <file>` is invoked, the system shall include per-source-address DM1 presence metadata without requiring the operator to run `j1939 dm1` separately. |
+| `REQ-J1939-14` | Ubiquitous | The `--json` output for `j1939 inventory` shall use stable field names suitable for automation and downstream multi-capture comparison workflows. |
 | `REQ-J1939-06` | Unwanted behaviour | If `j1939 spn` is invoked without `--file`, the system shall return a structured error with code `CAPTURE_FILE_REQUIRED` and exit code 1. |
 | `REQ-J1939-07` | Unwanted behaviour | If `j1939 spn` is invoked with a negative SPN value, the system shall return a structured error with code `INVALID_SPN` and exit code 1. |
 | `REQ-J1939-08` | Unwanted behaviour | If the requested SPN is not in the curated decoder map, the system shall return a structured error with code `J1939_SPN_UNSUPPORTED` and exit code 1. |
@@ -37,6 +41,7 @@ Heavy-vehicle workflows should remain PGN and SPN first rather than forcing oper
 canarchy j1939 spn <spn> --file <capture>
 canarchy j1939 tp <capture>
 canarchy j1939 dm1 <capture>
+canarchy j1939 inventory --file <capture>
 ```
 
 ## Responsibilities And Boundaries
@@ -46,12 +51,14 @@ In scope:
 * curated SPN decoding for the initial supported set
 * BAM-oriented transport-protocol session summaries
 * DM1 parsing from direct frames and TP-reassembled payloads
+* source-address inventory summaries built from observed PGNs, TP identification payloads, and DM1 presence
 
 Out of scope:
 
 * broad SPN database coverage
 * full RTS/CTS transport control state handling
 * DM message families beyond DM1
+* OEM-specific ECU identity resolution beyond J1939 source-address and printable identification hints
 
 ## `j1939 spn`
 
@@ -130,9 +137,41 @@ Each DTC includes:
 * `occurrence_count`
 * `conversion_method`
 
+## `j1939 inventory`
+
+Inventory inspection produces one protocol-aware row per observed source address.
+
+### Inventory contract
+
+Top-level output includes:
+
+* `file`
+* `total_frames`
+* `interfaces`
+* `j1939_frame_count`
+* `source_count`
+* `vehicle_identification_count`
+* `vehicle_identifications`
+* `nodes`
+
+Each node includes:
+
+* `source_address`
+* `source_address_name`
+* `frame_count`
+* `first_timestamp`
+* `last_timestamp`
+* `unique_pgn_count`
+* `top_pgns`
+* `component_identifications`
+* `vehicle_identifications`
+* `dm1`
+
+The inventory view is intended to reduce manual cross-referencing between `j1939 summary`, `j1939 tp`, and `j1939 dm1` during initial capture triage.
+
 ## Output Contracts
 
-For `j1939 spn`, `j1939 tp`, and `j1939 dm1`, both `--json` and `--jsonl` emit a single CANarchy result object because these commands return structured observations under `data` rather than event streams. Table output remains protocol-first and summarises SPN observations, TP sessions, and DM1 fault content without dropping to raw-ID-only views. For `j1939 tp`, raw `reassembled_data` remains authoritative even when heuristic text or payload labels are present.
+For `j1939 spn`, `j1939 tp`, `j1939 dm1`, and `j1939 inventory`, both `--json` and `--jsonl` emit a single CANarchy result object because these commands return structured observations under `data` rather than event streams. Table output remains protocol-first and summarises SPN observations, TP sessions, DM1 fault content, and source-address inventory rows without dropping to raw-ID-only views. For `j1939 tp`, raw `reassembled_data` remains authoritative even when heuristic text or payload labels are present.
 
 ## Error Contracts
 

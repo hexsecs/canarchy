@@ -6,7 +6,7 @@ import argparse
 import json
 import shlex
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -14,7 +14,7 @@ from typing import Any
 from canarchy.dbc import DbcError, dbc_supports_spn, decode_frames, decode_j1939_spn, encode_message, inspect_database, lookup_j1939_spn_metadata
 from canarchy import __version__
 from canarchy.exporter import ExportError, export_artifact
-from canarchy.j1939 import decompose_arbitration_id
+from canarchy.j1939 import TP_CM_PGN, TP_DT_PGN, decompose_arbitration_id
 from canarchy.j1939_decoder import get_j1939_decoder
 from canarchy.j1939_metadata import pgn_lookup, source_address_lookup
 from canarchy import pretty_j1939_support
@@ -47,7 +47,7 @@ EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
-J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary"}
+J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary", "j1939 inventory"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
@@ -409,6 +409,12 @@ def build_parser() -> CanarchyArgumentParser:
     add_j1939_file_analysis_arguments(j1939_summary)
     add_output_arguments(j1939_summary)
     j1939_summary.set_defaults(command="j1939 summary")
+
+    j1939_inventory = j1939_subparsers.add_parser("inventory", help="build a J1939 ECU inventory from a capture")
+    j1939_inventory.add_argument("--file", required=True, help="path to candump capture file")
+    add_j1939_file_analysis_arguments(j1939_inventory)
+    add_output_arguments(j1939_inventory)
+    j1939_inventory.set_defaults(command="j1939 inventory")
 
     uds = subparsers.add_parser("uds", help="UDS protocol workflows")
     uds_subparsers = uds.add_subparsers(dest="uds_action", required=True)
@@ -848,7 +854,7 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary"}:
+    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary", "j1939 inventory"}:
         max_frames = getattr(args, "max_frames", None)
         seconds = getattr(args, "seconds", None)
         if max_frames is not None and max_frames < 1:
@@ -1152,6 +1158,177 @@ def _j1939_summary(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[
             },
         },
         [],
+    )
+
+
+def _dedupe_inventory_identifiers(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[int, str, str]] = set()
+    for entry in sorted(
+        entries,
+        key=lambda item: (
+            int(item["source_address"]),
+            str(item["payload_label"]),
+            str(item["text"]),
+            float(item["timestamp"]),
+        ),
+    ):
+        key = (int(entry["source_address"]), str(entry["payload_label"]), str(entry["text"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(entry)
+    return deduped
+
+
+def _j1939_inventory(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[dict[str, Any], list[str]]:
+    if not frames:
+        return (
+            {
+                "mode": "passive",
+                "file": file,
+                "total_frames": 0,
+                "interfaces": [],
+                "unique_arbitration_ids": 0,
+                "first_timestamp": None,
+                "last_timestamp": None,
+                "duration_seconds": 0.0,
+                "j1939_frame_count": 0,
+                "source_count": 0,
+                "vehicle_identification_count": 0,
+                "vehicle_identifications": [],
+                "nodes": [],
+            },
+            ["No frames were found in the capture."],
+        )
+
+    interfaces = sorted({frame.interface or "unknown" for frame in frames})
+    timestamps = [frame.timestamp for frame in frames]
+    tp_sessions = [_enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)]
+    dm1_messages = decoder.dm1_messages(frames)
+
+    source_pgn_counts: defaultdict[int, Counter[int]] = defaultdict(Counter)
+    source_frame_counts: Counter[int] = Counter()
+    source_first_seen: dict[int, float] = {}
+    source_last_seen: dict[int, float] = {}
+    j1939_frame_count = 0
+
+    for frame in frames:
+        if not frame.is_extended_id:
+            continue
+        identifier = decompose_arbitration_id(frame.arbitration_id)
+        j1939_frame_count += 1
+        source_address = identifier.source_address
+        source_frame_counts[source_address] += 1
+        source_pgn_counts[source_address][identifier.pgn] += 1
+        if source_address not in source_first_seen:
+            source_first_seen[source_address] = frame.timestamp
+        source_last_seen[source_address] = frame.timestamp
+
+    raw_identifiers: list[dict[str, Any]] = []
+    for session in tp_sessions:
+        if not bool(session.get("complete", False)):
+            continue
+        label = session.get("payload_label")
+        text = session.get("decoded_text")
+        if label not in {"component_identification", "vehicle_identification"} or text is None:
+            continue
+        raw_identifiers.append(
+            {
+                "text": text,
+                "transfer_pgn": int(session["transfer_pgn"]),
+                "source_address": int(session["source_address"]),
+                "destination_address": session["destination_address"],
+                "session_type": str(session["session_type"]),
+                "payload_label": str(label),
+                "heuristic": bool(session.get("decoded_text_heuristic", False)),
+                "timestamp": float(session["timestamp"]),
+            }
+        )
+    identifiers = _dedupe_inventory_identifiers(raw_identifiers)
+
+    component_ids_by_sa: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    vehicle_ids_by_sa: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    for entry in identifiers:
+        if entry["payload_label"] == "component_identification":
+            component_ids_by_sa[int(entry["source_address"])] += [entry]
+        if entry["payload_label"] == "vehicle_identification":
+            vehicle_ids_by_sa[int(entry["source_address"])] += [entry]
+
+    dm1_by_sa: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    for message in dm1_messages:
+        dm1_by_sa[int(message["source_address"])] += [message]
+
+    source_addresses = sorted(
+        set(source_frame_counts)
+        | set(component_ids_by_sa)
+        | set(vehicle_ids_by_sa)
+        | set(dm1_by_sa)
+    )
+    nodes: list[dict[str, Any]] = []
+    for source_address in source_addresses:
+        component_identifications = component_ids_by_sa[source_address]
+        vehicle_identifications = vehicle_ids_by_sa[source_address]
+        dm1_for_source = dm1_by_sa[source_address]
+        display_pgn_counts = Counter(
+            {
+                pgn: count
+                for pgn, count in source_pgn_counts[source_address].items()
+                if pgn not in {TP_CM_PGN, TP_DT_PGN}
+            }
+        )
+        if not display_pgn_counts:
+            display_pgn_counts = source_pgn_counts[source_address]
+        top_pgns = [
+            {
+                "pgn": pgn,
+                "label": pgn_lookup(pgn)["label"] if pgn_lookup(pgn) else None,
+                "frame_count": count,
+            }
+            for pgn, count in display_pgn_counts.most_common(5)
+        ]
+        nodes.append(
+            {
+                "source_address": source_address,
+                "source_address_name": source_address_lookup(source_address),
+                "frame_count": source_frame_counts[source_address],
+                "first_timestamp": source_first_seen.get(source_address),
+                "last_timestamp": source_last_seen.get(source_address),
+                "unique_pgn_count": len(source_pgn_counts[source_address]),
+                "top_pgns": top_pgns,
+                "component_identifications": component_identifications,
+                "vehicle_identifications": vehicle_identifications,
+                "dm1": {
+                    "present": bool(dm1_for_source),
+                    "message_count": len(dm1_for_source),
+                    "active_dtc_count": sum(int(message["active_dtc_count"]) for message in dm1_for_source),
+                },
+            }
+        )
+
+    vehicle_identifications = [
+        entry for entry in identifiers if entry["payload_label"] == "vehicle_identification"
+    ]
+    warnings: list[str] = []
+    if not nodes:
+        warnings.append("No J1939 source-address inventory could be built from the capture window.")
+    return (
+        {
+            "mode": "passive",
+            "file": file,
+            "total_frames": len(frames),
+            "interfaces": interfaces,
+            "unique_arbitration_ids": len({frame.arbitration_id for frame in frames}),
+            "first_timestamp": timestamps[0],
+            "last_timestamp": timestamps[-1],
+            "duration_seconds": timestamps[-1] - timestamps[0],
+            "j1939_frame_count": j1939_frame_count,
+            "source_count": len(nodes),
+            "vehicle_identification_count": len(vehicle_identifications),
+            "vehicle_identifications": vehicle_identifications,
+            "nodes": nodes,
+        },
+        warnings,
     )
 
 
@@ -1580,6 +1757,14 @@ def j1939_payload(
     if args.command == "j1939 summary":
         decoder = get_j1939_decoder()
         data, warnings = _j1939_summary(
+            transport.frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
+            file=args.file,
+            decoder=decoder,
+        )
+        return (data, [], warnings)
+    if args.command == "j1939 inventory":
+        decoder = get_j1939_decoder()
+        data, warnings = _j1939_inventory(
             transport.frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
             file=args.file,
             decoder=decoder,
@@ -2289,6 +2474,43 @@ def format_j1939_table(result: CommandResult) -> list[str]:
                 )
         return lines
 
+    if result.command == "j1939 inventory":
+        lines.append(f"file: {result.data['file']}")
+        lines.append(f"sources: {result.data['source_count']}")
+        vehicle_identifiers = result.data.get("vehicle_identifications", [])
+        if vehicle_identifiers:
+            lines.append(
+                "vehicle_identifications: "
+                + ", ".join(entry["text"] for entry in vehicle_identifiers)
+            )
+        else:
+            lines.append("vehicle_identifications: none")
+        lines.append("nodes:")
+        nodes = result.data.get("nodes", [])
+        if not nodes:
+            lines.append("- no j1939 inventory nodes")
+            return lines
+        for node in nodes:
+            source_address = node["source_address"]
+            source_name = node.get("source_address_name")
+            source_label = f" [{source_name}]" if source_name else ""
+            component_text = ",".join(entry["text"] for entry in node.get("component_identifications", [])) or "none"
+            vehicle_text = ",".join(entry["text"] for entry in node.get("vehicle_identifications", [])) or "none"
+            top_pgns = ",".join(
+                f"{entry['pgn']}" + (f"[{entry['label']}]" if entry.get("label") else "")
+                for entry in node.get("top_pgns", [])
+            ) or "none"
+            lines.append(
+                "- "
+                f"sa=0x{source_address:02X}{source_label} "
+                f"frames={node['frame_count']} "
+                f"dm1_present={node['dm1']['present']} "
+                f"component_ids={component_text} "
+                f"vehicle_ids={vehicle_text} "
+                f"top_pgns={top_pgns}"
+            )
+        return lines
+
     lines.append("observations:")
     if not events:
         lines.append("- no j1939 observations")
@@ -2672,7 +2894,7 @@ def _flatten_frame_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
-    _J1939_SESSION_COMMANDS = {"j1939 tp", "j1939 dm1", "j1939 summary"}
+    _J1939_SESSION_COMMANDS = {"j1939 tp", "j1939 dm1", "j1939 summary", "j1939 inventory"}
     if output_format == "json":
         data = payload.get("data", {})
         if result.command == "filter":

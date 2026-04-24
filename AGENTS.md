@@ -301,6 +301,7 @@ Examples:
 
 * `j1939 monitor`
 * `j1939 decode`
+* `j1939 inventory`
 * `uds scan`
 * `re signals`
 * `session save`
@@ -418,6 +419,8 @@ canarchy
     spn
     tp
     dm1
+    summary
+    inventory
   uds
     scan
     trace

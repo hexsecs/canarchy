@@ -86,6 +86,7 @@ FLAGS: dict[str, list[str]] = {
     ] + _OUTPUT,
     "j1939 decode": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 dm1": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
+    "j1939 inventory": ["--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 monitor": ["--pgn"] + _OUTPUT,
     "j1939 pgn": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 spn": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,

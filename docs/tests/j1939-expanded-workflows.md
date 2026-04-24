@@ -10,7 +10,7 @@
 
 ## Test Objectives
 
-Validate that the expanded J1939 workflows preserve protocol-first behavior and correctly parse supported SPN, TP, and DM1 scenarios.
+Validate that the expanded J1939 workflows preserve protocol-first behavior and correctly parse supported SPN, TP, DM1, and inventory scenarios.
 
 ## Coverage Requirements
 
@@ -18,13 +18,14 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 * `j1939 spn` structured value extraction from a supported SPN
 * `j1939 tp` BAM session summary and reassembly
 * `j1939 dm1` parsing for both direct and TP-reassembled messages
+* `j1939 inventory` source-address inventory assembly from identification and DM1 context
 * table output for DM1 remains human-readable
 
 ## Requirement Traceability
 
 | Requirement ID | Covered by test IDs |
 |----------------|---------------------|
-| `REQ-J1939-01` | `TEST-J1939-01`, `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05` |
+| `REQ-J1939-01` | `TEST-J1939-01`, `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05`, `TEST-J1939-08`, `TEST-J1939-09` |
 | `REQ-J1939-02` | `TEST-J1939-02` |
 | `REQ-J1939-03` | `TEST-J1939-03` |
 | `REQ-J1939-04` | `TEST-J1939-04` |
@@ -34,6 +35,10 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 | `REQ-J1939-08` | Deferred |
 | `REQ-J1939-09` | `TEST-J1939-06`, `TEST-J1939-07` |
 | `REQ-J1939-10` | `TEST-J1939-06`, `TEST-J1939-07` |
+| `REQ-J1939-11` | `TEST-J1939-08`, `TEST-J1939-09` |
+| `REQ-J1939-12` | `TEST-J1939-08`, `TEST-J1939-09` |
+| `REQ-J1939-13` | `TEST-J1939-08`, `TEST-J1939-09` |
+| `REQ-J1939-14` | `TEST-J1939-08` |
 
 ## Representative Test Cases
 
@@ -131,11 +136,41 @@ And    the operator-facing output shall include the decoded printable text witho
 
 ---
 
+### `TEST-J1939-08` — Inventory JSON output associates IDs with source addresses
+
+```gherkin
+Given  the fixture `j1939_inventory.candump` contains per-source operational PGNs, component-identification TP payloads, a vehicle-identification TP payload, and DM1 traffic
+When   the operator runs `canarchy j1939 inventory --file j1939_inventory.candump --json`
+Then   the result shall include one inventory node per observed source address
+And    the source-address rows shall include top PGNs plus first and last timestamps
+And    the reporting source address shall include the decoded component-identification and vehicle-identification strings when available
+And    the reporting source address shall include DM1 presence metadata
+```
+
+**Fixture:** `tests/fixtures/j1939_inventory.candump`.
+
+---
+
+### `TEST-J1939-09` — Inventory table output remains operator-friendly
+
+```gherkin
+Given  the fixture `j1939_inventory.candump` is available
+When   the operator runs `canarchy j1939 inventory --file j1939_inventory.candump --table`
+Then   the output shall include the command header
+And    the output shall include the decoded vehicle identification text when available
+And    the output shall include per-source rows with component-identification and DM1 presence summaries
+```
+
+**Fixture:** `tests/fixtures/j1939_inventory.candump`.
+
+---
+
 ## Fixtures And Environment
 
 * existing `sample.candump`
 * `j1939_dm1_tp.candump` for TP and DM1 coverage
 * `j1939_tp_printable_id.candump` for printable TP identification coverage
+* `j1939_inventory.candump` for source-address inventory coverage
 
 ## Explicit Non-Coverage
 
