@@ -419,7 +419,7 @@ Notes:
 
 * without an interface, this command uses an explicit sample/reference provider
 * with an interface, this command captures from the selected transport backend and filters to J1939 extended-ID traffic
-* `j1939 decode`, `j1939 spn`, `j1939 tp`, and `j1939 dm1` remain file-backed
+* `j1939 decode`, `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 summary`, and `j1939 inventory` remain file-backed
 
 ### j1939 decode
 
@@ -475,7 +475,7 @@ Notes:
 Summarize J1939 transport-protocol sessions from a capture file.
 
 ```bash
-canarchy j1939 tp <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 tp --file <file> [--json|--jsonl|--table|--raw]
 ```
 
 Notes:
@@ -487,8 +487,28 @@ Notes:
 Inspect DM1 fault traffic from direct J1939 frames and TP-reassembled payloads.
 
 ```bash
-canarchy j1939 dm1 <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 dm1 --file <file> [--json|--jsonl|--table|--raw]
 ```
+
+### j1939 inventory
+
+Build a source-address inventory from a J1939 capture file, including top PGNs, component-identification strings, vehicle-identification strings, and DM1 presence.
+
+```bash
+canarchy j1939 inventory --file <file> [--json|--jsonl|--table|--raw]
+```
+
+Example:
+
+```bash
+canarchy j1939 inventory --file tests/fixtures/j1939_inventory.candump --json
+```
+
+Notes:
+
+* inventory rows are grouped by source address
+* printable TP payloads for component identification and vehicle identification are associated with the reporting source address when available
+* DM1 presence is summarised per source address so initial triage does not require a second command
 
 ### tui
 

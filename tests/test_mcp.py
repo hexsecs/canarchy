@@ -15,7 +15,7 @@ _EXPECTED_TOOLS = {
     "capture", "send", "generate", "gateway", "replay", "filter", "stats", "capture_info",
     "decode", "encode", "dbc_inspect", "export",
     "session_save", "session_load", "session_show",
-    "j1939_monitor", "j1939_decode", "j1939_pgn", "j1939_spn", "j1939_tp", "j1939_dm1",
+    "j1939_monitor", "j1939_decode", "j1939_pgn", "j1939_spn", "j1939_tp", "j1939_dm1", "j1939_inventory",
     "uds_scan", "uds_trace", "uds_services",
     "config_show",
 }
@@ -253,6 +253,15 @@ def test_build_argv_j1939_summary_seconds():
     argv = _build_argv("j1939_summary", {"file": "big.log", "seconds": 30.0})
     assert "--seconds" in argv
     assert "30.0" in argv
+    assert argv[-1] == "--json"
+
+
+def test_build_argv_j1939_inventory_max_frames():
+    argv = _build_argv("j1939_inventory", {"file": "big.log", "max_frames": 5000})
+    assert argv[:3] == ["j1939", "inventory", "--file"]
+    assert "big.log" in argv
+    assert "--max-frames" in argv
+    assert "5000" in argv
     assert argv[-1] == "--json"
 
 

@@ -693,6 +693,47 @@ class CliTests(unittest.TestCase):
         self.assertIn("printable_identifiers:", stdout)
         self.assertIn("text=VIN1234", stdout)
 
+    def test_j1939_inventory_json_builds_source_address_inventory(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "inventory",
+            "--file",
+            str(FIXTURES / "j1939_inventory.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "j1939 inventory")
+        self.assertEqual(payload["data"]["vehicle_identification_count"], 1)
+        self.assertEqual(payload["data"]["vehicle_identifications"][0]["text"], "VIN1234")
+        self.assertEqual(payload["data"]["source_count"], 2)
+
+        nodes = {node["source_address"]: node for node in payload["data"]["nodes"]}
+        self.assertEqual(nodes[0]["component_identifications"][0]["text"], "ENGINE1")
+        self.assertEqual(nodes[0]["vehicle_identifications"][0]["text"], "VIN1234")
+        self.assertTrue(nodes[0]["dm1"]["present"])
+        self.assertEqual(nodes[0]["top_pgns"][0]["pgn"], 61444)
+        self.assertEqual(nodes[3]["component_identifications"][0]["text"], "TRANS01")
+        self.assertFalse(nodes[3]["dm1"]["present"])
+
+    def test_j1939_inventory_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "inventory",
+            "--file",
+            str(FIXTURES / "j1939_inventory.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 inventory", stdout)
+        self.assertIn("vehicle_identifications: VIN1234", stdout)
+        self.assertIn("sa=0x00", stdout)
+        self.assertIn("component_ids=ENGINE1", stdout)
+        self.assertIn("component_ids=TRANS01", stdout)
+
     def test_j1939_decode_returns_j1939_events(self) -> None:
         exit_code, stdout, _ = run_cli(
             "j1939", "decode", "--file", str(FIXTURES / "sample.candump"), "--json"
@@ -3232,6 +3273,13 @@ class CompletionTests(unittest.TestCase):
     def test_j1939_summary_flags_include_bounds(self) -> None:
         results = self._completions("j1939 summary ", "")
         names = [r.strip() for r in results]
+        self.assertIn("--max-frames", names)
+        self.assertIn("--seconds", names)
+
+    def test_j1939_inventory_flags_include_bounds(self) -> None:
+        results = self._completions("j1939 inventory ", "")
+        names = [r.strip() for r in results]
+        self.assertIn("--file", names)
         self.assertIn("--max-frames", names)
         self.assertIn("--seconds", names)
 
