@@ -1654,6 +1654,59 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
 
+    def test_re_signals_returns_ranked_candidates_and_metadata(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "signals",
+            str(FIXTURES / "re_signals_mixed.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["analysis"], "signal_inference")
+        self.assertGreater(payload["data"]["candidate_count"], 0)
+        self.assertEqual(payload["data"]["low_sample_ids"], [0x301])
+        best = payload["data"]["candidates"][0]
+        self.assertEqual(best["arbitration_id"], 0x300)
+        self.assertEqual(best["start_bit"], 8)
+        self.assertEqual(best["bit_length"], 8)
+        self.assertAlmostEqual(best["change_rate"], 0.444, places=3)
+        analysed = next(item for item in payload["data"]["analysis_by_id"] if item["arbitration_id"] == 0x300)
+        self.assertEqual(analysed["frame_count"], 10)
+        self.assertFalse(analysed["low_sample"])
+
+    def test_re_signals_table_output_is_ranked(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "signals",
+            str(FIXTURES / "re_signals_mixed.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: re signals", stdout)
+        self.assertIn("analysis: signal_inference", stdout)
+        self.assertIn("candidate_count:", stdout)
+        self.assertIn("id=0x300", stdout)
+        self.assertIn("start=8", stdout)
+        self.assertIn("len=8", stdout)
+        self.assertIn("change_rate=0.444", stdout)
+
+    def test_re_signals_missing_capture_returns_transport_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "signals",
+            str(FIXTURES / "missing-signals-file.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
+
     def test_re_entropy_returns_ranked_id_summaries(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "re",

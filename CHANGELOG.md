@@ -13,6 +13,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added `--compact` output format to `filter` command for easy data extraction. Emits one JSON object per line with flat frame data (timestamp, interface, arbitration_id, data) without wrapping metadata.
 * Added J1939 performance benchmarks with defined budgets and automated tests (`tests/test_j1939_performance.py`). Benchmark fixture generated via `scripts/generate_benchmark_fixture.py`. All J1939 commands meet budget targets on 10k frame capture.
 * Added `capture-info` and the `capture_info` MCP tool for fast capture reconnaissance. They return frame count, first/last timestamps, duration, unique IDs, interfaces, and suggested `max_frames`/`seconds` bounds without loading decoded frame data into memory.
+* Added `re signals` as a file-backed reverse-engineering helper that ranks 4-bit, 8-bit, and 16-bit signal candidates, reports `low_sample_ids`, and includes per-ID analysis metadata for follow-on inspection.
 
 ### Fixed
 

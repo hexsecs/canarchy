@@ -19,6 +19,7 @@ Implemented and exercised in the current codebase:
 * DBC provider and cache workflows for catalog search, fetch, and refresh through the optional opendbc integration
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
 * UDS `scan`, `trace`, and `services`
+* `re signals` for file-backed signal candidate inference
 * `re counters` for file-backed likely-counter detection
 * `re entropy` for file-backed per-ID and per-byte entropy ranking
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
@@ -35,7 +36,7 @@ Some protocol-oriented commands still use explicit sample/reference providers ra
 
 Present in the CLI tree but not yet implemented end to end:
 
-* `re signals` and `re correlate`
+* `re correlate`
 * `fuzz replay`, `fuzz mutate`, and `fuzz id`
 
 ## Recommended Reading

@@ -76,6 +76,32 @@ class EntropyCandidate:
         }
 
 
+@dataclass(slots=True, frozen=True)
+class SignalCandidate:
+    arbitration_id: int
+    start_bit: int
+    bit_length: int
+    score: float
+    rationale: str
+    sample_count: int
+    observed_min: int
+    observed_max: int
+    change_rate: float
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "arbitration_id": self.arbitration_id,
+            "start_bit": self.start_bit,
+            "bit_length": self.bit_length,
+            "score": self.score,
+            "rationale": self.rationale,
+            "sample_count": self.sample_count,
+            "observed_min": self.observed_min,
+            "observed_max": self.observed_max,
+            "change_rate": self.change_rate,
+        }
+
+
 def counter_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
     grouped_frames: dict[int, list[CanFrame]] = defaultdict(list)
     for frame in frames:
@@ -149,6 +175,74 @@ def entropy_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
     return [candidate.to_payload() for candidate in candidates]
 
 
+def signal_analysis(frames: list[CanFrame]) -> dict[str, object]:
+    grouped_frames: dict[int, list[CanFrame]] = defaultdict(list)
+    for frame in frames:
+        if not frame.is_remote_frame and not frame.is_error_frame and frame.data:
+            grouped_frames[frame.arbitration_id].append(frame)
+
+    candidates: list[SignalCandidate] = []
+    analysis_by_id: list[dict[str, object]] = []
+    low_sample_ids: list[int] = []
+
+    for arbitration_id in sorted(grouped_frames):
+        group = grouped_frames[arbitration_id]
+        frame_count = len(group)
+        payload_bits = min(len(frame.data) for frame in group) * 8
+        evaluated_fields = 0
+        accepted_fields = 0
+
+        if frame_count < 5:
+            low_sample_ids.append(arbitration_id)
+            analysis_by_id.append(
+                {
+                    "arbitration_id": arbitration_id,
+                    "frame_count": frame_count,
+                    "payload_bits": payload_bits,
+                    "evaluated_fields": 0,
+                    "candidate_count": 0,
+                    "low_sample": True,
+                }
+            )
+            continue
+
+        for bit_length in (4, 8, 16):
+            for start_bit in range(0, payload_bits - bit_length + 1, bit_length):
+                evaluated_fields += 1
+                candidate = _signal_candidate_for_field(group, arbitration_id, start_bit, bit_length)
+                if candidate is None:
+                    continue
+                accepted_fields += 1
+                candidates.append(candidate)
+
+        analysis_by_id.append(
+            {
+                "arbitration_id": arbitration_id,
+                "frame_count": frame_count,
+                "payload_bits": payload_bits,
+                "evaluated_fields": evaluated_fields,
+                "candidate_count": accepted_fields,
+                "low_sample": False,
+            }
+        )
+
+    candidates.sort(
+        key=lambda candidate: (
+            -candidate.score,
+            candidate.arbitration_id,
+            candidate.start_bit,
+            candidate.bit_length,
+        )
+    )
+
+    return {
+        "candidate_count": len(candidates),
+        "candidates": [candidate.to_payload() for candidate in candidates],
+        "analysis_by_id": analysis_by_id,
+        "low_sample_ids": low_sample_ids,
+    }
+
+
 def _counter_candidate_for_field(
     frames: list[CanFrame], arbitration_id: int, start_bit: int, bit_length: int
 ) -> CounterCandidate | None:
@@ -204,6 +298,66 @@ def _counter_candidate_for_field(
         rollover_detected=rollover_detected,
         observed_min=observed_min,
         observed_max=observed_max,
+    )
+
+
+def _signal_candidate_for_field(
+    frames: list[CanFrame], arbitration_id: int, start_bit: int, bit_length: int
+) -> SignalCandidate | None:
+    values = [_extract_field_value(frame, start_bit, bit_length) for frame in frames]
+    if len(values) < 5:
+        return None
+
+    transitions = len(values) - 1
+    if transitions <= 0:
+        return None
+
+    changed_steps = sum(1 for current, following in zip(values, values[1:]) if current != following)
+    change_rate = changed_steps / transitions
+    unique_values = len(set(values))
+    if unique_values < 2:
+        return None
+
+    observed_min = min(values)
+    observed_max = max(values)
+    max_value = (1 << bit_length) - 1
+    span_ratio = 0.0 if max_value <= 0 else (observed_max - observed_min) / max_value
+    midrange_change_score = max(0.0, 1.0 - (abs(change_rate - 0.5) / 0.5))
+    unique_ratio = unique_values / len(values)
+    bit_length_bonus = {4: 0.0, 8: 0.08, 16: 0.05}[bit_length]
+
+    score = round(
+        min(
+            1.0,
+            (midrange_change_score * 0.55) + (span_ratio * 0.25) + (unique_ratio * 0.2) + bit_length_bonus,
+        ),
+        3,
+    )
+    if score < 0.2:
+        return None
+
+    rationale_parts = [
+        f"change rate {round(change_rate, 3)} across {transitions} transitions",
+        f"observed range {observed_min}..{observed_max}",
+        f"{unique_values} unique values across {len(values)} samples",
+    ]
+    if 0.05 <= change_rate <= 0.95:
+        rationale_parts.append("change rate sits inside the preferred signal band")
+    elif change_rate == 0.0:
+        rationale_parts.append("field is too stable to be a useful signal candidate")
+    else:
+        rationale_parts.append("field changes nearly every frame, reducing signal confidence")
+
+    return SignalCandidate(
+        arbitration_id=arbitration_id,
+        start_bit=start_bit,
+        bit_length=bit_length,
+        score=score,
+        rationale="; ".join(rationale_parts),
+        sample_count=len(values),
+        observed_min=observed_min,
+        observed_max=observed_max,
+        change_rate=round(change_rate, 3),
     )
 
 

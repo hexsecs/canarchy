@@ -26,7 +26,7 @@ from canarchy.models import (
     serialize_events,
 )
 from canarchy.replay import build_replay_plan
-from canarchy.reverse_engineering import counter_candidates, entropy_candidates, score_dbc_candidates
+from canarchy.reverse_engineering import counter_candidates, entropy_candidates, score_dbc_candidates, signal_analysis
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.transport import (
     LocalTransport,
@@ -51,7 +51,7 @@ J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
-RE_COMMANDS = {"re counters", "re entropy", "re match-dbc", "re shortlist-dbc"}
+RE_COMMANDS = {"re signals", "re counters", "re entropy", "re match-dbc", "re shortlist-dbc"}
 ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
 IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
@@ -1936,6 +1936,26 @@ def reverse_engineering_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
+    if args.command == "re signals":
+        frames = transport.frames_from_file(args.file)
+        analysis = signal_analysis(frames)
+        warnings: list[str] = []
+        if analysis["candidate_count"] == 0:
+            warnings.append("No likely signal candidates met the current heuristic threshold.")
+        return (
+            {
+                "mode": "passive",
+                "file": args.file,
+                "analysis": "signal_inference",
+                "candidate_count": analysis["candidate_count"],
+                "candidates": analysis["candidates"],
+                "analysis_by_id": analysis["analysis_by_id"],
+                "low_sample_ids": analysis["low_sample_ids"],
+                "implementation": "file-backed heuristic analysis",
+            },
+            [],
+            warnings,
+        )
     if args.command == "re counters":
         frames = transport.frames_from_file(args.file)
         candidates = counter_candidates(frames)
@@ -2400,6 +2420,8 @@ def format_re_table(result: CommandResult) -> list[str]:
     if not candidates:
         if result.command == "re entropy":
             lines.append("- no entropy candidates")
+        elif result.command == "re signals":
+            lines.append("- no likely signals")
         else:
             lines.append("- no likely counters")
         return lines
@@ -2425,6 +2447,19 @@ def format_re_table(result: CommandResult) -> list[str]:
         return lines
 
     for candidate in candidates:
+        if result.command == "re signals":
+            lines.append(
+                "- "
+                f"id=0x{candidate['arbitration_id']:X} "
+                f"start={candidate['start_bit']} "
+                f"len={candidate['bit_length']} "
+                f"score={candidate['score']} "
+                f"change_rate={candidate['change_rate']} "
+                f"samples={candidate['sample_count']} "
+                f"range={candidate['observed_min']}..{candidate['observed_max']} "
+                f"why={candidate['rationale']}"
+            )
+            continue
         lines.append(
             "- "
             f"id=0x{candidate['arbitration_id']:X} "
