@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>CANarchy — CAN bus security for the anarchists</title>
+  <title>CANarchy — CAN bus security for researchers</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #faf9f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -36,6 +36,157 @@ document.addEventListener('DOMContentLoaded', async function() {
   const loading = document.getElementById('__bundler_loading');
   function setStatus(msg) { if (loading) loading.textContent = msg; }
 
+  const homepageTitle = 'CANarchy — CAN bus security for researchers';
+  const externalHref = /^https?:\/\//i;
+  const homepageLinks = {
+    'CAN/ARCHY': './',
+    'DOCS': 'docs/',
+    'COMMANDS': 'docs/command_spec/',
+    'J1939': 'docs/tutorials/j1939_heavy_vehicle/',
+    'AGENTS': 'docs/agents/',
+    'GITHUB': 'https://github.com/hexsecs/canarchy',
+    'Read the Docs': 'docs/',
+    '★ Star It': 'https://github.com/hexsecs/canarchy',
+    'Getting Started': 'docs/getting_started/',
+    'Command Spec': 'docs/command_spec/',
+    'Event Schema': 'docs/event-schema/',
+    'Matrix': 'docs/feature-matrix/',
+    'Backends': 'docs/backends/',
+    'UDS': 'docs/design/uds-transaction-workflows/',
+    'Tutorials': 'docs/tutorials/',
+    'Architecture': 'docs/architecture/',
+    'Design': 'docs/design/j1939-expanded-workflows/',
+    'Release': 'docs/release/',
+    'TUI': 'docs/tui_plan/',
+    'GitHub': 'https://github.com/hexsecs/canarchy',
+    'Issues': 'https://github.com/hexsecs/canarchy/issues',
+    'Discussions': 'https://github.com/hexsecs/canarchy/discussions',
+    'Agents': 'docs/agents/'
+  };
+
+  function normalizeText(value) {
+    return (value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function looksLikeLeafTextElement(node) {
+    return node && node.children && node.children.length === 0 && normalizeText(node.textContent).length > 0;
+  }
+
+  function copyInlineStyle(from, to) {
+    if (!from || !to) return;
+    to.style.cssText = from.style.cssText;
+  }
+
+  function applyHref(anchor, href) {
+    anchor.href = href;
+    if (externalHref.test(href)) {
+      anchor.target = '_blank';
+      anchor.rel = 'noreferrer';
+    }
+  }
+
+  function replaceWithAnchor(node, href) {
+    if (!node || node.dataset.homepagePatched === '1') return false;
+    if (node.tagName === 'A') {
+      applyHref(node, href);
+      node.dataset.homepagePatched = '1';
+      return true;
+    }
+    const anchor = document.createElement('a');
+    anchor.innerHTML = node.innerHTML;
+    copyInlineStyle(node, anchor);
+    anchor.style.cursor = 'pointer';
+    anchor.style.display = node.tagName === 'DIV' ? 'block' : (anchor.style.display || 'inline-block');
+    anchor.style.textDecoration = 'none';
+    applyHref(anchor, href);
+    anchor.dataset.homepagePatched = '1';
+    node.replaceWith(anchor);
+    return true;
+  }
+
+  function patchTextLinks() {
+    let changed = false;
+    const candidates = Array.from(document.querySelectorAll('a, div, span, button'));
+    for (const node of candidates) {
+      if (!looksLikeLeafTextElement(node)) continue;
+      const label = normalizeText(node.textContent);
+      const href = homepageLinks[label];
+      if (!href) continue;
+      changed = replaceWithAnchor(node, href) || changed;
+    }
+    return changed;
+  }
+
+  function patchInstallCopyCTA() {
+    const candidates = Array.from(document.querySelectorAll('a, div, span, button'));
+    for (const node of candidates) {
+      const label = normalizeText(node.textContent);
+      if (label !== 'pip install canarchy →' && label !== 'pip install canarchy') continue;
+      if (node.dataset.homepagePatched === '1') return true;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'pip install canarchy';
+      copyInlineStyle(node, button);
+      button.dataset.homepagePatched = '1';
+      button.title = 'Copy pip install command';
+      button.style.cursor = 'copy';
+      button.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      button.style.textTransform = 'none';
+      button.style.whiteSpace = 'nowrap';
+      button.addEventListener('click', async function() {
+        const text = 'pip install canarchy';
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const input = document.createElement('textarea');
+            input.value = text;
+            input.setAttribute('readonly', '');
+            input.style.position = 'absolute';
+            input.style.left = '-9999px';
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+          }
+          const original = button.textContent;
+          button.textContent = 'copied: pip install canarchy';
+          setTimeout(function() { button.textContent = original; }, 1400);
+        } catch (error) {
+          console.error('Failed to copy install command:', error);
+        }
+      });
+      node.replaceWith(button);
+      return true;
+    }
+    return false;
+  }
+
+  function patchHomepageTitleAndCopy() {
+    document.title = homepageTitle;
+    const titleMeta = document.querySelector('meta[property="og:title"]');
+    if (titleMeta) titleMeta.setAttribute('content', homepageTitle);
+  }
+
+  function patchHomepage() {
+    patchHomepageTitleAndCopy();
+    const copied = patchInstallCopyCTA();
+    const linked = patchTextLinks();
+    return copied || linked;
+  }
+
+  function scheduleHomepagePatches() {
+    patchHomepageTitleAndCopy();
+    let attempts = 0;
+    const timer = setInterval(function() {
+      attempts += 1;
+      patchHomepage();
+      if (attempts >= 12) clearInterval(timer);
+    }, 300);
+    requestAnimationFrame(patchHomepage);
+    setTimeout(patchHomepage, 1200);
+  }
+
   // Error sink persists across replaceWith since it's on window, not the DOM.
   window.addEventListener('error', function(e) {
     var p = document.body || document.documentElement;
@@ -58,6 +209,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     const manifest = JSON.parse(manifestEl.textContent);
     let template = JSON.parse(templateEl.textContent);
+    template = template.replaceAll('CANarchy — CAN bus security for the anarchists', homepageTitle);
 
     const uuids = Object.keys(manifest);
     setStatus('Unpacking ' + uuids.length + ' assets...');
@@ -159,6 +311,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (window.Babel && typeof window.Babel.transformScriptTags === 'function') {
       window.Babel.transformScriptTags();
     }
+    scheduleHomepagePatches();
   } catch (err) {
     setStatus('Error unpacking: ' + err.message);
     console.error('Bundle unpack error:', err);
