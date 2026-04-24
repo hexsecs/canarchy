@@ -15,6 +15,7 @@ const bColors = {
 const bDisplay = "'Archivo Black', 'Archivo', ui-sans-serif, system-ui";
 const bBody = "'Archivo', ui-sans-serif, system-ui";
 const bMono = "'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace";
+const siteBase = '/canarchy';
 
 function CautionStripe({ h = 24, flip = false }) {
   return (
@@ -26,10 +27,10 @@ function CautionStripe({ h = 24, flip = false }) {
 }
 
 const navLinks = [
-  { label: 'DOCS',     href: '/docs/getting_started' },
-  { label: 'COMMANDS', href: '/docs/command_spec' },
-  { label: 'J1939',    href: '/docs/tutorials/j1939_heavy_vehicle' },
-  { label: 'AGENTS',   href: '/docs/agents' },
+  { label: 'DOCS',     href: siteBase + '/docs/getting_started' },
+  { label: 'COMMANDS', href: siteBase + '/docs/command_spec' },
+  { label: 'J1939',    href: siteBase + '/docs/tutorials/j1939_heavy_vehicle' },
+  { label: 'AGENTS',   href: siteBase + '/docs/agents' },
   { label: 'GITHUB',   href: 'https://github.com/hexsecs/canarchy' },
 ];
 
@@ -145,7 +146,7 @@ function BrutHero() {
         >
           pip install canarchy →
         </a>
-        <a href="/docs/getting_started" style={{
+        <a href={siteBase + '/docs/getting_started'} style={{
           background: bColors.yellow, color: bColors.ink, padding: '22px 30px',
           fontFamily: bDisplay, fontSize: 20, letterSpacing: 1, textDecoration: 'none',
           border: `4px solid ${bColors.ink}`, borderLeft: 'none', textTransform: 'uppercase',
@@ -711,28 +712,28 @@ function BrutInstall() {
 
 const footerLinks = {
   DOCS: [
-    { label: 'Getting Started', href: '/docs/getting_started' },
-    { label: 'Command Spec',    href: '/docs/command_spec' },
-    { label: 'Event Schema',    href: '/docs/event-schema' },
-    { label: 'Matrix',          href: '/docs/feature-matrix' },
+    { label: 'Getting Started', href: siteBase + '/docs/getting_started' },
+    { label: 'Command Spec',    href: siteBase + '/docs/command_spec' },
+    { label: 'Event Schema',    href: siteBase + '/docs/event-schema' },
+    { label: 'Matrix',          href: siteBase + '/docs/feature-matrix' },
   ],
   GUIDE: [
-    { label: 'Backends',   href: '/docs/backends' },
-    { label: 'J1939',      href: '/docs/tutorials/j1939_heavy_vehicle' },
-    { label: 'UDS',        href: '/docs/tutorials' },
-    { label: 'Tutorials',  href: '/docs/tutorials' },
+    { label: 'Backends',   href: siteBase + '/docs/backends' },
+    { label: 'J1939',      href: siteBase + '/docs/tutorials/j1939_heavy_vehicle' },
+    { label: 'UDS',        href: siteBase + '/docs/tutorials' },
+    { label: 'Tutorials',  href: siteBase + '/docs/tutorials' },
   ],
   DEV: [
-    { label: 'Architecture', href: '/docs/architecture' },
-    { label: 'Design',        href: '/docs/overview' },
-    { label: 'Release',        href: '/docs/release' },
-    { label: 'TUI',           href: '/docs/tui_plan' },
+    { label: 'Architecture', href: siteBase + '/docs/architecture' },
+    { label: 'Design',        href: siteBase + '/docs/overview' },
+    { label: 'Release',        href: siteBase + '/docs/release' },
+    { label: 'TUI',           href: siteBase + '/docs/tui_plan' },
   ],
   SOCIAL: [
     { label: 'GitHub',      href: 'https://github.com/hexsecs/canarchy' },
     { label: 'Issues',      href: 'https://github.com/hexsecs/canarchy/issues' },
     { label: 'Discussions', href: 'https://github.com/hexsecs/canarchy/discussions' },
-    { label: 'Agents',       href: '/docs/agents' },
+    { label: 'Agents',      href: siteBase + '/docs/agents' },
   ],
 };
 
