@@ -45,7 +45,7 @@ And    `canarchy mcp serve --help` shall exit with code `0`
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `capture_info`, `decode`, `encode`, `dbc_inspect`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`
+Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `capture_info`, `decode`, `encode`, `dbc_inspect`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_inventory`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`
 ```
 
 **Fixture:** none.
@@ -57,7 +57,7 @@ Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   at least 25 tools shall be returned — one per registered MCP tool in the current curated surface
+Then   at least 26 tools shall be returned — one per registered MCP tool in the current curated surface
 ```
 
 **Fixture:** none.
@@ -218,6 +218,9 @@ Then   the result shall contain `"dbc"`, `"inspect"`, `"t.dbc"`, `"--message"`, 
 
 When   called with `("j1939_pgn", {"pgn": 61444, "file": "trace.candump"})`
 Then   the result shall contain `["j1939", "pgn", "61444", "--file", "trace.candump"]` in order
+
+When   called with `("j1939_inventory", {"file": "trace.candump", "max_frames": 5000})`
+Then   the result shall contain `["j1939", "inventory", "--file", "trace.candump", "--max-frames", "5000"]` in order
 And    `"--json"` shall be the final element in each case
 ```
 
@@ -264,7 +267,7 @@ When   called with a J1939 file tool and neither limit is supplied
 Then   neither `"--max-frames"` nor `"--seconds"` shall appear in the returned argv
 ```
 
-Applies to: `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`.
+Applies to: `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`, `j1939_inventory`.
 
 **Fixture:** none.
 
@@ -275,7 +278,7 @@ Applies to: `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   for each of `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`
+Then   for each of `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`, `j1939_inventory`
        the tool's `inputSchema.properties` shall contain `"max_frames"` of type `"integer"`
        and `"seconds"` of type `"number"`
 ```
