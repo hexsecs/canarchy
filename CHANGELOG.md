@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+* GitHub Pages now publishes the custom repository-root homepage at `/`, while the MkDocs documentation site is built and published under `/docs/` so the existing docs home remains available as the documentation landing page.
+
+### Documentation
+
+* Documented the split GitHub Pages layout and the combined local/CI build flow for the root homepage plus `/docs/` site.
+
 ## [0.4.0] - 2026-04-24
 
 ### Added

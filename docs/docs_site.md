@@ -16,17 +16,23 @@ Run the local docs server:
 uv run mkdocs serve
 ```
 
-Build the static site locally:
+Build the full GitHub Pages site locally:
 
 ```bash
-uv run mkdocs build --strict
+bash scripts/build_pages_site.sh
 ```
+
+This produces:
+
+* `site/index.html` as the custom GitHub Pages landing page from the repository-root `index.html`
+* `site/docs/` as the MkDocs-built documentation site
 
 ## Source Layout
 
 The docs site pulls from these in-repo sources:
 
-* `docs/index.md` for the docs landing page
+* repository-root `index.html` for the GitHub Pages landing page
+* `docs/index.md` for the docs landing page published at `/docs/`
 * `README.md` surfaced through `docs/overview.md`
 * `AGENTS.md` surfaced through `docs/agents.md`
 * `docs/architecture.md`, `docs/command_spec.md`, and `docs/tui_plan.md` as direct site pages
@@ -52,6 +58,11 @@ The site theme also supports light and dark mode through Material for MkDocs, fo
 
 ## GitHub Pages
 
-The GitHub Pages workflow builds the MkDocs site on pushes to `main` and deploys the generated `site/` artifact through GitHub Pages.
+The GitHub Pages workflow builds the full Pages artifact on pushes to `main` and deploys the generated `site/` directory through GitHub Pages.
+
+The published structure is:
+
+* `/` for the custom homepage
+* `/docs/` for the MkDocs documentation site
 
 If the Pages site is not yet enabled in the repository settings, enable GitHub Pages with GitHub Actions as the source.

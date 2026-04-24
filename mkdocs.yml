@@ -1,8 +1,9 @@
 site_name: CANarchy
 site_description: CLI-first CAN security research toolkit documentation
-site_url: https://hexsecs.github.io/canarchy/
+site_url: https://hexsecs.github.io/canarchy/docs/
 repo_url: https://github.com/hexsecs/canarchy
 repo_name: hexsecs/canarchy
+site_dir: site/docs
 
 theme:
   name: material
