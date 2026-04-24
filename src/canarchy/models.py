@@ -251,6 +251,7 @@ class UdsTransactionEvent:
     service_name: str
     request_data: bytes = field(repr=False)
     response_data: bytes = field(repr=False)
+    complete: bool = True
     ecu_address: int | None = None
     source: str = "uds"
     timestamp: float | None = None
@@ -263,6 +264,7 @@ class UdsTransactionEvent:
                 "ecu_address": self.ecu_address,
                 "request_data": self.request_data.hex(),
                 "request_id": self.request_id,
+                "complete": self.complete,
                 "response_data": self.response_data.hex(),
                 "response_id": self.response_id,
                 "service": self.service,

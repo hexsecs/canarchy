@@ -102,5 +102,6 @@ class EventTests(unittest.TestCase):
 
         payload = event.to_payload()
         self.assertEqual(payload["event_type"], "uds_transaction")
+        self.assertTrue(payload["payload"]["complete"])
         self.assertEqual(payload["payload"]["service_name"], "DiagnosticSessionControl")
         self.assertEqual(payload["payload"]["request_data"], "1003")

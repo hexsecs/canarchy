@@ -97,6 +97,8 @@ Every tool returns a single JSON text block with the canonical result envelope:
 
 Failures set `"ok": false` and populate `errors` with structured objects (`code`, `message`, `hint`), using the same error codes as the CLI JSON output.
 
+For UDS workflows, `uds_transaction` events may include `payload.complete=false` when a multi-frame ISO-TP response was only partially captured or arrived out of order. In that case `payload.response_data` still contains the partial bytes that were reassembled.
+
 ### Example Interactions
 
 ```

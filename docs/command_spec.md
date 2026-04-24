@@ -515,10 +515,10 @@ canarchy uds scan <interface> [--ack-active] [--json|--jsonl|--table|--raw]
 
 Notes:
 
-* with the `python-can` backend, this command sends a single-frame functional DiagnosticSessionControl request and summarizes any single-frame responses it captures
+* with the `python-can` backend, this command sends a single-frame functional DiagnosticSessionControl request and summarizes captured UDS responses after ISO-TP reassembly when needed
 * with the `scaffold` backend, this command emits explicit sample/reference UDS transaction data
 * `--ack-active` requests an interactive `YES` confirmation before the diagnostic request is sent
-* this is an initial transport-backed step, not a full ISO-TP or ECU-specific diagnostic scan implementation
+* if a segmented response is truncated or arrives out of order, the emitted `uds_transaction` event keeps the partial `response_data` and sets `complete` to `false`
 
 ### uds trace
 
@@ -530,9 +530,10 @@ canarchy uds trace <interface> [--json|--jsonl|--table|--raw]
 
 Notes:
 
-* with the `python-can` backend, this command captures raw CAN frames and infers single-frame UDS request/response transactions from common diagnostic IDs
+* with the `python-can` backend, this command captures raw CAN frames and infers UDS request/response transactions from common diagnostic IDs, including ISO-TP multi-frame responses
 * with the `scaffold` backend, this command emits explicit sample/reference UDS transaction data
-* this is an initial transport-backed step, not a full ISO-TP reassembly pipeline
+* flow-control frames are used only for reassembly and are not emitted as transactions
+* if a segmented response is truncated or arrives out of order, the emitted `uds_transaction` event keeps the partial `response_data` and sets `complete` to `false`
 
 ### uds services
 

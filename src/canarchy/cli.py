@@ -2361,6 +2361,7 @@ def format_uds_table(result: CommandResult) -> list[str]:
             f"ecu={ecu_text} "
             f"req_id=0x{payload['request_id']:03X} "
             f"resp_id=0x{payload['response_id']:03X} "
+            f"complete={payload.get('complete', True)} "
             f"req={payload['request_data']} "
             f"resp={payload['response_data']}"
         )
