@@ -28,6 +28,9 @@ Operators need a protocol-aware UDS surface for discovery and transaction inspec
 | `REQ-UDS-TX-04` | Event-driven | When `uds trace <interface>` is invoked, the system shall emit structured `uds_transaction` events for traced request/response exchanges. |
 | `REQ-UDS-TX-05` | Ubiquitous | UDS table output shall present service identifier, ECU address, request ID, and response ID for each transaction. |
 | `REQ-UDS-TX-06` | Unwanted behaviour | If the transport interface is unavailable, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
+| `REQ-UDS-TX-09` | Event-driven | When `uds scan` or `uds trace` receives ISO 15765-2 first-frame and consecutive-frame responses, the system shall reassemble them into a single `uds_transaction` response payload before service decoding. |
+| `REQ-UDS-TX-10` | Unwanted behaviour | If a segmented UDS response is truncated or arrives out of order, the system shall emit a `uds_transaction` event with `complete` equal to `false` and the partial reassembled response payload. |
+| `REQ-UDS-TX-11` | Event-driven | When ISO 15765-2 flow-control frames appear in captured traffic, the system shall use them only for reassembly and shall not emit them as `uds_transaction` events. |
 
 ## Command Surface
 
@@ -43,11 +46,11 @@ In scope:
 * structured scan responder transactions
 * structured trace transactions
 * protocol-aware table rendering
-* initial single-frame transport-backed behavior through the shared transport layer when `python-can` is selected
+* transport-backed UDS response reassembly through the shared transport layer when `python-can` is selected
 
 Out of scope:
 
-* full ISO-TP reassembly
+* segmented request transmission
 * exhaustive ECU-specific service negotiation
 * deep ECU-specific timing and retry behavior
 
@@ -61,6 +64,7 @@ Both commands emit `uds_transaction` events with fields including:
 * `response_id`
 * `request_data`
 * `response_data`
+* `complete`
 * `ecu_address`
 
 ## Output Contracts
@@ -69,7 +73,7 @@ Both commands emit `uds_transaction` events with fields including:
 
 Current implementation note:
 
-* with the `python-can` backend, `uds scan` and `uds trace` use transport-backed single-frame heuristics
+* with the `python-can` backend, `uds scan` and `uds trace` reassemble multi-frame UDS responses before transaction emission
 * with the `scaffold` backend, they emit explicit sample/reference transactions
 
 ## Error Contracts

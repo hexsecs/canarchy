@@ -384,9 +384,21 @@ class TransportBackendTests(unittest.TestCase):
                 ),
                 CanFrame(
                     arbitration_id=0x7E8,
-                    data=bytes.fromhex("0450030032000000"),
+                    data=bytes.fromhex("100A5003003201F4"),
                     interface="can0",
                     timestamp=0.1,
+                ),
+                CanFrame(
+                    arbitration_id=0x7E0,
+                    data=bytes.fromhex("3000000000000000"),
+                    interface="can0",
+                    timestamp=0.11,
+                ),
+                CanFrame(
+                    arbitration_id=0x7E8,
+                    data=bytes.fromhex("2100000000000000"),
+                    interface="can0",
+                    timestamp=0.12,
                 ),
             ],
         ) as capture_mock:
@@ -396,6 +408,7 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["event_type"], "uds_transaction")
         self.assertEqual(events[0]["payload"]["service"], 0x10)
+        self.assertTrue(events[0]["payload"]["complete"])
 
     def test_uds_scan_events_with_python_can_backend_send_request_and_capture_responses(self) -> None:
         transport = LocalTransport(live_backend=PythonCanBackend(bus_interface="virtual"))
@@ -406,10 +419,22 @@ class TransportBackendTests(unittest.TestCase):
             return_value=[
                 CanFrame(
                     arbitration_id=0x7E8,
-                    data=bytes.fromhex("0450010032000000"),
+                    data=bytes.fromhex("100A5001003201F4"),
                     interface="can0",
                     timestamp=0.1,
-                )
+                ),
+                CanFrame(
+                    arbitration_id=0x7DF,
+                    data=bytes.fromhex("3000000000000000"),
+                    interface="can0",
+                    timestamp=0.11,
+                ),
+                CanFrame(
+                    arbitration_id=0x7E8,
+                    data=bytes.fromhex("2100000000000000"),
+                    interface="can0",
+                    timestamp=0.12,
+                ),
             ],
         ) as capture_mock:
             events = transport.uds_scan_events("can0")
@@ -419,6 +444,7 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["payload"]["request_id"], 0x7DF)
         self.assertEqual(events[0]["payload"]["service"], 0x10)
+        self.assertTrue(events[0]["payload"]["complete"])
 
     def test_build_live_backend_rejects_unknown_backend(self) -> None:
         with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "unknown"}, clear=False):

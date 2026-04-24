@@ -266,6 +266,8 @@ Internally, the system should model events such as:
 
 Prefer typed event objects over free-form strings.
 
+For protocol transactions that can be partially reconstructed from captured traffic, include explicit completeness fields instead of implying that every decoded payload is whole.
+
 ### 2. Human output must never break machine output
 
 Every command should support explicit output modes:

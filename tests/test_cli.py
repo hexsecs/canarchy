@@ -1447,8 +1447,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["mode"], "passive")
         self.assertEqual(payload["data"]["implementation"], "sample/reference provider")
         self.assertEqual(payload["data"]["transaction_count"], 2)
+        self.assertTrue(payload["data"]["events"][0]["payload"]["complete"])
         self.assertEqual(payload["data"]["events"][1]["payload"]["service"], 0x27)
         self.assertEqual(payload["data"]["events"][1]["payload"]["service_name"], "SecurityAccess")
+        self.assertTrue(payload["data"]["events"][1]["payload"]["complete"])
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "python-can", "CANARCHY_PYTHON_CAN_INTERFACE": "virtual"})
     @patch("canarchy.transport.LocalTransport.capture")
@@ -1462,9 +1464,21 @@ class CliTests(unittest.TestCase):
             ),
             CanFrame(
                 arbitration_id=0x7E8,
-                data=bytes.fromhex("0450030032000000"),
+                data=bytes.fromhex("100A5003003201F4"),
                 interface="can0",
                 timestamp=0.1,
+            ),
+            CanFrame(
+                arbitration_id=0x7E0,
+                data=bytes.fromhex("3000000000000000"),
+                interface="can0",
+                timestamp=0.11,
+            ),
+            CanFrame(
+                arbitration_id=0x7E8,
+                data=bytes.fromhex("2100000000000000"),
+                interface="can0",
+                timestamp=0.12,
             ),
         ]
 
@@ -1476,6 +1490,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["implementation"], "transport-backed")
         self.assertEqual(payload["data"]["transport_backend"], "python-can")
         self.assertEqual(payload["data"]["events"][0]["payload"]["service"], 0x10)
+        self.assertTrue(payload["data"]["events"][0]["payload"]["complete"])
 
     def test_uds_scan_table_output_is_pretty_printed(self) -> None:
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):

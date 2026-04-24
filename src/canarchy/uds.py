@@ -53,23 +53,40 @@ def uds_services_payload() -> list[dict[str, object]]:
     return [service.to_payload() for service in UDS_SERVICE_CATALOG]
 
 
+@dataclass(slots=True, frozen=True)
+class ReassembledUdsPdu:
+    arbitration_id: int
+    payload: bytes
+    timestamp: float | None
+    complete: bool = True
+
+
+@dataclass(slots=True)
+class _IsoTpReassemblyState:
+    arbitration_id: int
+    total_length: int
+    payload: bytearray
+    next_sequence_number: int
+    timestamp: float | None
+
+
 def uds_trace_transactions(frames: list[CanFrame], *, source: str) -> list[UdsTransactionEvent]:
     pending_requests: list[tuple[int, bytes]] = []
     events: list[UdsTransactionEvent] = []
 
-    for frame in sorted(frames, key=lambda candidate: candidate.timestamp or 0.0):
-        payload = _single_frame_payload(frame)
-        if payload is None or not payload:
+    for pdu in reassemble_uds_pdus(frames):
+        payload = pdu.payload
+        if not payload:
             continue
 
-        if _is_request_id(frame.arbitration_id):
-            pending_requests.append((frame.arbitration_id, payload))
+        if _is_request_id(pdu.arbitration_id):
+            pending_requests.append((pdu.arbitration_id, payload))
             continue
 
-        if not _is_response_id(frame.arbitration_id):
+        if not _is_response_id(pdu.arbitration_id):
             continue
 
-        request_index = _match_request_index(pending_requests, frame.arbitration_id)
+        request_index = _match_request_index(pending_requests, pdu.arbitration_id)
         if request_index is None:
             continue
 
@@ -81,14 +98,15 @@ def uds_trace_transactions(frames: list[CanFrame], *, source: str) -> list[UdsTr
         events.append(
             UdsTransactionEvent(
                 request_id=request_id,
-                response_id=frame.arbitration_id,
+                response_id=pdu.arbitration_id,
                 service=service,
                 service_name=service_name,
                 request_data=request_payload,
                 response_data=payload,
-                ecu_address=frame.arbitration_id,
+                complete=pdu.complete,
+                ecu_address=pdu.arbitration_id,
                 source=source,
-                timestamp=frame.timestamp,
+                timestamp=pdu.timestamp,
             )
         )
 
@@ -100,11 +118,11 @@ def uds_scan_transactions(frames: list[CanFrame], *, source: str) -> list[UdsTra
     request_payload = bytes.fromhex("1001")
     events: list[UdsTransactionEvent] = []
 
-    for frame in sorted(frames, key=lambda candidate: candidate.timestamp or 0.0):
-        if not _is_response_id(frame.arbitration_id):
+    for pdu in reassemble_uds_pdus(frames):
+        if not _is_response_id(pdu.arbitration_id):
             continue
-        payload = _single_frame_payload(frame)
-        if payload is None or not payload:
+        payload = pdu.payload
+        if not payload:
             continue
 
         service, service_name = _response_service_info(payload)
@@ -114,14 +132,15 @@ def uds_scan_transactions(frames: list[CanFrame], *, source: str) -> list[UdsTra
         events.append(
             UdsTransactionEvent(
                 request_id=request_id,
-                response_id=frame.arbitration_id,
+                response_id=pdu.arbitration_id,
                 service=service,
                 service_name=service_name,
                 request_data=request_payload,
                 response_data=payload,
-                ecu_address=frame.arbitration_id,
+                complete=pdu.complete,
+                ecu_address=pdu.arbitration_id,
                 source=source,
-                timestamp=frame.timestamp,
+                timestamp=pdu.timestamp,
             )
         )
 
@@ -136,19 +155,135 @@ def diagnostic_session_control_request_frame(interface: str | None = None) -> Ca
     )
 
 
-def _single_frame_payload(frame: CanFrame) -> bytes | None:
+def reassemble_uds_pdus(frames: list[CanFrame]) -> list[ReassembledUdsPdu]:
+    sessions: dict[int, _IsoTpReassemblyState] = {}
+    pdus: list[ReassembledUdsPdu] = []
+
+    for frame in sorted(frames, key=lambda candidate: candidate.timestamp or 0.0):
+        payload = _transport_payload(frame)
+        if payload is None:
+            continue
+
+        pci = payload[0] >> 4
+        arbitration_id = frame.arbitration_id
+
+        if pci == 0x0:
+            _flush_incomplete_session(sessions, pdus, arbitration_id)
+            single_frame_payload = _single_frame_payload(payload)
+            if single_frame_payload:
+                pdus.append(
+                    ReassembledUdsPdu(
+                        arbitration_id=arbitration_id,
+                        payload=single_frame_payload,
+                        timestamp=frame.timestamp,
+                        complete=True,
+                    )
+                )
+            continue
+
+        if pci == 0x1:
+            _flush_incomplete_session(sessions, pdus, arbitration_id)
+            first_frame = _first_frame_state(arbitration_id, payload, timestamp=frame.timestamp)
+            if first_frame is None:
+                continue
+            if len(first_frame.payload) >= first_frame.total_length:
+                pdus.append(
+                    ReassembledUdsPdu(
+                        arbitration_id=arbitration_id,
+                        payload=bytes(first_frame.payload[: first_frame.total_length]),
+                        timestamp=frame.timestamp,
+                        complete=True,
+                    )
+                )
+                continue
+            sessions[arbitration_id] = first_frame
+            continue
+
+        if pci == 0x2:
+            session = sessions.get(arbitration_id)
+            if session is None:
+                continue
+            sequence_number = payload[0] & 0x0F
+            if sequence_number != session.next_sequence_number:
+                _flush_incomplete_session(sessions, pdus, arbitration_id)
+                continue
+            session.payload.extend(payload[1:])
+            session.timestamp = frame.timestamp
+            if len(session.payload) >= session.total_length:
+                pdus.append(
+                    ReassembledUdsPdu(
+                        arbitration_id=arbitration_id,
+                        payload=bytes(session.payload[: session.total_length]),
+                        timestamp=frame.timestamp,
+                        complete=True,
+                    )
+                )
+                del sessions[arbitration_id]
+                continue
+            session.next_sequence_number = (session.next_sequence_number + 1) & 0x0F
+            continue
+
+        if pci == 0x3:
+            continue
+
+    for arbitration_id in sorted(sessions):
+        _flush_incomplete_session(sessions, pdus, arbitration_id)
+
+    return pdus
+
+
+def _transport_payload(frame: CanFrame) -> bytes | None:
     if frame.is_extended_id or frame.is_remote_frame or frame.is_error_frame or not frame.data:
         return None
-    pci = frame.data[0] >> 4
-    if pci != 0:
-        return None
-    payload_length = frame.data[0] & 0x0F
+    return frame.data
+
+
+def _single_frame_payload(data: bytes) -> bytes | None:
+    payload_length = data[0] & 0x0F
     if payload_length == 0:
         return None
-    available = frame.data[1 : 1 + payload_length]
+    available = data[1 : 1 + payload_length]
     if len(available) < payload_length:
         return None
     return bytes(available)
+
+
+def _first_frame_state(
+    arbitration_id: int,
+    data: bytes,
+    *,
+    timestamp: float | None,
+) -> _IsoTpReassemblyState | None:
+    if len(data) < 2:
+        return None
+    total_length = ((data[0] & 0x0F) << 8) | data[1]
+    if total_length == 0:
+        return None
+    return _IsoTpReassemblyState(
+        arbitration_id=arbitration_id,
+        total_length=total_length,
+        payload=bytearray(data[2:]),
+        next_sequence_number=1,
+        timestamp=timestamp,
+    )
+
+
+def _flush_incomplete_session(
+    sessions: dict[int, _IsoTpReassemblyState],
+    pdus: list[ReassembledUdsPdu],
+    arbitration_id: int,
+) -> None:
+    session = sessions.pop(arbitration_id, None)
+    if session is None or not session.payload:
+        return
+    pdus.append(
+        ReassembledUdsPdu(
+            arbitration_id=arbitration_id,
+            payload=bytes(session.payload[: session.total_length]),
+            timestamp=session.timestamp,
+            complete=False,
+        )
+    )
 
 
 def _is_request_id(arbitration_id: int) -> bool:

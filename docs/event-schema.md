@@ -282,6 +282,7 @@ Emitted by: `uds scan`, `uds trace`
   "source": "transport.uds.scan",
   "timestamp": 0.0,
   "payload": {
+    "complete": true,
     "ecu_address": 2024,
     "request_data": "1001",
     "request_id": 2015,
@@ -302,6 +303,7 @@ Emitted by: `uds scan`, `uds trace`
 | `ecu_address` | int \| null | Responding ECU address (typically equals `response_id`). |
 | `request_data` | string | Request payload bytes, hex-encoded. |
 | `response_data` | string | Response payload bytes, hex-encoded. |
+| `complete` | bool | `true` when the response payload was fully reassembled; `false` when the capture ended early or consecutive frames arrived out of order. |
 
 ---
 
