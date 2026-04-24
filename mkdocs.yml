@@ -4,6 +4,8 @@ site_url: https://hexsecs.github.io/canarchy/docs/
 repo_url: https://github.com/hexsecs/canarchy
 repo_name: hexsecs/canarchy
 site_dir: site/docs
+extra_css:
+  - stylesheets/extra.css
 
 theme:
   name: material
