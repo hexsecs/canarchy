@@ -562,6 +562,21 @@ Notes:
 * the current implementation inspects nibble- and byte-sized candidate fields on recorded arbitration IDs
 * candidates are ranked by monotonicity evidence and explicit rollover detection
 
+### re signals
+
+Rank likely signal fields from recorded CAN traffic.
+
+```bash
+canarchy re signals <file> [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* this command is passive and file-backed
+* the current implementation inspects nibble-aligned 4-bit fields, byte-aligned 8-bit fields, and word-aligned 16-bit fields
+* candidates are ranked by change-rate preference, observed range, and value diversity
+* arbitration IDs with fewer than 5 frames are omitted from the candidate list and reported in `low_sample_ids`
+
 ### re entropy
 
 Rank arbitration IDs and byte positions by Shannon entropy over recorded CAN traffic.

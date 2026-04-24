@@ -78,7 +78,7 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 Current exclusions:
 
 * DBC provider and cache commands such as `dbc search` and `dbc fetch`
-* reverse-engineering helpers such as `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc`
+* reverse-engineering helpers such as `re signals`, `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc`
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
 
 ### Response Format

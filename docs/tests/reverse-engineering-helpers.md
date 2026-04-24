@@ -14,7 +14,7 @@ Define the expected coverage for the reverse-engineering helper family so shippe
 
 ## Coverage Requirements
 
-* command-level success coverage for shipped helpers: `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc`
+* command-level success coverage for shipped helpers: `re signals`, `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc`
 * passive file-backed analysis behavior
 * structured candidate output with rationale and confidence or score fields
 * representative edge cases for sparse captures, low-sample captures, and mixed arbitration IDs
@@ -28,7 +28,7 @@ Define the expected coverage for the reverse-engineering helper family so shippe
 |----------------|---------------------|
 | `REQ-RE-01` | `TEST-RE-02`, `TEST-RE-03`, `TEST-RE-04`, `TEST-RE-05` |
 | `REQ-RE-02` | `TEST-RE-02`, `TEST-RE-03`, `TEST-RE-04`, `TEST-RE-05` |
-| `REQ-RE-03` | Deferred |
+| `REQ-RE-03` | `TEST-RE-01`, `TEST-RE-06`, `TEST-RE-08`, `TEST-RE-11` |
 | `REQ-RE-04` | `TEST-RE-02` |
 | `REQ-RE-05` | `TEST-RE-03` |
 | `REQ-RE-06` | Deferred |
@@ -41,15 +41,16 @@ Define the expected coverage for the reverse-engineering helper family so shippe
 
 ## Representative Test Cases
 
-### `TEST-RE-01` — Deferred signal candidate analysis
+### `TEST-RE-01` — Signal candidate analysis
 
 ```gherkin
-Given  `re signals` remains unimplemented
-When   the operator reviews the current shipped reverse-engineering helper coverage
-Then   signal candidate analysis shall be tracked as deferred work rather than represented as implemented coverage
+Given  a capture fixture with stable, high-change, and mid-range candidate fields is available
+When   the operator runs `canarchy re signals <fixture> --json`
+Then   the result shall include ranked signal candidates with change-rate and observed-range metadata
+And    sparse arbitration IDs shall be omitted from the candidate list and recorded in `low_sample_ids`
 ```
 
-**Fixture:** none.
+**Fixture:** `tests/fixtures/re_signals_mixed.candump`.
 
 ---
 
@@ -193,6 +194,7 @@ Fixtures should include:
 
 Current implementation note:
 
+* `re signals` is covered with a mixed capture containing stable fields, a mid-range candidate, a high-change field, and a low-sample arbitration ID
 * `re counters` is covered with fixtures for nibble counters, rollover counters, non-counter noise, and low-sample captures
 * `re entropy` is covered with fixtures for constant, alternating, high-entropy, and low-sample arbitration IDs
 * `re match-dbc` and `re shortlist-dbc` are covered with mocked provider catalogs for output shape, warnings, and limit handling

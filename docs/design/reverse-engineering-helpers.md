@@ -50,8 +50,8 @@ The first implementation should be file-backed and deterministic. Live capture s
 
 Current implementation note:
 
-* `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc` are implemented as deterministic file-backed helpers
-* `re signals` and `re correlate` remain command-surface placeholders and are still deferred
+* `re signals`, `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc` are implemented as deterministic file-backed helpers
+* `re correlate` remains deferred
 
 ## Responsibilities And Boundaries
 
@@ -92,10 +92,22 @@ Each candidate shall include at least:
 
 Signal candidates shall include:
 
+* `arbitration_id`
 * `start_bit`
 * `bit_length`
-* `byte_order` when inferable
-* `value_shape` summary such as discrete, stepped, or continuous-like
+* `score`
+* `rationale`
+* `sample_count`
+* `observed_min`
+* `observed_max`
+* `change_rate`
+
+Current implementation note:
+
+* `re signals` is implemented as a deterministic file-backed helper
+* the initial heuristic evaluates nibble-aligned 4-bit fields, byte-aligned 8-bit fields, and word-aligned 16-bit fields
+* IDs with fewer than 5 frames are omitted from the candidate list and recorded in `low_sample_ids`
+* result metadata includes `analysis_by_id` summaries with `frame_count`, `payload_bits`, `evaluated_fields`, and per-ID `candidate_count`
 
 ### `re counters`
 
@@ -207,5 +219,4 @@ Table output shall present compact ranked candidate summaries with confidence/sc
 ## Deferred Decisions
 
 * exact candidate schemas and whether they should also be modelled as typed events
-* whether `re signals` should emit contiguous-field suggestions, bitfield suggestions, or both in the first version
 * threshold and scoring models for counter and entropy ranking

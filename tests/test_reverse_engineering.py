@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from canarchy.reverse_engineering import counter_candidates, entropy_candidates, score_dbc_candidates
+from canarchy.reverse_engineering import counter_candidates, entropy_candidates, score_dbc_candidates, signal_analysis
 from canarchy.transport import LocalTransport
 
 
@@ -90,6 +90,31 @@ class ReverseEngineeringTests(unittest.TestCase):
         low_sample = next(candidate for candidate in candidates if candidate["arbitration_id"] == 0x103)
         self.assertTrue(low_sample["low_sample"])
         self.assertEqual(low_sample["frame_count"], 5)
+
+    def test_signal_analysis_returns_ranked_candidates(self) -> None:
+        frames = LocalTransport().frames_from_file(str(FIXTURES / "re_signals_mixed.candump"))
+
+        analysis = signal_analysis(frames)
+
+        self.assertGreater(analysis["candidate_count"], 0)
+        best = analysis["candidates"][0]
+        self.assertEqual(best["arbitration_id"], 0x300)
+        self.assertEqual(best["start_bit"], 8)
+        self.assertEqual(best["bit_length"], 8)
+        self.assertEqual(best["sample_count"], 10)
+        self.assertAlmostEqual(best["change_rate"], 0.444, places=3)
+        self.assertIn("preferred signal band", best["rationale"])
+
+    def test_signal_analysis_marks_low_sample_ids(self) -> None:
+        frames = LocalTransport().frames_from_file(str(FIXTURES / "re_signals_mixed.candump"))
+
+        analysis = signal_analysis(frames)
+
+        self.assertEqual(analysis["low_sample_ids"], [0x301])
+        low_sample = next(item for item in analysis["analysis_by_id"] if item["arbitration_id"] == 0x301)
+        self.assertTrue(low_sample["low_sample"])
+        self.assertEqual(low_sample["frame_count"], 4)
+        self.assertEqual(low_sample["candidate_count"], 0)
 
 
 class ScoreDbcCandidatesTests(unittest.TestCase):
