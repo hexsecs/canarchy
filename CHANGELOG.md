@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-24
+
 ### Added
 
 * Added `--offset` parameter to all file-backed commands (`filter`, `stats`, `decode`, `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 summary`) to skip the first N frames before processing. Works alongside `--max-frames` to define a processing window.
@@ -14,6 +16,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added J1939 performance benchmarks with defined budgets and automated tests (`tests/test_j1939_performance.py`). Benchmark fixture generated via `scripts/generate_benchmark_fixture.py`. All J1939 commands meet budget targets on 10k frame capture.
 * Added `capture-info` and the `capture_info` MCP tool for fast capture reconnaissance. They return frame count, first/last timestamps, duration, unique IDs, interfaces, and suggested `max_frames`/`seconds` bounds without loading decoded frame data into memory.
 * Added `re signals` as a file-backed reverse-engineering helper that ranks 4-bit, 8-bit, and 16-bit signal candidates, reports `low_sample_ids`, and includes per-ID analysis metadata for follow-on inspection.
+
+### Changed
+
+* Standardized CLI argument ordering: file-backed commands now use `--file` flag for capture file input instead of positional arguments. The `--file` argument is required for file-only commands (`stats`, `capture-info`, `replay`, `j1939 tp`, `j1939 dm1`, `j1939 summary`) to prevent unstructured crashes. Commands with stdin support (`filter`, `decode`, `j1939 decode`) can alternatively use `--stdin`.
 
 ### Fixed
 
@@ -24,12 +30,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * `--stdin` mode now rejects `--max-frames` and `--seconds` flags with `ANALYSIS_WINDOW_REQUIRES_FILE` error, since these bounds cannot be applied to stdin input.
 * Added `--max-frames` and `--seconds` parameters to `stats`, `filter`, and `decode` commands for working with large capture files. These mirror the existing parameters on J1939 commands.
 * Expanded the `filter` expression engine with six new operators: `dlc><n>` (DLC threshold), `data~=<hex>` (payload substring), `extended` (29-bit frames), `standard` (11-bit frames), `&&` (AND), and `||` (OR). All new operators are composable; `&&` binds tighter than `||`. Unrecognised expressions now return error code `INVALID_FILTER_EXPRESSION` instead of the old `FILTER_EXPRESSION_UNSUPPORTED`.
-
-### Changed
-
-* Standardized CLI argument ordering: file-backed commands now use `--file` flag for capture file input instead of positional arguments. The `--file` argument is required for file-only commands (`stats`, `capture-info`, `replay`, `j1939 tp`, `j1939 dm1`, `j1939 summary`) to prevent unstructured crashes. Commands with stdin support (`filter`, `decode`, `j1939 decode`) can alternatively use `--stdin`.
-
-### Fixed
 
 * MCP server now handles SIGINT (Ctrl+C) and SIGTERM gracefully, without traceback or thread errors during shutdown.
 * `j1939 pgn --json` now includes decoded signal values in each event's `decoded_signals` field, matching what the table renderer already showed. Previously the JSON output contained only the raw frame bytes with no signal interpretation.
