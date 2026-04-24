@@ -147,9 +147,6 @@ function BrutHero() {
           pip install canarchy →
         </a>
 <a href={siteBase + '/docs/getting_started'} style={{
-=======
-        <a href={siteBase + '/docs/getting_started'} style={{
->>>>>>> e85df0b (fix(site): prefix all /docs/ links with /canarchy base path)
           background: bColors.yellow, color: bColors.ink, padding: '22px 30px',
           fontFamily: bDisplay, fontSize: 20, letterSpacing: 1, textDecoration: 'none',
           border: `4px solid ${bColors.ink}`, borderLeft: 'none', textTransform: 'uppercase',
