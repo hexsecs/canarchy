@@ -12,6 +12,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added `--offset` parameter to all file-backed commands (`filter`, `stats`, `decode`, `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 summary`) to skip the first N frames before processing. Works alongside `--max-frames` to define a processing window.
 * Added `--compact` output format to `filter` command for easy data extraction. Emits one JSON object per line with flat frame data (timestamp, interface, arbitration_id, data) without wrapping metadata.
 * Added J1939 performance benchmarks with defined budgets and automated tests (`tests/test_j1939_performance.py`). Benchmark fixture generated via `scripts/generate_benchmark_fixture.py`. All J1939 commands meet budget targets on 10k frame capture.
+* Added `capture-info` and the `capture_info` MCP tool for fast capture reconnaissance. They return frame count, first/last timestamps, duration, unique IDs, interfaces, and suggested `max_frames`/`seconds` bounds without loading decoded frame data into memory.
 
 ### Fixed
 
@@ -19,7 +20,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Unparseable candump lines are now silently skipped instead of causing an error, allowing analysis to proceed with valid frames only.
 * Added validation for `--max-frames` and `--seconds` on all file-backed commands (`filter`, `stats`, `decode`) to match J1939 command behavior. Invalid values now return `INVALID_MAX_FRAMES` or `INVALID_ANALYSIS_SECONDS` errors.
 * `--stdin` mode now rejects `--max-frames` and `--seconds` flags with `ANALYSIS_WINDOW_REQUIRES_FILE` error, since these bounds cannot be applied to stdin input.
-* New `capture-info` command returns fast metadata about capture files (frame count, duration, unique IDs, interfaces) without loading the full file into memory. This enables AI agents to inspect large capture files before deciding how to process them.
 * Added `--max-frames` and `--seconds` parameters to `stats`, `filter`, and `decode` commands for working with large capture files. These mirror the existing parameters on J1939 commands.
 * Expanded the `filter` expression engine with six new operators: `dlc><n>` (DLC threshold), `data~=<hex>` (payload substring), `extended` (29-bit frames), `standard` (11-bit frames), `&&` (AND), and `||` (OR). All new operators are composable; `&&` binds tighter than `||`. Unrecognised expressions now return error code `INVALID_FILTER_EXPRESSION` instead of the old `FILTER_EXPRESSION_UNSUPPORTED`.
 

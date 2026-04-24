@@ -15,7 +15,7 @@
 | REQ-MCP-01 | `mcp serve` subcommand starts MCP server | TEST-MCP-01 |
 | REQ-MCP-02 | Each selected CLI command surfaces as an MCP tool | TEST-MCP-02, TEST-MCP-03 |
 | REQ-MCP-03 | Input schemas derived from argparse definitions | TEST-MCP-04 |
-| REQ-MCP-04 | Tool responses use canonical event envelope | TEST-MCP-05, TEST-MCP-06 |
+| REQ-MCP-04 | Tool responses use canonical event envelope | TEST-MCP-05, TEST-MCP-06, TEST-MCP-19 |
 | REQ-MCP-05 | Invalid inputs return same error codes as CLI | TEST-MCP-07, TEST-MCP-08 |
 | REQ-MCP-06 | Tool discovery returns all registered MCP tools with metadata | TEST-MCP-02, TEST-MCP-03 |
 | REQ-MCP-07 | stdio transport only | TEST-MCP-01 |
@@ -45,7 +45,7 @@ And    `canarchy mcp serve --help` shall exit with code `0`
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `decode`, `encode`, `dbc_inspect`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`
+Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `capture_info`, `decode`, `encode`, `dbc_inspect`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`
 ```
 
 **Fixture:** none.
@@ -57,7 +57,7 @@ Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   at least 24 tools shall be returned — one per registered MCP tool in the current curated surface
+Then   at least 25 tools shall be returned — one per registered MCP tool in the current curated surface
 ```
 
 **Fixture:** none.
@@ -101,6 +101,20 @@ And    `data.service_count` shall be greater than `0`
 ```
 
 **Fixture:** none.
+
+---
+
+### `TEST-MCP-19` — `capture_info` returns capture metadata
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("capture_info", {"file": "tests/fixtures/sample.candump"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"capture-info"`
+And    `data.frame_count` and `data.unique_ids` shall both be greater than `0`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
 
 ---
 
@@ -189,6 +203,9 @@ And    `"re_match_dbc"` shall not appear in the set of tool names
 Given  the `_build_argv` helper is available
 When   called with `("capture", {"interface": "can0"})`
 Then   the result shall equal `["capture", "can0", "--json"]`
+
+When   called with `("capture_info", {"file": "trace.candump"})`
+Then   the result shall equal `["capture-info", "--file", "trace.candump", "--json"]`
 
 When   called with `("j1939_monitor", {"interface": "can0", "pgn": 60160})`
 Then   the result shall contain `["j1939", "monitor", "can0", "--pgn", "60160"]` in order

@@ -12,7 +12,7 @@ from canarchy.mcp_server import _TOOL_NAMES, _TOOLS, _build_argv, handle_call_to
 FIXTURES = Path(__file__).parent / "fixtures"
 
 _EXPECTED_TOOLS = {
-    "capture", "send", "generate", "gateway", "replay", "filter", "stats",
+    "capture", "send", "generate", "gateway", "replay", "filter", "stats", "capture_info",
     "decode", "encode", "dbc_inspect", "export",
     "session_save", "session_load", "session_show",
     "j1939_monitor", "j1939_decode", "j1939_pgn", "j1939_spn", "j1939_tp", "j1939_dm1",
@@ -37,7 +37,7 @@ def test_list_tools_returns_expected_names():
 
 def test_list_tools_count():
     tools = asyncio.run(handle_list_tools())
-    assert len(tools) >= 24
+    assert len(tools) >= 25
 
 
 # --- TEST-MCP-04: tool metadata validity -----------------------------------
@@ -69,6 +69,18 @@ def test_call_tool_uds_services():
     payload = json.loads(results[0].text)
     assert payload["ok"] is True
     assert payload["data"]["service_count"] > 0
+
+
+def test_call_tool_capture_info():
+    results = asyncio.run(
+        handle_call_tool("capture_info", {"file": str(FIXTURES / "sample.candump")})
+    )
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "capture-info"
+    assert payload["data"]["frame_count"] == 3
+    assert payload["data"]["unique_ids"] == 3
 
 
 # --- TEST-MCP-07: invalid frame_id returns structured error ----------------
@@ -120,6 +132,11 @@ def test_shell_and_tui_not_exposed():
 def test_build_argv_capture():
     argv = _build_argv("capture", {"interface": "can0"})
     assert argv == ["capture", "can0", "--json"]
+
+
+def test_build_argv_capture_info():
+    argv = _build_argv("capture_info", {"file": "trace.candump"})
+    assert argv == ["capture-info", "--file", "trace.candump", "--json"]
 
 
 def test_build_argv_j1939_monitor_with_pgn():

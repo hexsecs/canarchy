@@ -168,10 +168,11 @@ Every important workflow must be reachable as a non-interactive command.
 Examples:
 
 * `canarchy capture can0 --jsonl`
-* `canarchy decode capture.log --dbc truck.dbc --json`
+* `canarchy capture-info --file capture.log --json`
+* `canarchy decode --file capture.log --dbc truck.dbc --json`
 * `canarchy j1939 monitor --pgn 65262 --json`
 * `canarchy uds scan can0 --json`
-* `canarchy replay drive.log --rate 0.5`
+* `canarchy replay --file drive.log --rate 0.5`
 
 ### REPL
 
@@ -396,6 +397,7 @@ Suggested JSON error shape:
 ```text
 canarchy
   capture
+  capture-info
   send
   replay
   filter

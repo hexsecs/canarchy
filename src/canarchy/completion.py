@@ -61,7 +61,7 @@ _J1939_FILE_BOUNDS = ["--offset", "--max-frames", "--seconds"]
 # Keys for subcommand groups use the "group subcommand" form.
 FLAGS: dict[str, list[str]] = {
     "capture": ["--candump"] + _OUTPUT,
-    "capture-info": ["--file", "--sample"] + _OUTPUT,
+    "capture-info": ["--file"] + _OUTPUT,
     "config show": _OUTPUT,
     "dbc inspect": ["--message", "--signals-only"] + _OUTPUT,
     "decode": ["--dbc", "--file"] + _OUTPUT,

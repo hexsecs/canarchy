@@ -56,6 +56,7 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 | `replay` | `canarchy replay` |
 | `filter` | `canarchy filter` |
 | `stats` | `canarchy stats` |
+| `capture_info` | `canarchy capture-info` |
 | `decode` | `canarchy decode` |
 | `encode` | `canarchy encode` |
 | `dbc_inspect` | `canarchy dbc inspect` |
