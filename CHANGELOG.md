@@ -11,9 +11,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 * Added `canarchy j1939 inventory` and the `j1939_inventory` MCP tool for building source-address inventories from recorded J1939 captures, including top PGNs, component-identification strings, vehicle-identification strings, and per-node DM1 presence.
 
+### Changed
+
+* GitHub Pages now publishes the custom repository-root homepage at `/`, while the MkDocs documentation site is built and published under `/docs/` so the existing docs home remains available as the documentation landing page.
+
 ### Documentation
 
 * Documented the `j1939 inventory` workflow across the command reference, J1939 design/test specs, MCP docs, and agent-facing command/tool guidance.
+* Documented the split GitHub Pages layout and the combined local/CI build flow for the root homepage plus `/docs/` site.
 
 ## [0.4.0] - 2026-04-24
 
