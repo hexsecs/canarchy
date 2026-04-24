@@ -26,9 +26,9 @@ function CautionStripe({ h = 24, flip = false }) {
 }
 
 const navLinks = [
-  { label: 'DOCS',     href: '/docs/' },
+  { label: 'DOCS',     href: '/docs/getting_started' },
   { label: 'COMMANDS', href: '/docs/command_spec' },
-  { label: 'J1939',    href: '/docs/j1939' },
+  { label: 'J1939',    href: '/docs/tutorials/j1939_heavy_vehicle' },
   { label: 'AGENTS',   href: '/docs/agents' },
   { label: 'GITHUB',   href: 'https://github.com/hexsecs/canarchy' },
 ];
@@ -145,7 +145,7 @@ function BrutHero() {
         >
           pip install canarchy →
         </a>
-        <a href="/docs/" style={{
+        <a href="/docs/getting_started" style={{
           background: bColors.yellow, color: bColors.ink, padding: '22px 30px',
           fontFamily: bDisplay, fontSize: 20, letterSpacing: 1, textDecoration: 'none',
           border: `4px solid ${bColors.ink}`, borderLeft: 'none', textTransform: 'uppercase',
@@ -711,28 +711,28 @@ function BrutInstall() {
 
 const footerLinks = {
   DOCS: [
-    { label: 'Getting Started', href: '/docs/' },
+    { label: 'Getting Started', href: '/docs/getting_started' },
     { label: 'Command Spec',    href: '/docs/command_spec' },
-    { label: 'Event Schema',    href: '/docs/event_schema' },
-    { label: 'Matrix',          href: '/docs/command_matrix' },
+    { label: 'Event Schema',    href: '/docs/event-schema' },
+    { label: 'Matrix',          href: '/docs/feature-matrix' },
   ],
   GUIDE: [
     { label: 'Backends',   href: '/docs/backends' },
-    { label: 'J1939',      href: '/docs/j1939' },
-    { label: 'UDS',        href: '/docs/uds' },
+    { label: 'J1939',      href: '/docs/tutorials/j1939_heavy_vehicle' },
+    { label: 'UDS',        href: '/docs/tutorials' },
     { label: 'Tutorials',  href: '/docs/tutorials' },
   ],
   DEV: [
     { label: 'Architecture', href: '/docs/architecture' },
-    { label: 'Design',        href: '/docs/design' },
+    { label: 'Design',        href: '/docs/overview' },
     { label: 'Release',        href: '/docs/release' },
-    { label: 'TUI',           href: '/docs/tui' },
+    { label: 'TUI',           href: '/docs/tui_plan' },
   ],
   SOCIAL: [
     { label: 'GitHub',      href: 'https://github.com/hexsecs/canarchy' },
     { label: 'Issues',      href: 'https://github.com/hexsecs/canarchy/issues' },
     { label: 'Discussions', href: 'https://github.com/hexsecs/canarchy/discussions' },
-    { label: 'Agents',      href: '/docs/agents' },
+    { label: 'Agents',       href: '/docs/agents' },
   ],
 };
 
