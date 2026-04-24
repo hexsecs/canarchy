@@ -7,7 +7,9 @@ site_root="$repo_root/site"
 
 rm -rf "$site_root"
 uv run mkdocs build --strict
-cp "$repo_root/index.html" "$site_root/index.html"
+
+cp "$repo_root/src/homepage/index.html" "$site_root/index.html"
+cp "$repo_root/src/homepage/site-brutalist.jsx" "$site_root/site-brutalist.jsx"
 
 if [[ ! -f "$site_root/index.html" ]]; then
   echo "missing published homepage: $site_root/index.html" >&2
