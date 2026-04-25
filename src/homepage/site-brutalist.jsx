@@ -221,7 +221,7 @@ function BrutHero({ viewport }) {
             background: bColors.ink, color: bColors.yellow, padding: stacked ? (viewport.isCompactMobile ? '16px 18px' : '18px 22px') : '22px 30px',
             fontFamily: bDisplay, fontSize: stacked ? (viewport.isCompactMobile ? 17 : 18) : 20, letterSpacing: 1, textDecoration: 'none',
             border: `4px solid ${bColors.ink}`, textTransform: 'uppercase',
-            width: stacked ? '100%' : 'auto',
+            width: stacked ? '100%' : 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
           pip install canarchy →
@@ -230,7 +230,7 @@ function BrutHero({ viewport }) {
           background: bColors.yellow, color: bColors.ink, padding: stacked ? (viewport.isCompactMobile ? '16px 18px' : '18px 22px') : '22px 30px',
           fontFamily: bDisplay, fontSize: stacked ? (viewport.isCompactMobile ? 17 : 18) : 20, letterSpacing: 1, textDecoration: 'none',
           border: `4px solid ${bColors.ink}`, borderLeft: stacked ? `4px solid ${bColors.ink}` : 'none', borderTop: stacked ? 'none' : undefined, textTransform: 'uppercase',
-          width: stacked ? '100%' : 'auto',
+          width: stacked ? '100%' : 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           Read the Docs
         </a>
@@ -238,7 +238,7 @@ function BrutHero({ viewport }) {
           background: bColors.paper, color: bColors.ink, padding: stacked ? (viewport.isCompactMobile ? '16px 18px' : '18px 22px') : '22px 30px',
           fontFamily: bDisplay, fontSize: stacked ? (viewport.isCompactMobile ? 17 : 18) : 20, letterSpacing: 1, textDecoration: 'none',
           border: `4px solid ${bColors.ink}`, borderLeft: stacked ? `4px solid ${bColors.ink}` : 'none', borderTop: stacked ? 'none' : undefined, textTransform: 'uppercase',
-          width: stacked ? '100%' : 'auto',
+          width: stacked ? '100%' : 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           ★ Star It
         </a>
