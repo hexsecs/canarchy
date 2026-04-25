@@ -15,6 +15,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 * GitHub Pages now publishes the custom repository-root homepage at `/`, while the MkDocs documentation site is built and published under `/docs/` so the existing docs home remains available as the documentation landing page.
 * Homepage nav and footer links are now real `<a>` tags instead of plain styled divs. The source lives in `src/homepage/` (`index.html` + `site-brutalist.jsx`) and is copied to the site root by the Pages build script — no more binary blob patching.
+* The package version has advanced to `0.4.1.dev0` on `main` so post-`0.4.0` work is identified as development builds until the next release is cut.
+
+### Fixed
+
+* The GitHub Pages root homepage now collapses oversized navigation, hero, CTA, content-grid, and footer layouts for mobile viewports so the base page remains readable and usable on phones.
+* The GitHub Pages root homepage now scales marquee text, major section headings, selected card titles, and command/transcript blocks down further for common phone widths including iPhone 16 Pro-sized viewports.
+* The GitHub Pages root homepage now uses a compact hamburger menu for mobile navigation while preserving the full inline top nav on larger viewports.
 
 ### Documentation
 
@@ -36,10 +43,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Standardized CLI argument ordering: file-backed commands now use `--file` flag for capture file input instead of positional arguments. The `--file` argument is required for file-only commands (`stats`, `capture-info`, `replay`, `j1939 tp`, `j1939 dm1`, `j1939 summary`) to prevent unstructured crashes. Commands with stdin support (`filter`, `decode`, `j1939 decode`) can alternatively use `--stdin`.
 
 ### Fixed
-
-* The GitHub Pages root homepage now collapses oversized navigation, hero, CTA, content-grid, and footer layouts for mobile viewports so the base page remains readable and usable on phones.
-* The GitHub Pages root homepage now scales marquee text, major section headings, selected card titles, and command/transcript blocks down further for common phone widths including iPhone 16 Pro-sized viewports.
-* The GitHub Pages root homepage now uses a compact hamburger menu for mobile navigation while preserving the full inline top nav on larger viewports.
 
 * `uds scan` and `uds trace` now reassemble ISO-TP multi-frame UDS responses, ignore flow-control frames, and mark partial transactions with `complete=false` when a segmented response is truncated or arrives out of order.
 * `--offset` now counts successfully parsed frames rather than file lines, correctly handling files with blank lines, comments, or malformed entries.
