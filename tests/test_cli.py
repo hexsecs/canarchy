@@ -1544,6 +1544,36 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_ANALYSIS_SECONDS")
 
+    def test_j1939_tp_sessions_rejects_invalid_sa_token(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            "sessions",
+            "--file",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--sa",
+            "0x80,foo",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_SOURCE_ADDRESS")
+
+    def test_j1939_tp_compare_rejects_invalid_sa_token(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            "compare",
+            "--file",
+            str(FIXTURES / "j1939_tp_compare.candump"),
+            "--sa",
+            "0x80,notanumber",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_SOURCE_ADDRESS")
+
     def test_j1939_dm1_json_keeps_deprecated_conversion_warning_structured(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",

@@ -120,7 +120,7 @@ def _traffic_lines(result: CommandResult) -> list[str]:
                 lines.append(
                     f"spn {observation['spn']} value={observation['value']} {observation['units']}"
                 )
-        elif result.command == "j1939 tp":
+        elif result.command == "j1939 tp sessions":
             for session in result.data.get("sessions", []):
                 lines.append(
                     f"tp pgn={session['transfer_pgn']} packets={session['packet_count']}/{session['total_packets']}"

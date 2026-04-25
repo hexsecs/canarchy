@@ -917,6 +917,29 @@ def validate_args(args: argparse.Namespace) -> None:
                 ],
             )
 
+    if args.command in {"j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults"}:
+        sa_arg = getattr(args, "sa", None)
+        if sa_arg is not None:
+            for token in sa_arg.split(","):
+                token = token.strip()
+                if not token:
+                    continue
+                try:
+                    int(token, 0)
+                except ValueError:
+                    raise CommandError(
+                        command=args.command,
+                        exit_code=EXIT_USER_ERROR,
+                        errors=[
+                            ErrorDetail(
+                                code="INVALID_SOURCE_ADDRESS",
+                                message=f"Invalid source address value: {token!r}",
+                                hint="Source addresses must be integers (e.g. 128, 0x80). Separate multiple values with commas.",
+                            )
+                        ],
+                        data={"sa": sa_arg},
+                    )
+
     if args.command == "encode":
         for assignment in args.signals:
             if "=" not in assignment:
