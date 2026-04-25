@@ -26,10 +26,27 @@ For the first public release, use TestPyPI first.
 2. Move relevant entries from `CHANGELOG.md` `Unreleased` into a new versioned release section.
 3. Commit the release preparation changes.
 4. Tag the release with `vX.Y.Z`.
-5. Build and verify artifacts locally.
-6. Publish to TestPyPI first if this is the first release or if the release workflow changed.
-7. Publish to PyPI.
-8. Create the GitHub release notes from the changelog.
+5. After the release commit lands on `main`, advance `src/canarchy/__init__.py` to the next development version.
+6. Build and verify artifacts locally.
+7. Publish to TestPyPI first if this is the first release or if the release workflow changed.
+8. Publish to PyPI.
+9. Create the GitHub release notes from the changelog.
+
+## Development Version Naming
+
+After cutting release `X.Y.Z`, `main` shall advance immediately to `X.Y.(Z+1).dev0` unless a different next-version target is explicitly planned and documented before or as part of the release.
+
+Examples:
+
+* after `0.4.0`, set `src/canarchy/__init__.py` to `0.4.1.dev0`
+* after `1.2.3`, set `src/canarchy/__init__.py` to `1.2.4.dev0`
+
+Rules:
+
+* keep release tags on the stable version only, such as `v0.4.0`
+* keep unreleased work on `main` on a `.devN` version string
+* update the version metadata in the same commit or immediate follow-up commit that reopens development after a release
+* if the next planned release target is a minor or major bump instead of the next patch version, document that decision explicitly and set the `.dev0` version accordingly
 
 ## Local Verification
 

@@ -52,6 +52,15 @@ The only exceptions are:
 * When a release is cut, the `[Unreleased]` section is promoted to a versioned heading. Do not manually create versioned headings outside of the release workflow.
 * The only exceptions are: typo/whitespace-only changes in docs or comments, changes to `.gitignore` or other non-functional config, and MkDocs nav or theme-only changes.
 
+### Versioning after release
+
+**This is a hard rule, not a suggestion.**
+
+* After cutting release `X.Y.Z`, advance `src/canarchy/__init__.py` on `main` to `X.Y.(Z+1).dev0` unless a different next-version target is explicitly planned and documented.
+* Do not leave `main` on the released version once unreleased work resumes.
+* Keep release tags on the stable release version only, such as `v0.4.0`.
+* If the next intended release is a minor or major bump instead of the next patch version, document that decision explicitly and set the `.dev0` version accordingly.
+
 ### PR acceptance criteria
 
 **A PR is not ready to merge until all of the following are true.**
