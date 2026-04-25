@@ -62,6 +62,11 @@ const navLinks = [
 
 function BrutNav({ viewport }) {
   const compact = viewport.isMobile;
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!compact) setIsMenuOpen(false);
+  }, [compact]);
 
   return (
     <>
@@ -70,26 +75,63 @@ function BrutNav({ viewport }) {
         flexDirection: compact ? 'column' : 'row',
         background: bColors.ink, color: bColors.bg, borderBottom: `4px solid ${bColors.ink}`,
       }}>
-        <div style={{ display: 'flex', alignItems: compact ? 'stretch' : 'center', gap: 0, flexDirection: compact ? 'column' : 'row' }}>
-          <div style={{
-            background: bColors.yellow, color: bColors.ink, padding: compact ? '16px 18px' : '18px 22px',
-            fontFamily: bDisplay, fontSize: compact ? 20 : 22, letterSpacing: 1,
-            borderRight: compact ? 'none' : `4px solid ${bColors.ink}`,
-            borderBottom: compact ? `4px solid ${bColors.ink}` : 'none',
-          }}>
-            CAN/ARCHY
+        <div style={{ display: 'flex', alignItems: compact ? 'stretch' : 'center', gap: 0, flexDirection: compact ? 'column' : 'row', flex: compact ? '1 1 auto' : '0 0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'space-between' }}>
+            <div style={{
+              background: bColors.yellow, color: bColors.ink, padding: compact ? '16px 18px' : '18px 22px',
+              fontFamily: bDisplay, fontSize: compact ? 20 : 22, letterSpacing: 1,
+              borderRight: compact ? 'none' : `4px solid ${bColors.ink}`,
+              borderBottom: compact ? `4px solid ${bColors.ink}` : 'none',
+              flex: compact ? '1 1 auto' : '0 0 auto',
+            }}>
+              CAN/ARCHY
+            </div>
+            {compact && (
+              <button
+                type="button"
+                aria-label={isMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={isMenuOpen}
+                aria-controls="homepage-mobile-nav"
+                onClick={() => setIsMenuOpen(open => !open)}
+                style={{
+                  appearance: 'none', border: 'none', borderLeft: `4px solid ${bColors.ink}`,
+                  borderBottom: `4px solid ${bColors.ink}`,
+                  background: isMenuOpen ? bColors.red : bColors.paper,
+                  color: bColors.ink, padding: '0 18px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  minWidth: 72,
+                }}
+              >
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {[0, 1, 2].map(line => (
+                    <span key={line} style={{ width: 24, height: 3, background: bColors.ink, display: 'block' }}/>
+                  ))}
+                </span>
+              </button>
+            )}
           </div>
           <div style={{ padding: compact ? '14px 18px' : '18px 22px', fontFamily: bMono, fontSize: compact ? 10 : 11, letterSpacing: 2, color: '#f3efe4' }}>
             STREAM-FIRST · AGENT-FIRST · J1939-FIRST
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div
+          id={compact ? 'homepage-mobile-nav' : undefined}
+          style={{
+            display: compact ? (isMenuOpen ? 'flex' : 'none') : 'flex',
+            alignItems: 'center', flexWrap: 'wrap',
+            width: compact ? '100%' : 'auto',
+            borderTop: compact ? `4px solid ${bColors.bg}` : 'none',
+          }}
+        >
           {navLinks.map(link => (
             <a
               key={link.label}
               href={link.href}
               target={link.label === 'GITHUB' ? '_blank' : undefined}
               rel={link.label === 'GITHUB' ? 'noopener noreferrer' : undefined}
+              onClick={() => {
+                if (compact) setIsMenuOpen(false);
+              }}
               style={{
                 padding: compact ? '14px 16px' : '18px 20px',
                 fontFamily: bBody, fontWeight: 800, fontSize: compact ? 12 : 13,
@@ -100,7 +142,7 @@ function BrutNav({ viewport }) {
                 background: link.label === 'GITHUB' ? bColors.red : 'transparent',
                 color: bColors.bg,
                 textDecoration: 'none', display: 'block',
-                flex: compact ? '1 1 50%' : '0 0 auto',
+                flex: compact ? '1 1 100%' : '0 0 auto',
                 textAlign: compact ? 'center' : 'left',
               }}
             >
