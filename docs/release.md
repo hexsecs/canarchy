@@ -34,7 +34,7 @@ For the first public release, use TestPyPI first.
 
 ## Development Version Naming
 
-After cutting release `X.Y.Z`, `main` shall advance immediately to `X.Y.(Z+1).dev0` unless a different next-version target is explicitly planned and documented before or as part of the release.
+After cutting release `X.Y.Z`, `main` shall advance to `X.Y.(Z+1).dev0` in the follow-up commit that reopens development after the release artifacts are built and published, unless a different next-version target is explicitly planned and documented before or as part of the release.
 
 Examples:
 
