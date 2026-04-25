@@ -38,6 +38,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Fixed
 
 * The GitHub Pages root homepage now collapses oversized navigation, hero, CTA, content-grid, and footer layouts for mobile viewports so the base page remains readable and usable on phones.
+* The GitHub Pages root homepage now scales marquee text, major section headings, selected card titles, and command/transcript blocks down further for common phone widths including iPhone 16 Pro-sized viewports.
 
 * `uds scan` and `uds trace` now reassemble ISO-TP multi-frame UDS responses, ignore flow-control frames, and mark partial transactions with `complete=false` when a segmented response is truncated or arrives out of order.
 * `--offset` now counts successfully parsed frames rather than file lines, correctly handling files with blank lines, comments, or malformed entries.
