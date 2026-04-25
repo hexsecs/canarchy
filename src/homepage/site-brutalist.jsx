@@ -451,20 +451,21 @@ function BrutMCP({ viewport }) {
             background: bColors.yellow, color: bColors.ink,
             padding: '12px 18px', fontFamily: bDisplay, fontSize: viewport.isCompactMobile ? 14 : 16, letterSpacing: 2,
             borderBottom: `4px solid ${bColors.ink}`,
+            overflowWrap: 'anywhere',
           }}>
             TOOL CATALOG · canarchy.* (9 tools, all stream)
           </div>
-          <div style={{ fontFamily: bMono, fontSize: 13, lineHeight: 1.75 }}>
+          <div style={{ fontFamily: bMono, fontSize: viewport.isCompactMobile ? 12 : 13, lineHeight: 1.75 }}>
             {tools.map((t, i) => (
               <div key={t.name} style={{
                 display: 'grid', gridTemplateColumns: viewport.isMobile ? '1fr' : '1.3fr 1.6fr 1fr',
-                gap: 12, padding: '10px 18px',
+                gap: viewport.isMobile ? 4 : 12, padding: '10px 18px',
                 background: i % 2 ? 'transparent' : 'rgba(11,11,11,0.04)',
                 borderBottom: i < tools.length - 1 ? `1px dashed ${bColors.ink}` : 'none',
               }}>
-                <span style={{ fontWeight: 700, color: bColors.ink }}>{t.name}</span>
-                <span style={{ color: bColors.mute }}>{t.args}</span>
-                <span style={{ color: bColors.red, fontWeight: 700, textAlign: viewport.isMobile ? 'left' : 'right' }}>{t.ret}</span>
+                <span style={{ fontWeight: 700, color: bColors.ink, overflowWrap: 'anywhere' }}>{t.name}</span>
+                <span style={{ color: bColors.mute, overflowWrap: 'anywhere' }}>{t.args}</span>
+                <span style={{ color: bColors.red, fontWeight: 700, textAlign: viewport.isMobile ? 'left' : 'right', overflowWrap: 'anywhere' }}>{t.ret}</span>
               </div>
             ))}
           </div>
@@ -489,11 +490,12 @@ function BrutMCP({ viewport }) {
             background: bColors.red, color: bColors.bg,
             padding: '12px 18px', fontFamily: bDisplay, fontSize: viewport.isCompactMobile ? 14 : 16, letterSpacing: 2,
             display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+            overflowWrap: 'anywhere',
           }}>
             <span>AGENT TRANSCRIPT · LIVE</span>
             <span style={{ fontFamily: bMono, fontSize: viewport.isCompactMobile ? 10 : 11, fontWeight: 700 }}>claude ↔ canarchy</span>
           </div>
-          <div style={{ fontFamily: bMono, fontSize: viewport.isCompactMobile ? 11.5 : 12.5, lineHeight: 1.7, padding: '18px 20px' }}>
+          <div style={{ fontFamily: bMono, fontSize: viewport.isCompactMobile ? 11 : 12.5, lineHeight: 1.7, padding: '18px 20px', overflowWrap: 'anywhere' }}>
             {transcript.map((row, i) => {
               if (row.k === 'user') return (
                 <div key={i} style={{ marginBottom: 10 }}>
@@ -505,14 +507,16 @@ function BrutMCP({ viewport }) {
                 <div key={i} style={{ color: bColors.mute, marginBottom: 8, fontStyle: 'italic' }}>{row.t}</div>
               );
               if (row.k === 'call') return (
-                <div key={i} style={{ marginBottom: 4 }}>
-                  <span style={{ color: bColors.red, fontWeight: 700 }}>→ call</span>{' '}
-                  <span style={{ color: bColors.ink, fontWeight: 700 }}>{row.fn}</span>{' '}
-                  <span style={{ color: bColors.mute }}>{row.body}</span>
+                <div key={i} style={{ marginBottom: 8, display: 'grid', gap: 2 }}>
+                  <div>
+                    <span style={{ color: bColors.red, fontWeight: 700 }}>→ call</span>{' '}
+                    <span style={{ color: bColors.ink, fontWeight: 700, overflowWrap: 'anywhere' }}>{row.fn}</span>
+                  </div>
+                  <div style={{ color: bColors.mute, paddingLeft: viewport.isMobile ? 0 : 18, overflowWrap: 'anywhere' }}>{row.body}</div>
                 </div>
               );
               if (row.k === 'ret') return (
-                <div key={i} style={{ marginBottom: 10, paddingLeft: 18, color: bColors.mute }}>
+                <div key={i} style={{ marginBottom: 10, paddingLeft: viewport.isMobile ? 0 : 18, color: bColors.mute, overflowWrap: 'anywhere' }}>
                   <span style={{ color: bColors.ink, fontWeight: 700 }}>←</span> {row.body}
                 </div>
               );
