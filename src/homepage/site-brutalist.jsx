@@ -160,13 +160,13 @@ function BrutHero({ viewport }) {
   const stacked = viewport.isMobile;
 
   return (
-    <section style={{ padding: viewport.isMobile ? '42px 18px 26px' : viewport.isTablet ? '56px 28px 30px' : '60px 56px 30px', position: 'relative', overflow: 'hidden' }}>
+    <section style={{ padding: viewport.isMobile ? '42px 18px 26px' : viewport.isTablet ? '56px 28px 30px' : '60px 56px 30px', position: 'relative' }}>
       {/* Giant ID stamp */}
       <div style={{
-        position: stacked ? 'static' : 'absolute', top: 80, right: -60, transform: stacked ? 'none' : 'rotate(9deg)',
+        position: stacked ? 'static' : 'absolute', top: 80, right: stacked ? 'auto' : 0, left: stacked ? 'auto' : 'auto', transform: stacked ? 'none' : 'rotate(9deg)',
         fontFamily: bMono, fontSize: 12, color: bColors.ink, border: `3px solid ${bColors.red}`,
         padding: '10px 18px', background: bColors.paper, letterSpacing: 2, fontWeight: 700,
-        display: 'inline-block', marginBottom: stacked ? 18 : 0,
+        display: 'inline-block', marginBottom: stacked ? 18 : 0, marginLeft: stacked ? 0 : 'auto',
       }}>
         <div style={{ color: bColors.red }}>▲ ADVISORY</div>
         <div>FUZZ AROUND · FIND OUT</div>
