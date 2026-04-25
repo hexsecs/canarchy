@@ -1862,8 +1862,12 @@ def j1939_payload(
             messages,
         )
         warnings.extend(dbc_warnings)
+        faults_data = _j1939_faults(enriched_data["messages"], file=args.file)
+        for key in ("dbc", "dbc_source", "dbc_spn_matches"):
+            if key in enriched_data:
+                faults_data[key] = enriched_data[key]
         return (
-            _j1939_faults(enriched_data["messages"], file=args.file),
+            faults_data,
             [],
             warnings,
         )

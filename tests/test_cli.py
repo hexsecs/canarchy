@@ -1536,6 +1536,26 @@ class CliTests(unittest.TestCase):
         self.assertIn("spn=110", stdout)
         self.assertIn("fmi=5", stdout)
 
+    def test_j1939_faults_retains_dbc_metadata_in_response(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "faults",
+            "--file",
+            str(FIXTURES / "j1939_dm1_spn175.candump"),
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        data = payload["data"]
+        self.assertIn("dbc", data)
+        self.assertEqual(data["dbc_source"]["provider"], "local")
+        self.assertEqual(data["dbc_spn_matches"], 1)
+        fault = data["ecus"][0]["faults"][0]
+        self.assertEqual(fault["spn"], 175)
+        self.assertEqual(fault["dbc_signal_name"], "EngineOilTemp")
+
     def test_j1939_faults_filler_dtc_is_excluded(self) -> None:
         # SPN=255/FMI=0 is a common no-fault filler; active_dtc_count is 0.
         # The faults command should suppress it and report zero active faults.
