@@ -1462,6 +1462,97 @@ class CliTests(unittest.TestCase):
         self.assertEqual(records[2]["event_type"], "alert")
         self.assertEqual(records[2]["payload"]["level"], "warning")
 
+    def test_j1939_faults_groups_dtcs_by_source_address(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "faults",
+            "--file",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        data = payload["data"]
+        self.assertEqual(data["source_count"], 2)
+        self.assertEqual(data["total_fault_count"], 3)
+        ecu_31 = next(e for e in data["ecus"] if e["source_address"] == 0x31)
+        self.assertEqual(ecu_31["source_address_name"], "Cab Controller - Primary")
+        self.assertEqual(ecu_31["fault_count"], 2)
+        spns = {f["spn"] for f in ecu_31["faults"]}
+        self.assertEqual(spns, {110, 190})
+
+    def test_j1939_faults_marks_suspicious_dtcs(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "faults",
+            "--file",
+            str(FIXTURES / "j1939_dm1_deprecated_conversion.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        data = payload["data"]
+        self.assertIn(
+            "One or more DM1 DTCs use deprecated SPN conversion modes; conversion details are reported in structured output.",
+            payload["warnings"],
+        )
+        for ecu in data["ecus"]:
+            for fault in ecu["faults"]:
+                self.assertTrue(fault["suspicious"])
+
+    def test_j1939_faults_includes_lamp_summary(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "faults",
+            "--file",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        for ecu in payload["data"]["ecus"]:
+            lamp = ecu["lamp_summary"]
+            self.assertIn("mil", lamp)
+            self.assertIn("red_stop", lamp)
+            self.assertIn("amber_warning", lamp)
+            self.assertIn("protect", lamp)
+
+    def test_j1939_faults_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "faults",
+            "--file",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 faults", stdout)
+        self.assertIn("sa=0x31", stdout)
+        self.assertIn("spn=110", stdout)
+        self.assertIn("fmi=5", stdout)
+
+    def test_j1939_faults_filler_dtc_is_excluded(self) -> None:
+        # SPN=255/FMI=0 is a common no-fault filler; active_dtc_count is 0.
+        # The faults command should suppress it and report zero active faults.
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "faults",
+            "--file",
+            str(FIXTURES / "j1939_dm1_no_fault.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["total_fault_count"], 0)
+        ecu = payload["data"]["ecus"][0]
+        self.assertEqual(ecu["fault_count"], 0)
+        self.assertEqual(ecu["faults"], [])
+
     def test_uds_scan_returns_transaction_events(self) -> None:
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
             exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--json")
