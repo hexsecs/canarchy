@@ -27,6 +27,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 * Documented the `j1939 inventory` workflow across the command reference, J1939 design/test specs, MCP docs, and agent-facing command/tool guidance.
 * Documented the split GitHub Pages layout and the combined local/CI build flow for the root homepage plus `/docs/` site.
+* Corrected the release workflow documentation to keep artifact build and publish steps on the stable release version before `main` advances to the next `.dev0` development version.
 
 ## [0.4.0] - 2026-04-24
 
