@@ -24,14 +24,14 @@ bash scripts/build_pages_site.sh
 
 This produces:
 
-* `site/index.html` as the custom GitHub Pages landing page from the repository-root `index.html`
+* `site/index.html` as the custom GitHub Pages landing page built from `src/homepage/index.html` and `src/homepage/site-brutalist.jsx`
 * `site/docs/` as the MkDocs-built documentation site
 
 ## Source Layout
 
 The docs site pulls from these in-repo sources:
 
-* repository-root `index.html` for the GitHub Pages landing page
+* `src/homepage/index.html` and `src/homepage/site-brutalist.jsx` for the GitHub Pages landing page
 * `docs/index.md` for the docs landing page published at `/docs/`
 * `README.md` surfaced through `docs/overview.md`
 * `AGENTS.md` surfaced through `docs/agents.md`
