@@ -47,7 +47,7 @@ EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
-J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary", "j1939 inventory"}
+J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
@@ -403,6 +403,13 @@ def build_parser() -> CanarchyArgumentParser:
     add_j1939_file_analysis_arguments(j1939_dm1)
     add_output_arguments(j1939_dm1)
     j1939_dm1.set_defaults(command="j1939 dm1")
+
+    j1939_faults = j1939_subparsers.add_parser("faults", help="summarize J1939 DM1 faults by ECU")
+    j1939_faults.add_argument("--file", required=True, help="path to candump capture file")
+    j1939_faults.add_argument("--dbc", help="enrich DTC names with a local DBC path or provider ref")
+    add_j1939_file_analysis_arguments(j1939_faults)
+    add_output_arguments(j1939_faults)
+    j1939_faults.set_defaults(command="j1939 faults")
 
     j1939_summary = j1939_subparsers.add_parser("summary", help="summarize J1939 capture content")
     j1939_summary.add_argument("--file", required=True, help="path to candump capture file")
@@ -854,7 +861,7 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 summary", "j1939 inventory"}:
+    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory"}:
         max_frames = getattr(args, "max_frames", None)
         seconds = getattr(args, "seconds", None)
         if max_frames is not None and max_frames < 1:
@@ -1332,6 +1339,90 @@ def _j1939_inventory(frames: list[CanFrame], *, file: str, decoder: Any) -> tupl
     )
 
 
+_LAMP_PRIORITY: dict[str, int] = {"on": 3, "error": 2, "not_available": 1, "off": 0}
+
+
+def _j1939_faults(messages: list[dict[str, Any]], *, file: str) -> dict[str, Any]:
+    by_sa: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    for message in messages:
+        by_sa[int(message["source_address"])].append(message)
+
+    ecus: list[dict[str, Any]] = []
+    total_fault_count = 0
+
+    for sa in sorted(by_sa):
+        sa_messages = by_sa[sa]
+
+        fault_map: dict[tuple[int, int], dict[str, Any]] = {}
+        for message in sa_messages:
+            ts = message.get("timestamp")
+            for dtc in message.get("dtcs", []):
+                if int(dtc["spn"]) == 0 or int(dtc["fmi"]) in {0, 31}:
+                    continue
+                spn = int(dtc["spn"])
+                fmi = int(dtc["fmi"])
+                key = (spn, fmi)
+                if key not in fault_map:
+                    entry: dict[str, Any] = {
+                        "spn": spn,
+                        "name": dtc.get("name"),
+                        "fmi": fmi,
+                        "occurrences": 0,
+                        "first_seen": ts,
+                        "last_seen": ts,
+                        "suspicious": False,
+                    }
+                    for field in ("dbc_signal_name", "dbc_message_name", "units"):
+                        if field in dtc:
+                            entry[field] = dtc[field]
+                    fault_map[key] = entry
+                e = fault_map[key]
+                e["occurrences"] += 1
+                if ts is not None:
+                    if e["first_seen"] is None or ts < e["first_seen"]:
+                        e["first_seen"] = ts
+                    if e["last_seen"] is None or ts > e["last_seen"]:
+                        e["last_seen"] = ts
+                if int(dtc.get("conversion_method", 0)) != 0:
+                    e["suspicious"] = True
+
+        def _worst_lamp(key: str) -> str:
+            states = [m["lamp_status"][key] for m in sa_messages if "lamp_status" in m]
+            return max(states, key=lambda s: _LAMP_PRIORITY.get(s, 0)) if states else "off"
+
+        lamp_summary = {
+            "mil": _worst_lamp("mil"),
+            "red_stop": _worst_lamp("red_stop"),
+            "amber_warning": _worst_lamp("amber_warning"),
+            "protect": _worst_lamp("protect"),
+        }
+
+        timestamps = [m["timestamp"] for m in sa_messages if m.get("timestamp") is not None]
+        faults = list(fault_map.values())
+        total_fault_count += len(faults)
+
+        ecus.append(
+            {
+                "source_address": sa,
+                "source_address_name": source_address_lookup(sa),
+                "message_count": len(sa_messages),
+                "first_seen": min(timestamps) if timestamps else None,
+                "last_seen": max(timestamps) if timestamps else None,
+                "lamp_summary": lamp_summary,
+                "fault_count": len(faults),
+                "faults": faults,
+            }
+        )
+
+    return {
+        "mode": "passive",
+        "file": file,
+        "source_count": len(ecus),
+        "total_fault_count": total_fault_count,
+        "ecus": ecus,
+    }
+
+
 def sample_frame(*, interface: str | None = None, frame_format: str = "can") -> CanFrame:
     data = bytes.fromhex("11223344") if frame_format == "can" else bytes.fromhex("1122334455667788")
     return CanFrame(
@@ -1751,6 +1842,32 @@ def j1939_payload(
         warnings.extend(dbc_warnings)
         return (
             data,
+            [],
+            warnings,
+        )
+    if args.command == "j1939 faults":
+        decoder = get_j1939_decoder()
+        messages = decoder.dm1_messages(
+            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+        )
+        warnings = dm1_warnings(messages)
+        enriched_data, dbc_warnings = enrich_dm1_with_dbc(
+            {
+                "mode": "passive",
+                "file": args.file,
+                "message_count": len(messages),
+                "messages": messages,
+                "source_count": len({m["source_address"] for m in messages}),
+            },
+            messages,
+        )
+        warnings.extend(dbc_warnings)
+        faults_data = _j1939_faults(enriched_data["messages"], file=args.file)
+        for key in ("dbc", "dbc_source", "dbc_spn_matches"):
+            if key in enriched_data:
+                faults_data[key] = enriched_data[key]
+        return (
+            faults_data,
             [],
             warnings,
         )
@@ -2422,6 +2539,35 @@ def format_j1939_table(result: CommandResult) -> list[str]:
                 f"amber={message['lamp_status']['amber_warning']} "
                 f"codes={dtc_text}"
             )
+        return lines
+
+    if result.command == "j1939 faults":
+        lines.append(f"file: {result.data['file']}")
+        lines.append(f"sources: {result.data['source_count']}  total_faults: {result.data['total_fault_count']}")
+        ecus = result.data.get("ecus", [])
+        if not ecus:
+            lines.append("- no dm1 fault activity")
+            return lines
+        for ecu in ecus:
+            sa = ecu["source_address"]
+            sa_name = ecu.get("source_address_name")
+            sa_label = f" [{sa_name}]" if sa_name else ""
+            lamp = ecu["lamp_summary"]
+            lines.append(
+                f"sa=0x{sa:02X}{sa_label} "
+                f"messages={ecu['message_count']} "
+                f"faults={ecu['fault_count']} "
+                f"mil={lamp['mil']} "
+                f"amber={lamp['amber_warning']}"
+            )
+            for fault in ecu["faults"]:
+                name = fault.get("name") or "unknown"
+                suspicious_flag = " [suspicious]" if fault.get("suspicious") else ""
+                lines.append(
+                    f"  spn={fault['spn']} fmi={fault['fmi']} "
+                    f"name={name} "
+                    f"occurrences={fault['occurrences']}{suspicious_flag}"
+                )
         return lines
 
     if result.command == "j1939 summary":
