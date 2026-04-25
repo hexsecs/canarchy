@@ -602,9 +602,10 @@ function BrutMatrix({ viewport }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 0, background: bColors.ink }}>
                 {mobileTools.map(({ tool, index }) => (
                   <div key={tool} style={{
+                    gridColumn: index === mobileTools.length - 1 && mobileTools.length % 2 === 1 ? '1 / -1' : 'auto',
                     background: index === 0 && row[1][index] === 1 ? bColors.yellow : bColors.bg,
                     color: bColors.ink, padding: viewport.isCompactMobile ? '10px 12px' : '12px 14px',
-                    borderRight: index % 2 === 0 ? `2px solid ${bColors.ink}` : 'none',
+                    borderRight: index === mobileTools.length - 1 && mobileTools.length % 2 === 1 ? 'none' : index % 2 === 0 ? `2px solid ${bColors.ink}` : 'none',
                     borderBottom: index < mobileTools.length - 2 ? `2px solid ${bColors.ink}` : 'none',
                     display: 'flex', flexDirection: 'column', gap: 6, minHeight: viewport.isCompactMobile ? 68 : 74,
                   }}>
