@@ -577,6 +577,8 @@ function BrutMatrix({ viewport }) {
     ['Provider-backed DBC',  [1,0,0,0,0,0,0]],
     ['Agent / MCP',          [1,0,0,0,0,0,0]],
   ];
+  const mobileTools = tools.map((tool, index) => ({ tool, index }));
+
   return (
     <section style={{ padding: sectionPadding(viewport), background: bColors.bg }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 30, flexDirection: viewport.isMobile ? 'column' : 'row', gap: 16 }}>
@@ -587,6 +589,43 @@ function BrutMatrix({ viewport }) {
           FIRST-CLASS ONLY · NO HALFWAY<br/>■ = shipped · □ = not a focus
         </div>
       </div>
+      {viewport.isMobile ? (
+        <div style={{ display: 'grid', gap: 16 }}>
+          {rows.map(row => (
+            <div key={row[0]} style={{ border: `4px solid ${bColors.ink}`, background: bColors.bg }}>
+              <div style={{
+                background: bColors.yellow, color: bColors.ink, padding: '12px 16px',
+                fontFamily: bDisplay, fontSize: viewport.isCompactMobile ? 18 : 20, letterSpacing: 1,
+              }}>
+                {row[0]}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 0, background: bColors.ink }}>
+                {mobileTools.map(({ tool, index }) => (
+                  <div key={tool} style={{
+                    background: index === 0 && row[1][index] === 1 ? bColors.yellow : bColors.bg,
+                    color: bColors.ink, padding: viewport.isCompactMobile ? '10px 12px' : '12px 14px',
+                    borderRight: index % 2 === 0 ? `2px solid ${bColors.ink}` : 'none',
+                    borderBottom: index < mobileTools.length - 2 ? `2px solid ${bColors.ink}` : 'none',
+                    display: 'flex', flexDirection: 'column', gap: 6, minHeight: viewport.isCompactMobile ? 68 : 74,
+                  }}>
+                    <span style={{ fontFamily: bMono, fontSize: viewport.isCompactMobile ? 10 : 11, lineHeight: 1.35, color: bColors.mute, overflowWrap: 'anywhere' }}>
+                      {tool}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontFamily: bDisplay, fontSize: 18, lineHeight: 1, color: bColors.ink }}>
+                        {row[1][index] ? '■' : '□'}
+                      </span>
+                      <span style={{ fontFamily: bMono, fontSize: 10, letterSpacing: 1, color: bColors.ink, fontWeight: 700 }}>
+                        {row[1][index] ? 'YES' : 'NO'}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div style={{ border: `4px solid ${bColors.ink}`, background: bColors.ink, overflowX: 'auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr repeat(7, 1fr)', minWidth: 820 }}>
           <div style={{ background: bColors.yellow, color: bColors.ink, padding: '14px 18px', fontFamily: bDisplay, fontSize: 14, letterSpacing: 2 }}>WORKFLOW</div>
@@ -614,6 +653,7 @@ function BrutMatrix({ viewport }) {
           </div>
         ))}
       </div>
+      )}
     </section>
   );
 }

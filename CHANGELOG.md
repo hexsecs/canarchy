@@ -23,6 +23,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * The GitHub Pages root homepage now scales marquee text, major section headings, selected card titles, and command/transcript blocks down further for common phone widths including iPhone 16 Pro-sized viewports.
 * The GitHub Pages root homepage now uses a compact hamburger menu for mobile navigation while preserving the full inline top nav on larger viewports.
 * The GitHub Pages homepage MCP tool catalog and agent transcript now wrap long tool names, argument lists, return types, and transcript lines cleanly on narrow mobile screens instead of overflowing horizontally.
+* The GitHub Pages homepage tool matrix now switches to a balanced stacked comparison-card layout on mobile instead of forcing the full desktop table off-screen.
 
 ### Documentation
 
