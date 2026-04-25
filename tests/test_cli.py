@@ -1025,6 +1025,7 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
+            "sessions",
             "--file",
             str(FIXTURES / "j1939_dm1_tp.candump"),
             "--json",
@@ -1044,11 +1045,13 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(session["decoded_text"])
         self.assertFalse(session["decoded_text_heuristic"])
         self.assertIsNone(session["payload_label"])
+        self.assertIsNotNone(session["payload_hash"])
 
     def test_j1939_tp_returns_rts_cts_session_summary(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
+            "sessions",
             "--file",
             str(FIXTURES / "j1939_dm1_rts_cts.candump"),
             "--json",
@@ -1074,6 +1077,7 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
+            "sessions",
             "--file",
             str(FIXTURES / "j1939_tp_printable_id.candump"),
             "--json",
@@ -1094,6 +1098,7 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
+            "sessions",
             "--file",
             str(FIXTURES / "j1939_tp_printable_id.candump"),
             "--table",
@@ -1102,6 +1107,118 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("label=component_identification", stdout)
         self.assertIn("text=VIN1234", stdout)
+        self.assertIn("hash=", stdout)
+
+    def test_j1939_tp_sessions_pgn_filter_limits_results(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            "sessions",
+            "--file",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--pgn",
+            "65226",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["session_count"], 1)
+        self.assertEqual(payload["data"]["pgn_filter"], 65226)
+
+    def test_j1939_tp_sessions_pgn_filter_returns_zero_for_unmatched(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            "sessions",
+            "--file",
+            str(FIXTURES / "j1939_dm1_tp.candump"),
+            "--pgn",
+            "99999",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["session_count"], 0)
+
+    def test_j1939_tp_sessions_sa_filter_limits_results(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            "sessions",
+            "--file",
+            str(FIXTURES / "j1939_tp_compare.candump"),
+            "--sa",
+            "0x80",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["session_count"], 2)  # 0x80 appears twice in the fixture
+        self.assertTrue(all(s["source_address"] == 0x80 for s in payload["data"]["sessions"]))
+        self.assertEqual(payload["data"]["sa_filter"], [0x80])
+
+    def test_j1939_tp_compare_groups_sessions_by_pgn(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            "compare",
+            "--file",
+            str(FIXTURES / "j1939_tp_compare.candump"),
+            "--sa",
+            "0x80,0x83",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        data = payload["data"]
+        self.assertEqual(data["source_addresses"], [0x80, 0x83])
+        self.assertEqual(data["group_count"], 1)
+        group = data["groups"][0]
+        self.assertEqual(group["transfer_pgn"], 65280)
+        self.assertEqual(group["session_count"], 3)  # 0x80 appears twice in the fixture
+        self.assertFalse(group["payloads_identical"])
+        self.assertEqual(group["unique_payload_count"], 2)
+        self.assertGreater(group["timing_spread_seconds"], 0)
+        self.assertEqual(group["repeated_sources"], [0x80])
+
+    def test_j1939_tp_compare_detects_identical_payloads_and_repeated_sources(self) -> None:
+        # SA=0x80 sends the same PGN twice with identical payload in the compare fixture.
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            "compare",
+            "--file",
+            str(FIXTURES / "j1939_tp_compare.candump"),
+            "--sa",
+            "0x80",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        group = payload["data"]["groups"][0]
+        self.assertTrue(group["payloads_identical"])
+        self.assertEqual(group["unique_payload_count"], 1)
+        self.assertEqual(group["repeated_sources"], [0x80])
+
+    def test_j1939_tp_compare_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "tp",
+            "compare",
+            "--file",
+            str(FIXTURES / "j1939_tp_compare.candump"),
+            "--sa",
+            "0x80,0x83",
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 tp compare", stdout)
+        self.assertIn("pgn=65280", stdout)
+        self.assertIn("sa=0x80", stdout)
+        self.assertIn("sa=0x83", stdout)
 
     def test_j1939_dm1_returns_direct_and_transport_messages(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -1156,6 +1273,7 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
+            "sessions",
             "--file",
             str(FIXTURES / "j1939_tp_printable_id.candump"),
             "--json",
@@ -1176,6 +1294,7 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
+            "sessions",
             "--file",
             str(FIXTURES / "j1939_tp_printable_id.candump"),
             "--table",
@@ -1348,6 +1467,7 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
+            "sessions",
             "--file",
             str(FIXTURES / "j1939_dm1_tp.candump"),
             "--seconds",
@@ -1411,6 +1531,7 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
+            "sessions",
             "--file",
             str(FIXTURES / "j1939_dm1_tp.candump"),
             "--seconds",
@@ -2481,6 +2602,7 @@ class CliTests(unittest.TestCase):
             tp_exit_code, tp_stdout, tp_stderr = run_cli(
                 "j1939",
                 "tp",
+                "sessions",
                 "--file",
             str(FIXTURES / "j1939_dm1_tp.candump"),
                 "--json",
@@ -2495,7 +2617,10 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(tp_exit_code, EXIT_OK)
         self.assertEqual(tp_stderr, "")
-        self.assertEqual(json.loads(tp_stdout)["data"]["sessions"], sessions)
+        tp_session = json.loads(tp_stdout)["data"]["sessions"][0]
+        self.assertEqual(tp_session["transfer_pgn"], sessions[0]["transfer_pgn"])
+        self.assertEqual(tp_session["source_address"], sessions[0]["source_address"])
+        self.assertIn("payload_hash", tp_session)
         self.assertEqual(dm1_exit_code, EXIT_OK)
         self.assertEqual(dm1_stderr, "")
         self.assertEqual(json.loads(dm1_stdout)["data"]["messages"], messages)

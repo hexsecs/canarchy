@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shlex
 import sys
@@ -47,7 +48,7 @@ EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
-J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory"}
+J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
@@ -391,11 +392,24 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(j1939_spn)
     j1939_spn.set_defaults(command="j1939 spn")
 
-    j1939_tp = j1939_subparsers.add_parser("tp", help="inspect J1939 transport protocol")
-    j1939_tp.add_argument("--file", required=True, help="path to candump capture file")
-    add_j1939_file_analysis_arguments(j1939_tp)
-    add_output_arguments(j1939_tp)
-    j1939_tp.set_defaults(command="j1939 tp")
+    j1939_tp = j1939_subparsers.add_parser("tp", help="inspect J1939 transport protocol sessions")
+    j1939_tp_subparsers = j1939_tp.add_subparsers(dest="tp_action", required=True)
+
+    j1939_tp_sessions = j1939_tp_subparsers.add_parser("sessions", help="list reassembled TP sessions")
+    j1939_tp_sessions.add_argument("--file", required=True, help="path to candump capture file")
+    j1939_tp_sessions.add_argument("--pgn", type=lambda x: int(x, 0), default=None, help="filter by transfer PGN")
+    j1939_tp_sessions.add_argument("--sa", default=None, help="filter by source address (comma-separated hex or decimal)")
+    add_j1939_file_analysis_arguments(j1939_tp_sessions)
+    add_output_arguments(j1939_tp_sessions)
+    j1939_tp_sessions.set_defaults(command="j1939 tp sessions")
+
+    j1939_tp_compare = j1939_tp_subparsers.add_parser("compare", help="compare TP sessions across source addresses")
+    j1939_tp_compare.add_argument("--file", required=True, help="path to candump capture file")
+    j1939_tp_compare.add_argument("--sa", required=True, help="comma-separated source addresses to compare (hex or decimal)")
+    j1939_tp_compare.add_argument("--pgn", type=lambda x: int(x, 0), default=None, help="filter by transfer PGN")
+    add_j1939_file_analysis_arguments(j1939_tp_compare)
+    add_output_arguments(j1939_tp_compare)
+    j1939_tp_compare.set_defaults(command="j1939 tp compare")
 
     j1939_dm1 = j1939_subparsers.add_parser("dm1", help="inspect J1939 DM1 traffic")
     j1939_dm1.add_argument("--file", required=True, help="path to candump capture file")
@@ -861,7 +875,7 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory"}:
+    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory"}:
         max_frames = getattr(args, "max_frames", None)
         seconds = getattr(args, "seconds", None)
         if max_frames is not None and max_frames < 1:
@@ -1053,13 +1067,18 @@ def _enrich_tp_session(session: dict[str, Any]) -> dict[str, Any]:
     enriched["decoded_text"] = None
     enriched["decoded_text_encoding"] = None
     enriched["decoded_text_heuristic"] = False
+    enriched["payload_hash"] = None
+
+    raw = enriched.get("reassembled_data")
+    try:
+        payload = bytes.fromhex(str(raw)) if raw else b""
+    except ValueError:
+        payload = b""
+
+    if payload:
+        enriched["payload_hash"] = hashlib.sha256(payload).hexdigest()
 
     if not bool(enriched.get("complete", False)):
-        return enriched
-
-    try:
-        payload = bytes.fromhex(str(enriched["reassembled_data"]))
-    except ValueError:
         return enriched
 
     text = _extract_printable_text(payload)
@@ -1420,6 +1439,70 @@ def _j1939_faults(messages: list[dict[str, Any]], *, file: str) -> dict[str, Any
         "source_count": len(ecus),
         "total_fault_count": total_fault_count,
         "ecus": ecus,
+    }
+
+
+def _parse_sa_list(sa_arg: str | None) -> frozenset[int] | None:
+    """Parse a comma-separated list of source addresses (hex or decimal) into a frozenset."""
+    if not sa_arg:
+        return None
+    result: set[int] = set()
+    for part in sa_arg.split(","):
+        part = part.strip()
+        if part:
+            result.add(int(part, 0))
+    return frozenset(result) if result else None
+
+
+def _j1939_tp_compare(
+    sessions: list[dict[str, Any]],
+    *,
+    source_addresses: list[int],
+    pgn_filter: int | None,
+    file: str,
+) -> dict[str, Any]:
+    by_pgn: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    for session in sessions:
+        by_pgn[int(session["transfer_pgn"])].append(session)
+
+    groups: list[dict[str, Any]] = []
+    for pgn in sorted(by_pgn):
+        pgn_sessions = by_pgn[pgn]
+        hashes = [s.get("payload_hash") for s in pgn_sessions]
+        unique_hashes = {h for h in hashes if h is not None}
+        timestamps = [s["timestamp"] for s in pgn_sessions if s.get("timestamp") is not None]
+        sa_counts: Counter[int] = Counter(int(s["source_address"]) for s in pgn_sessions)
+        repeated_sources = sorted(sa for sa, count in sa_counts.items() if count > 1)
+        session_summaries = [
+            {
+                "source_address": int(s["source_address"]),
+                "timestamp": s.get("timestamp"),
+                "total_bytes": int(s["total_bytes"]),
+                "complete": bool(s.get("complete", False)),
+                "payload_hash": s.get("payload_hash"),
+                "reassembled_data": s.get("reassembled_data"),
+            }
+            for s in sorted(pgn_sessions, key=lambda s: (s.get("timestamp") or 0.0))
+        ]
+        groups.append(
+            {
+                "transfer_pgn": pgn,
+                "session_count": len(pgn_sessions),
+                "payloads_identical": len(unique_hashes) == 1 and None not in hashes,
+                "unique_payload_count": len(unique_hashes),
+                "timing_spread_seconds": round(max(timestamps) - min(timestamps), 6) if len(timestamps) >= 2 else 0.0,
+                "repeated_sources": repeated_sources,
+                "sessions": session_summaries,
+            }
+        )
+
+    return {
+        "mode": "passive",
+        "file": file,
+        "source_addresses": source_addresses,
+        "pgn_filter": pgn_filter,
+        "group_count": len(groups),
+        "groups": groups,
     }
 
 
@@ -1802,26 +1885,48 @@ def j1939_payload(
             [],
             warnings,
         )
-    if args.command == "j1939 tp":
+    if args.command == "j1939 tp sessions":
         decoder = get_j1939_decoder()
+        pgn_filter = getattr(args, "pgn", None)
+        sa_filter = _parse_sa_list(getattr(args, "sa", None))
         sessions = [
             _enrich_tp_session(session)
             for session in decoder.transport_protocol_sessions(
                 transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
             )
+            if (pgn_filter is None or int(session["transfer_pgn"]) == pgn_filter)
+            and (sa_filter is None or int(session["source_address"]) in sa_filter)
         ]
         warnings = []
         if not sessions:
             warnings.append("No J1939 transport protocol sessions were found in the capture.")
+        data: dict[str, Any] = {
+            "mode": "passive",
+            "file": args.file,
+            "session_count": len(sessions),
+            "sessions": sessions,
+        }
+        if pgn_filter is not None:
+            data["pgn_filter"] = pgn_filter
+        if sa_filter is not None:
+            data["sa_filter"] = sorted(sa_filter)
+        return (data, [], warnings)
+    if args.command == "j1939 tp compare":
+        decoder = get_j1939_decoder()
+        sa_filter = _parse_sa_list(args.sa)
+        pgn_filter = getattr(args, "pgn", None)
+        all_sessions = [
+            _enrich_tp_session(session)
+            for session in decoder.transport_protocol_sessions(
+                transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+            )
+            if int(session["source_address"]) in sa_filter
+            and (pgn_filter is None or int(session["transfer_pgn"]) == pgn_filter)
+        ]
         return (
-            {
-                "mode": "passive",
-                "file": args.file,
-                "session_count": len(sessions),
-                "sessions": sessions,
-            },
+            _j1939_tp_compare(all_sessions, source_addresses=sorted(sa_filter), pgn_filter=pgn_filter, file=args.file),
             [],
-            warnings,
+            [],
         )
     if args.command == "j1939 dm1":
         decoder = get_j1939_decoder()
@@ -2488,8 +2593,12 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             )
         return lines
 
-    if result.command == "j1939 tp":
+    if result.command == "j1939 tp sessions":
         lines.append(f"file: {result.data['file']}")
+        if "pgn_filter" in result.data:
+            lines.append(f"pgn_filter: {result.data['pgn_filter']}")
+        if "sa_filter" in result.data:
+            lines.append("sa_filter: " + ",".join(f"0x{sa:02X}" for sa in result.data["sa_filter"]))
         lines.append("sessions:")
         sessions = result.data.get("sessions", [])
         if not sessions:
@@ -2502,6 +2611,8 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             decoded_suffix = f" text={decoded_text}" if decoded_text else ""
             label = session.get("payload_label")
             label_suffix = f" label={label}" if label else ""
+            hash_val = session.get("payload_hash")
+            hash_suffix = f" hash={hash_val[:12]}..." if hash_val else ""
             lines.append(
                 "- "
                 f"type={session['session_type']} "
@@ -2513,7 +2624,42 @@ def format_j1939_table(result: CommandResult) -> list[str]:
                 f"complete={session['complete']}"
                 f"{label_suffix}"
                 f"{decoded_suffix}"
+                f"{hash_suffix}"
             )
+        return lines
+
+    if result.command == "j1939 tp compare":
+        lines.append(f"file: {result.data['file']}")
+        sa_hex = " ".join(f"0x{sa:02X}" for sa in result.data.get("source_addresses", []))
+        lines.append(f"source_addresses: {sa_hex}")
+        if result.data.get("pgn_filter") is not None:
+            lines.append(f"pgn_filter: {result.data['pgn_filter']}")
+        lines.append(f"groups: {result.data['group_count']}")
+        groups = result.data.get("groups", [])
+        if not groups:
+            lines.append("- no sessions found for selected source addresses")
+            return lines
+        for group in groups:
+            identical_flag = " [identical]" if group["payloads_identical"] else ""
+            repeated = group.get("repeated_sources", [])
+            repeated_suffix = " repeated=" + ",".join(f"0x{sa:02X}" for sa in repeated) if repeated else ""
+            lines.append(
+                f"pgn={group['transfer_pgn']} "
+                f"sessions={group['session_count']} "
+                f"unique_payloads={group['unique_payload_count']} "
+                f"spread={group['timing_spread_seconds']}s"
+                f"{identical_flag}"
+                f"{repeated_suffix}"
+            )
+            for s in group["sessions"]:
+                hash_val = s.get("payload_hash")
+                hash_text = hash_val[:12] + "..." if hash_val else "none"
+                lines.append(
+                    f"  sa=0x{s['source_address']:02X} "
+                    f"bytes={s['total_bytes']} "
+                    f"complete={s['complete']} "
+                    f"hash={hash_text}"
+                )
         return lines
 
     if result.command == "j1939 dm1":
@@ -3040,7 +3186,7 @@ def _flatten_frame_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
-    _J1939_SESSION_COMMANDS = {"j1939 tp", "j1939 dm1", "j1939 summary", "j1939 inventory"}
+    _J1939_SESSION_COMMANDS = {"j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 summary", "j1939 inventory"}
     if output_format == "json":
         data = payload.get("data", {})
         if result.command == "filter":
