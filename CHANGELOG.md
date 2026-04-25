@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-04-25
+
 ### Added
 
 * Added `canarchy j1939 inventory` and the `j1939_inventory` MCP tool for building source-address inventories from recorded J1939 captures, including top PGNs, component-identification strings, vehicle-identification strings, and per-node DM1 presence.
