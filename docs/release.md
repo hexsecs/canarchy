@@ -26,15 +26,15 @@ For the first public release, use TestPyPI first.
 2. Move relevant entries from `CHANGELOG.md` `Unreleased` into a new versioned release section.
 3. Commit the release preparation changes.
 4. Tag the release with `vX.Y.Z`.
-5. After the release commit lands on `main`, advance `src/canarchy/__init__.py` to the next development version.
-6. Build and verify artifacts locally.
-7. Publish to TestPyPI first if this is the first release or if the release workflow changed.
-8. Publish to PyPI.
-9. Create the GitHub release notes from the changelog.
+5. Build and verify artifacts locally from the release version.
+6. Publish to TestPyPI first if this is the first release or if the release workflow changed.
+7. Publish to PyPI from the same release version or tag.
+8. Create the GitHub release notes from the changelog.
+9. After the release is cut and the release artifacts are published, advance `src/canarchy/__init__.py` on `main` to the next development version in a follow-up commit.
 
 ## Development Version Naming
 
-After cutting release `X.Y.Z`, `main` shall advance immediately to `X.Y.(Z+1).dev0` unless a different next-version target is explicitly planned and documented before or as part of the release.
+After cutting release `X.Y.Z`, `main` shall advance to `X.Y.(Z+1).dev0` in the follow-up commit that reopens development after the release artifacts are built and published, unless a different next-version target is explicitly planned and documented before or as part of the release.
 
 Examples:
 
@@ -45,7 +45,8 @@ Rules:
 
 * keep release tags on the stable version only, such as `v0.4.0`
 * keep unreleased work on `main` on a `.devN` version string
-* update the version metadata in the same commit or immediate follow-up commit that reopens development after a release
+* build and publish release artifacts from the stable release version, not from the post-release `.dev0` version
+* update the version metadata in the same commit or immediate follow-up commit that reopens development on `main` after the release artifacts are published
 * if the next planned release target is a minor or major bump instead of the next patch version, document that decision explicitly and set the `.dev0` version accordingly
 
 ## Local Verification
