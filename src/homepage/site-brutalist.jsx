@@ -31,6 +31,8 @@ function useViewport() {
   return {
     width,
     isMobile: width < 760,
+    isCompactMobile: width < 430,
+    isNarrowMobile: width < 390,
     isTablet: width >= 760 && width < 1100,
   };
 }
@@ -138,7 +140,7 @@ function BrutHero({ viewport }) {
       </div>
 
       <h1 style={{
-        fontFamily: bDisplay, fontSize: stacked ? 82 : viewport.isTablet ? 150 : 220, lineHeight: 0.82, letterSpacing: stacked ? -2 : -6,
+        fontFamily: bDisplay, fontSize: stacked ? (viewport.isNarrowMobile ? 62 : viewport.isCompactMobile ? 70 : 82) : viewport.isTablet ? 150 : 220, lineHeight: 0.82, letterSpacing: stacked ? -2 : -6,
         margin: 0, color: bColors.ink, textTransform: 'uppercase',
       }}>
         The bus<br/>
@@ -150,7 +152,7 @@ function BrutHero({ viewport }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: stacked ? '1fr' : viewport.isTablet ? '1fr' : '1.3fr 1fr', gap: stacked ? 24 : 56, marginTop: 50, alignItems: 'start' }}>
         <p style={{
-          fontFamily: bBody, fontSize: stacked ? 18 : 22, lineHeight: 1.35, color: bColors.ink,
+          fontFamily: bBody, fontSize: stacked ? (viewport.isCompactMobile ? 17 : 18) : 22, lineHeight: 1.35, color: bColors.ink,
           margin: 0, fontWeight: 500, maxWidth: 640,
         }}>
           CANarchy is an <b>open, stream-first runtime</b> for analyzing and manipulating
@@ -174,8 +176,8 @@ function BrutHero({ viewport }) {
           href="#"
           onClick={e => { e.preventDefault(); navigator.clipboard?.writeText('pip install canarchy'); }}
           style={{
-            background: bColors.ink, color: bColors.yellow, padding: stacked ? '18px 22px' : '22px 30px',
-            fontFamily: bDisplay, fontSize: stacked ? 18 : 20, letterSpacing: 1, textDecoration: 'none',
+            background: bColors.ink, color: bColors.yellow, padding: stacked ? (viewport.isCompactMobile ? '16px 18px' : '18px 22px') : '22px 30px',
+            fontFamily: bDisplay, fontSize: stacked ? (viewport.isCompactMobile ? 17 : 18) : 20, letterSpacing: 1, textDecoration: 'none',
             border: `4px solid ${bColors.ink}`, textTransform: 'uppercase',
             width: stacked ? '100%' : 'auto',
           }}
@@ -183,16 +185,16 @@ function BrutHero({ viewport }) {
           pip install canarchy →
         </a>
         <a href={siteBase + '/docs/getting_started'} style={{
-          background: bColors.yellow, color: bColors.ink, padding: stacked ? '18px 22px' : '22px 30px',
-          fontFamily: bDisplay, fontSize: stacked ? 18 : 20, letterSpacing: 1, textDecoration: 'none',
+          background: bColors.yellow, color: bColors.ink, padding: stacked ? (viewport.isCompactMobile ? '16px 18px' : '18px 22px') : '22px 30px',
+          fontFamily: bDisplay, fontSize: stacked ? (viewport.isCompactMobile ? 17 : 18) : 20, letterSpacing: 1, textDecoration: 'none',
           border: `4px solid ${bColors.ink}`, borderLeft: stacked ? `4px solid ${bColors.ink}` : 'none', borderTop: stacked ? 'none' : undefined, textTransform: 'uppercase',
           width: stacked ? '100%' : 'auto',
         }}>
           Read the Docs
         </a>
         <a href="https://github.com/hexsecs/canarchy" target="_blank" rel="noopener noreferrer" style={{
-          background: bColors.paper, color: bColors.ink, padding: stacked ? '18px 22px' : '22px 30px',
-          fontFamily: bDisplay, fontSize: stacked ? 18 : 20, letterSpacing: 1, textDecoration: 'none',
+          background: bColors.paper, color: bColors.ink, padding: stacked ? (viewport.isCompactMobile ? '16px 18px' : '18px 22px') : '22px 30px',
+          fontFamily: bDisplay, fontSize: stacked ? (viewport.isCompactMobile ? 17 : 18) : 20, letterSpacing: 1, textDecoration: 'none',
           border: `4px solid ${bColors.ink}`, borderLeft: stacked ? `4px solid ${bColors.ink}` : 'none', borderTop: stacked ? 'none' : undefined, textTransform: 'uppercase',
           width: stacked ? '100%' : 'auto',
         }}>
@@ -203,7 +205,10 @@ function BrutHero({ viewport }) {
   );
 }
 
-function BrutTicker() {
+function BrutTicker({ viewport }) {
+  const fontSize = viewport.isNarrowMobile ? 16 : viewport.isCompactMobile ? 18 : 22;
+  const gap = viewport.isCompactMobile ? 18 : 28;
+
   const items = [
     'J1939 NATIVE', '·', 'JSONL WIRE FORMAT', '·', 'MCP SERVER', '·', 'UDS DISCOVERY',
     '·', 'DBC PROVIDERS', '·', 'REPLAY WITH JITTER', '·', 'FRAME GATEWAY', '·',
@@ -213,10 +218,10 @@ function BrutTicker() {
     <div style={{
       display: 'flex', background: bColors.ink, color: bColors.yellow,
       padding: '16px 0', borderTop: `4px solid ${bColors.ink}`, borderBottom: `4px solid ${bColors.ink}`,
-      fontFamily: bDisplay, fontSize: 22, letterSpacing: 2, overflow: 'hidden', whiteSpace: 'nowrap', gap: 28,
+      fontFamily: bDisplay, fontSize, letterSpacing: viewport.isCompactMobile ? 1 : 2, overflow: 'hidden', whiteSpace: 'nowrap', gap,
     }}>
       {[...items, ...items].map((t, i) => (
-        <span key={i} style={{ padding: '0 14px', color: t === '·' ? bColors.red : bColors.yellow }}>{t}</span>
+        <span key={i} style={{ padding: viewport.isCompactMobile ? '0 10px' : '0 14px', color: t === '·' ? bColors.red : bColors.yellow }}>{t}</span>
       ))}
     </div>
   );
@@ -234,7 +239,7 @@ function BrutFeatures({ viewport }) {
   return (
     <section style={{ padding: sectionPadding(viewport, '60px 56px'), background: bColors.paper, borderTop: `4px solid ${bColors.ink}` }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 40, flexDirection: viewport.isMobile ? 'column' : 'row', gap: 16 }}>
-        <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 64 : viewport.isTablet ? 84 : 100, margin: 0, letterSpacing: viewport.isMobile ? -2 : -3, lineHeight: 0.9, color: bColors.ink }}>
+        <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 46 : viewport.isCompactMobile ? 52 : 64) : viewport.isTablet ? 84 : 100, margin: 0, letterSpacing: viewport.isMobile ? -2 : -3, lineHeight: 0.9, color: bColors.ink }}>
           SIX<br/>MOVES.
         </h2>
         <div style={{ fontFamily: bMono, fontSize: 12, letterSpacing: 2, color: bColors.mute, textAlign: 'right' }}>
@@ -255,7 +260,7 @@ function BrutFeatures({ viewport }) {
               <span style={{ fontFamily: bMono, fontWeight: 700, fontSize: 12, letterSpacing: 2 }}>NO.{f.n}</span>
               <span style={{ fontFamily: bMono, fontWeight: 700, fontSize: 12, letterSpacing: 2, color: bColors.red }}>● STABLE</span>
             </div>
-            <h3 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 42 : 54, margin: '0 0 14px', letterSpacing: -2, lineHeight: 1, color: bColors.ink }}>
+            <h3 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 34 : 42) : 54, margin: '0 0 14px', letterSpacing: -2, lineHeight: 1, color: bColors.ink }}>
               {f.t}
             </h3>
             <div style={{ width: 60, height: 4, background: bColors.yellow, margin: '0 0 16px' }}/>
@@ -282,7 +287,7 @@ function BrutCommand({ viewport }) {
       <div style={{ fontFamily: bMono, fontSize: 12, letterSpacing: 3, color: bColors.yellow, marginBottom: 16 }}>
         // EXHIBIT A — ONE PIPELINE, ONE TRUTH
       </div>
-      <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 54 : viewport.isTablet ? 72 : 86, letterSpacing: viewport.isMobile ? -1.5 : -3, lineHeight: 0.95, margin: '0 0 40px', color: bColors.bg }}>
+      <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 42 : viewport.isCompactMobile ? 48 : 54) : viewport.isTablet ? 72 : 86, letterSpacing: viewport.isMobile ? -1.5 : -3, lineHeight: 0.95, margin: '0 0 40px', color: bColors.bg }}>
         CAPTURE. DECODE.<br/>
         <span style={{ color: bColors.yellow }}>DIFF.</span> REPLAY.
       </h2>
@@ -292,7 +297,7 @@ function BrutCommand({ viewport }) {
           <div style={{ fontFamily: bMono, fontSize: 11, color: bColors.red, letterSpacing: 2, fontWeight: 700, marginBottom: 12 }}>
             # STEP 1 — CAPTURE + DECODE
           </div>
-          <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? 12 : 14, lineHeight: 1.7, color: bColors.ink, overflowX: 'auto' }}>
+          <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 11 : 12) : 14, lineHeight: 1.7, color: bColors.ink, overflowX: 'auto' }}>
 {`$ canarchy capture \\
     --iface can0 \\
     --decode j1939 \\
@@ -311,7 +316,7 @@ function BrutCommand({ viewport }) {
           <div style={{ fontFamily: bMono, fontSize: 11, color: bColors.red, letterSpacing: 2, fontWeight: 700, marginBottom: 12 }}>
             # STEP 2 — DIFF AGAINST BASELINE
           </div>
-          <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? 12 : 14, lineHeight: 1.7, color: bColors.ink, overflowX: 'auto' }}>
+          <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 11 : 12) : 14, lineHeight: 1.7, color: bColors.ink, overflowX: 'auto' }}>
 {`$ canarchy diff \\
     baseline.jsonl run.jsonl \\
     --by pgn --by source-address
@@ -363,7 +368,7 @@ function BrutMCP({ viewport }) {
           <div style={{ fontFamily: bMono, fontSize: 12, letterSpacing: 3, color: bColors.yellow, fontWeight: 700, marginBottom: 14 }}>
             ■ MCP SERVER · AGENTS GET A SEAT
           </div>
-          <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 56 : viewport.isTablet ? 82 : 110, letterSpacing: viewport.isMobile ? -1.5 : -3.5, lineHeight: 0.88, margin: 0, color: bColors.bg }}>
+          <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 40 : viewport.isCompactMobile ? 46 : 56) : viewport.isTablet ? 82 : 110, letterSpacing: viewport.isMobile ? -1.5 : -3.5, lineHeight: 0.88, margin: 0, color: bColors.bg }}>
             PLUG CLAUDE<br/>
             <span style={{ color: bColors.yellow }}>STRAIGHT INTO</span><br/>
             THE CAN BUS.
@@ -371,7 +376,7 @@ function BrutMCP({ viewport }) {
         </div>
         <div style={{
           background: bColors.yellow, color: bColors.ink, padding: '12px 18px',
-          fontFamily: bMono, fontSize: 11, fontWeight: 700, letterSpacing: 2,
+          fontFamily: bMono, fontSize: viewport.isCompactMobile ? 10 : 11, fontWeight: 700, letterSpacing: 2,
           border: `4px solid ${bColors.bg}`, transform: viewport.isMobile ? 'none' : 'rotate(2deg)',
         }}>
           9 TOOLS · 1 SCHEMA · 0 GLUE CODE
@@ -384,7 +389,7 @@ function BrutMCP({ viewport }) {
         border: `4px solid ${bColors.bg}`, padding: '22px 26px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap',
       }}>
-        <div style={{ fontFamily: bMono, fontSize: viewport.isMobile ? 15 : 22, fontWeight: 700, letterSpacing: -0.5, overflowWrap: 'anywhere' }}>
+        <div style={{ fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 12 : viewport.isCompactMobile ? 13 : 15) : 22, fontWeight: 700, letterSpacing: -0.5, overflowWrap: 'anywhere' }}>
           <span style={{ color: bColors.red }}>$</span> canarchy mcp serve --bind 127.0.0.1:6969
         </div>
         <div style={{ fontFamily: bMono, fontSize: 11, letterSpacing: 2, fontWeight: 700 }}>
@@ -402,7 +407,7 @@ function BrutMCP({ viewport }) {
         }}>
           <div style={{
             background: bColors.yellow, color: bColors.ink,
-            padding: '12px 18px', fontFamily: bDisplay, fontSize: 16, letterSpacing: 2,
+            padding: '12px 18px', fontFamily: bDisplay, fontSize: viewport.isCompactMobile ? 14 : 16, letterSpacing: 2,
             borderBottom: `4px solid ${bColors.ink}`,
           }}>
             TOOL CATALOG · canarchy.* (9 tools, all stream)
@@ -440,13 +445,13 @@ function BrutMCP({ viewport }) {
         }}>
           <div style={{
             background: bColors.red, color: bColors.bg,
-            padding: '12px 18px', fontFamily: bDisplay, fontSize: 16, letterSpacing: 2,
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '12px 18px', fontFamily: bDisplay, fontSize: viewport.isCompactMobile ? 14 : 16, letterSpacing: 2,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
           }}>
             <span>AGENT TRANSCRIPT · LIVE</span>
-            <span style={{ fontFamily: bMono, fontSize: 11, fontWeight: 700 }}>claude ↔ canarchy</span>
+            <span style={{ fontFamily: bMono, fontSize: viewport.isCompactMobile ? 10 : 11, fontWeight: 700 }}>claude ↔ canarchy</span>
           </div>
-          <div style={{ fontFamily: bMono, fontSize: 12.5, lineHeight: 1.7, padding: '18px 20px' }}>
+          <div style={{ fontFamily: bMono, fontSize: viewport.isCompactMobile ? 11.5 : 12.5, lineHeight: 1.7, padding: '18px 20px' }}>
             {transcript.map((row, i) => {
               if (row.k === 'user') return (
                 <div key={i} style={{ marginBottom: 10 }}>
@@ -529,7 +534,7 @@ function BrutMatrix({ viewport }) {
   return (
     <section style={{ padding: sectionPadding(viewport), background: bColors.bg }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 30, flexDirection: viewport.isMobile ? 'column' : 'row', gap: 16 }}>
-        <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 56 : viewport.isTablet ? 72 : 86, letterSpacing: viewport.isMobile ? -1.5 : -3, lineHeight: 0.9, margin: 0, color: bColors.ink }}>
+        <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 42 : viewport.isCompactMobile ? 48 : 56) : viewport.isTablet ? 72 : 86, letterSpacing: viewport.isMobile ? -1.5 : -3, lineHeight: 0.9, margin: 0, color: bColors.ink }}>
           THE<br/>MATRIX.
         </h2>
         <div style={{ fontFamily: bMono, fontSize: 12, color: bColors.mute, textAlign: 'right', letterSpacing: 1 }}>
@@ -581,7 +586,7 @@ function BrutManifesto({ viewport }) {
       <div style={{ fontFamily: bMono, fontSize: 12, letterSpacing: 3, color: bColors.red, fontWeight: 700, marginBottom: 14 }}>
         ▲▲▲ MANIFESTO ▲▲▲
       </div>
-      <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 58 : viewport.isTablet ? 84 : 120, lineHeight: 0.9, letterSpacing: viewport.isMobile ? -1.5 : -4, margin: '0 0 40px' }}>
+      <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 42 : viewport.isCompactMobile ? 48 : 58) : viewport.isTablet ? 84 : 120, lineHeight: 0.9, letterSpacing: viewport.isMobile ? -1.5 : -4, margin: '0 0 40px' }}>
         SIX RULES.<br/>ONE EXCEPTION: YOU.
       </h2>
       <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: viewport.isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 0, borderTop: `4px solid ${bColors.ink}` }}>
@@ -593,7 +598,7 @@ function BrutManifesto({ viewport }) {
             flexDirection: viewport.isMobile ? 'column' : 'row',
           }}>
             <span style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 40 : 56, letterSpacing: -2, color: bColors.red, lineHeight: 1 }}>0{i+1}</span>
-            <span style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 22 : 30, letterSpacing: -1, lineHeight: 1.1 }}>{p}</span>
+            <span style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 20 : 22) : 30, letterSpacing: -1, lineHeight: 1.1 }}>{p}</span>
           </li>
         ))}
       </ol>
@@ -653,7 +658,7 @@ function BrutReviews({ viewport }) {
           <div style={{ fontFamily: bMono, fontSize: 12, letterSpacing: 3, color: bColors.red, fontWeight: 700, marginBottom: 14 }}>
             ▣ DEFINITELY-REAL REVIEWS
           </div>
-          <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 58 : viewport.isTablet ? 82 : 100, letterSpacing: viewport.isMobile ? -1.5 : -3, lineHeight: 0.9, margin: 0, color: bColors.ink }}>
+          <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 42 : viewport.isCompactMobile ? 48 : 58) : viewport.isTablet ? 82 : 100, letterSpacing: viewport.isMobile ? -1.5 : -3, lineHeight: 0.9, margin: 0, color: bColors.ink }}>
             TESTIMONIALS.<br/>
             <span style={{ background: bColors.yellow, padding: '0 10px' }}>ALLEGEDLY.</span>
           </h2>
@@ -684,7 +689,7 @@ function BrutReviews({ viewport }) {
               {'★'.repeat(r.stars)}<span style={{ color: bColors.mute }}>{'☆'.repeat(5 - r.stars)}</span>
             </div>
             <p style={{
-              fontFamily: bDisplay, fontSize: 22, lineHeight: 1.15, letterSpacing: -0.5,
+              fontFamily: bDisplay, fontSize: viewport.isCompactMobile ? 19 : 22, lineHeight: 1.15, letterSpacing: -0.5,
               margin: '0 0 22px', color: bColors.ink,
             }}>
               {r.quote}
@@ -723,7 +728,7 @@ function BrutInstall({ viewport }) {
           <div style={{ fontFamily: bMono, fontSize: 12, letterSpacing: 3, color: bColors.red, fontWeight: 700 }}>
             ▣ INSTALL / RUN
           </div>
-          <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? 56 : viewport.isTablet ? 72 : 92, lineHeight: 0.9, letterSpacing: viewport.isMobile ? -1.5 : -3, margin: '16px 0 26px', color: bColors.ink }}>
+          <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 42 : viewport.isCompactMobile ? 48 : 56) : viewport.isTablet ? 72 : 92, lineHeight: 0.9, letterSpacing: viewport.isMobile ? -1.5 : -3, margin: '16px 0 26px', color: bColors.ink }}>
             THREE<br/>COMMANDS.<br/>
             <span style={{ background: bColors.yellow, padding: '0 10px' }}>ZERO</span> FLUFF.
           </h2>
@@ -736,7 +741,7 @@ function BrutInstall({ viewport }) {
           <div style={{ position: 'absolute', top: -14, left: 24, background: bColors.red, color: bColors.bg, fontFamily: bMono, fontSize: 11, letterSpacing: 2, fontWeight: 700, padding: '4px 10px' }}>
             $ ZSH · canarchy v0.4.1
           </div>
-          <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? 12 : 15, lineHeight: 1.9, color: bColors.bg, overflowX: 'auto' }}>
+          <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 11 : 12) : 15, lineHeight: 1.9, color: bColors.bg, overflowX: 'auto' }}>
 <span style={{ color: bColors.mute }}># 1. install</span>{'\n'}
 <span style={{ color: bColors.yellow }}>➜</span> pip install canarchy{'\n\n'}
 <span style={{ color: bColors.mute }}># 2. bring up a virtual bus</span>{'\n'}
@@ -786,7 +791,7 @@ function BrutFooter({ viewport }) {
       <footer style={{ background: bColors.ink, color: bColors.bg, padding: viewport.isMobile ? '42px 18px 32px' : viewport.isTablet ? '50px 28px 36px' : '50px 56px 40px', fontFamily: bBody }}>
         <div style={{ display: 'grid', gridTemplateColumns: viewport.isMobile ? '1fr' : viewport.isTablet ? 'repeat(2, 1fr)' : '2fr 1fr 1fr 1fr 1fr', gap: 40 }}>
           <div>
-            <div style={{ fontFamily: bDisplay, fontSize: 44, letterSpacing: -1.5, color: bColors.yellow, lineHeight: 1 }}>CAN/ARCHY</div>
+            <div style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 34 : 40) : 44, letterSpacing: -1.5, color: bColors.yellow, lineHeight: 1 }}>CAN/ARCHY</div>
             <div style={{ marginTop: 14, fontFamily: bMono, fontSize: 12, lineHeight: 1.7, color: '#d8d3c5' }}>
               STREAM-FIRST CAN ANALYSIS RUNTIME.<br/>
               OPEN SOURCE · GPL-3.0 · BUILT BY hexsecs.<br/>
@@ -833,7 +838,7 @@ function SiteBrutalist() {
     }}>
       <BrutNav viewport={viewport}/>
       <BrutHero viewport={viewport}/>
-      <BrutTicker/>
+      <BrutTicker viewport={viewport}/>
       <BrutFeatures viewport={viewport}/>
       <BrutCommand viewport={viewport}/>
       <BrutMCP viewport={viewport}/>
