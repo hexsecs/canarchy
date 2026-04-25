@@ -213,7 +213,7 @@ function BrutHero({ viewport }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 0, marginTop: 50, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 0, marginTop: 50, flexWrap: 'wrap', alignItems: 'stretch' }}>
         <a
           href="#"
           onClick={e => { e.preventDefault(); navigator.clipboard?.writeText('pip install canarchy'); }}
