@@ -43,6 +43,7 @@ The only exceptions are:
 
 **This is a hard rule, not a suggestion.**
 
+* Before creating a branch, **post a comment on the issue claiming it** — for example: "Starting work on this; branch will be `<branch-name>`." This prevents two agents or contributors from independently implementing the same issue.
 * For any non-trivial feature, bug fix, refactor, or documentation change, agents shall create and work from a dedicated branch rather than committing directly on `main`.
 * Branch names should be short, descriptive, and tied to the issue when practical, for example `issue-110-j1939-compare`.
 * When issue-scoped work is complete, agents shall push the branch and open a pull request unless the user explicitly asks for a direct push or direct commit flow.
@@ -93,6 +94,7 @@ When reviewing your own work before committing or pushing, explicitly check each
 ### Other issue rules
 
 * Use GitHub Issues to track planned work rather than ad hoc task lists in docs.
+* **Claim an issue before starting work.** Post a comment on the issue as the very first action — before creating a branch or writing any code — stating that work is beginning and naming the intended branch. This is the coordination signal that prevents duplicate effort by other agents or contributors.
 * When starting or completing work that relates to an issue, update the issue with progress or implementation notes.
 * Commit and push the relevant code changes before closing an issue so the issue state matches the remote repository state.
 * Close an issue when its scope and acceptance criteria have been satisfied.
