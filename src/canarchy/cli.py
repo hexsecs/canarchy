@@ -47,7 +47,7 @@ from canarchy.transport import (
     generate_frames,
 )
 from canarchy.tui import run_tui
-from canarchy.uds import uds_services_payload
+from canarchy.uds import uds_decoder_backend, uds_services_payload
 
 EXIT_OK = 0
 EXIT_USER_ERROR = 1
@@ -2472,6 +2472,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             {
                 "interface": args.interface,
                 "mode": "active",
+                "protocol_decoder": uds_decoder_backend(),
                 "responder_count": len(events),
                 **backend_metadata,
                 "implementation": implementation,
@@ -2485,6 +2486,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             {
                 "interface": args.interface,
                 "mode": "passive",
+                "protocol_decoder": uds_decoder_backend(),
                 "transaction_count": len(events),
                 **backend_metadata,
                 "implementation": implementation,
@@ -3289,6 +3291,8 @@ def format_uds_table(result: CommandResult) -> list[str]:
         return lines
 
     lines.append(f"interface: {result.data.get('interface', 'unknown')}")
+    if result.data.get("protocol_decoder"):
+        lines.append(f"protocol_decoder: {result.data['protocol_decoder']}")
     events = result.data.get("events", [])
     if result.command == "uds scan":
         lines.append(f"responders: {result.data.get('responder_count', 0)}")
@@ -3315,6 +3319,12 @@ def format_uds_table(result: CommandResult) -> list[str]:
             f"req={payload['request_data']} "
             f"resp={payload['response_data']}"
         )
+        if payload.get("negative_response_name"):
+            code = payload.get("negative_response_code")
+            code_text = f"0x{code:02X}" if isinstance(code, int) else "unknown"
+            lines.append(f"  nrc={code_text} name={payload['negative_response_name']}")
+        if payload.get("response_summary"):
+            lines.append(f"  response_summary: {payload['response_summary']}")
     return lines
 
 

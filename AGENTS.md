@@ -288,6 +288,8 @@ Prefer typed event objects over free-form strings.
 
 For protocol transactions that can be partially reconstructed from captured traffic, include explicit completeness fields instead of implying that every decoded payload is whole.
 
+Where optional protocol enrichers are present, such as a Scapy-backed diagnostic adapter for UDS, surface them through stable summary-level fields rather than leaking third-party runtime objects into command output.
+
 ### 2. Human output must never break machine output
 
 Every command should support explicit output modes:

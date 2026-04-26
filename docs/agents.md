@@ -101,6 +101,8 @@ Failures set `"ok": false` and populate `errors` with structured objects (`code`
 
 For UDS workflows, `uds_transaction` events may include `payload.complete=false` when a multi-frame ISO-TP response was only partially captured or arrived out of order. In that case `payload.response_data` still contains the partial bytes that were reassembled.
 
+When the optional Scapy extra is installed, UDS results may also report `data.protocol_decoder="scapy"` and include summary-level `request_summary` / `response_summary` enrichment on `uds_transaction` payloads while preserving the same result envelope and event type.
+
 ### Example Interactions
 
 ```

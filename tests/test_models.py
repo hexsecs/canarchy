@@ -103,5 +103,28 @@ class EventTests(unittest.TestCase):
         payload = event.to_payload()
         self.assertEqual(payload["event_type"], "uds_transaction")
         self.assertTrue(payload["payload"]["complete"])
+        self.assertEqual(payload["payload"]["decoder"], "built-in")
         self.assertEqual(payload["payload"]["service_name"], "DiagnosticSessionControl")
         self.assertEqual(payload["payload"]["request_data"], "1003")
+
+    def test_uds_transaction_event_serializes_optional_decode_fields(self) -> None:
+        event = UdsTransactionEvent(
+            request_id=0x7E0,
+            response_id=0x7E8,
+            service=0x27,
+            service_name="SecurityAccess",
+            request_data=bytes.fromhex("2702"),
+            response_data=bytes.fromhex("7f2735"),
+            decoder="scapy",
+            request_summary="UDS / SecurityAccess",
+            response_summary="UDS / NegativeResponse",
+            negative_response_code=0x35,
+            negative_response_name="InvalidKey",
+        ).to_event()
+
+        payload = event.to_payload()["payload"]
+        self.assertEqual(payload["decoder"], "scapy")
+        self.assertEqual(payload["request_summary"], "UDS / SecurityAccess")
+        self.assertEqual(payload["response_summary"], "UDS / NegativeResponse")
+        self.assertEqual(payload["negative_response_code"], 0x35)
+        self.assertEqual(payload["negative_response_name"], "InvalidKey")

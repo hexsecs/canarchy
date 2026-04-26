@@ -96,6 +96,7 @@ nav:
           - Config Show Command: design/config-show-command.md
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
           - J1939 Monitor Command: design/j1939-monitor-command.md
+          - Scapy Diagnostic Integration: design/scapy-diagnostic-integration.md
           - Composition: design/composition.md
           - MCP Server: design/mcp-server.md
           - Reverse-Engineering Helpers: design/reverse-engineering-helpers.md
@@ -117,6 +118,7 @@ nav:
           - Config Show Command: tests/config-show-command.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
           - J1939 Monitor Command: tests/j1939-monitor-command.md
+          - Scapy Diagnostic Integration: tests/scapy-diagnostic-integration.md
           - MCP Server: tests/mcp-server.md
           - Reverse-Engineering Helpers: tests/reverse-engineering-helpers.md
           - Replay Command: tests/replay-command.md

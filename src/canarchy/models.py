@@ -253,6 +253,11 @@ class UdsTransactionEvent:
     response_data: bytes = field(repr=False)
     complete: bool = True
     ecu_address: int | None = None
+    decoder: str = "built-in"
+    request_summary: str | None = None
+    response_summary: str | None = None
+    negative_response_code: int | None = None
+    negative_response_name: str | None = None
     source: str = "uds"
     timestamp: float | None = None
 
@@ -265,8 +270,13 @@ class UdsTransactionEvent:
                 "request_data": self.request_data.hex(),
                 "request_id": self.request_id,
                 "complete": self.complete,
+                "decoder": self.decoder,
+                "negative_response_code": self.negative_response_code,
+                "negative_response_name": self.negative_response_name,
                 "response_data": self.response_data.hex(),
                 "response_id": self.response_id,
+                "request_summary": self.request_summary,
+                "response_summary": self.response_summary,
                 "service": self.service,
                 "service_name": self.service_name,
             },

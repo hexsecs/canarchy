@@ -33,6 +33,11 @@ dependencies = [
     "python-can>=4.4",
 ]
 
+[project.optional-dependencies]
+scapy = [
+    "scapy>=2.6",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",

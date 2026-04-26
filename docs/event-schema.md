@@ -283,11 +283,16 @@ Emitted by: `uds scan`, `uds trace`
   "timestamp": 0.0,
   "payload": {
     "complete": true,
+    "decoder": "built-in",
     "ecu_address": 2024,
+    "negative_response_code": null,
+    "negative_response_name": null,
     "request_data": "1001",
     "request_id": 2015,
+    "request_summary": null,
     "response_data": "5001003201f4",
     "response_id": 2024,
+    "response_summary": null,
     "service": 16,
     "service_name": "DiagnosticSessionControl"
   }
@@ -304,6 +309,11 @@ Emitted by: `uds scan`, `uds trace`
 | `request_data` | string | Request payload bytes, hex-encoded. |
 | `response_data` | string | Response payload bytes, hex-encoded. |
 | `complete` | bool | `true` when the response payload was fully reassembled; `false` when the capture ended early or consecutive frames arrived out of order. |
+| `decoder` | string | Protocol decoder path used for transaction enrichment, such as `built-in` or `scapy`. |
+| `request_summary` | string \| null | Optional summary-level request interpretation when the Scapy-backed adapter is available. |
+| `response_summary` | string \| null | Optional summary-level response interpretation when the Scapy-backed adapter is available. |
+| `negative_response_code` | int \| null | Negative response code for UDS negative responses. |
+| `negative_response_name` | string \| null | Human-readable negative response name for UDS negative responses. |
 
 ---
 
