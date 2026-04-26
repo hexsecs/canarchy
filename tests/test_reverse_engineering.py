@@ -4,7 +4,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from canarchy.reverse_engineering import counter_candidates, entropy_candidates, score_dbc_candidates, signal_analysis
+from canarchy.reverse_engineering import (
+    ReferenceSeriesError,
+    correlate_candidates,
+    counter_candidates,
+    entropy_candidates,
+    load_reference_series,
+    score_dbc_candidates,
+    signal_analysis,
+)
 from canarchy.transport import LocalTransport
 
 
@@ -293,3 +301,114 @@ class MatchDbcCliTests(unittest.TestCase):
 
         assert result is not None
         self.assertLessEqual(len(result.data["candidates"]), 3)
+
+
+class LoadReferenceSeriesTests(unittest.TestCase):
+    def test_load_json_array_returns_sorted_reference(self) -> None:
+        ref = load_reference_series(str(FIXTURES / "re_correlate_reference.json"))
+
+        self.assertEqual(len(ref), 20)
+        self.assertIsNone(ref.name)
+        self.assertAlmostEqual(ref.timestamps[0], 0.0)
+        self.assertAlmostEqual(ref.values[0], 10.0)
+        self.assertAlmostEqual(ref.timestamps[-1], 1.9, places=5)
+        self.assertAlmostEqual(ref.values[-1], 48.0)
+
+    def test_load_json_named_object_returns_name_and_samples(self) -> None:
+        ref = load_reference_series(str(FIXTURES / "re_correlate_reference_named.json"))
+
+        self.assertEqual(ref.name, "vehicle_speed_kph")
+        self.assertEqual(len(ref), 20)
+
+    def test_load_jsonl_format(self) -> None:
+        ref = load_reference_series(str(FIXTURES / "re_correlate_reference.jsonl"))
+
+        self.assertEqual(len(ref), 20)
+        self.assertAlmostEqual(ref.values[0], 10.0)
+
+    def test_missing_file_raises_invalid_reference_file(self) -> None:
+        with self.assertRaises(ReferenceSeriesError) as ctx:
+            load_reference_series(str(FIXTURES / "nonexistent_reference.json"))
+
+        self.assertEqual(ctx.exception.code, "INVALID_REFERENCE_FILE")
+
+    def test_malformed_json_raises_invalid_reference_file(self) -> None:
+        with self.assertRaises(ReferenceSeriesError) as ctx:
+            load_reference_series(str(FIXTURES / "re_correlate_reference_malformed.json"))
+
+        self.assertEqual(ctx.exception.code, "INVALID_REFERENCE_FILE")
+
+    def test_non_finite_value_raises_invalid_reference_file(self) -> None:
+        with self.assertRaises(ReferenceSeriesError) as ctx:
+            load_reference_series(str(FIXTURES / "re_correlate_reference_nan.json"))
+
+        self.assertEqual(ctx.exception.code, "INVALID_REFERENCE_FILE")
+        self.assertIn("non-finite", str(ctx.exception))
+
+    def test_fewer_than_10_samples_raises_invalid_reference_file(self) -> None:
+        with self.assertRaises(ReferenceSeriesError) as ctx:
+            load_reference_series(str(FIXTURES / "re_correlate_reference_short.json"))
+
+        self.assertEqual(ctx.exception.code, "INVALID_REFERENCE_FILE")
+        self.assertIn("3 samples", str(ctx.exception))
+
+
+class CorrelateCandidatesTests(unittest.TestCase):
+    def _load_linear_fixture(self):
+        frames = LocalTransport().frames_from_file(str(FIXTURES / "re_correlate_linear.candump"))
+        ref = load_reference_series(str(FIXTURES / "re_correlate_reference.json"))
+        return frames, ref
+
+    def test_correlate_returns_candidate_for_linear_field(self) -> None:
+        frames, ref = self._load_linear_fixture()
+
+        result = correlate_candidates(frames, ref)
+
+        self.assertGreater(result["candidate_count"], 0)
+        # start_bit=8, bit_length=8 encodes the linear field
+        byte1 = next(
+            (c for c in result["candidates"]
+             if c["arbitration_id"] == 0x400 and c["start_bit"] == 8 and c["bit_length"] == 8),
+            None,
+        )
+        self.assertIsNotNone(byte1)
+        assert byte1 is not None
+        self.assertAlmostEqual(byte1["pearson_r"], 1.0, places=3)
+        self.assertAlmostEqual(byte1["spearman_r"], 1.0, places=3)
+        self.assertEqual(byte1["sample_count"], 20)
+        self.assertEqual(byte1["lag_ms"], 0.0)
+
+    def test_correlate_output_shape(self) -> None:
+        frames, ref = self._load_linear_fixture()
+
+        result = correlate_candidates(frames, ref)
+
+        self.assertIn("candidate_count", result)
+        self.assertIn("candidates", result)
+        top = result["candidates"][0]
+        for key in ("arbitration_id", "start_bit", "bit_length", "pearson_r", "spearman_r", "sample_count", "lag_ms"):
+            self.assertIn(key, top)
+
+    def test_correlate_sorted_by_absolute_pearson_r(self) -> None:
+        frames, ref = self._load_linear_fixture()
+
+        result = correlate_candidates(frames, ref)
+
+        candidates = result["candidates"]
+        for i in range(len(candidates) - 1):
+            self.assertGreaterEqual(abs(candidates[i]["pearson_r"]), abs(candidates[i + 1]["pearson_r"]))
+
+    def test_correlate_insufficient_overlap_raises_error(self) -> None:
+        frames = LocalTransport().frames_from_file(str(FIXTURES / "re_correlate_linear.candump"))
+        from canarchy.reverse_engineering import ReferenceData
+        # Reference range [10.0, 20.0] does not overlap with capture timestamps [0.0, 1.9]
+        ref = ReferenceData(
+            name=None,
+            timestamps=tuple(float(10 + i) for i in range(20)),
+            values=tuple(float(i) for i in range(20)),
+        )
+
+        with self.assertRaises(ReferenceSeriesError) as ctx:
+            correlate_candidates(frames, ref)
+
+        self.assertEqual(ctx.exception.code, "INSUFFICIENT_OVERLAP")
