@@ -18,6 +18,7 @@
 | `REQ-J1939WIN-04` | Invalid `--max-frames` returns structured error | `TEST-J1939WIN-03` |
 | `REQ-J1939WIN-05` | Invalid `--seconds` returns structured error | `TEST-J1939WIN-06` |
 | `REQ-J1939WIN-06` | Bounded analysis is rejected with `j1939 decode --stdin` | `TEST-J1939WIN-07` |
+| `REQ-J1939WIN-07` | Auto-cap for j1939 summary/dm1/faults/inventory/compare on large files | `TEST-J1939WIN-08`, `TEST-J1939WIN-09`, `TEST-J1939WIN-10`, `TEST-J1939WIN-11`, `TEST-J1939WIN-12`, `TEST-J1939WIN-13` |
 
 ## Test Cases
 
@@ -110,10 +111,92 @@ And    `errors[0].code` shall equal `"ANALYSIS_WINDOW_REQUIRES_FILE"`
 
 **Fixture:** mocked stdin JSONL frame event stream.
 
+### TEST-J1939WIN-08 — j1939 summary auto-caps on large files
+
+```gherkin
+Given  a capture file larger than 50 MB (threshold patched to 1 byte in test)
+And    no `--max-frames` or `--seconds` flag is provided
+When   the operator runs `canarchy j1939 summary --file <large-file> --json`
+Then   the response shall include a warning containing "Large file"
+And    the warning shall mention 500,000 frames
+```
+
+**Fixture:** `tests/fixtures/j1939_heavy_vehicle.candump` with threshold patched.
+
+---
+
+### TEST-J1939WIN-09 — j1939 summary does not auto-cap when --max-frames is set
+
+```gherkin
+Given  a capture file larger than 50 MB (threshold patched to 1 byte in test)
+And    `--max-frames 100` is provided
+When   the operator runs `canarchy j1939 summary --file <large-file> --max-frames 100 --json`
+Then   the response warnings shall not include any "Large file" auto-cap message
+```
+
+**Fixture:** `tests/fixtures/j1939_heavy_vehicle.candump` with threshold patched.
+
+---
+
+### TEST-J1939WIN-10 — j1939 dm1 auto-caps on large files
+
+```gherkin
+Given  a capture file larger than 50 MB (threshold patched to 1 byte in test)
+And    no `--max-frames` or `--seconds` flag is provided
+When   the operator runs `canarchy j1939 dm1 --file <large-file> --json`
+Then   the response shall include a warning containing "Large file"
+```
+
+**Fixture:** `tests/fixtures/j1939_dm1_spn175.candump` with threshold patched.
+
+---
+
+### TEST-J1939WIN-11 — j1939 faults auto-caps on large files
+
+```gherkin
+Given  a capture file larger than 50 MB (threshold patched to 1 byte in test)
+And    no `--max-frames` or `--seconds` flag is provided
+When   the operator runs `canarchy j1939 faults --file <large-file> --json`
+Then   the response shall include a warning containing "Large file"
+```
+
+**Fixture:** `tests/fixtures/j1939_dm1_spn175.candump` with threshold patched.
+
+---
+
+### TEST-J1939WIN-12 — j1939 inventory auto-caps on large files
+
+```gherkin
+Given  a capture file larger than 50 MB (threshold patched to 1 byte in test)
+And    no `--max-frames` or `--seconds` flag is provided
+When   the operator runs `canarchy j1939 inventory --file <large-file> --json`
+Then   the response shall include a warning containing "Large file"
+```
+
+**Fixture:** `tests/fixtures/j1939_inventory.candump` with threshold patched.
+
+---
+
+### TEST-J1939WIN-13 — j1939 compare auto-caps on large files
+
+```gherkin
+Given  two capture files larger than 50 MB (threshold patched to 1 byte in test)
+And    no `--max-frames` or `--seconds` flag is provided
+When   the operator runs `canarchy j1939 compare <file1> <file2> --json`
+Then   the response shall include a warning containing "Large file"
+```
+
+**Fixture:** `tests/fixtures/j1939_inventory.candump` and `tests/fixtures/j1939_compare_shifted.candump` with threshold patched.
+
+---
+
 ## Fixtures And Environment
 
 * `tests/fixtures/j1939_heavy_vehicle.candump`
 * `tests/fixtures/j1939_dm1_tp.candump`
+* `tests/fixtures/j1939_dm1_spn175.candump`
+* `tests/fixtures/j1939_inventory.candump`
+* `tests/fixtures/j1939_compare_shifted.candump`
 * mocked stdin JSONL frame event input for the file-only validation path
 
 ## Explicit Non-Coverage
