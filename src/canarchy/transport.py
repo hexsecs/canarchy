@@ -62,14 +62,16 @@ class CaptureMetadata:
     last_timestamp: float
     suggested_max_frames: int
     suggested_seconds: float
+    scan_mode: str = "full"
 
-    def to_payload(self) -> dict[str, int | float | list[str]]:
+    def to_payload(self) -> dict[str, int | float | list[str] | str]:
         return {
             "duration_seconds": self.duration_seconds,
             "first_timestamp": self.first_timestamp,
             "frame_count": self.frame_count,
             "interfaces": self.interfaces,
             "last_timestamp": self.last_timestamp,
+            "scan_mode": self.scan_mode,
             "suggested_max_frames": self.suggested_max_frames,
             "suggested_seconds": self.suggested_seconds,
             "unique_ids": self.unique_ids,
@@ -97,6 +99,9 @@ CAN_ERR_FLAG = 0x20000000
 SUPPORTED_CANDUMP_FD_FLAGS = 0x3
 CAPTURE_INFO_MAX_FRAMES_HINT = 500_000
 CAPTURE_INFO_MAX_SECONDS_HINT = 3600.0
+FAST_SCAN_THRESHOLD_BYTES = 50 * 1024 * 1024  # 50 MB
+FAST_SCAN_HEAD_BYTES = 65_536  # 64 KB
+FAST_SCAN_TAIL_BYTES = 65_536
 
 
 @dataclass(slots=True, frozen=True)
@@ -970,7 +975,79 @@ def _capture_info_suggestions(frame_count: int, duration_seconds: float) -> tupl
     )
 
 
-def capture_metadata(path: Path) -> CaptureMetadata:
+def _fast_capture_metadata(path: Path) -> CaptureMetadata:
+    """Estimate metadata for large files by parsing head+tail bytes only.
+
+    Frame count is estimated from file size divided by average sampled line length.
+    unique_ids reflects only the sampled head and tail regions, not the full file.
+    scan_mode is "estimated" to signal that counts are approximations.
+    """
+    file_size = path.stat().st_size
+
+    with path.open("rb") as fh:
+        head_bytes = fh.read(FAST_SCAN_HEAD_BYTES)
+        tail_offset = max(0, file_size - FAST_SCAN_TAIL_BYTES)
+        fh.seek(tail_offset)
+        tail_bytes = fh.read()
+
+    head_lines = [line.strip() for line in head_bytes.decode("utf-8", errors="replace").splitlines() if line.strip()]
+    tail_lines = [line.strip() for line in tail_bytes.decode("utf-8", errors="replace").splitlines() if line.strip()]
+
+    first_timestamp: float | None = None
+    interfaces: set[str] = set()
+    arbitration_ids: set[int] = set()
+    total_head_bytes = 0
+    valid_head_count = 0
+
+    for line in head_lines:
+        try:
+            frame = parse_candump_line(line, path=path, line_number=0)
+        except TransportError:
+            continue
+        if first_timestamp is None:
+            first_timestamp = frame.timestamp
+        interfaces.add(frame.interface or "unknown")
+        arbitration_ids.add(frame.arbitration_id)
+        total_head_bytes += len(line.encode("utf-8")) + 1
+        valid_head_count += 1
+
+    if first_timestamp is None:
+        return _full_capture_metadata(path)
+
+    avg_line_bytes = total_head_bytes / valid_head_count
+    estimated_frame_count = max(1, int(file_size / avg_line_bytes))
+
+    last_timestamp: float | None = None
+    for line in reversed(tail_lines):
+        try:
+            frame = parse_candump_line(line, path=path, line_number=0)
+        except TransportError:
+            continue
+        if last_timestamp is None:
+            last_timestamp = frame.timestamp
+        interfaces.add(frame.interface or "unknown")
+        arbitration_ids.add(frame.arbitration_id)
+
+    if last_timestamp is None:
+        last_timestamp = first_timestamp
+
+    duration_seconds = max(0.0, last_timestamp - first_timestamp)
+    suggested_max_frames, suggested_seconds = _capture_info_suggestions(estimated_frame_count, duration_seconds)
+
+    return CaptureMetadata(
+        frame_count=estimated_frame_count,
+        duration_seconds=duration_seconds,
+        unique_ids=len(arbitration_ids),
+        interfaces=sorted(interfaces),
+        first_timestamp=first_timestamp,
+        last_timestamp=last_timestamp,
+        suggested_max_frames=suggested_max_frames,
+        suggested_seconds=suggested_seconds,
+        scan_mode="estimated",
+    )
+
+
+def _full_capture_metadata(path: Path) -> CaptureMetadata:
     first_timestamp: float | None = None
     last_timestamp: float | None = None
     interfaces: set[str] = set()
@@ -1015,6 +1092,12 @@ def capture_metadata(path: Path) -> CaptureMetadata:
         suggested_max_frames=suggested_max_frames,
         suggested_seconds=suggested_seconds,
     )
+
+
+def capture_metadata(path: Path) -> CaptureMetadata:
+    if path.stat().st_size >= FAST_SCAN_THRESHOLD_BYTES:
+        return _fast_capture_metadata(path)
+    return _full_capture_metadata(path)
 
 
 def parse_candump_line(line: str, *, path: Path, line_number: int) -> CanFrame:

@@ -28,7 +28,15 @@ from canarchy.models import (
     serialize_events,
 )
 from canarchy.replay import build_replay_plan
-from canarchy.reverse_engineering import counter_candidates, entropy_candidates, score_dbc_candidates, signal_analysis
+from canarchy.reverse_engineering import (
+    ReferenceSeriesError,
+    correlate_candidates,
+    counter_candidates,
+    entropy_candidates,
+    load_reference_series,
+    score_dbc_candidates,
+    signal_analysis,
+)
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.transport import (
     LocalTransport,
@@ -53,7 +61,7 @@ J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
-RE_COMMANDS = {"re signals", "re counters", "re entropy", "re match-dbc", "re shortlist-dbc"}
+RE_COMMANDS = {"re signals", "re counters", "re entropy", "re correlate", "re match-dbc", "re shortlist-dbc"}
 ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
 IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
@@ -480,8 +488,9 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(re_entropy)
     re_entropy.set_defaults(command="re entropy")
 
-    re_correlate = re_subparsers.add_parser("correlate", help="correlate signal candidates")
+    re_correlate = re_subparsers.add_parser("correlate", help="correlate signal candidates against a reference series")
     re_correlate.add_argument("file")
+    re_correlate.add_argument("--reference", help="reference series file (.json or .jsonl) with timestamp and value fields")
     add_output_arguments(re_correlate)
     re_correlate.set_defaults(command="re correlate")
 
@@ -639,6 +648,18 @@ def enforce_active_transmit_safety(
 
 
 def validate_args(args: argparse.Namespace) -> None:
+    if args.command == "re correlate" and not getattr(args, "reference", None):
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="RE_REFERENCE_REQUIRED",
+                    message="re correlate requires a --reference file.",
+                    hint="Provide a JSON or JSONL reference series file with timestamp and value fields.",
+                )
+            ],
+        )
     if args.command == "replay" and args.rate <= 0:
         raise CommandError(
             command=args.command,
@@ -1071,12 +1092,34 @@ def frames_from_stdin(*, command: str) -> list[CanFrame]:
     return frames
 
 
+LARGE_FILE_AUTO_CAP_BYTES = 50 * 1024 * 1024
+LARGE_FILE_AUTO_CAP_FRAMES = 500_000
+
+
 def j1939_file_analysis_kwargs(args: argparse.Namespace) -> dict[str, int | float | None]:
     return {
         "offset": getattr(args, "offset", 0),
         "max_frames": getattr(args, "max_frames", None),
         "seconds": getattr(args, "seconds", None),
     }
+
+
+def _large_file_kwargs(args: argparse.Namespace, file: str, warnings: list[str]) -> dict[str, int | float | None]:
+    """Apply auto-cap when the file exceeds the large-file threshold and no limit is set."""
+    kwargs = j1939_file_analysis_kwargs(args)
+    if kwargs["max_frames"] is None and kwargs["seconds"] is None:
+        try:
+            size = Path(file).stat().st_size
+        except OSError:
+            return kwargs
+        if size >= LARGE_FILE_AUTO_CAP_BYTES:
+            kwargs["max_frames"] = LARGE_FILE_AUTO_CAP_FRAMES
+            warnings.append(
+                f"Large file detected ({size // (1024 * 1024)} MB); analysis capped at "
+                f"{LARGE_FILE_AUTO_CAP_FRAMES:,} frames. "
+                "Use --max-frames or --seconds to override."
+            )
+    return kwargs
 
 
 def _extract_printable_text(payload: bytes) -> str | None:
@@ -2184,11 +2227,12 @@ def j1939_payload(
             [],
         )
     if args.command == "j1939 dm1":
+        auto_warnings: list[str] = []
         decoder = get_j1939_decoder()
         messages = decoder.dm1_messages(
-            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+            transport.iter_frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings))
         )
-        warnings = dm1_warnings(messages)
+        warnings = auto_warnings + dm1_warnings(messages)
         data, dbc_warnings = enrich_dm1_with_dbc(
             {
                 "mode": "passive",
@@ -2206,11 +2250,12 @@ def j1939_payload(
             warnings,
         )
     if args.command == "j1939 faults":
+        auto_warnings = []
         decoder = get_j1939_decoder()
         messages = decoder.dm1_messages(
-            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+            transport.iter_frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings))
         )
-        warnings = dm1_warnings(messages)
+        warnings = auto_warnings + dm1_warnings(messages)
         enriched_data, dbc_warnings = enrich_dm1_with_dbc(
             {
                 "mode": "passive",
@@ -2232,28 +2277,31 @@ def j1939_payload(
             warnings,
         )
     if args.command == "j1939 summary":
+        auto_warnings = []
         decoder = get_j1939_decoder()
         data, warnings = _j1939_summary(
-            transport.frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
+            transport.frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings)),
             file=args.file,
             decoder=decoder,
         )
-        return (data, [], warnings)
+        return (data, [], auto_warnings + warnings)
     if args.command == "j1939 inventory":
+        auto_warnings = []
         decoder = get_j1939_decoder()
         data, warnings = _j1939_inventory(
-            transport.frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
+            transport.frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings)),
             file=args.file,
             decoder=decoder,
         )
-        return (data, [], warnings)
+        return (data, [], auto_warnings + warnings)
     if args.command == "j1939 compare":
         decoder = get_j1939_decoder()
         captures: list[dict[str, Any]] = []
         warnings: list[str] = []
         for file in args.files:
+            file_kwargs = _large_file_kwargs(args, file, warnings)
             capture_data, capture_warnings = _j1939_compare_capture(
-                transport.frames_from_file(file, **j1939_file_analysis_kwargs(args)),
+                transport.frames_from_file(file, **file_kwargs),
                 file=file,
                 decoder=decoder,
             )
@@ -2708,6 +2756,41 @@ def reverse_engineering_payload(
             data["make"] = make_filter
         return (data, [], warnings)
 
+    if args.command == "re correlate":
+        frames = transport.frames_from_file(args.file)
+        try:
+            ref = load_reference_series(args.reference)
+        except ReferenceSeriesError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        try:
+            analysis = correlate_candidates(frames, ref)
+        except ReferenceSeriesError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        corr_warnings: list[str] = []
+        if analysis["candidate_count"] == 0:
+            corr_warnings.append("No fields met the minimum sample overlap threshold for correlation.")
+        return (
+            {
+                "mode": "passive",
+                "file": args.file,
+                "reference": args.reference,
+                "reference_name": ref.name,
+                "analysis": "correlation",
+                "candidate_count": analysis["candidate_count"],
+                "candidates": analysis["candidates"],
+                "implementation": "file-backed correlation analysis",
+            },
+            [],
+            corr_warnings,
+        )
     raise AssertionError(f"unsupported reverse-engineering command: {args.command}")
 
 
@@ -3237,6 +3320,30 @@ def format_uds_table(result: CommandResult) -> list[str]:
 
 def format_re_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
+
+    if result.command == "re correlate":
+        lines.append(f"file: {result.data.get('file')}")
+        lines.append(f"reference: {result.data.get('reference')}")
+        if result.data.get("reference_name"):
+            lines.append(f"reference_name: {result.data['reference_name']}")
+        lines.append(f"candidate_count: {result.data.get('candidate_count', 0)}")
+        lines.append("candidates:")
+        candidates = result.data.get("candidates", [])
+        if not candidates:
+            lines.append("- no correlation candidates")
+            return lines
+        for candidate in candidates:
+            lines.append(
+                "- "
+                f"id=0x{candidate['arbitration_id']:X} "
+                f"start={candidate['start_bit']} "
+                f"len={candidate['bit_length']} "
+                f"pearson_r={candidate['pearson_r']} "
+                f"spearman_r={candidate['spearman_r']} "
+                f"samples={candidate['sample_count']} "
+                f"lag_ms={candidate['lag_ms']}"
+            )
+        return lines
 
     if result.command in {"re match-dbc", "re shortlist-dbc"}:
         lines.append(f"capture: {result.data.get('capture')}")

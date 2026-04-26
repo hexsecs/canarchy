@@ -31,6 +31,7 @@ Operators need a stable base command set that supports passive live observation,
 | `REQ-TRANSPORT-09` | Unwanted behaviour | If a capture file format is unsupported, the system shall return a structured error with code `CAPTURE_FORMAT_UNSUPPORTED` and exit code 2. |
 | `REQ-TRANSPORT-10` | Unwanted behaviour | If `filter` receives an invalid expression, the system shall return a structured error with code `INVALID_FILTER_EXPRESSION` and exit code 2. |
 | `REQ-TRANSPORT-11` | Event-driven | When `capture-info --file <path>` is invoked, the system shall return capture metadata including frame count, first and last timestamps, duration, unique IDs, interfaces, and suggested `max_frames` and `seconds` bounds for follow-on analysis. |
+| `REQ-TRANSPORT-12` | Performance | When `capture-info` is invoked on a file larger than 50 MB, the system shall use a fast head+tail scan to estimate metadata rather than parsing every frame, and shall set `scan_mode` to `"estimated"` in the response. |
 
 ## Command Surface
 
@@ -83,6 +84,7 @@ Relevant shared fields include:
 * `interfaces`
 * `suggested_max_frames`
 * `suggested_seconds`
+* `scan_mode` — `"full"` for files ≤ 50 MB (exact counts); `"estimated"` for larger files (head+tail heuristic, approximate frame count and unique_ids)
 
 Current backend note:
 

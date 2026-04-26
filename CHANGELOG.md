@@ -15,9 +15,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 
 * Added `canarchy j1939 compare` for multi-capture comparison of J1939 PGNs, source addresses, DM1 fault changes, and printable TP identification payloads across two or more recorded captures.
+* Implemented `canarchy re correlate <file> --reference <ref>` to correlate candidate bit fields against a reference time series. Accepts JSON (array or named object with `name`+`samples`) and JSONL reference formats. Each candidate reports `pearson_r`, `spearman_r`, `sample_count`, and `lag_ms` (optimal time offset in [-500, +500] ms). Candidates are ranked by `|pearson_r|` descending. Structured errors are returned for missing `--reference` (`RE_REFERENCE_REQUIRED`), invalid or short reference files (`INVALID_REFERENCE_FILE`), and insufficient capture/reference time-range overlap (`INSUFFICIENT_OVERLAP`). Also exposed as the `re_correlate` MCP tool. Closes #52.
+* Added fast-scan path to `capture-info` for large candump files (> 50 MB). The first and last 64 KB are parsed for timestamps and interface/ID samples; frame count is estimated from file size and average line length. The response payload now includes `scan_mode: "full"` (exact) or `scan_mode: "estimated"` (large-file approximation). Closes #163.
+* Added automatic frame cap for `j1939 summary`, `j1939 dm1`, `j1939 faults`, `j1939 inventory`, and `j1939 compare` on captures exceeding 50 MB when no `--max-frames` or `--seconds` limit is specified. Analysis is capped at 500,000 frames and a warning is included in the response. Use `--max-frames` or `--seconds` to override. Closes #163.
 
 ### Documentation
 
+* Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
 * Documented the new multi-capture `j1939 compare` workflow across the J1939 design/test specs, command reference, and agent-facing command guidance.
 
 ## [0.5.0] - 2026-04-25

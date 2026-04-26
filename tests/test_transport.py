@@ -13,12 +13,15 @@ from unittest.mock import patch
 
 from canarchy.models import CanFrame, UdsTransactionEvent
 from canarchy.transport import (
+    FAST_SCAN_THRESHOLD_BYTES,
     LocalTransport,
     PythonCanBackend,
     ScaffoldCanBackend,
     TransportBackendConfig,
     TransportError,
+    _fast_capture_metadata,
     build_live_backend,
+    capture_metadata,
     iter_candump_file,
     load_candump_file,
     parse_candump_line,
@@ -636,6 +639,53 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(frames[0].arbitration_id, 0x123)
         self.assertEqual(frames[0].data, bytes.fromhex("11223344"))
         self.assertEqual(frames[0].interface, interface)
+
+
+class CaptureMetadataTests(unittest.TestCase):
+    def test_full_scan_returns_exact_counts(self) -> None:
+        meta = capture_metadata(FIXTURES / "sample.candump")
+        self.assertEqual(meta.scan_mode, "full")
+        self.assertEqual(meta.frame_count, 3)
+        self.assertEqual(meta.unique_ids, 3)
+        self.assertEqual(meta.interfaces, ["can0", "can1"])
+        self.assertAlmostEqual(meta.first_timestamp, 0.0)
+        self.assertAlmostEqual(meta.last_timestamp, 0.2)
+        self.assertAlmostEqual(meta.duration_seconds, 0.2)
+
+    def test_fast_scan_returns_estimated_mode(self) -> None:
+        meta = _fast_capture_metadata(FIXTURES / "sample.candump")
+        self.assertEqual(meta.scan_mode, "estimated")
+        self.assertAlmostEqual(meta.first_timestamp, 0.0)
+        self.assertAlmostEqual(meta.last_timestamp, 0.2)
+        self.assertAlmostEqual(meta.duration_seconds, 0.2)
+        self.assertGreater(meta.frame_count, 0)
+        self.assertGreater(meta.unique_ids, 0)
+        self.assertIn("can0", meta.interfaces)
+
+    def test_fast_scan_includes_interfaces_from_head_and_tail(self) -> None:
+        meta = _fast_capture_metadata(FIXTURES / "sample.candump")
+        self.assertIn("can1", meta.interfaces)
+
+    def test_capture_metadata_dispatches_to_fast_path_for_large_files(self) -> None:
+        with patch("canarchy.transport.FAST_SCAN_THRESHOLD_BYTES", 1):
+            meta = capture_metadata(FIXTURES / "sample.candump")
+        self.assertEqual(meta.scan_mode, "estimated")
+
+    def test_capture_metadata_uses_full_path_for_small_files(self) -> None:
+        with patch("canarchy.transport.FAST_SCAN_THRESHOLD_BYTES", 10 * 1024 * 1024):
+            meta = capture_metadata(FIXTURES / "sample.candump")
+        self.assertEqual(meta.scan_mode, "full")
+
+    def test_to_payload_includes_scan_mode(self) -> None:
+        meta = capture_metadata(FIXTURES / "sample.candump")
+        payload = meta.to_payload()
+        self.assertIn("scan_mode", payload)
+        self.assertEqual(payload["scan_mode"], "full")
+
+    def test_fast_scan_to_payload_includes_estimated_scan_mode(self) -> None:
+        meta = _fast_capture_metadata(FIXTURES / "sample.candump")
+        payload = meta.to_payload()
+        self.assertEqual(payload["scan_mode"], "estimated")
 
 
 if __name__ == "__main__":

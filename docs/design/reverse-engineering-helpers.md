@@ -141,31 +141,50 @@ Current implementation note:
 
 ### `re correlate`
 
-The initial `re correlate` workflow is file-backed and requires an explicit reference series file.
+`re correlate` is implemented as a deterministic file-backed helper.
 
 #### Reference input contract
 
 `--reference` shall point to either:
 
-* a `.json` file containing an object with `name` and `samples`
+* a `.json` file containing a JSON array of sample objects, or an object with `name` and `samples`
 * a `.jsonl` file containing one sample object per line
 
 Each sample object shall contain:
 
-* `timestamp`: numeric seconds or milliseconds represented consistently within the file
+* `timestamp`: numeric (seconds)
 * `value`: numeric value
 
-Optional fields:
+Optional fields on the outer JSON object:
 
-* `name`: series name when not supplied by the outer `.json` object
-* `units`: operator-facing units metadata
+* `name`: series name surfaced as `reference_name` in the result
 
-Correlation candidates shall include:
+The reference file must contain at least 10 samples.
 
-* `reference_name`
-* `correlation`
-* `lag` when relevant
-* `sample_count`
+#### Candidate output shape
+
+Each correlation candidate shall include:
+
+* `arbitration_id`: CAN ID being evaluated
+* `start_bit`: LSB position of the candidate field (little-endian bit numbering)
+* `bit_length`: width in bits (4, 8, or 16)
+* `pearson_r`: Pearson correlation coefficient, clamped to [-1.0, 1.0], rounded to 4 decimal places
+* `spearman_r`: Spearman rank correlation coefficient, clamped to [-1.0, 1.0], rounded to 4 decimal places
+* `sample_count`: number of overlapping samples used in the final computation
+* `lag_ms`: time offset in milliseconds that maximises `|pearson_r|` (tried in range [-500, +500] ms in 50 ms steps, with lag=0 tried first)
+
+Candidates are ranked by `|pearson_r|` descending.
+
+#### Field evaluation
+
+Candidate fields are nibble (4-bit), byte (8-bit), and word (16-bit) aligned, consistent with `re signals`.
+Only candidates with at least 10 overlapping timestamp samples are included in the output.
+
+#### Current implementation notes
+
+* `re correlate` is implemented as a deterministic file-backed helper
+* reference series values are linearly interpolated to the CAN frame timestamps before correlation is computed
+* the lag search tries lag=0 first and iterates outward, so lag=0 wins when multiple lags produce equal correlation
 
 ### `re match-dbc`
 
@@ -212,9 +231,9 @@ Table output shall present compact ranked candidate summaries with confidence/sc
 |------|---------|-----------|
 | `CAPTURE_SOURCE_UNAVAILABLE` | input capture file is missing | 2 |
 | `CAPTURE_SOURCE_INVALID` | input capture file cannot be parsed | 2 |
-| `RE_REFERENCE_REQUIRED` | `re correlate` is invoked without a required reference input | 1 |
-| `RE_REFERENCE_UNSUPPORTED` | correlation reference input format is unsupported | 1 |
-| `RE_REFERENCE_INVALID` | reference file does not match the required timestamped numeric sample schema | 1 |
+| `RE_REFERENCE_REQUIRED` | `re correlate` is invoked without `--reference` | 1 |
+| `INVALID_REFERENCE_FILE` | reference file is missing, malformed JSON, or contains fewer than 10 valid samples | 1 |
+| `INSUFFICIENT_OVERLAP` | fewer than 10 capture frames fall within the reference series time range | 1 |
 
 ## Deferred Decisions
 
