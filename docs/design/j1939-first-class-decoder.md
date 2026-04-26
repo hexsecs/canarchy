@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Partial |
-| Command surface | `canarchy j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, `j1939 dm1` |
+| Command surface | `canarchy j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp sessions`, `j1939 dm1` |
 | Primary area | CLI, protocol, DBC |
 | Related specs | `docs/design/j1939-expanded-workflows.md`, `docs/design/dbc-command-workflows.md`, `docs/design/transport-core-commands.md` |
 
@@ -13,7 +13,7 @@
 
 Replace the current curated J1939 helper path with a library-backed decoder built around `can-j1939`, while preserving CANarchy's existing CLI contract and structured output modes. The decoder should provide protocol-correct PGN, SPN, TP, and DM1 behavior and optionally enrich signal-level decode with operator-supplied J1939 DBC files.
 
-Phase 1 is implemented: the CLI now consumes a decoder abstraction. Phase 2 is partially implemented: file-backed `j1939 decode` and `j1939 pgn` route through that abstraction, and the underlying identifier and DTC parsing paths use `can-j1939` helpers. Phase 3 is partially implemented: `j1939 spn`, `j1939 tp`, and `j1939 dm1` now execute through a `can-j1939`-backed decoder adapter instead of thin CLI wrappers over the legacy helper functions. The TP/DM1 path now handles both BAM and RTS/CTS transport sessions rather than the earlier BAM-only starter behavior. Phase 4 is partially implemented: `j1939 decode`, `j1939 pgn`, `j1939 spn`, and `j1939 dm1` accept optional DBC enrichment through `--dbc <path|provider-ref>` or a configured default J1939 DBC path. `j1939 spn` can now resolve non-curated SPNs from DBC signal SPN metadata when the requested SPN is not present in the starter map.
+Phase 1 is implemented: the CLI now consumes a decoder abstraction. Phase 2 is partially implemented: file-backed `j1939 decode` and `j1939 pgn` route through that abstraction, and the underlying identifier and DTC parsing paths use `can-j1939` helpers. Phase 3 is partially implemented: `j1939 spn`, `j1939 tp sessions`, and `j1939 dm1` now execute through a `can-j1939`-backed decoder adapter instead of thin CLI wrappers over the legacy helper functions. The TP/DM1 path now handles both BAM and RTS/CTS transport sessions rather than the earlier BAM-only starter behavior. Phase 4 is partially implemented: `j1939 decode`, `j1939 pgn`, `j1939 spn`, and `j1939 dm1` accept optional DBC enrichment through `--dbc <path|provider-ref>` or a configured default J1939 DBC path. `j1939 spn` can now resolve non-curated SPNs from DBC signal SPN metadata when the requested SPN is not present in the starter map.
 
 ## User-Facing Motivation
 
@@ -24,8 +24,8 @@ Operators need J1939 commands that scale beyond a demo-only SPN map. They should
 | ID | Type | Requirement |
 |----|------|-------------|
 | `REQ-J1939F-01` | Ubiquitous | The system shall provide a J1939 decoder abstraction so CLI commands do not depend directly on the current curated helper implementation. |
-| `REQ-J1939F-02` | Event-driven | When `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, or `j1939 dm1` is invoked against a capture or live stream, the system shall use a library-backed J1939 decoder implementation for protocol parsing. |
-| `REQ-J1939F-03` | Event-driven | When a J1939 transport-protocol message spans multiple frames, the system shall reassemble the payload before protocol-aware decode and expose the resulting session state through `j1939 tp` and dependent commands such as `j1939 dm1`. |
+| `REQ-J1939F-02` | Event-driven | When `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp sessions`, or `j1939 dm1` is invoked against a capture file, or when `j1939 decode --stdin` is invoked against streamed frame events, the system shall use a library-backed J1939 decoder implementation for protocol parsing. |
+| `REQ-J1939F-03` | Event-driven | When a J1939 transport-protocol message spans multiple frames, the system shall reassemble the payload before protocol-aware decode and expose the resulting session state through `j1939 tp sessions` and dependent commands such as `j1939 dm1`. |
 | `REQ-J1939F-04` | Event-driven | When `j1939 dm1` is invoked, the system shall decode direct and transport-protocol-carried DM1 payloads into structured diagnostic messages without relying on the current BAM-only toy parser. |
 | `REQ-J1939F-05` | Optional feature | Where `--dbc <path|provider-ref>` is specified for a J1939 decode workflow, the system shall enrich protocol-aware results with DBC-backed signal metadata and values when the supplied DBC contains a matching J1939 definition. |
 | `REQ-J1939F-10` | Optional feature | Where no `--dbc` flag is supplied and a default J1939 DBC is configured through `CANARCHY_J1939_DBC` or `[j1939].dbc`, the system shall use that configured DBC for J1939 DBC enrichment workflows. |
@@ -40,8 +40,8 @@ Operators need J1939 commands that scale beyond a demo-only SPN map. They should
 canarchy j1939 decode <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 pgn <pgn> --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 spn <spn> --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 tp <capture> [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 dm1 <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 tp sessions --file <capture> [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 dm1 --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
 
 # optional defaults
 # ~/.canarchy/config.toml
@@ -101,7 +101,7 @@ J1939 commands shall continue returning the standard CANarchy result envelope. D
 
 ### JSONL
 
-`j1939 decode` shall continue emitting one event line per decoded J1939 observation. `j1939 spn`, `j1939 tp`, and `j1939 dm1` shall emit one decoded object per line, with optional DBC-enriched fields where applicable.
+`j1939 decode` shall continue emitting one event line per decoded J1939 observation. `j1939 spn`, `j1939 tp sessions`, and `j1939 dm1` shall emit one decoded object per line, with optional DBC-enriched fields where applicable.
 
 ### Table
 

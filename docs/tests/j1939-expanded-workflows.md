@@ -16,7 +16,7 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 
 * `j1939 spn` capture-file requirement
 * `j1939 spn` structured value extraction from a supported SPN
-* `j1939 tp` BAM session summary and reassembly
+* `j1939 tp sessions` BAM session summary and reassembly
 * `j1939 dm1` parsing for both direct and TP-reassembled messages
 * `j1939 inventory` source-address inventory assembly from identification and DM1 context
 * `j1939 compare` multi-capture PGN/source/dm1/identifier differences
@@ -78,7 +78,7 @@ And    the observation shall include the expected SPN, PGN, source address, deco
 
 ```gherkin
 Given  the fixture `j1939_dm1_tp.candump` contains TP.CM BAM and TP.DT frames for a DM1 payload
-When   the operator runs `canarchy j1939 tp j1939_dm1_tp.candump --json`
+When   the operator runs `canarchy j1939 tp sessions --file j1939_dm1_tp.candump --json`
 Then   exactly one complete BAM session shall be returned
 And    the session shall include the expected transferred PGN, packet count, and reassembled payload bytes
 ```
@@ -91,7 +91,7 @@ And    the session shall include the expected transferred PGN, packet count, and
 
 ```gherkin
 Given  the fixture `j1939_dm1_tp.candump` contains one direct DM1 and one TP-reassembled DM1
-When   the operator runs `canarchy j1939 dm1 j1939_dm1_tp.candump --json`
+When   the operator runs `canarchy j1939 dm1 --file j1939_dm1_tp.candump --json`
 Then   both DM1 messages shall be returned
 And    the TP-reassembled message shall have two DTCs
 And    the direct message shall preserve its source address and FMI
@@ -105,7 +105,7 @@ And    the direct message shall preserve its source address and FMI
 
 ```gherkin
 Given  the fixture `j1939_dm1_tp.candump` is available
-When   the operator runs `canarchy j1939 dm1 j1939_dm1_tp.candump --table`
+When   the operator runs `canarchy j1939 dm1 --file j1939_dm1_tp.candump --table`
 Then   the output shall include the command header
 And    the output shall include a message section with a transport label
 And    the output shall include DTC summaries for each message
@@ -119,7 +119,7 @@ And    the output shall include DTC summaries for each message
 
 ```gherkin
 Given  the fixture `j1939_tp_printable_id.candump` contains a completed TP payload with obvious printable ASCII identification text
-When   the operator runs `canarchy j1939 tp j1939_tp_printable_id.candump --json`
+When   the operator runs `canarchy j1939 tp sessions --file j1939_tp_printable_id.candump --json`
 Then   the returned TP session shall preserve `reassembled_data`
 And    the session shall include `decoded_text` plus a heuristic flag
 And    the session shall include a stable payload label when the transferred PGN is known to be identification-style data
@@ -133,7 +133,7 @@ And    the session shall include a stable payload label when the transferred PGN
 
 ```gherkin
 Given  the fixture `j1939_tp_printable_id.candump` contains a printable TP identification payload
-When   the operator runs `canarchy j1939 tp j1939_tp_printable_id.candump --table`
+When   the operator runs `canarchy j1939 tp sessions --file j1939_tp_printable_id.candump --table`
 Then   the operator-facing output shall include the payload label when available
 And    the operator-facing output shall include the decoded printable text without hiding the TP session summary context
 ```

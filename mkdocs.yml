@@ -93,7 +93,9 @@ nav:
           - Generate Command: design/generate-command.md
           - Gateway Command: design/gateway-command.md
           - Export Command: design/export-command.md
+          - Config Show Command: design/config-show-command.md
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
+          - J1939 Monitor Command: design/j1939-monitor-command.md
           - Composition: design/composition.md
           - MCP Server: design/mcp-server.md
           - Reverse-Engineering Helpers: design/reverse-engineering-helpers.md
@@ -112,7 +114,9 @@ nav:
           - Generate Command: tests/generate-command.md
           - Gateway Command: tests/gateway-command.md
           - Export Command: tests/export-command.md
+          - Config Show Command: tests/config-show-command.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
+          - J1939 Monitor Command: tests/j1939-monitor-command.md
           - MCP Server: tests/mcp-server.md
           - Reverse-Engineering Helpers: tests/reverse-engineering-helpers.md
           - Replay Command: tests/replay-command.md

@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented |
-| Command surface | `canarchy j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, `j1939 dm1` |
+| Command surface | `canarchy j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp sessions`, `j1939 dm1` |
 | Primary area | CLI, transport, protocol |
 | Related specs | `docs/design/j1939-first-class-decoder.md`, `docs/design/j1939-expanded-workflows.md` |
 
@@ -23,7 +23,7 @@ Large heavy-vehicle captures often contain millions of frames. Analysts need to 
 |----|------|-------------|
 | `REQ-J1939WIN-01` | Optional feature | Where a file-backed J1939 analysis command supports bounded analysis, the system shall accept `--max-frames <n>` to limit work to the first `<n>` frames in the capture. |
 | `REQ-J1939WIN-02` | Optional feature | Where a file-backed J1939 analysis command supports bounded analysis, the system shall accept `--seconds <n>` to limit work to frames whose timestamps fall within the first `<n>` seconds of the capture window. |
-| `REQ-J1939WIN-03` | Event-driven | When `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp`, or `j1939 dm1` is invoked with bounded-analysis flags against a capture file, the system shall apply those bounds during file iteration rather than after a full-file read. |
+| `REQ-J1939WIN-03` | Event-driven | When `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp sessions`, or `j1939 dm1` is invoked with bounded-analysis flags against a capture file, the system shall apply those bounds during file iteration rather than after a full-file read. |
 | `REQ-J1939WIN-04` | Unwanted behaviour | If `--max-frames` is less than `1`, the system shall return a structured user error with code `INVALID_MAX_FRAMES`. |
 | `REQ-J1939WIN-05` | Unwanted behaviour | If `--seconds` is negative, the system shall return a structured user error with code `INVALID_ANALYSIS_SECONDS`. |
 | `REQ-J1939WIN-06` | Unwanted behaviour | If bounded-analysis flags are used with `j1939 decode --stdin`, the system shall return a structured user error with code `ANALYSIS_WINDOW_REQUIRES_FILE`. |
@@ -35,8 +35,8 @@ Large heavy-vehicle captures often contain millions of frames. Analysts need to 
 canarchy j1939 decode <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 pgn <pgn> --file <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 spn <spn> --file <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 tp <capture> [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 dm1 <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 tp sessions --file <capture> [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 dm1 --file <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
 ```
 
 ## Responsibilities And Boundaries

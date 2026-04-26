@@ -66,7 +66,7 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `j1939 decode` | `j1939_decode` |
 | `j1939 pgn` | `j1939_pgn` |
 | `j1939 spn` | `j1939_spn` |
-| `j1939 tp` | `j1939_tp` |
+| `j1939 tp sessions` | `j1939_tp` |
 | `j1939 dm1` | `j1939_dm1` |
 | `j1939 summary` | `j1939_summary` |
 | `j1939 inventory` | `j1939_inventory` |
