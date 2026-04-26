@@ -1023,10 +1023,10 @@ def _fast_capture_metadata(path: Path) -> CaptureMetadata:
             frame = parse_candump_line(line, path=path, line_number=0)
         except TransportError:
             continue
-        last_timestamp = frame.timestamp
+        if last_timestamp is None:
+            last_timestamp = frame.timestamp
         interfaces.add(frame.interface or "unknown")
         arbitration_ids.add(frame.arbitration_id)
-        break
 
     if last_timestamp is None:
         last_timestamp = first_timestamp
