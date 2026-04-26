@@ -338,6 +338,13 @@ class LoadReferenceSeriesTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, "INVALID_REFERENCE_FILE")
 
+    def test_non_finite_value_raises_invalid_reference_file(self) -> None:
+        with self.assertRaises(ReferenceSeriesError) as ctx:
+            load_reference_series(str(FIXTURES / "re_correlate_reference_nan.json"))
+
+        self.assertEqual(ctx.exception.code, "INVALID_REFERENCE_FILE")
+        self.assertIn("non-finite", str(ctx.exception))
+
     def test_fewer_than_10_samples_raises_invalid_reference_file(self) -> None:
         with self.assertRaises(ReferenceSeriesError) as ctx:
             load_reference_series(str(FIXTURES / "re_correlate_reference_short.json"))

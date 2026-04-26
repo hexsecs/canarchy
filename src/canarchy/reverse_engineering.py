@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from dataclasses import dataclass
-from math import log2
+from math import isfinite, log2
 from pathlib import Path
 from statistics import StatisticsError, correlation
 from typing import Any
@@ -529,6 +529,12 @@ def load_reference_series(path: str) -> ReferenceData:
                 message=f"Sample {i} has non-numeric 'timestamp' or 'value': {exc}",
                 hint="'timestamp' and 'value' must be numeric.",
             ) from exc
+        if not isfinite(t) or not isfinite(v):
+            raise ReferenceSeriesError(
+                code="INVALID_REFERENCE_FILE",
+                message=f"Sample {i} has non-finite 'timestamp' or 'value' ({t!r}, {v!r}).",
+                hint="'timestamp' and 'value' must be finite numbers (NaN and Infinity are not accepted).",
+            )
         timestamps.append(t)
         values.append(v)
 
