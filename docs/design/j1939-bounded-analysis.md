@@ -27,6 +27,7 @@ Large heavy-vehicle captures often contain millions of frames. Analysts need to 
 | `REQ-J1939WIN-04` | Unwanted behaviour | If `--max-frames` is less than `1`, the system shall return a structured user error with code `INVALID_MAX_FRAMES`. |
 | `REQ-J1939WIN-05` | Unwanted behaviour | If `--seconds` is negative, the system shall return a structured user error with code `INVALID_ANALYSIS_SECONDS`. |
 | `REQ-J1939WIN-06` | Unwanted behaviour | If bounded-analysis flags are used with `j1939 decode --stdin`, the system shall return a structured user error with code `ANALYSIS_WINDOW_REQUIRES_FILE`. |
+| `REQ-J1939WIN-07` | Performance | When `j1939 summary`, `j1939 dm1`, `j1939 faults`, `j1939 inventory`, or `j1939 compare` is invoked on a file larger than 50 MB without an explicit `--max-frames` or `--seconds` bound, the system shall automatically cap analysis at 500,000 frames and include a warning in the response instructing the operator to use `--max-frames` or `--seconds` to override. |
 
 ## Command Surface
 

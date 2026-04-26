@@ -562,6 +562,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["duration_seconds"], 0.2)
         self.assertEqual(payload["data"]["suggested_max_frames"], 3)
         self.assertEqual(payload["data"]["suggested_seconds"], 0.2)
+        self.assertEqual(payload["data"]["scan_mode"], "full")
+
+    def test_capture_info_large_file_reports_estimated_scan_mode(self) -> None:
+        with patch("canarchy.transport.FAST_SCAN_THRESHOLD_BYTES", 1):
+            exit_code, stdout, stderr = run_cli(
+                "capture-info", "--file", str(FIXTURES / "sample.candump"), "--json"
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["scan_mode"], "estimated")
 
     def test_capture_info_invalid_capture_returns_structured_error(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -693,6 +703,53 @@ class CliTests(unittest.TestCase):
         self.assertIn("printable_identifiers:", stdout)
         self.assertIn("text=VIN1234", stdout)
 
+    def test_j1939_summary_large_file_emits_auto_cap_warning(self) -> None:
+        with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
+            exit_code, stdout, _ = run_cli(
+                "j1939", "summary", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--json"
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(any("Large file" in w for w in payload["warnings"]))
+        self.assertTrue(any("500,000" in w for w in payload["warnings"]))
+
+    def test_j1939_summary_explicit_max_frames_suppresses_auto_cap_warning(self) -> None:
+        with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
+            exit_code, stdout, _ = run_cli(
+                "j1939", "summary", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"),
+                "--max-frames", "100", "--json"
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertFalse(any("Large file" in w for w in payload["warnings"]))
+
+    def test_j1939_dm1_large_file_emits_auto_cap_warning(self) -> None:
+        with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
+            exit_code, stdout, _ = run_cli(
+                "j1939", "dm1", "--file", str(FIXTURES / "j1939_dm1_spn175.candump"), "--json"
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(any("Large file" in w for w in payload["warnings"]))
+
+    def test_j1939_faults_large_file_emits_auto_cap_warning(self) -> None:
+        with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
+            exit_code, stdout, _ = run_cli(
+                "j1939", "faults", "--file", str(FIXTURES / "j1939_dm1_spn175.candump"), "--json"
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(any("Large file" in w for w in payload["warnings"]))
+
+    def test_j1939_inventory_large_file_emits_auto_cap_warning(self) -> None:
+        with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
+            exit_code, stdout, _ = run_cli(
+                "j1939", "inventory", "--file", str(FIXTURES / "j1939_inventory.candump"), "--json"
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(any("Large file" in w for w in payload["warnings"]))
+
     def test_j1939_inventory_json_builds_source_address_inventory(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
@@ -795,6 +852,18 @@ class CliTests(unittest.TestCase):
         vehicle_values = {entry["file"]: entry["values"] for entry in vehicle_difference["captures"]}
         self.assertEqual(vehicle_values[str(FIXTURES / "j1939_inventory.candump")], ["VIN1234"])
         self.assertEqual(vehicle_values[str(FIXTURES / "j1939_compare_shifted.candump")], ["VIN5678"])
+
+    def test_j1939_compare_large_file_emits_auto_cap_warning(self) -> None:
+        with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
+            exit_code, stdout, _ = run_cli(
+                "j1939", "compare",
+                str(FIXTURES / "j1939_inventory.candump"),
+                str(FIXTURES / "j1939_compare_shifted.candump"),
+                "--json",
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(any("Large file" in w for w in payload["warnings"]))
 
     def test_j1939_compare_table_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(

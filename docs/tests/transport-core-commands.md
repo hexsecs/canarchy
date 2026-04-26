@@ -37,6 +37,7 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 | `REQ-TRANSPORT-09` | `TEST-TRANSPORT-12` |
 | `REQ-TRANSPORT-10` | `TEST-TRANSPORT-10` |
 | `REQ-TRANSPORT-11` | `TEST-TRANSPORT-13`, `TEST-TRANSPORT-14` |
+| `REQ-TRANSPORT-12` | `TEST-TRANSPORT-15`, `TEST-TRANSPORT-16` |
 
 ## Representative Test Cases
 
@@ -215,6 +216,32 @@ And    `errors[0].code` shall equal `"CAPTURE_SOURCE_INVALID"`
 ```
 
 **Fixture:** `tests/fixtures/invalid.candump`.
+
+---
+
+### `TEST-TRANSPORT-15` — Capture-info uses full scan for small files and sets scan_mode=full
+
+```gherkin
+Given  a small capture file (under 50 MB)
+When   the operator runs `canarchy capture-info --file <small-file> --json`
+Then   `data.scan_mode` shall equal `"full"`
+And    `data.frame_count` shall be the exact frame count
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-TRANSPORT-16` — Capture-info uses estimated scan for large files and sets scan_mode=estimated
+
+```gherkin
+Given  a capture file larger than 50 MB (or threshold patched to 1 byte in test)
+When   the operator runs `canarchy capture-info --file <large-file> --json`
+Then   `data.scan_mode` shall equal `"estimated"`
+And    `data.first_timestamp` and `data.last_timestamp` shall be parseable from head/tail bytes
+```
+
+**Fixture:** `tests/fixtures/sample.candump` with threshold patched.
 
 ---
 

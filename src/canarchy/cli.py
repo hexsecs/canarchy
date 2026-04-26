@@ -1092,12 +1092,34 @@ def frames_from_stdin(*, command: str) -> list[CanFrame]:
     return frames
 
 
+LARGE_FILE_AUTO_CAP_BYTES = 50 * 1024 * 1024
+LARGE_FILE_AUTO_CAP_FRAMES = 500_000
+
+
 def j1939_file_analysis_kwargs(args: argparse.Namespace) -> dict[str, int | float | None]:
     return {
         "offset": getattr(args, "offset", 0),
         "max_frames": getattr(args, "max_frames", None),
         "seconds": getattr(args, "seconds", None),
     }
+
+
+def _large_file_kwargs(args: argparse.Namespace, file: str, warnings: list[str]) -> dict[str, int | float | None]:
+    """Apply auto-cap when the file exceeds the large-file threshold and no limit is set."""
+    kwargs = j1939_file_analysis_kwargs(args)
+    if kwargs["max_frames"] is None and kwargs["seconds"] is None:
+        try:
+            size = Path(file).stat().st_size
+        except OSError:
+            return kwargs
+        if size >= LARGE_FILE_AUTO_CAP_BYTES:
+            kwargs["max_frames"] = LARGE_FILE_AUTO_CAP_FRAMES
+            warnings.append(
+                f"Large file detected ({size // (1024 * 1024)} MB); analysis capped at "
+                f"{LARGE_FILE_AUTO_CAP_FRAMES:,} frames. "
+                "Use --max-frames or --seconds to override."
+            )
+    return kwargs
 
 
 def _extract_printable_text(payload: bytes) -> str | None:
@@ -2205,11 +2227,12 @@ def j1939_payload(
             [],
         )
     if args.command == "j1939 dm1":
+        auto_warnings: list[str] = []
         decoder = get_j1939_decoder()
         messages = decoder.dm1_messages(
-            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+            transport.iter_frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings))
         )
-        warnings = dm1_warnings(messages)
+        warnings = auto_warnings + dm1_warnings(messages)
         data, dbc_warnings = enrich_dm1_with_dbc(
             {
                 "mode": "passive",
@@ -2227,11 +2250,12 @@ def j1939_payload(
             warnings,
         )
     if args.command == "j1939 faults":
+        auto_warnings = []
         decoder = get_j1939_decoder()
         messages = decoder.dm1_messages(
-            transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+            transport.iter_frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings))
         )
-        warnings = dm1_warnings(messages)
+        warnings = auto_warnings + dm1_warnings(messages)
         enriched_data, dbc_warnings = enrich_dm1_with_dbc(
             {
                 "mode": "passive",
@@ -2253,28 +2277,31 @@ def j1939_payload(
             warnings,
         )
     if args.command == "j1939 summary":
+        auto_warnings = []
         decoder = get_j1939_decoder()
         data, warnings = _j1939_summary(
-            transport.frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
+            transport.frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings)),
             file=args.file,
             decoder=decoder,
         )
-        return (data, [], warnings)
+        return (data, [], auto_warnings + warnings)
     if args.command == "j1939 inventory":
+        auto_warnings = []
         decoder = get_j1939_decoder()
         data, warnings = _j1939_inventory(
-            transport.frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
+            transport.frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings)),
             file=args.file,
             decoder=decoder,
         )
-        return (data, [], warnings)
+        return (data, [], auto_warnings + warnings)
     if args.command == "j1939 compare":
         decoder = get_j1939_decoder()
         captures: list[dict[str, Any]] = []
         warnings: list[str] = []
         for file in args.files:
+            file_kwargs = _large_file_kwargs(args, file, warnings)
             capture_data, capture_warnings = _j1939_compare_capture(
-                transport.frames_from_file(file, **j1939_file_analysis_kwargs(args)),
+                transport.frames_from_file(file, **file_kwargs),
                 file=file,
                 decoder=decoder,
             )
