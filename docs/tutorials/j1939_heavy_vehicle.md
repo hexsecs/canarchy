@@ -105,7 +105,7 @@ The ECU has already flagged both the coolant overheat and engine speed anomaly. 
 
 ## Machine-Readable Output
 
-All three commands support `--json` for a full structured envelope or `--jsonl` for one structured record per line. `j1939 decode` emits J1939 observation events, while `j1939 spn`, `j1939 tp`, and `j1939 dm1` emit the decoded observation, session, or message objects directly. JSONL is suitable for piping into further analysis tools:
+All three commands support `--json` for a full structured envelope or `--jsonl` for one structured record per line. `j1939 decode` emits J1939 observation events, while `j1939 spn`, `j1939 tp sessions`, and `j1939 dm1` emit the decoded observation, session, or message objects directly. JSONL is suitable for piping into further analysis tools:
 
 ```bash
 # Stream all J1939 observations as JSONL

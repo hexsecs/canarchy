@@ -68,7 +68,7 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 | `j1939_decode` | `canarchy j1939 decode` |
 | `j1939_pgn` | `canarchy j1939 pgn` |
 | `j1939_spn` | `canarchy j1939 spn` |
-| `j1939_tp` | `canarchy j1939 tp` |
+| `j1939_tp` | `canarchy j1939 tp sessions` |
 | `j1939_dm1` | `canarchy j1939 dm1` |
 | `j1939_inventory` | `canarchy j1939 inventory` |
 | `uds_scan` | `canarchy uds scan` |

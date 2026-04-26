@@ -419,7 +419,7 @@ Notes:
 
 * without an interface, this command uses an explicit sample/reference provider
 * with an interface, this command captures from the selected transport backend and filters to J1939 extended-ID traffic
-* `j1939 decode`, `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 summary`, `j1939 inventory`, and `j1939 compare` remain file-backed
+* `j1939 decode`, `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 summary`, `j1939 inventory`, and `j1939 compare` remain file-backed
 
 ### j1939 decode
 
@@ -470,12 +470,12 @@ Notes:
 * the first implementation supports a curated SPN decoder set rather than a full J1939 database
 * unsupported SPNs return a structured `J1939_SPN_UNSUPPORTED` error
 
-### j1939 tp
+### j1939 tp sessions
 
 Summarize J1939 transport-protocol sessions from a capture file.
 
 ```bash
-canarchy j1939 tp --file <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 tp sessions --file <file> [--json|--jsonl|--table|--raw]
 ```
 
 Notes:

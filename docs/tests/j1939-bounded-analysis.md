@@ -34,11 +34,11 @@ And    the command shall remain otherwise valid JSON output
 
 ---
 
-### TEST-J1939WIN-02 — Time bound limits `j1939 tp`
+### TEST-J1939WIN-02 — Time bound limits `j1939 tp sessions`
 
 ```gherkin
 Given  a transport-protocol fixture spans multiple timestamps
-When   the operator runs `canarchy j1939 tp <capture> --seconds 0.08 --json`
+When   the operator runs `canarchy j1939 tp sessions --file <capture> --seconds 0.08 --json`
 Then   the system shall analyse only the initial capture-time window
 And    the returned session summary shall reflect an incomplete reassembly if later packets fall outside the window
 ```
@@ -51,7 +51,7 @@ And    the returned session summary shall reflect an incomplete reassembly if la
 
 ```gherkin
 Given  a valid J1939 DM1 capture file
-When   the operator runs `canarchy j1939 dm1 <capture> --max-frames 0 --json`
+When   the operator runs `canarchy j1939 dm1 --file <capture> --max-frames 0 --json`
 Then   the system shall exit with code `1`
 And    `errors[0].code` shall equal `"INVALID_MAX_FRAMES"`
 ```
@@ -90,7 +90,7 @@ And    later frames shall not appear in the yielded sequence
 
 ```gherkin
 Given  a valid J1939 TP capture file
-When   the operator runs `canarchy j1939 tp <capture> --seconds -1 --json`
+When   the operator runs `canarchy j1939 tp sessions --file <capture> --seconds -1 --json`
 Then   the system shall exit with code `1`
 And    `errors[0].code` shall equal `"INVALID_ANALYSIS_SECONDS"`
 ```

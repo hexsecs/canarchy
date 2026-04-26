@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented |
-| Command surface | `canarchy j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 inventory`, `j1939 compare` |
+| Command surface | `canarchy j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 inventory`, `j1939 compare` |
 | Primary area | CLI, protocol |
 
 ## Goal
@@ -20,13 +20,13 @@ Heavy-vehicle workflows should remain PGN and SPN first rather than forcing oper
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| `REQ-J1939-01` | Ubiquitous | The system shall provide `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 inventory`, and `j1939 compare` commands for SPN, transport-protocol, fault-traffic, source-address inventory, and multi-capture comparison workflows over capture files. |
+| `REQ-J1939-01` | Ubiquitous | The system shall provide `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 inventory`, and `j1939 compare` commands for SPN, transport-protocol, fault-traffic, source-address inventory, and multi-capture comparison workflows over capture files. |
 | `REQ-J1939-02` | Event-driven | When `j1939 spn <spn> --file <file>` is invoked, the system shall decode supported SPNs into structured observations including value, units, PGN, and addressing metadata. |
-| `REQ-J1939-03` | Event-driven | When `j1939 tp <file>` is invoked, the system shall summarise BAM-based transport-protocol sessions including reassembled payload data. |
-| `REQ-J1939-04` | Event-driven | When `j1939 dm1 <file>` is invoked, the system shall parse direct and TP-reassembled DM1 messages into structured fault records with lamp status and DTC details. |
+| `REQ-J1939-03` | Event-driven | When `j1939 tp sessions --file <file>` is invoked, the system shall summarise BAM-based transport-protocol sessions including reassembled payload data. |
+| `REQ-J1939-04` | Event-driven | When `j1939 dm1 --file <file>` is invoked, the system shall parse direct and TP-reassembled DM1 messages into structured fault records with lamp status and DTC details. |
 | `REQ-J1939-05` | Ubiquitous | J1939 command output shall present PGN and SPN identifiers rather than raw 29-bit arbitration IDs wherever protocol-aware views are available. |
-| `REQ-J1939-09` | Optional feature | Where a completed `j1939 tp` payload decodes cleanly as printable ASCII text, the system shall include the decoded text alongside the raw reassembled payload and mark it as heuristic. |
-| `REQ-J1939-10` | Optional feature | Where the transferred PGN is known to carry identification-style J1939 data, the system shall include a stable payload label in `j1939 tp` output without removing the raw payload bytes. |
+| `REQ-J1939-09` | Optional feature | Where a completed `j1939 tp sessions` payload decodes cleanly as printable ASCII text, the system shall include the decoded text alongside the raw reassembled payload and mark it as heuristic. |
+| `REQ-J1939-10` | Optional feature | Where the transferred PGN is known to carry identification-style J1939 data, the system shall include a stable payload label in `j1939 tp sessions` output without removing the raw payload bytes. |
 | `REQ-J1939-11` | Event-driven | When `j1939 inventory --file <file>` is invoked, the system shall report per-source-address inventory rows that include source address, observed frame count, first and last timestamps, and top PGNs within the analysed capture window. |
 | `REQ-J1939-12` | Optional feature | Where `j1939 inventory` observes printable TP payloads for J1939 component-identification or vehicle-identification transfers, the system shall associate those identifiers with the reporting source address and surface them in structured output. |
 | `REQ-J1939-13` | Event-driven | When `j1939 inventory --file <file>` is invoked, the system shall include per-source-address DM1 presence metadata without requiring the operator to run `j1939 dm1` separately. |
@@ -44,8 +44,8 @@ Heavy-vehicle workflows should remain PGN and SPN first rather than forcing oper
 
 ```text
 canarchy j1939 spn <spn> --file <capture>
-canarchy j1939 tp <capture>
-canarchy j1939 dm1 <capture>
+canarchy j1939 tp sessions --file <capture>
+canarchy j1939 dm1 --file <capture>
 canarchy j1939 inventory --file <capture>
 canarchy j1939 compare <capture> <capture> [<capture> ...]
 ```
@@ -92,7 +92,7 @@ Each observation includes:
 
 Unsupported SPNs return `J1939_SPN_UNSUPPORTED`.
 
-## `j1939 tp`
+## `j1939 tp sessions`
 
 The first implementation focuses on BAM-based transport sessions:
 
@@ -174,7 +174,7 @@ Each node includes:
 * `vehicle_identifications`
 * `dm1`
 
-The inventory view is intended to reduce manual cross-referencing between `j1939 summary`, `j1939 tp`, and `j1939 dm1` during initial capture triage.
+The inventory view is intended to reduce manual cross-referencing between `j1939 summary`, `j1939 tp sessions`, and `j1939 dm1` during initial capture triage.
 
 ## `j1939 compare`
 
@@ -211,7 +211,7 @@ The compare view is intended to answer high-value investigation questions quickl
 
 ## Output Contracts
 
-For `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 inventory`, and `j1939 compare`, both `--json` and `--jsonl` emit a single CANarchy result object because these commands return structured observations under `data` rather than event streams. Table output remains protocol-first and summarises SPN observations, TP sessions, DM1 fault content, source-address inventory rows, and multi-capture J1939 differences without dropping to raw-ID-only views. For `j1939 tp`, raw `reassembled_data` remains authoritative even when heuristic text or payload labels are present.
+For `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 inventory`, and `j1939 compare`, both `--json` and `--jsonl` emit a single CANarchy result object because these commands return structured observations under `data` rather than event streams. Table output remains protocol-first and summarises SPN observations, TP sessions, DM1 fault content, source-address inventory rows, and multi-capture J1939 differences without dropping to raw-ID-only views. For `j1939 tp sessions`, raw `reassembled_data` remains authoritative even when heuristic text or payload labels are present.
 
 ## Error Contracts
 

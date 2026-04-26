@@ -10,6 +10,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Documentation
 
 * Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
+* Added dedicated current-state design and test specs for `j1939 monitor` and `config show`, and aligned the surrounding J1939 spec language with the current `j1939 tp sessions` command surface.
 
 ### Added
 
