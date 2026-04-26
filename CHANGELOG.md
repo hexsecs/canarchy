@@ -7,16 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-### Documentation
-
-* Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
-
 ### Added
 
 * Added `canarchy j1939 compare` for multi-capture comparison of J1939 PGNs, source addresses, DM1 fault changes, and printable TP identification payloads across two or more recorded captures.
+* Implemented `canarchy re correlate <file> --reference <ref>` to correlate candidate bit fields against a reference time series. Accepts JSON (array or named object with `name`+`samples`) and JSONL reference formats. Each candidate reports `pearson_r`, `spearman_r`, `sample_count`, and `lag_ms` (optimal time offset in [-500, +500] ms). Candidates are ranked by `|pearson_r|` descending. Structured errors are returned for missing `--reference` (`RE_REFERENCE_REQUIRED`), invalid or short reference files (`INVALID_REFERENCE_FILE`), and insufficient capture/reference time-range overlap (`INSUFFICIENT_OVERLAP`). Also exposed as the `re_correlate` MCP tool. Closes #52.
 
 ### Documentation
 
+* Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
 * Documented the new multi-capture `j1939 compare` workflow across the J1939 design/test specs, command reference, and agent-facing command guidance.
 
 ## [0.5.0] - 2026-04-25

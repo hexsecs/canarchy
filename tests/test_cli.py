@@ -2150,6 +2150,149 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
 
+    def test_re_correlate_returns_ranked_candidates_and_metadata(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "re_correlate_linear.candump"),
+            "--reference",
+            str(FIXTURES / "re_correlate_reference.json"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["mode"], "passive")
+        self.assertEqual(payload["data"]["analysis"], "correlation")
+        self.assertGreater(payload["data"]["candidate_count"], 0)
+        # start_bit=8, bit_length=8 encodes the linear field in the fixture
+        byte1 = next(
+            (c for c in payload["data"]["candidates"]
+             if c["arbitration_id"] == 0x400 and c["start_bit"] == 8 and c["bit_length"] == 8),
+            None,
+        )
+        self.assertIsNotNone(byte1)
+        assert byte1 is not None
+        self.assertAlmostEqual(byte1["pearson_r"], 1.0, places=3)
+        self.assertAlmostEqual(byte1["spearman_r"], 1.0, places=3)
+        self.assertEqual(byte1["sample_count"], 20)
+        for key in ("pearson_r", "spearman_r", "sample_count", "lag_ms"):
+            self.assertIn(key, byte1)
+
+    def test_re_correlate_table_output_includes_ranked_candidates(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "re_correlate_linear.candump"),
+            "--reference",
+            str(FIXTURES / "re_correlate_reference.json"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: re correlate", stdout)
+        self.assertIn("candidate_count:", stdout)
+        self.assertIn("id=0x400", stdout)
+        self.assertIn("pearson_r=", stdout)
+        self.assertIn("spearman_r=", stdout)
+        self.assertIn("lag_ms=", stdout)
+
+    def test_re_correlate_named_reference_includes_reference_name(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "re_correlate_linear.candump"),
+            "--reference",
+            str(FIXTURES / "re_correlate_reference_named.json"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["reference_name"], "vehicle_speed_kph")
+
+    def test_re_correlate_jsonl_reference_format(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "re_correlate_linear.candump"),
+            "--reference",
+            str(FIXTURES / "re_correlate_reference.jsonl"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertGreater(payload["data"]["candidate_count"], 0)
+
+    def test_re_correlate_without_reference_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "re_correlate_linear.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "RE_REFERENCE_REQUIRED")
+
+    def test_re_correlate_missing_reference_file_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "re_correlate_linear.candump"),
+            "--reference",
+            str(FIXTURES / "nonexistent_reference.json"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_REFERENCE_FILE")
+
+    def test_re_correlate_malformed_reference_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "re_correlate_linear.candump"),
+            "--reference",
+            str(FIXTURES / "re_correlate_reference_malformed.json"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_REFERENCE_FILE")
+
+    def test_re_correlate_short_reference_returns_user_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "re_correlate_linear.candump"),
+            "--reference",
+            str(FIXTURES / "re_correlate_reference_short.json"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_REFERENCE_FILE")
+
+    def test_re_correlate_missing_capture_returns_transport_error(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "re",
+            "correlate",
+            str(FIXTURES / "missing-correlate-file.candump"),
+            "--reference",
+            str(FIXTURES / "re_correlate_reference.json"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
+
     def test_session_save_load_and_show_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             with working_directory(temp_dir):

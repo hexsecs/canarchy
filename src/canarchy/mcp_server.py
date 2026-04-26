@@ -440,6 +440,18 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="re_correlate",
+        description="Correlate candidate bit fields in a capture against a reference time series to identify which fields encode a known physical quantity.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+                "reference": {"type": "string", "description": "Path to reference series file (.json or .jsonl) with timestamp and value fields"},
+            },
+            "required": ["file", "reference"],
+        },
+    ),
+    types.Tool(
         name="re_counters",
         description="Detect likely counter fields in CAN frames from a capture file.",
         inputSchema={
@@ -698,6 +710,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("provider"):
                 argv += ["--provider", a["provider"]]
             return argv + ["--json"]
+        case "re_correlate":
+            return ["re", "correlate", a["file"], "--reference", a["reference"], "--json"]
         case "re_counters":
             return ["re", "counters", a["file"], "--json"]
         case "re_entropy":
