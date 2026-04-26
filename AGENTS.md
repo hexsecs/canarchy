@@ -39,6 +39,17 @@ The only exceptions are:
 * typo/whitespace-only changes in docs or comments
 * changes to `.gitignore` or other non-functional config
 
+### Branch and pull-request workflow
+
+**This is a hard rule, not a suggestion.**
+
+* For any non-trivial feature, bug fix, refactor, or documentation change, agents shall create and work from a dedicated branch rather than committing directly on `main`.
+* Branch names should be short, descriptive, and tied to the issue when practical, for example `issue-110-j1939-compare`.
+* When issue-scoped work is complete, agents shall push the branch and open a pull request unless the user explicitly asks for a direct push or direct commit flow.
+* Pull requests should be the default handoff for review, CI, and merge discussion.
+* Agents shall not merge their own pull requests unless the user explicitly asks them to do so.
+* If urgent work must go directly to `main`, the user shall explicitly request that exception.
+
 ### Changelog policy
 
 `CHANGELOG.md` follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. Every non-trivial change must be recorded in the `[Unreleased]` section before or alongside the commit that introduces it.
@@ -94,12 +105,12 @@ When reviewing your own work before committing or pushing, explicitly check each
 
 1. State that the issue work is complete locally.
 2. Summarize the shipped changes and verification results.
-3. Offer to commit and push the changes if that has not happened yet.
-4. If commit/push is already done, offer to close or update the issue if still needed.
+3. Offer to commit, push the branch, and open a pull request if that has not happened yet.
+4. If the branch and pull request already exist, offer to update or close the issue if still needed.
 5. Recommend the next 2–4 highest-value follow-up tasks.
 6. Present the next steps as a multiple-choice menu, for example:
 
-   A. commit, push, and close the issue
+   A. commit, push the branch, and open a pull request
    B. start the next recommended issue
    C. refine docs or tests around the completed work
    D. inspect or review the implementation before moving on

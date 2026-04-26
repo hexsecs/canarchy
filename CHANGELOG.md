@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Documentation
+
+* Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
+
 ### Added
 
 * Added `canarchy j1939 compare` for multi-capture comparison of J1939 PGNs, source addresses, DM1 fault changes, and printable TP identification payloads across two or more recorded captures.
