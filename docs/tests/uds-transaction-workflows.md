@@ -39,6 +39,7 @@ The current implementation covers transport-backed multi-frame response reassemb
 | `REQ-UDS-TX-09` | `TEST-UDS-TX-06`, `TEST-UDS-TX-08` |
 | `REQ-UDS-TX-10` | `TEST-UDS-TX-07`, `TEST-UDS-TX-08` |
 | `REQ-UDS-TX-11` | `TEST-UDS-TX-06` |
+| `REQ-UDS-TX-12` | `TEST-UDS-TX-01`, `TEST-UDS-TX-02` |
 
 ## Representative Test Cases
 
@@ -49,6 +50,7 @@ Given  the scaffold transport backend is active
 When   the operator runs `canarchy uds scan can0 --json`
 Then   the result shall indicate active mode
 And    the result shall include a responder count and structured transaction events
+And    the result shall report the active protocol decoder path
 And    the command shall emit a preflight warning on `stderr`
 ```
 
@@ -63,6 +65,7 @@ Given  the scaffold transport backend is active
 When   the operator runs `canarchy uds trace can0 --json`
 Then   the result shall indicate passive mode
 And    the result shall include a transaction count and structured transaction events
+And    the result shall report the active protocol decoder path
 ```
 
 **Fixture:** scaffold backend (no file required).

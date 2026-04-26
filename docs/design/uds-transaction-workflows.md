@@ -7,6 +7,7 @@
 | Status | Implemented |
 | Command surface | `canarchy uds scan`, `uds trace` |
 | Primary area | CLI, protocol |
+| Related specs | `docs/design/scapy-diagnostic-integration.md` |
 
 ## Goal
 
@@ -31,6 +32,7 @@ Operators need a protocol-aware UDS surface for discovery and transaction inspec
 | `REQ-UDS-TX-09` | Event-driven | When `uds scan` or `uds trace` receives ISO 15765-2 first-frame and consecutive-frame responses, the system shall reassemble them into a single `uds_transaction` response payload before service decoding. |
 | `REQ-UDS-TX-10` | Unwanted behaviour | If a segmented UDS response is truncated or arrives out of order, the system shall emit a `uds_transaction` event with `complete` equal to `false` and the partial reassembled response payload. |
 | `REQ-UDS-TX-11` | Event-driven | When ISO 15765-2 flow-control frames appear in captured traffic, the system shall use them only for reassembly and shall not emit them as `uds_transaction` events. |
+| `REQ-UDS-TX-12` | Ubiquitous | `uds scan` and `uds trace` shall report the active protocol decoder path in the result data as `protocol_decoder`. |
 
 ## Command Surface
 
@@ -66,6 +68,7 @@ Both commands emit `uds_transaction` events with fields including:
 * `response_data`
 * `complete`
 * `ecu_address`
+* optional `decoder`, `request_summary`, `response_summary`, `negative_response_code`, and `negative_response_name`
 
 ## Output Contracts
 
@@ -75,6 +78,7 @@ Current implementation note:
 
 * with the `python-can` backend, `uds scan` and `uds trace` reassemble multi-frame UDS responses before transaction emission
 * with the `scaffold` backend, they emit explicit sample/reference transactions
+* where the optional Scapy extra is installed, UDS transactions may include summary-level request/response enrichment while preserving the same event type and envelope
 
 ## Error Contracts
 

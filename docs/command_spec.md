@@ -850,11 +850,21 @@ canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 Oil
 canarchy uds scan can0 --json
 ```
 
+Notes:
+
+* the result reports `protocol_decoder` as `built-in` by default
+* when the optional Scapy extra is installed, UDS transaction payloads may include summary-level request/response enrichment without changing the command surface
+
 ### UDS Trace
 
 ```bash
 canarchy uds trace can0 --json
 ```
+
+Notes:
+
+* the result reports `protocol_decoder` as `built-in` by default
+* negative responses may include `negative_response_code` and `negative_response_name`
 
 ### Session Save
 

@@ -1882,6 +1882,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "active")
         self.assertEqual(payload["data"]["implementation"], "sample/reference provider")
+        self.assertEqual(payload["data"]["protocol_decoder"], "built-in")
         self.assertEqual(payload["data"]["responder_count"], 2)
         self.assertEqual(payload["data"]["events"][0]["event_type"], "uds_transaction")
         self.assertEqual(
@@ -1898,6 +1899,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "passive")
         self.assertEqual(payload["data"]["implementation"], "sample/reference provider")
+        self.assertEqual(payload["data"]["protocol_decoder"], "built-in")
         self.assertEqual(payload["data"]["transaction_count"], 2)
         self.assertTrue(payload["data"]["events"][0]["payload"]["complete"])
         self.assertEqual(payload["data"]["events"][1]["payload"]["service"], 0x27)
@@ -1941,8 +1943,32 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["implementation"], "transport-backed")
         self.assertEqual(payload["data"]["transport_backend"], "python-can")
+        self.assertEqual(payload["data"]["protocol_decoder"], "built-in")
         self.assertEqual(payload["data"]["events"][0]["payload"]["service"], 0x10)
         self.assertTrue(payload["data"]["events"][0]["payload"]["complete"])
+
+    @patch("canarchy.cli.uds_decoder_backend", return_value="scapy")
+    @patch("canarchy.uds.uds_decoder_backend", return_value="scapy")
+    @patch(
+        "canarchy.uds.inspect_uds_payload",
+        side_effect=[
+            {"summary": "UDS / DiagnosticSessionControl"},
+            {"summary": "UDS / PositiveResponse DiagnosticSessionControl"},
+            {"summary": "UDS / SecurityAccess"},
+            {"summary": "UDS / PositiveResponse SecurityAccess"},
+        ],
+    )
+    def test_uds_trace_reports_optional_scapy_enrichment(self, _inspect_mock, _uds_decoder_mock, _cli_decoder_mock) -> None:
+        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+            exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["protocol_decoder"], "scapy")
+        first = payload["data"]["events"][0]["payload"]
+        self.assertEqual(first["decoder"], "scapy")
+        self.assertEqual(first["response_summary"], "UDS / PositiveResponse DiagnosticSessionControl")
 
     def test_uds_scan_table_output_is_pretty_printed(self) -> None:
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):

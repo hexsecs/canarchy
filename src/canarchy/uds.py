@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from canarchy.models import CanFrame, UdsTransactionEvent
+from canarchy.scapy_uds import inspect_uds_payload, scapy_uds_available
 
 
 @dataclass(slots=True, frozen=True)
@@ -48,9 +49,38 @@ UDS_SERVICE_CATALOG: tuple[UdsService, ...] = (
     UdsService(0x85, "ControlDTCSetting", "diagnostics", True),
 )
 
+UDS_NEGATIVE_RESPONSE_CODES: dict[int, str] = {
+    0x10: "GeneralReject",
+    0x11: "ServiceNotSupported",
+    0x12: "SubFunctionNotSupported",
+    0x13: "IncorrectMessageLengthOrInvalidFormat",
+    0x14: "ResponseTooLong",
+    0x21: "BusyRepeatRequest",
+    0x22: "ConditionsNotCorrect",
+    0x24: "RequestSequenceError",
+    0x25: "NoResponseFromSubnetComponent",
+    0x26: "FailurePreventsExecutionOfRequestedAction",
+    0x31: "RequestOutOfRange",
+    0x33: "SecurityAccessDenied",
+    0x35: "InvalidKey",
+    0x36: "ExceededNumberOfAttempts",
+    0x37: "RequiredTimeDelayNotExpired",
+    0x70: "UploadDownloadNotAccepted",
+    0x71: "TransferDataSuspended",
+    0x72: "GeneralProgrammingFailure",
+    0x73: "WrongBlockSequenceCounter",
+    0x78: "RequestCorrectlyReceivedResponsePending",
+    0x7E: "SubFunctionNotSupportedInActiveSession",
+    0x7F: "ServiceNotSupportedInActiveSession",
+}
+
 
 def uds_services_payload() -> list[dict[str, object]]:
     return [service.to_payload() for service in UDS_SERVICE_CATALOG]
+
+
+def uds_decoder_backend() -> str:
+    return "scapy" if scapy_uds_available() else "built-in"
 
 
 @dataclass(slots=True, frozen=True)
@@ -110,7 +140,7 @@ def uds_trace_transactions(frames: list[CanFrame], *, source: str) -> list[UdsTr
             )
         )
 
-    return events
+    return enrich_uds_transactions(events)
 
 
 def uds_scan_transactions(frames: list[CanFrame], *, source: str) -> list[UdsTransactionEvent]:
@@ -144,7 +174,41 @@ def uds_scan_transactions(frames: list[CanFrame], *, source: str) -> list[UdsTra
             )
         )
 
-    return events
+    return enrich_uds_transactions(events)
+
+
+def enrich_uds_transactions(events: list[UdsTransactionEvent]) -> list[UdsTransactionEvent]:
+    decoder = uds_decoder_backend()
+    return [_enrich_uds_transaction(event, decoder=decoder) for event in events]
+
+
+def _enrich_uds_transaction(event: UdsTransactionEvent, *, decoder: str) -> UdsTransactionEvent:
+    request_summary: str | None = None
+    response_summary: str | None = None
+
+    if decoder == "scapy":
+        request_decode = inspect_uds_payload(event.request_data) or {}
+        response_decode = inspect_uds_payload(event.response_data) or {}
+        request_summary = request_decode.get("summary")
+        response_summary = response_decode.get("summary")
+
+    negative_response_code: int | None = None
+    negative_response_name: str | None = None
+    if event.response_data[:1] == b"\x7f" and len(event.response_data) >= 3:
+        negative_response_code = event.response_data[2]
+        negative_response_name = UDS_NEGATIVE_RESPONSE_CODES.get(
+            negative_response_code,
+            f"ResponseCode0x{negative_response_code:02X}",
+        )
+
+    return replace(
+        event,
+        decoder=decoder,
+        request_summary=request_summary,
+        response_summary=response_summary,
+        negative_response_code=negative_response_code,
+        negative_response_name=negative_response_name,
+    )
 
 
 def diagnostic_session_control_request_frame(interface: str | None = None) -> CanFrame:

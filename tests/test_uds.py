@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from canarchy.models import CanFrame
 from canarchy.uds import reassemble_uds_pdus, uds_scan_transactions, uds_trace_transactions
@@ -83,3 +84,39 @@ class UdsIsoTpTests(unittest.TestCase):
         self.assertTrue(events[0].complete)
         self.assertEqual(events[0].service, 0x10)
         self.assertEqual(events[0].response_data, bytes.fromhex("5001003201F400000000"))
+
+    @patch("canarchy.uds.uds_decoder_backend", return_value="scapy")
+    @patch(
+        "canarchy.uds.inspect_uds_payload",
+        side_effect=[
+            {"summary": "UDS / DiagnosticSessionControl"},
+            {"summary": "UDS / PositiveResponse DiagnosticSessionControl"},
+        ],
+    )
+    def test_uds_trace_transactions_include_optional_scapy_summaries(self, _inspect_mock, _decoder_mock) -> None:
+        events = uds_trace_transactions(
+            [
+                _frame(0x7E0, "0210030000000000", 0.0),
+                _frame(0x7E8, "0450030032000000", 0.1),
+            ],
+            source="transport.uds.trace",
+        )
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].decoder, "scapy")
+        self.assertEqual(events[0].request_summary, "UDS / DiagnosticSessionControl")
+        self.assertEqual(events[0].response_summary, "UDS / PositiveResponse DiagnosticSessionControl")
+
+    def test_uds_trace_transactions_name_negative_response_codes(self) -> None:
+        events = uds_trace_transactions(
+            [
+                _frame(0x7E0, "0227020000000000", 0.0),
+                _frame(0x7E8, "037F273500000000", 0.1),
+            ],
+            source="transport.uds.trace",
+        )
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].service, 0x27)
+        self.assertEqual(events[0].negative_response_code, 0x35)
+        self.assertEqual(events[0].negative_response_name, "InvalidKey")

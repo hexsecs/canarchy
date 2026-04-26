@@ -33,6 +33,7 @@ from canarchy.sample_data import (
 )
 from canarchy.uds import (
     diagnostic_session_control_request_frame,
+    enrich_uds_transactions,
     uds_scan_transactions,
     uds_trace_transactions,
 )
@@ -687,7 +688,7 @@ class LocalTransport:
     def uds_scan_events(self, interface: str) -> list[dict[str, object]]:
         if self.live_backend.backend_name == "scaffold":
             self._require_interface(interface)
-            return serialize_events([event.to_event() for event in sample_uds_scan_transactions()])
+            return serialize_events(enrich_uds_transactions(sample_uds_scan_transactions()))
 
         self.send(interface, diagnostic_session_control_request_frame(interface))
         frames = self.capture(interface)
@@ -696,7 +697,7 @@ class LocalTransport:
     def uds_trace_events(self, interface: str) -> list[dict[str, object]]:
         if self.live_backend.backend_name == "scaffold":
             self._require_interface(interface)
-            return serialize_events([event.to_event() for event in sample_uds_trace_transactions()])
+            return serialize_events(enrich_uds_transactions(sample_uds_trace_transactions()))
 
         frames = self.capture(interface)
         return serialize_events(uds_trace_transactions(frames, source="transport.uds.trace"))
