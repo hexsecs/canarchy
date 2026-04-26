@@ -642,7 +642,7 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_tp":
-            argv = ["j1939", "tp", a["file"]]
+            argv = ["j1939", "tp", "sessions", "--file", a["file"]]
             if a.get("offset") is not None and a["offset"] > 0:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:

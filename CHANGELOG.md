@@ -12,6 +12,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
 * Added dedicated current-state design and test specs for `j1939 monitor` and `config show`, and aligned the surrounding J1939 spec language with the current `j1939 tp sessions` command surface.
 
+### Fixed
+
+* Fixed the MCP `j1939_tp` tool to invoke the current `j1939 tp sessions --file <file>` CLI surface instead of the older bare `j1939 tp <file>` form, and tightened MCP argv coverage around that mapping.
+
 ### Added
 
 * Added `canarchy j1939 compare` for multi-capture comparison of J1939 PGNs, source addresses, DM1 fault changes, and printable TP identification payloads across two or more recorded captures.

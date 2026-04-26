@@ -285,8 +285,12 @@ def test_build_argv_j1939_spn_seconds():
 
 def test_build_argv_j1939_tp_max_frames():
     argv = _build_argv("j1939_tp", {"file": "big.log", "max_frames": 500})
-    assert "--max-frames" in argv
-    assert "500" in argv
+    assert argv == ["j1939", "tp", "sessions", "--file", "big.log", "--max-frames", "500", "--json"]
+
+
+def test_build_argv_j1939_tp_seconds_and_offset():
+    argv = _build_argv("j1939_tp", {"file": "big.log", "offset": 12, "seconds": 10.0})
+    assert argv == ["j1939", "tp", "sessions", "--file", "big.log", "--offset", "12", "--seconds", "10.0", "--json"]
 
 
 def test_build_argv_j1939_dm1_max_frames():
