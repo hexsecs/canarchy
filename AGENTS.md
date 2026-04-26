@@ -310,6 +310,7 @@ Examples:
 
 * `j1939 monitor`
 * `j1939 decode`
+* `j1939 compare`
 * `j1939 inventory`
 * `uds scan`
 * `re signals`
@@ -424,6 +425,7 @@ canarchy
   j1939
     monitor
     decode
+    compare
     pgn
     spn
     tp

@@ -419,7 +419,7 @@ Notes:
 
 * without an interface, this command uses an explicit sample/reference provider
 * with an interface, this command captures from the selected transport backend and filters to J1939 extended-ID traffic
-* `j1939 decode`, `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 summary`, and `j1939 inventory` remain file-backed
+* `j1939 decode`, `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 summary`, `j1939 inventory`, and `j1939 compare` remain file-backed
 
 ### j1939 decode
 
@@ -509,6 +509,27 @@ Notes:
 * inventory rows are grouped by source address
 * printable TP payloads for component identification and vehicle identification are associated with the reporting source address when available
 * DM1 presence is summarised per source address so initial triage does not require a second command
+
+### j1939 compare
+
+Compare two or more J1939 capture files and highlight common versus capture-unique PGNs, source-address changes, DM1 differences, and printable TP identification changes.
+
+```bash
+canarchy j1939 compare <file> <file> [<file> ...] [--json|--jsonl|--table|--raw]
+```
+
+Example:
+
+```bash
+canarchy j1939 compare tests/fixtures/j1939_inventory.candump tests/fixtures/j1939_compare_shifted.candump --json
+```
+
+Notes:
+
+* this command requires at least two capture files
+* `--max-frames`, `--seconds`, and `--offset` apply independently to each compared capture file
+* DM1 differences are grouped by source address and surface active-fault or lamp-state changes when present
+* printable TP component-identification and vehicle-identification payloads are compared by source address and payload label
 
 ### tui
 

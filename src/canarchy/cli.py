@@ -10,6 +10,7 @@ import sys
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from canarchy.dbc import DbcError, dbc_supports_spn, decode_frames, decode_j1939_spn, encode_message, inspect_database, lookup_j1939_spn_metadata
@@ -48,7 +49,7 @@ EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
-J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory"}
+J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory", "j1939 compare"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
@@ -436,6 +437,12 @@ def build_parser() -> CanarchyArgumentParser:
     add_j1939_file_analysis_arguments(j1939_inventory)
     add_output_arguments(j1939_inventory)
     j1939_inventory.set_defaults(command="j1939 inventory")
+
+    j1939_compare = j1939_subparsers.add_parser("compare", help="compare multiple J1939 capture files")
+    j1939_compare.add_argument("files", nargs="+", help="paths to candump capture files")
+    add_j1939_file_analysis_arguments(j1939_compare)
+    add_output_arguments(j1939_compare)
+    j1939_compare.set_defaults(command="j1939 compare")
 
     uds = subparsers.add_parser("uds", help="UDS protocol workflows")
     uds_subparsers = uds.add_subparsers(dest="uds_action", required=True)
@@ -875,7 +882,7 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory"}:
+    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory", "j1939 compare"}:
         max_frames = getattr(args, "max_frames", None)
         seconds = getattr(args, "seconds", None)
         if max_frames is not None and max_frames < 1:
@@ -940,6 +947,19 @@ def validate_args(args: argparse.Namespace) -> None:
                         data={"sa": sa_arg},
                     )
 
+    if args.command == "j1939 compare" and len(args.files) < 2:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="J1939_COMPARE_REQUIRES_MULTIPLE_FILES",
+                    message="J1939 capture comparison requires at least two capture files.",
+                    hint="Pass two or more candump files to `canarchy j1939 compare`.",
+                )
+            ],
+        )
+
     if args.command == "encode":
         for assignment in args.signals:
             if "=" not in assignment:
@@ -982,9 +1002,9 @@ def frame_from_stream_event(event: dict[str, Any], *, command: str, line_num: in
                     code="INVALID_STREAM_EVENT",
                     message=f"Expected frame event, got {event.get('event_type')} at line {line_num}",
                     hint="Input stream must contain JSONL FrameEvents.",
-                )
-            ],
-        )
+                            )
+                        ],
+                    )
 
     try:
         frame_data = event["payload"]["frame"]
@@ -1379,6 +1399,218 @@ def _j1939_inventory(frames: list[CanFrame], *, file: str, decoder: Any) -> tupl
         },
         warnings,
     )
+
+
+def _format_pgn_entry(pgn: int) -> dict[str, Any]:
+    meta = pgn_lookup(pgn)
+    return {
+        "pgn": pgn,
+        "label": meta["label"] if meta else None,
+    }
+
+
+def _format_source_address_entry(source_address: int) -> dict[str, Any]:
+    return {
+        "source_address": source_address,
+        "source_address_name": source_address_lookup(source_address),
+    }
+
+
+def _j1939_compare_capture(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[dict[str, Any], list[str]]:
+    summary_data, summary_warnings = _j1939_summary(frames, file=file, decoder=decoder)
+    inventory_data, inventory_warnings = _j1939_inventory(frames, file=file, decoder=decoder)
+    dm1_messages = decoder.dm1_messages(frames)
+    faults_data = _j1939_faults(dm1_messages, file=file)
+    tp_sessions = [_enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)]
+
+    pgns = {entry["pgn"] for entry in summary_data.get("top_pgns", [])}
+    source_addresses = {entry["source_address"] for entry in summary_data.get("top_source_addresses", [])}
+    for frame in frames:
+        if not frame.is_extended_id:
+            continue
+        identifier = decompose_arbitration_id(frame.arbitration_id)
+        pgns.add(identifier.pgn)
+        source_addresses.add(identifier.source_address)
+
+    dm1_by_source: dict[int, dict[str, Any]] = {}
+    for ecu in faults_data["ecus"]:
+        faults = [
+            {
+                "spn": int(fault["spn"]),
+                "fmi": int(fault["fmi"]),
+                "name": fault.get("name"),
+            }
+            for fault in ecu.get("faults", [])
+        ]
+        dm1_by_source[int(ecu["source_address"])] = {
+            "present": True,
+            "message_count": int(ecu["message_count"]),
+            "active_fault_count": int(ecu["fault_count"]),
+            "lamp_summary": dict(ecu["lamp_summary"]),
+            "faults": sorted(faults, key=lambda item: (item["spn"], item["fmi"], item.get("name") or "")),
+        }
+
+    identifier_map: dict[tuple[int, str], list[str]] = {}
+    for node in inventory_data.get("nodes", []):
+        source_address = int(node["source_address"])
+        for key in ("component_identifications", "vehicle_identifications"):
+            texts = sorted({str(entry["text"]) for entry in node.get(key, [])})
+            if texts:
+                identifier_map[(source_address, key.removesuffix("s"))] = texts
+
+    return (
+        {
+            "file": file,
+            "file_name": Path(file).name,
+            "total_frames": int(summary_data["total_frames"]),
+            "j1939_frame_count": int(summary_data["j1939_frame_count"]),
+            "unique_pgn_count": len(pgns),
+            "unique_source_count": len(source_addresses),
+            "pgns": [_format_pgn_entry(pgn) for pgn in sorted(pgns)],
+            "source_addresses": [_format_source_address_entry(sa) for sa in sorted(source_addresses)],
+            "dm1_by_source": dm1_by_source,
+            "identifiers": [
+                {
+                    "source_address": source_address,
+                    "source_address_name": source_address_lookup(source_address),
+                    "payload_label": payload_label,
+                    "values": values,
+                }
+                for (source_address, payload_label), values in sorted(identifier_map.items())
+            ],
+            "printable_identifiers": summary_data.get("tp", {}).get("printable_identifiers", []),
+            "vehicle_identifications": inventory_data.get("vehicle_identifications", []),
+            "tp_session_count": int(summary_data.get("tp", {}).get("session_count", 0)),
+        },
+        summary_warnings + inventory_warnings,
+    )
+
+
+def _dm1_compare_signature(entry: dict[str, Any]) -> tuple[Any, ...]:
+    lamp = entry.get("lamp_summary", {})
+    faults = tuple(
+        (int(fault["spn"]), int(fault["fmi"]), fault.get("name"))
+        for fault in entry.get("faults", [])
+    )
+    return (
+        bool(entry.get("present", False)),
+        int(entry.get("active_fault_count", 0)),
+        lamp.get("mil"),
+        lamp.get("red_stop"),
+        lamp.get("amber_warning"),
+        lamp.get("protect"),
+        faults,
+    )
+
+
+def _j1939_compare(captures: list[dict[str, Any]]) -> dict[str, Any]:
+    pgn_sets = [
+        {int(entry["pgn"]) for entry in capture.get("pgns", [])}
+        for capture in captures
+    ]
+    source_sets = [
+        {int(entry["source_address"]) for entry in capture.get("source_addresses", [])}
+        for capture in captures
+    ]
+
+    common_pgns = set.intersection(*pgn_sets) if pgn_sets else set()
+    common_sources = set.intersection(*source_sets) if source_sets else set()
+
+    dm1_differences: list[dict[str, Any]] = []
+    all_dm1_sources = sorted(
+        {
+            source_address
+            for capture in captures
+            for source_address in capture.get("dm1_by_source", {})
+        }
+    )
+    for source_address in all_dm1_sources:
+        capture_entries = []
+        signatures = []
+        for capture in captures:
+            entry = capture.get("dm1_by_source", {}).get(
+                source_address,
+                {
+                    "present": False,
+                    "message_count": 0,
+                    "active_fault_count": 0,
+                    "lamp_summary": {
+                        "mil": "off",
+                        "red_stop": "off",
+                        "amber_warning": "off",
+                        "protect": "off",
+                    },
+                    "faults": [],
+                },
+            )
+            signatures.append(_dm1_compare_signature(entry))
+            capture_entries.append({"file": capture["file"], **entry})
+        if len(set(signatures)) > 1:
+            dm1_differences.append(
+                {
+                    "source_address": source_address,
+                    "source_address_name": source_address_lookup(source_address),
+                    "captures": capture_entries,
+                }
+            )
+
+    identifier_differences: list[dict[str, Any]] = []
+    identifier_keys = sorted(
+        {
+            (int(entry["source_address"]), str(entry["payload_label"]))
+            for capture in captures
+            for entry in capture.get("identifiers", [])
+        }
+    )
+    for source_address, payload_label in identifier_keys:
+        capture_entries = []
+        signatures = []
+        for capture in captures:
+            values: list[str] = []
+            for entry in capture.get("identifiers", []):
+                if int(entry["source_address"]) == source_address and str(entry["payload_label"]) == payload_label:
+                    values = list(entry.get("values", []))
+                    break
+            normalized = tuple(values)
+            signatures.append(normalized)
+            capture_entries.append({"file": capture["file"], "values": values})
+        if len(set(signatures)) > 1:
+            identifier_differences.append(
+                {
+                    "source_address": source_address,
+                    "source_address_name": source_address_lookup(source_address),
+                    "payload_label": payload_label,
+                    "captures": capture_entries,
+                }
+            )
+
+    return {
+        "mode": "passive",
+        "files": [capture["file"] for capture in captures],
+        "capture_count": len(captures),
+        "captures": captures,
+        "common_pgns": [_format_pgn_entry(pgn) for pgn in sorted(common_pgns)],
+        "unique_pgns": [
+            {
+                "file": capture["file"],
+                "pgns": [_format_pgn_entry(pgn) for pgn in sorted({int(entry["pgn"]) for entry in capture.get("pgns", [])} - common_pgns)],
+            }
+            for capture in captures
+        ],
+        "common_source_addresses": [_format_source_address_entry(sa) for sa in sorted(common_sources)],
+        "unique_source_addresses": [
+            {
+                "file": capture["file"],
+                "source_addresses": [
+                    _format_source_address_entry(sa)
+                    for sa in sorted({int(entry["source_address"]) for entry in capture.get("source_addresses", [])} - common_sources)
+                ],
+            }
+            for capture in captures
+        ],
+        "dm1_differences": dm1_differences,
+        "identifier_differences": identifier_differences,
+    }
 
 
 _LAMP_PRIORITY: dict[str, int] = {"on": 3, "error": 2, "not_available": 1, "off": 0}
@@ -2015,6 +2247,19 @@ def j1939_payload(
             decoder=decoder,
         )
         return (data, [], warnings)
+    if args.command == "j1939 compare":
+        decoder = get_j1939_decoder()
+        captures: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        for file in args.files:
+            capture_data, capture_warnings = _j1939_compare_capture(
+                transport.frames_from_file(file, **j1939_file_analysis_kwargs(args)),
+                file=file,
+                decoder=decoder,
+            )
+            captures.append(capture_data)
+            warnings.extend(f"{Path(file).name}: {warning}" for warning in capture_warnings)
+        return (_j1939_compare(captures), [], warnings)
     raise AssertionError(f"unsupported j1939 command: {args.command}")
 
 
@@ -2826,6 +3071,71 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             )
         return lines
 
+    if result.command == "j1939 compare":
+        lines.append("files:")
+        for file in result.data.get("files", []):
+            lines.append(f"- {file}")
+        lines.append("common_pgns:")
+        common_pgns = result.data.get("common_pgns", [])
+        if not common_pgns:
+            lines.append("- none")
+        else:
+            for entry in common_pgns:
+                label = f" [{entry['label']}]" if entry.get("label") else ""
+                lines.append(f"- pgn={entry['pgn']}{label}")
+        lines.append("unique_pgns:")
+        for capture in result.data.get("unique_pgns", []):
+            pgn_text = ", ".join(
+                f"{entry['pgn']}" + (f"[{entry['label']}]" if entry.get("label") else "")
+                for entry in capture.get("pgns", [])
+            ) or "none"
+            lines.append(f"- {capture['file']}: {pgn_text}")
+        lines.append("common_source_addresses:")
+        common_sources = result.data.get("common_source_addresses", [])
+        if not common_sources:
+            lines.append("- none")
+        else:
+            for entry in common_sources:
+                label = f" [{entry['source_address_name']}]" if entry.get("source_address_name") else ""
+                lines.append(f"- sa=0x{entry['source_address']:02X}{label}")
+        lines.append("unique_source_addresses:")
+        for capture in result.data.get("unique_source_addresses", []):
+            sa_text = ", ".join(
+                f"0x{entry['source_address']:02X}" + (f"[{entry['source_address_name']}]" if entry.get("source_address_name") else "")
+                for entry in capture.get("source_addresses", [])
+            ) or "none"
+            lines.append(f"- {capture['file']}: {sa_text}")
+        lines.append("dm1_differences:")
+        dm1_differences = result.data.get("dm1_differences", [])
+        if not dm1_differences:
+            lines.append("- none")
+        else:
+            for difference in dm1_differences:
+                sa = difference["source_address"]
+                label = f" [{difference['source_address_name']}]" if difference.get("source_address_name") else ""
+                lines.append(f"- sa=0x{sa:02X}{label}")
+                for capture in difference.get("captures", []):
+                    faults = ", ".join(
+                        f"spn={fault['spn']}/fmi={fault['fmi']}"
+                        for fault in capture.get("faults", [])
+                    ) or "none"
+                    lines.append(
+                        f"  {capture['file']}: present={capture['present']} active_faults={capture['active_fault_count']} faults={faults}"
+                    )
+        lines.append("identifier_differences:")
+        identifier_differences = result.data.get("identifier_differences", [])
+        if not identifier_differences:
+            lines.append("- none")
+        else:
+            for difference in identifier_differences:
+                sa = difference["source_address"]
+                label = f" [{difference['source_address_name']}]" if difference.get("source_address_name") else ""
+                lines.append(f"- sa=0x{sa:02X}{label} label={difference['payload_label']}")
+                for capture in difference.get("captures", []):
+                    values = ", ".join(capture.get("values", [])) or "none"
+                    lines.append(f"  {capture['file']}: {values}")
+        return lines
+
     lines.append("observations:")
     if not events:
         lines.append("- no j1939 observations")
@@ -3209,7 +3519,7 @@ def _flatten_frame_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
-    _J1939_SESSION_COMMANDS = {"j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 summary", "j1939 inventory"}
+    _J1939_SESSION_COMMANDS = {"j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 summary", "j1939 inventory", "j1939 compare"}
     if output_format == "json":
         data = payload.get("data", {})
         if result.command == "filter":

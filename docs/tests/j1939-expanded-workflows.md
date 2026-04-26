@@ -10,7 +10,7 @@
 
 ## Test Objectives
 
-Validate that the expanded J1939 workflows preserve protocol-first behavior and correctly parse supported SPN, TP, DM1, and inventory scenarios.
+Validate that the expanded J1939 workflows preserve protocol-first behavior and correctly parse supported SPN, TP, DM1, inventory, and multi-capture comparison scenarios.
 
 ## Coverage Requirements
 
@@ -19,13 +19,14 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 * `j1939 tp` BAM session summary and reassembly
 * `j1939 dm1` parsing for both direct and TP-reassembled messages
 * `j1939 inventory` source-address inventory assembly from identification and DM1 context
+* `j1939 compare` multi-capture PGN/source/dm1/identifier differences
 * table output for DM1 remains human-readable
 
 ## Requirement Traceability
 
 | Requirement ID | Covered by test IDs |
 |----------------|---------------------|
-| `REQ-J1939-01` | `TEST-J1939-01`, `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05`, `TEST-J1939-08`, `TEST-J1939-09` |
+| `REQ-J1939-01` | `TEST-J1939-01`, `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05`, `TEST-J1939-08`, `TEST-J1939-09`, `TEST-J1939-10`, `TEST-J1939-11` |
 | `REQ-J1939-02` | `TEST-J1939-02` |
 | `REQ-J1939-03` | `TEST-J1939-03` |
 | `REQ-J1939-04` | `TEST-J1939-04` |
@@ -39,6 +40,11 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 | `REQ-J1939-12` | `TEST-J1939-08`, `TEST-J1939-09` |
 | `REQ-J1939-13` | `TEST-J1939-08`, `TEST-J1939-09` |
 | `REQ-J1939-14` | `TEST-J1939-08` |
+| `REQ-J1939-15` | `TEST-J1939-10` |
+| `REQ-J1939-16` | `TEST-J1939-10` |
+| `REQ-J1939-17` | `TEST-J1939-10` |
+| `REQ-J1939-18` | `TEST-J1939-10`, `TEST-J1939-11` |
+| `REQ-J1939-19` | `TEST-J1939-12` |
 
 ## Representative Test Cases
 
@@ -165,12 +171,55 @@ And    the output shall include per-source rows with component-identification an
 
 ---
 
+### `TEST-J1939-10` — Compare JSON output highlights capture differences
+
+```gherkin
+Given  two J1939 capture fixtures with intentional differences in PGNs, source addresses, DM1 content, and printable identification payloads are available
+When   the operator runs `canarchy j1939 compare compare_a.candump compare_b.candump --json`
+Then   the result shall include common and capture-unique PGNs
+And    the result shall include common and capture-unique source addresses
+And    the result shall include DM1 differences for source addresses whose active fault content changed
+And    the result shall include source-address identification differences when printable TP payloads differ
+```
+
+**Fixture:** `tests/fixtures/j1939_inventory.candump`, `tests/fixtures/j1939_compare_shifted.candump`.
+
+---
+
+### `TEST-J1939-11` — Compare table output remains operator-friendly
+
+```gherkin
+Given  two J1939 capture fixtures with identification differences are available
+When   the operator runs `canarchy j1939 compare compare_a.candump compare_b.candump --table`
+Then   the output shall include the command header
+And    the output shall include common-PGN and unique-source sections
+And    the output shall include the differing printable identification values
+```
+
+**Fixture:** `tests/fixtures/j1939_inventory.candump`, `tests/fixtures/j1939_compare_shifted.candump`.
+
+---
+
+### `TEST-J1939-12` — Compare requires multiple captures
+
+```gherkin
+Given  only one capture file is provided
+When   the operator runs `canarchy j1939 compare compare_a.candump --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"J1939_COMPARE_REQUIRES_MULTIPLE_FILES"`
+```
+
+**Fixture:** `tests/fixtures/j1939_inventory.candump`.
+
+---
+
 ## Fixtures And Environment
 
 * existing `sample.candump`
 * `j1939_dm1_tp.candump` for TP and DM1 coverage
 * `j1939_tp_printable_id.candump` for printable TP identification coverage
 * `j1939_inventory.candump` for source-address inventory coverage
+* `j1939_compare_shifted.candump` for multi-capture comparison coverage
 
 ## Explicit Non-Coverage
 

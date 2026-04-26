@@ -734,6 +734,86 @@ class CliTests(unittest.TestCase):
         self.assertIn("component_ids=ENGINE1", stdout)
         self.assertIn("component_ids=TRANS01", stdout)
 
+    def test_j1939_compare_requires_multiple_files(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "compare",
+            str(FIXTURES / "j1939_inventory.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "J1939_COMPARE_REQUIRES_MULTIPLE_FILES")
+
+    def test_j1939_compare_json_highlights_protocol_differences(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "compare",
+            str(FIXTURES / "j1939_inventory.candump"),
+            str(FIXTURES / "j1939_compare_shifted.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "j1939 compare")
+        data = payload["data"]
+        self.assertEqual(data["capture_count"], 2)
+
+        common_pgns = {entry["pgn"] for entry in data["common_pgns"]}
+        self.assertEqual(common_pgns, {60160, 60416, 61444, 65226})
+
+        unique_pgns = {entry["file"]: {pgn["pgn"] for pgn in entry["pgns"]} for entry in data["unique_pgns"]}
+        self.assertEqual(unique_pgns[str(FIXTURES / "j1939_inventory.candump")], {61443})
+        self.assertEqual(unique_pgns[str(FIXTURES / "j1939_compare_shifted.candump")], {65262})
+
+        unique_sources = {
+            entry["file"]: {source["source_address"] for source in entry["source_addresses"]}
+            for entry in data["unique_source_addresses"]
+        }
+        self.assertEqual(unique_sources[str(FIXTURES / "j1939_inventory.candump")], {0x03})
+        self.assertEqual(unique_sources[str(FIXTURES / "j1939_compare_shifted.candump")], {0x05})
+
+        dm1_difference = next(diff for diff in data["dm1_differences"] if diff["source_address"] == 0x00)
+        dm1_by_file = {entry["file"]: entry for entry in dm1_difference["captures"]}
+        self.assertEqual(dm1_by_file[str(FIXTURES / "j1939_inventory.candump")]["active_fault_count"], 0)
+        self.assertEqual(dm1_by_file[str(FIXTURES / "j1939_compare_shifted.candump")]["active_fault_count"], 1)
+        self.assertEqual(dm1_by_file[str(FIXTURES / "j1939_compare_shifted.candump")]["faults"][0]["spn"], 110)
+
+        identifier_differences = {
+            (entry["source_address"], entry["payload_label"]): entry
+            for entry in data["identifier_differences"]
+        }
+        component_difference = identifier_differences[(0x00, "component_identification")]
+        component_values = {entry["file"]: entry["values"] for entry in component_difference["captures"]}
+        self.assertEqual(component_values[str(FIXTURES / "j1939_inventory.candump")], ["ENGINE1"])
+        self.assertEqual(component_values[str(FIXTURES / "j1939_compare_shifted.candump")], ["ENGINE2"])
+
+        vehicle_difference = identifier_differences[(0x00, "vehicle_identification")]
+        vehicle_values = {entry["file"]: entry["values"] for entry in vehicle_difference["captures"]}
+        self.assertEqual(vehicle_values[str(FIXTURES / "j1939_inventory.candump")], ["VIN1234"])
+        self.assertEqual(vehicle_values[str(FIXTURES / "j1939_compare_shifted.candump")], ["VIN5678"])
+
+    def test_j1939_compare_table_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "compare",
+            str(FIXTURES / "j1939_inventory.candump"),
+            str(FIXTURES / "j1939_compare_shifted.candump"),
+            "--table",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 compare", stdout)
+        self.assertIn("common_pgns:", stdout)
+        self.assertIn("identifier_differences:", stdout)
+        self.assertIn("ENGINE1", stdout)
+        self.assertIn("ENGINE2", stdout)
+        self.assertIn("VIN1234", stdout)
+        self.assertIn("VIN5678", stdout)
+
     def test_j1939_decode_returns_j1939_events(self) -> None:
         exit_code, stdout, _ = run_cli(
             "j1939", "decode", "--file", str(FIXTURES / "sample.candump"), "--json"
@@ -3546,6 +3626,12 @@ class CompletionTests(unittest.TestCase):
         results = self._completions("j1939 inventory ", "")
         names = [r.strip() for r in results]
         self.assertIn("--file", names)
+        self.assertIn("--max-frames", names)
+        self.assertIn("--seconds", names)
+
+    def test_j1939_compare_flags_include_bounds(self) -> None:
+        results = self._completions("j1939 compare ", "")
+        names = [r.strip() for r in results]
         self.assertIn("--max-frames", names)
         self.assertIn("--seconds", names)
 

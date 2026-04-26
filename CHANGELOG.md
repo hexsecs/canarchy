@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+* Added `canarchy j1939 compare` for multi-capture comparison of J1939 PGNs, source addresses, DM1 fault changes, and printable TP identification payloads across two or more recorded captures.
+
+### Documentation
+
+* Documented the new multi-capture `j1939 compare` workflow across the J1939 design/test specs, command reference, and agent-facing command guidance.
+
 ## [0.5.0] - 2026-04-25
 
 ### Added

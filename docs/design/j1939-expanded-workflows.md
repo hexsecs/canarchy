@@ -5,12 +5,12 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented |
-| Command surface | `canarchy j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 inventory` |
+| Command surface | `canarchy j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 inventory`, `j1939 compare` |
 | Primary area | CLI, protocol |
 
 ## Goal
 
-Expand the J1939 command surface beyond PGN-only views so operators can inspect SPN values, transport-protocol sessions, DM1 fault traffic, and source-address inventories using protocol-aware commands.
+Expand the J1939 command surface beyond PGN-only views so operators can inspect SPN values, transport-protocol sessions, DM1 fault traffic, source-address inventories, and multi-capture differences using protocol-aware commands.
 
 ## User-Facing Motivation
 
@@ -20,7 +20,7 @@ Heavy-vehicle workflows should remain PGN and SPN first rather than forcing oper
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| `REQ-J1939-01` | Ubiquitous | The system shall provide `j1939 spn`, `j1939 tp`, `j1939 dm1`, and `j1939 inventory` commands for SPN, transport-protocol, fault-traffic, and source-address inventory inspection over capture files. |
+| `REQ-J1939-01` | Ubiquitous | The system shall provide `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 inventory`, and `j1939 compare` commands for SPN, transport-protocol, fault-traffic, source-address inventory, and multi-capture comparison workflows over capture files. |
 | `REQ-J1939-02` | Event-driven | When `j1939 spn <spn> --file <file>` is invoked, the system shall decode supported SPNs into structured observations including value, units, PGN, and addressing metadata. |
 | `REQ-J1939-03` | Event-driven | When `j1939 tp <file>` is invoked, the system shall summarise BAM-based transport-protocol sessions including reassembled payload data. |
 | `REQ-J1939-04` | Event-driven | When `j1939 dm1 <file>` is invoked, the system shall parse direct and TP-reassembled DM1 messages into structured fault records with lamp status and DTC details. |
@@ -31,6 +31,11 @@ Heavy-vehicle workflows should remain PGN and SPN first rather than forcing oper
 | `REQ-J1939-12` | Optional feature | Where `j1939 inventory` observes printable TP payloads for J1939 component-identification or vehicle-identification transfers, the system shall associate those identifiers with the reporting source address and surface them in structured output. |
 | `REQ-J1939-13` | Event-driven | When `j1939 inventory --file <file>` is invoked, the system shall include per-source-address DM1 presence metadata without requiring the operator to run `j1939 dm1` separately. |
 | `REQ-J1939-14` | Ubiquitous | The `--json` output for `j1939 inventory` shall use stable field names suitable for automation and downstream multi-capture comparison workflows. |
+| `REQ-J1939-15` | Event-driven | When `j1939 compare <file>... --json` is invoked with two or more capture files, the system shall report common and capture-unique PGNs across the analysed captures. |
+| `REQ-J1939-16` | Event-driven | When `j1939 compare <file>... --json` is invoked with two or more capture files, the system shall report common and capture-unique source addresses across the analysed captures. |
+| `REQ-J1939-17` | Optional feature | Where DM1 traffic is present in any compared capture, the system shall surface per-source-address DM1 differences when the active fault set or lamp summary changes across captures. |
+| `REQ-J1939-18` | Optional feature | Where printable TP component-identification or vehicle-identification payloads differ across compared captures, the system shall report those source-address and payload-label differences in structured output. |
+| `REQ-J1939-19` | Unwanted behaviour | If `j1939 compare` is invoked with fewer than two capture files, the system shall return a structured error with code `J1939_COMPARE_REQUIRES_MULTIPLE_FILES` and exit code `1`. |
 | `REQ-J1939-06` | Unwanted behaviour | If `j1939 spn` is invoked without `--file`, the system shall return a structured error with code `CAPTURE_FILE_REQUIRED` and exit code 1. |
 | `REQ-J1939-07` | Unwanted behaviour | If `j1939 spn` is invoked with a negative SPN value, the system shall return a structured error with code `INVALID_SPN` and exit code 1. |
 | `REQ-J1939-08` | Unwanted behaviour | If the requested SPN is not in the curated decoder map, the system shall return a structured error with code `J1939_SPN_UNSUPPORTED` and exit code 1. |
@@ -42,6 +47,7 @@ canarchy j1939 spn <spn> --file <capture>
 canarchy j1939 tp <capture>
 canarchy j1939 dm1 <capture>
 canarchy j1939 inventory --file <capture>
+canarchy j1939 compare <capture> <capture> [<capture> ...]
 ```
 
 ## Responsibilities And Boundaries
@@ -52,6 +58,7 @@ In scope:
 * BAM-oriented transport-protocol session summaries
 * DM1 parsing from direct frames and TP-reassembled payloads
 * source-address inventory summaries built from observed PGNs, TP identification payloads, and DM1 presence
+* multi-capture comparison across PGN activity, source-address coverage, DM1 changes, and printable TP identification payloads
 
 Out of scope:
 
@@ -169,9 +176,42 @@ Each node includes:
 
 The inventory view is intended to reduce manual cross-referencing between `j1939 summary`, `j1939 tp`, and `j1939 dm1` during initial capture triage.
 
+## `j1939 compare`
+
+`j1939 compare` compares two or more file-backed J1939 captures and highlights differences that operators commonly check manually during before/after or idle/active investigations.
+
+### Comparison contract
+
+Top-level output includes:
+
+* `files`
+* `capture_count`
+* `captures`
+* `common_pgns`
+* `unique_pgns`
+* `common_source_addresses`
+* `unique_source_addresses`
+* `dm1_differences`
+* `identifier_differences`
+
+Each compared capture includes:
+
+* `file`
+* `file_name`
+* `total_frames`
+* `j1939_frame_count`
+* `unique_pgn_count`
+* `unique_source_count`
+* `pgns`
+* `source_addresses`
+* `dm1_by_source`
+* `identifiers`
+
+The compare view is intended to answer high-value investigation questions quickly without forcing the operator to manually diff multiple `summary`, `inventory`, `dm1`, or TP outputs.
+
 ## Output Contracts
 
-For `j1939 spn`, `j1939 tp`, `j1939 dm1`, and `j1939 inventory`, both `--json` and `--jsonl` emit a single CANarchy result object because these commands return structured observations under `data` rather than event streams. Table output remains protocol-first and summarises SPN observations, TP sessions, DM1 fault content, and source-address inventory rows without dropping to raw-ID-only views. For `j1939 tp`, raw `reassembled_data` remains authoritative even when heuristic text or payload labels are present.
+For `j1939 spn`, `j1939 tp`, `j1939 dm1`, `j1939 inventory`, and `j1939 compare`, both `--json` and `--jsonl` emit a single CANarchy result object because these commands return structured observations under `data` rather than event streams. Table output remains protocol-first and summarises SPN observations, TP sessions, DM1 fault content, source-address inventory rows, and multi-capture J1939 differences without dropping to raw-ID-only views. For `j1939 tp`, raw `reassembled_data` remains authoritative even when heuristic text or payload labels are present.
 
 ## Error Contracts
 
@@ -180,6 +220,7 @@ For `j1939 spn`, `j1939 tp`, `j1939 dm1`, and `j1939 inventory`, both `--json` a
 | `CAPTURE_FILE_REQUIRED` | `j1939 spn` is run without `--file` | 1 |
 | `INVALID_SPN` | requested SPN is negative | 1 |
 | `J1939_SPN_UNSUPPORTED` | requested SPN is not in the curated decoder map | 1 |
+| `J1939_COMPARE_REQUIRES_MULTIPLE_FILES` | `j1939 compare` is run with fewer than two capture files | 1 |
 
 ## Deferred Decisions
 
