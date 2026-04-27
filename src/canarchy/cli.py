@@ -38,6 +38,7 @@ from canarchy.reverse_engineering import (
     signal_analysis,
 )
 from canarchy.session import SessionError, SessionStore, build_session_context
+from canarchy.skills import SkillError
 from canarchy.transport import (
     LocalTransport,
     TransportError,
@@ -57,13 +58,14 @@ EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
+SKILLS_COMMANDS = {"skills provider list", "skills search", "skills fetch", "skills cache list", "skills cache refresh"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory", "j1939 compare"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
 RE_COMMANDS = {"re signals", "re counters", "re entropy", "re correlate", "re match-dbc", "re shortlist-dbc"}
 ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
-IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
+IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | SKILLS_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
 
 class CliUsageError(Exception):
@@ -341,6 +343,37 @@ def build_parser() -> CanarchyArgumentParser:
     dbc_cache_refresh.add_argument("--provider", default="opendbc", help="provider to refresh (default: opendbc)")
     add_output_arguments(dbc_cache_refresh)
     dbc_cache_refresh.set_defaults(command="dbc cache refresh")
+
+    skills = subparsers.add_parser("skills", help="manage repository-backed skills")
+    skills_subparsers = skills.add_subparsers(dest="skills_action", required=True)
+
+    skills_provider = skills_subparsers.add_parser("provider", help="manage skills providers")
+    skills_provider_subparsers = skills_provider.add_subparsers(dest="skills_provider_action", required=True)
+    skills_provider_list = skills_provider_subparsers.add_parser("list", help="list registered skills providers")
+    add_output_arguments(skills_provider_list)
+    skills_provider_list.set_defaults(command="skills provider list")
+
+    skills_search = skills_subparsers.add_parser("search", help="search skills across providers")
+    skills_search.add_argument("query", help="search query (name, tag, or keyword)")
+    skills_search.add_argument("--provider", help="restrict search to a specific provider")
+    skills_search.add_argument("--limit", type=int, default=20, help="maximum results (default: 20)")
+    add_output_arguments(skills_search)
+    skills_search.set_defaults(command="skills search")
+
+    skills_fetch = skills_subparsers.add_parser("fetch", help="fetch and cache a skill")
+    skills_fetch.add_argument("ref", help="skill ref (e.g. github:j1939_compare_triage)")
+    add_output_arguments(skills_fetch)
+    skills_fetch.set_defaults(command="skills fetch")
+
+    skills_cache = skills_subparsers.add_parser("cache", help="manage the local skills cache")
+    skills_cache_subparsers = skills_cache.add_subparsers(dest="skills_cache_action", required=True)
+    skills_cache_list = skills_cache_subparsers.add_parser("list", help="list cached skills providers")
+    add_output_arguments(skills_cache_list)
+    skills_cache_list.set_defaults(command="skills cache list")
+    skills_cache_refresh = skills_cache_subparsers.add_parser("refresh", help="refresh skills catalog from upstream")
+    skills_cache_refresh.add_argument("--provider", default="github", help="provider to refresh (default: github)")
+    add_output_arguments(skills_cache_refresh)
+    skills_cache_refresh.set_defaults(command="skills cache refresh")
 
     export = subparsers.add_parser("export", help="export session data")
     export.add_argument("source")
@@ -2457,6 +2490,77 @@ def dbc_provider_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list
     raise AssertionError(f"unsupported dbc provider command: {args.command}")
 
 
+def skills_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.skills_cache import cache_list
+    from canarchy.skills_provider import get_registry
+
+    registry = get_registry()
+
+    if args.command == "skills provider list":
+        return ({"providers": registry.list_providers()}, [], [])
+
+    if args.command == "skills search":
+        provider_filter = [args.provider] if getattr(args, "provider", None) else None
+        limit = getattr(args, "limit", 20)
+        results = registry.search(args.query, providers=provider_filter)[:limit]
+        items = [
+            {
+                "provider": descriptor.provider,
+                "name": descriptor.name,
+                "publisher": descriptor.publisher,
+                "version": descriptor.version,
+                "source_ref": descriptor.source_ref,
+                "metadata": descriptor.metadata,
+            }
+            for descriptor in results
+        ]
+        warnings: list[str] = []
+        if not items:
+            warnings.append("No skills matched the query. Try `canarchy skills cache refresh --provider github` to populate the catalog.")
+        return ({"query": args.query, "count": len(items), "results": items}, [], warnings)
+
+    if args.command == "skills fetch":
+        resolution = registry.resolve(args.ref)
+        return (
+            {
+                "ref": args.ref,
+                "provider": resolution.descriptor.provider,
+                "name": resolution.descriptor.name,
+                "publisher": resolution.descriptor.publisher,
+                "version": resolution.descriptor.version,
+                "local_manifest_path": str(resolution.local_manifest_path),
+                "local_entry_path": str(resolution.local_entry_path),
+                "is_cached": resolution.is_cached,
+            },
+            [],
+            [],
+        )
+
+    if args.command == "skills cache list":
+        entries = cache_list()
+        return ({"entries": entries, "count": len(entries)}, [], [])
+
+    if args.command == "skills cache refresh":
+        provider_name = getattr(args, "provider", "github")
+        provider = registry.get_provider(provider_name)
+        if provider is None:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_DECODE_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="SKILL_PROVIDER_NOT_FOUND",
+                        message=f"Provider '{provider_name}' is not registered.",
+                        hint=f"Available providers: {', '.join(p['name'] for p in registry.list_providers())}.",
+                    )
+                ],
+            )
+        descriptors = provider.refresh()
+        return ({"provider": provider_name, "skill_count": len(descriptors)}, [], [])
+
+    raise AssertionError(f"unsupported skills command: {args.command}")
+
+
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
     backend_metadata = transport.backend_metadata()
@@ -2806,6 +2910,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in DBC_PROVIDER_COMMANDS:
         _, events, _ = dbc_provider_payload(args)
         return events
+    if args.command in SKILLS_COMMANDS:
+        _, events, _ = skills_payload(args)
+        return events
     if args.command in J1939_COMMANDS:
         _, events, _ = j1939_payload(args)
         return events
@@ -2874,6 +2981,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(prov_data)
         data["events"] = prov_events
         warnings.extend(prov_warnings)
+    elif args.command in SKILLS_COMMANDS:
+        skills_data, skills_events, skills_warnings = skills_payload(args)
+        data.update(skills_data)
+        data["events"] = skills_events
+        warnings.extend(skills_warnings)
     elif args.command in UDS_COMMANDS:
         uds_data, uds_events, uds_warnings = uds_payload(args)
         data.update(uds_data)
@@ -3537,6 +3649,36 @@ def format_dbc_provider_table(result: CommandResult) -> list[str]:
     return lines
 
 
+def format_skills_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    if result.command == "skills provider list":
+        for provider in result.data.get("providers", []):
+            lines.append(f"  {provider['name']}")
+    elif result.command == "skills search":
+        lines.append(f"query: {result.data.get('query', '')}")
+        lines.append(f"results: {result.data.get('count', 0)}")
+        for item in result.data.get("results", []):
+            tags = ",".join(item.get("metadata", {}).get("tags", []))
+            tag_text = f" [{tags}]" if tags else ""
+            lines.append(f"  {item['source_ref']} ({item.get('publisher', '')}){tag_text}")
+    elif result.command == "skills fetch":
+        lines.append(f"ref: {result.data.get('ref', '')}")
+        lines.append(f"name: {result.data.get('name', '')}")
+        lines.append(f"publisher: {result.data.get('publisher', '')}")
+        lines.append(f"version: {result.data.get('version', '')}")
+        lines.append(f"manifest: {result.data.get('local_manifest_path', '')}")
+        lines.append(f"entry: {result.data.get('local_entry_path', '')}")
+    elif result.command == "skills cache list":
+        for entry in result.data.get("entries", []):
+            lines.append(
+                f"  {entry['provider']}  commit={entry.get('commit', 'unknown')[:12]}  skills={entry.get('skill_count', 0)}"
+            )
+    elif result.command == "skills cache refresh":
+        lines.append(f"provider: {result.data.get('provider', '')}")
+        lines.append(f"skill_count: {result.data.get('skill_count', 0)}")
+    return lines
+
+
 def emit_live_capture(args: argparse.Namespace, output_format: str) -> int:
     """Stream live capture frames until Ctrl+C, honouring *output_format*.
 
@@ -3760,6 +3902,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"warning: {warning}")
         return
 
+    if output_format == "table" and result.ok and result.command in SKILLS_COMMANDS:
+        for line in format_skills_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
     if output_format == "table" and result.ok and result.command in UDS_COMMANDS:
         for line in format_uds_table(result):
             print(line)
@@ -3899,6 +4048,14 @@ def execute_command(argv: Sequence[str] | None = None) -> tuple[int, CommandResu
             ),
         )
     except DbcError as exc:
+        return (
+            EXIT_DECODE_ERROR,
+            error_result(
+                args.command,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+        )
+    except SkillError as exc:
         return (
             EXIT_DECODE_ERROR,
             error_result(

@@ -36,6 +36,7 @@ TOP_LEVEL_COMMANDS: list[str] = [
     "replay",
     "send",
     "session",
+    "skills",
     "stats",
     "uds",
     "exit",
@@ -45,9 +46,14 @@ TOP_LEVEL_COMMANDS: list[str] = [
 # Group commands whose second token is a subcommand.
 SUBCOMMANDS: dict[str, list[str]] = {
     "config": ["show"],
-    "dbc": ["inspect"],
+    "dbc": ["cache", "fetch", "inspect", "provider", "search"],
+    "dbc provider": ["list"],
+    "dbc cache": ["list", "prune", "refresh"],
     "session": ["load", "save", "show"],
     "j1939": ["compare", "decode", "dm1", "inventory", "monitor", "pgn", "spn", "summary", "tp"],
+    "skills": ["cache", "fetch", "provider", "search"],
+    "skills provider": ["list"],
+    "skills cache": ["list", "refresh"],
     "uds": ["scan", "services", "trace"],
     "re": ["correlate", "counters", "entropy", "signals"],
     "fuzz": ["id", "mutate", "replay"],
@@ -105,6 +111,10 @@ FLAGS: dict[str, list[str]] = {
     "session load": _OUTPUT,
     "session save": ["--capture", "--dbc", "--interface"] + _OUTPUT,
     "session show": _OUTPUT,
+    "skills provider": _OUTPUT,
+    "skills search": ["--provider", "--limit"] + _OUTPUT,
+    "skills fetch": _OUTPUT,
+    "skills cache": ["--provider"] + _OUTPUT,
     "stats": ["--file"] + _OUTPUT,
     "uds scan": ["--ack-active"] + _OUTPUT,
     "uds services": _OUTPUT,
@@ -183,6 +193,10 @@ class CanarchyCompleter:
             cmd_key = f"{first} {confirmed[1]}"
         else:
             cmd_key = first
+
+        # ── Third token for nested group commands → subcommand names ───────
+        if cmd_key in SUBCOMMANDS and len(confirmed) == 2:
+            return [s + " " for s in SUBCOMMANDS[cmd_key] if s.startswith(text)]
 
         flags = FLAGS.get(cmd_key, _OUTPUT)
         already_used = set(confirmed)

@@ -79,6 +79,7 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 Current exclusions:
 
 * DBC provider and cache commands such as `dbc search` and `dbc fetch`
+* skills provider and cache commands such as `skills search` and `skills fetch`
 * CLI-only workflows such as `j1939 compare` that are not yet exposed as MCP tools
 * reverse-engineering helpers such as `re signals`, `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc`
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
