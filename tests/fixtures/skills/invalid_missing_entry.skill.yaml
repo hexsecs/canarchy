@@ -1,0 +1,15 @@
+schema_version: "canarchy.skill.v1"
+skill:
+  name: "invalid_skill"
+  summary: "Intentionally incomplete manifest."
+  description: "Fixture used to document future validation failures."
+  tags: ["invalid"]
+provider:
+  name: "canarchy-labs"
+  kind: "repository"
+provenance:
+  source_ref: "github:hexsecs/canarchy-skills"
+  revision: "deadbee"
+  manifest_path: "skills/invalid_skill/skill.yaml"
+compatibility:
+  canarchy: ">=0.5.0"
