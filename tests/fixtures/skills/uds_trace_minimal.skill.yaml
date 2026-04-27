@@ -1,0 +1,18 @@
+schema_version: "canarchy.skill.v1"
+skill:
+  name: "uds_trace_summary"
+  summary: "Summarize traced UDS request and response exchanges."
+  description: "Provides a compact interpretation layer for the canonical UDS trace workflow."
+  tags: ["uds", "diagnostics"]
+provider:
+  name: "canarchy-labs"
+  kind: "repository"
+provenance:
+  source_ref: "github:hexsecs/canarchy-skills"
+  revision: "aa83d11"
+  manifest_path: "skills/uds_trace_summary/skill.yaml"
+compatibility:
+  canarchy: ">=0.5.0"
+entry:
+  path: "skills/uds_trace_summary/SKILL.md"
+  format: "markdown"

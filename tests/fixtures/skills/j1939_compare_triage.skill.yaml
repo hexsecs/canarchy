@@ -1,0 +1,31 @@
+schema_version: "canarchy.skill.v1"
+skill:
+  name: "j1939_compare_triage"
+  summary: "Compare multiple J1939 captures for PGN, source-address, and fault drift."
+  description: "Guides an analyst through multi-capture J1939 triage using the canonical compare workflow."
+  tags: ["j1939", "triage", "heavy-vehicle"]
+  domains: ["j1939", "reverse-engineering"]
+  capabilities: ["file-analysis", "comparison"]
+provider:
+  name: "canarchy-labs"
+  kind: "repository"
+provenance:
+  source_ref: "github:hexsecs/canarchy-skills"
+  revision: "4f2a9c1"
+  manifest_path: "skills/j1939_compare_triage/skill.yaml"
+  version: "0.1.0"
+compatibility:
+  canarchy: ">=0.5.0"
+  mcp: false
+entry:
+  path: "skills/j1939_compare_triage/SKILL.md"
+  format: "markdown"
+inputs:
+  requires_context: ["capture_files"]
+  accepted_artifacts: ["candump"]
+outputs:
+  expected_artifacts: ["triage_summary"]
+  response_style: "structured_markdown"
+required_tools: ["j1939_compare", "j1939_summary"]
+examples:
+  - prompt: "Compare two captures from before and after engine start."
