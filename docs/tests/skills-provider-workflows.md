@@ -24,6 +24,8 @@
 | `REQ-SKILLPROV-10` | Missing skill names return structured error | `TEST-SKILLPROV-06` |
 | `REQ-SKILLPROV-11` | Cold cache returns structured cache miss | Deferred |
 | `REQ-SKILLPROV-12` | Invalid manifests are rejected | `TEST-SKILLPROV-04` |
+| `REQ-SKILLPROV-13` | Download failures return structured errors | `TEST-SKILLPROV-09`, `TEST-SKILLPROV-10` |
+| `REQ-SKILLPROV-14` | Cache-path traversal is rejected | `TEST-SKILLPROV-11` |
 
 ## Test Cases
 
@@ -124,6 +126,43 @@ And    the response shall contain an error with code `"SKILL_PROVIDER_NOT_FOUND"
 ```
 
 **Fixture:** mocked registry without the requested provider.
+
+---
+
+### TEST-SKILLPROV-09 — Fetch download failures return structured errors
+
+```gherkin
+Given  a cached provider catalog contains a valid skill entry
+When   the provider resolve path cannot download a missing manifest or entry file
+Then   the system shall return `SKILL_FETCH_FAILED`
+And    the command shall not terminate with an uncaught exception
+```
+
+**Fixture:** mocked download failure.
+
+---
+
+### TEST-SKILLPROV-10 — Refresh manifest download failures return structured errors
+
+```gherkin
+Given  a provider catalog refresh discovers a remote manifest path
+When   that manifest cannot be downloaded successfully
+Then   the system shall return a structured provider error rather than an uncaught exception
+```
+
+**Fixture:** mocked manifest download failure.
+
+---
+
+### TEST-SKILLPROV-11 — Path traversal is rejected during fetch
+
+```gherkin
+Given  a provider catalog entry contains manifest or entry paths that escape the provider cache subtree
+When   the provider resolve path is asked to fetch that skill
+Then   the system shall reject the request with `SKILL_MANIFEST_INVALID`
+```
+
+**Fixture:** mocked catalog entry with `../` traversal.
 
 ## Fixtures And Environment
 

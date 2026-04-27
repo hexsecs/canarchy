@@ -42,6 +42,14 @@ def cached_file_path(provider_name: str, commit: str, relative_path: str) -> Pat
     return provider_cache_dir(provider_name) / "files" / commit / relative_path
 
 
+def safe_cached_file_path(provider_name: str, commit: str, relative_path: str) -> Path:
+    base_dir = provider_cache_dir(provider_name) / "files" / commit
+    target = (base_dir / relative_path).resolve(strict=False)
+    if base_dir.resolve(strict=False) not in target.parents and target != base_dir.resolve(strict=False):
+        raise ValueError(f"relative path escapes cache root: {relative_path}")
+    return target
+
+
 def cache_list() -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     providers_dir = _CACHE_ROOT / "providers"

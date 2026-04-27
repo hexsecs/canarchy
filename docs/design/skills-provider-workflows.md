@@ -33,6 +33,8 @@ Operators and future agents need a local, inspectable skill catalog with reprodu
 | `REQ-SKILLPROV-10` | Unwanted behaviour | If a requested skill name is not present in the selected provider catalog, the system shall return a structured error with code `SKILL_NOT_FOUND` and exit code 3. |
 | `REQ-SKILLPROV-11` | Unwanted behaviour | If a provider-backed skill resolution is requested while the provider cache is missing and auto-refresh is disabled or unavailable, the system shall return a structured error with code `SKILL_CACHE_MISS` and exit code 3. |
 | `REQ-SKILLPROV-12` | Unwanted behaviour | If a repository-backed manifest is missing required schema fields, the system shall return a structured error with code `SKILL_MANIFEST_INVALID` and exit code 3 rather than accepting the malformed catalog entry. |
+| `REQ-SKILLPROV-13` | Unwanted behaviour | If repository-backed skill files cannot be downloaded during fetch or refresh, the system shall return structured provider/cache errors instead of surfacing an uncaught exception. |
+| `REQ-SKILLPROV-14` | Unwanted behaviour | If a manifest-controlled cache path escapes the provider cache subtree, the system shall reject that manifest or fetch request with `SKILL_MANIFEST_INVALID`. |
 
 ## Command Surface
 
@@ -124,6 +126,7 @@ Skills provider and cache workflows emit the command name on success or the firs
 | `SKILL_NOT_FOUND` | requested skill name is not present in the selected provider catalog | 3 |
 | `SKILL_CACHE_MISS` | provider-backed resolution is requested with no usable provider manifest or cache snapshot | 3 |
 | `SKILL_MANIFEST_INVALID` | repository-backed manifest is missing required schema fields | 3 |
+| `SKILL_FETCH_FAILED` | a skill manifest or entry file could not be downloaded during fetch | 3 |
 
 ## Deferred Decisions
 

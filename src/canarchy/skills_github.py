@@ -186,7 +186,7 @@ class GitHubSkillProvider:
         return [_make_descriptor(entry, commit, None) for entry, _score in scored[:limit]]
 
     def resolve(self, ref: str) -> SkillResolution:
-        from canarchy.skills_cache import cached_file_path
+        from canarchy.skills_cache import safe_cached_file_path
 
         manifest = self._manifest()
         if manifest is None:
@@ -217,13 +217,34 @@ class GitHubSkillProvider:
 
         manifest_path = entry["manifest_path"]
         entry_path = entry["entry_path"]
-        local_manifest_path = cached_file_path("github", commit, manifest_path)
-        local_entry_path = cached_file_path("github", commit, entry_path)
+        try:
+            local_manifest_path = safe_cached_file_path("github", commit, manifest_path)
+            local_entry_path = safe_cached_file_path("github", commit, entry_path)
+        except ValueError as exc:
+            raise SkillError(
+                code="SKILL_MANIFEST_INVALID",
+                message=f"Skill '{ref}' contains cache paths outside the skills cache root.",
+                hint="Ensure repository-backed skill manifests use relative paths under the provider cache subtree.",
+            ) from exc
         already_cached = local_manifest_path.exists() and local_entry_path.exists()
         if not local_manifest_path.exists():
-            _download_file(f"{_RAW_BASE}/{self._repo}/{commit}/{manifest_path}", local_manifest_path)
+            try:
+                _download_file(f"{_RAW_BASE}/{self._repo}/{commit}/{manifest_path}", local_manifest_path)
+            except Exception as exc:
+                raise SkillError(
+                    code="SKILL_FETCH_FAILED",
+                    message=f"Failed to download manifest for skill '{ref}' from the GitHub skills catalog.",
+                    hint="Check your network connection or refresh the skills cache and try again.",
+                ) from exc
         if not local_entry_path.exists():
-            _download_file(f"{_RAW_BASE}/{self._repo}/{commit}/{entry_path}", local_entry_path)
+            try:
+                _download_file(f"{_RAW_BASE}/{self._repo}/{commit}/{entry_path}", local_entry_path)
+            except Exception as exc:
+                raise SkillError(
+                    code="SKILL_FETCH_FAILED",
+                    message=f"Failed to download entry content for skill '{ref}' from the GitHub skills catalog.",
+                    hint="Check your network connection or refresh the skills cache and try again.",
+                ) from exc
         descriptor = _make_descriptor(entry, commit, local_entry_path)
         return SkillResolution(
             descriptor=descriptor,
@@ -247,8 +268,22 @@ class GitHubSkillProvider:
 
         skills: list[dict[str, Any]] = []
         for manifest_path in manifest_paths:
-            text = _download_text(f"{_RAW_BASE}/{self._repo}/{commit}/{manifest_path}")
-            manifest = yaml.safe_load(text)
+            try:
+                text = _download_text(f"{_RAW_BASE}/{self._repo}/{commit}/{manifest_path}")
+            except Exception as exc:
+                raise SkillError(
+                    code="SKILL_PROVIDER_NOT_FOUND",
+                    message=f"Failed to download skill manifest '{manifest_path}' from the GitHub skills catalog.",
+                    hint="Check your network connection and the configured skills repo/ref in ~/.canarchy/config.toml.",
+                ) from exc
+            try:
+                manifest = yaml.safe_load(text)
+            except yaml.YAMLError as exc:
+                raise SkillError(
+                    code="SKILL_MANIFEST_INVALID",
+                    message=f"Skill manifest '{manifest_path}' is not valid YAML.",
+                    hint="Ensure repository-backed skill manifests parse as YAML mappings.",
+                ) from exc
             if not isinstance(manifest, dict):
                 raise SkillError(
                     code="SKILL_MANIFEST_INVALID",

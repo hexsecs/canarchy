@@ -166,6 +166,104 @@ class GitHubSkillProviderTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, "SKILL_MANIFEST_INVALID")
 
+    def test_resolve_download_failures_return_skill_fetch_failed(self) -> None:
+        from canarchy.skills_cache import save_manifest
+        from canarchy.skills_github import GitHubSkillProvider
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_root = Path(tmpdir)
+            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
+                "canarchy.skills_cache.load_skills_config",
+                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
+            ):
+                save_manifest("github", {
+                    "provider": "github",
+                    "repo": "hexsecs/canarchy-skills",
+                    "commit": "abc123def4567890",
+                    "generated_at": "2026-04-26T00:00:00Z",
+                    "skills": [{
+                        "name": "uds_trace_summary",
+                        "summary": "Summarize traced UDS request and response exchanges.",
+                        "description": "desc",
+                        "tags": ["uds"],
+                        "domains": [],
+                        "capabilities": [],
+                        "publisher": "canarchy-labs",
+                        "provider_kind": "repository",
+                        "source_ref": "github:hexsecs/canarchy-skills",
+                        "revision": "aa83d11",
+                        "manifest_path": "skills/uds_trace_summary/skill.yaml",
+                        "version": None,
+                        "entry_path": "skills/uds_trace_summary/SKILL.md",
+                        "entry_format": "markdown",
+                        "compatibility": {"canarchy": ">=0.5.0"},
+                    }],
+                })
+
+                with patch("canarchy.skills_github._download_file", side_effect=RuntimeError("boom")):
+                    provider = GitHubSkillProvider()
+                    with self.assertRaises(SkillError) as ctx:
+                        provider.resolve("uds_trace_summary")
+
+        self.assertEqual(ctx.exception.code, "SKILL_FETCH_FAILED")
+
+    def test_refresh_download_failures_return_provider_error(self) -> None:
+        from canarchy.skills_github import GitHubSkillProvider
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_root = Path(tmpdir)
+            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
+                "canarchy.skills_cache.load_skills_config",
+                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
+            ), patch("canarchy.skills_github._resolve_commit", return_value="abc123def4567890"), patch(
+                "canarchy.skills_github._list_skill_manifests", return_value=["skills/uds_trace_minimal.skill.yaml"]
+            ), patch("canarchy.skills_github._download_text", side_effect=RuntimeError("boom")):
+                provider = GitHubSkillProvider()
+                with self.assertRaises(SkillError) as ctx:
+                    provider.refresh()
+
+        self.assertEqual(ctx.exception.code, "SKILL_PROVIDER_NOT_FOUND")
+
+    def test_resolve_rejects_cache_path_traversal(self) -> None:
+        from canarchy.skills_cache import save_manifest
+        from canarchy.skills_github import GitHubSkillProvider
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_root = Path(tmpdir)
+            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
+                "canarchy.skills_cache.load_skills_config",
+                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
+            ):
+                save_manifest("github", {
+                    "provider": "github",
+                    "repo": "hexsecs/canarchy-skills",
+                    "commit": "abc123def4567890",
+                    "generated_at": "2026-04-26T00:00:00Z",
+                    "skills": [{
+                        "name": "escape_attempt",
+                        "summary": "desc",
+                        "description": "desc",
+                        "tags": ["invalid"],
+                        "domains": [],
+                        "capabilities": [],
+                        "publisher": "canarchy-labs",
+                        "provider_kind": "repository",
+                        "source_ref": "github:hexsecs/canarchy-skills",
+                        "revision": "aa83d11",
+                        "manifest_path": "../outside.skill.yaml",
+                        "version": None,
+                        "entry_path": "../SKILL.md",
+                        "entry_format": "markdown",
+                        "compatibility": {"canarchy": ">=0.5.0"},
+                    }],
+                })
+
+                provider = GitHubSkillProvider()
+                with self.assertRaises(SkillError) as ctx:
+                    provider.resolve("escape_attempt")
+
+        self.assertEqual(ctx.exception.code, "SKILL_MANIFEST_INVALID")
+
 
 class SkillsCliTests(unittest.TestCase):
     def test_skills_provider_list_returns_registered_providers(self) -> None:
