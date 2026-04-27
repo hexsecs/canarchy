@@ -30,6 +30,7 @@ dependencies = [
     "mcp>=1.27.0",
     "msgpack>=1.1.2",
     "pretty-j1939>=0.0.6",
+    "pyyaml>=6.0",
     "python-can>=4.4",
 ]
 

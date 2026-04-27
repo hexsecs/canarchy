@@ -105,6 +105,16 @@ DBC architecture (current):
 
 This layer should remain reusable without depending on any specific front end.
 
+Skills provider architecture (current):
+
+* `src/canarchy/skills_provider.py` defines the provider registry, descriptors, resolutions, and ref parsing for repository-backed skills
+* `src/canarchy/skills_github.py` provides the first provider implementation by building a catalog from repository-hosted `.skill.yaml` manifests
+* `src/canarchy/skills_cache.py` persists provider manifests and cached skill files under `~/.canarchy/cache/skills`
+* `src/canarchy/skills.py` provides structured provider/cache errors without coupling the command layer to provider-specific exceptions
+* manifest parsing follows the versioned schema documented in `docs/design/skill-manifest-schema.md`
+
+As with the DBC provider path, third-party repository details stay behind a CANarchy-owned facade so future CLI and MCP workflows can consume manifest-derived metadata rather than provider runtime objects.
+
 ### 2. Transport And Backend Layer
 
 This layer is responsible for moving raw CAN frames in and out of the system.

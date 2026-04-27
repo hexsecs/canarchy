@@ -327,6 +327,7 @@ Examples:
 * `j1939 decode`
 * `j1939 compare`
 * `j1939 inventory`
+* `skills search`
 * `uds scan`
 * `re signals`
 * `session save`
@@ -432,6 +433,12 @@ canarchy
   stats
   decode
   encode
+  skills
+    provider list
+    search
+    fetch
+    cache list
+    cache refresh
   export
   session
     save

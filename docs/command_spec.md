@@ -368,6 +368,64 @@ Notes:
 * refreshing updates the cached catalog manifest; individual DBC files are fetched on demand or through `dbc fetch`
 * provider-backed decode, encode, and inspect commands return `DBC_CACHE_MISS` by default when the provider cache is cold; enabling `[dbc.providers.opendbc].auto_refresh = true` allows first-use refresh on resolution
 
+### skills provider list
+
+List registered repository-backed skills providers.
+
+```bash
+canarchy skills provider list [--json|--jsonl|--table|--raw]
+```
+
+### skills search
+
+Search repository-backed skills catalogs by name, tag, or keyword.
+
+```bash
+canarchy skills search <query> [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+```
+
+Example:
+
+```bash
+canarchy skills search j1939 --provider github --json
+```
+
+### skills fetch
+
+Fetch and cache a repository-backed skill locally.
+
+```bash
+canarchy skills fetch <provider>:<skill> [--json|--jsonl|--table|--raw]
+```
+
+Example:
+
+```bash
+canarchy skills fetch github:j1939_compare_triage --json
+```
+
+### skills cache list
+
+List cached skills provider manifests.
+
+```bash
+canarchy skills cache list [--json|--jsonl|--table|--raw]
+```
+
+### skills cache refresh
+
+Refresh a skills provider catalog from upstream.
+
+```bash
+canarchy skills cache refresh [--provider <name>] [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* the first provider implementation is GitHub-backed and consumes `.skill.yaml` manifests that follow the CANarchy skill manifest schema
+* `skills fetch` returns both the cached manifest path and the cached skill entry path
+* skills provider/cache commands are currently CLI-only and are not yet exposed as MCP tools
+
 ### session save
 
 Save a named session with useful CLI context.

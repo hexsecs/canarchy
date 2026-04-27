@@ -224,6 +224,7 @@ dependencies = [
     { name = "msgpack" },
     { name = "pretty-j1939" },
     { name = "python-can" },
+    { name = "pyyaml" },
 ]
 
 [package.optional-dependencies]
@@ -250,6 +251,7 @@ requires-dist = [
     { name = "msgpack", specifier = ">=1.1.2" },
     { name = "pretty-j1939", specifier = ">=0.0.6" },
     { name = "python-can", specifier = ">=4.4" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "scapy", marker = "extra == 'scapy'", specifier = ">=2.6" },
 ]
 provides-extras = ["scapy"]
