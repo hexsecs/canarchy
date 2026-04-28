@@ -59,7 +59,7 @@ Then   event timestamps shall be scaled relative to the slower replay rate
 
 ```gherkin
 Given  the file `tests/fixtures/sample.candump` is available
-When   the operator runs `canarchy replay sample.candump --rate 2.0 --json`
+When   the operator runs `canarchy replay --file sample.candump --rate 2.0 --json`
 Then   the result shall include active mode, frame count, duration, and replay events
 And    the result shall keep `warnings` empty for the replay plan output
 ```
@@ -72,7 +72,7 @@ And    the result shall keep `warnings` empty for the replay plan output
 
 ```gherkin
 Given  a valid capture file is available
-When   the operator runs `canarchy replay sample.candump --rate 0 --json`
+When   the operator runs `canarchy replay --file sample.candump --rate 0 --json`
 Then   the command shall exit with code `1`
 And    `errors[0].code` shall equal `"INVALID_RATE"`
 ```
@@ -85,7 +85,7 @@ And    `errors[0].code` shall equal `"INVALID_RATE"`
 
 ```gherkin
 Given  the file `missing.candump` does not exist
-When   the operator runs `canarchy replay missing.candump --json`
+When   the operator runs `canarchy replay --file missing.candump --json`
 Then   the command shall exit with code `2`
 And    `errors[0].code` shall equal `"CAPTURE_SOURCE_UNAVAILABLE"`
 ```

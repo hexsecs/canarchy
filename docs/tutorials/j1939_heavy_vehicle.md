@@ -30,7 +30,7 @@ The fixture used in this demo is at `tests/fixtures/j1939_heavy_vehicle.candump`
 Get an overview of what's on the bus:
 
 ```bash
-canarchy j1939 decode tests/fixtures/j1939_heavy_vehicle.candump --table
+canarchy j1939 decode --file tests/fixtures/j1939_heavy_vehicle.candump --table
 ```
 
 ```text
@@ -82,7 +82,7 @@ The coolant temperature is climbing: 85°C → 86°C → 87°C across the 550ms 
 Those TP frames in Step 1 are carrying a DM1 message. Let CANarchy reassemble and decode them:
 
 ```bash
-canarchy j1939 dm1 tests/fixtures/j1939_heavy_vehicle.candump --table
+canarchy j1939 dm1 --file tests/fixtures/j1939_heavy_vehicle.candump --table
 ```
 
 ```text
@@ -109,7 +109,7 @@ All three commands support `--json` for a full structured envelope or `--jsonl` 
 
 ```bash
 # Stream all J1939 observations as JSONL
-canarchy j1939 decode tests/fixtures/j1939_heavy_vehicle.candump --jsonl
+canarchy j1939 decode --file tests/fixtures/j1939_heavy_vehicle.candump --jsonl
 
 # Extract just the coolant temperature values with jq
 canarchy j1939 spn 110 --file tests/fixtures/j1939_heavy_vehicle.candump --jsonl \
@@ -135,7 +135,7 @@ export CANARCHY_TRANSPORT_BACKEND=python-can
 export CANARCHY_PYTHON_CAN_INTERFACE=socketcan   # or kvaser, pcan, etc.
 
 canarchy capture can0 --candump                   # live candump view
-canarchy j1939 dm1 today.candump --table          # decode DM1 from saved capture
+canarchy j1939 dm1 --file today.candump --table   # decode DM1 from saved capture
 ```
 
 For cross-process demos without physical hardware, see the [Generate and Capture Demo](generate_and_capture.md) using the `udp_multicast` backend.

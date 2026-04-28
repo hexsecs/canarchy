@@ -58,6 +58,12 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `decode` | `decode` |
 | `encode` | `encode` |
 | `dbc inspect` | `dbc_inspect` |
+| `dbc provider list` | `dbc_provider_list` |
+| `dbc search` | `dbc_search` |
+| `dbc fetch` | `dbc_fetch` |
+| `dbc cache list` | `dbc_cache_list` |
+| `dbc cache prune` | `dbc_cache_prune` |
+| `dbc cache refresh` | `dbc_cache_refresh` |
 | `export` | `export` |
 | `session save` | `session_save` |
 | `session load` | `session_load` |
@@ -74,6 +80,11 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `uds trace` | `uds_trace` |
 | `uds services` | `uds_services` |
 | `config show` | `config_show` |
+| `re correlate` | `re_correlate` |
+| `re counters` | `re_counters` |
+| `re entropy` | `re_entropy` |
+| `re match-dbc` | `re_match_dbc` |
+| `re shortlist-dbc` | `re_shortlist_dbc` |
 
 ## Response Envelope
 

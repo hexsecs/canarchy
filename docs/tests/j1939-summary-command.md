@@ -26,7 +26,7 @@
 
 ```gherkin
 Given  a representative J1939 capture fixture contains multiple PGNs and at least one TP session
-When   the operator runs `canarchy j1939 summary <capture> --json`
+When   the operator runs `canarchy j1939 summary --file <capture> --json`
 Then   the system shall return total frames, interfaces, unique arbitration IDs, first and last timestamps, top PGNs, top source addresses, DM1 summary fields, and TP summary fields
 And    the JSON field names shall remain stable for automation
 ```
@@ -39,7 +39,7 @@ And    the JSON field names shall remain stable for automation
 
 ```gherkin
 Given  a J1939 TP capture fixture contains a completed payload whose bytes form obvious printable ASCII text
-When   the operator runs `canarchy j1939 summary <capture> --json`
+When   the operator runs `canarchy j1939 summary --file <capture> --json`
 Then   the TP summary shall include that candidate printable identifier string
 And    the candidate shall retain the related PGN and addressing metadata
 ```
@@ -52,7 +52,7 @@ And    the candidate shall retain the related PGN and addressing metadata
 
 ```gherkin
 Given  a J1939 TP capture fixture contains a printable candidate identifier
-When   the operator runs `canarchy j1939 summary <capture> --table`
+When   the operator runs `canarchy j1939 summary --file <capture> --table`
 Then   the output shall show the summary sections for top PGNs and printable identifiers
 And    the printable text shall remain visible in the operator-facing output
 ```

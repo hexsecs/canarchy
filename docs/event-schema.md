@@ -30,7 +30,7 @@ Use `--jsonl` on any command to receive one event per line on stdout, suitable f
 
 ```bash
 canarchy capture can0 --jsonl
-canarchy j1939 decode trace.candump --jsonl
+canarchy j1939 decode --file trace.candump --jsonl
 canarchy generate can0 --count 100 --gap 10 --jsonl
 ```
 
@@ -389,11 +389,11 @@ canarchy capture can0 --jsonl \
   | jq 'select(.event_type == "frame") | .payload.frame.arbitration_id'
 
 # Decode a trace and print each signal value
-canarchy decode trace.candump --dbc vehicle.dbc --jsonl \
+canarchy decode --file trace.candump --dbc vehicle.dbc --jsonl \
   | jq 'select(.event_type == "signal") | [.payload.signal_name, .payload.value, .payload.units]'
 
 # Watch for J1939 coolant temperature observations
-canarchy j1939 decode trace.candump --jsonl \
+canarchy j1939 decode --file trace.candump --jsonl \
   | jq 'select(.event_type == "j1939_pgn" and .payload.pgn == 65262)'
 ```
 

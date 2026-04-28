@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Design doc | `docs/design/skill-manifest-schema.md` |
-| Test file | future schema validation tests; current fixtures live under `tests/fixtures/skills/` |
+| Test file | `tests/test_skills_provider.py`; fixtures live under `tests/fixtures/skills/` |
 
 ## Requirement Traceability
 
@@ -17,9 +17,9 @@
 | `REQ-SKILLMAN-03` | Each manifest identifies one skill with provider-facing identity | `TEST-SKILLMAN-01` |
 | `REQ-SKILLMAN-04` | Required core metadata is present | `TEST-SKILLMAN-01`, `TEST-SKILLMAN-02` |
 | `REQ-SKILLMAN-05` | Optional metadata can be present without redefining required fields | `TEST-SKILLMAN-01`, `TEST-SKILLMAN-03` |
-| `REQ-SKILLMAN-06` | Missing required fields will be rejected by future validation | `TEST-SKILLMAN-02` |
+| `REQ-SKILLMAN-06` | Missing required fields are rejected by provider validation | `TEST-SKILLMAN-02` |
 | `REQ-SKILLMAN-07` | Schema is suitable for provider/catalog/cache and future MCP workflows | `TEST-SKILLMAN-01`, `TEST-SKILLMAN-03` |
-| `REQ-SKILLMAN-08` | Canonical example manifests exist while runtime validation is absent | `TEST-SKILLMAN-01`, `TEST-SKILLMAN-03` |
+| `REQ-SKILLMAN-08` | Canonical example manifests support provider validation tests | `TEST-SKILLMAN-01`, `TEST-SKILLMAN-03` |
 
 ## Test Cases
 
@@ -41,7 +41,7 @@ And    optional workflow metadata may also be present without changing the requi
 
 ```gherkin
 Given  an intentionally incomplete skill manifest fixture exists
-When   a future schema validator checks that manifest
+When   the provider validation path checks that manifest
 Then   the system shall reject the manifest as invalid
 And    the failure shall be attributable to missing required identity, provenance, compatibility, or content-entry fields rather than inferred defaults
 ```
@@ -63,16 +63,15 @@ And    optional metadata such as examples or dependencies may be absent without 
 
 ## Fixtures And Environment
 
-Current fixtures for this issue are documentation and future-validation artifacts only:
+Current fixtures for this issue are provider-validation artifacts:
 
 * `tests/fixtures/skills/j1939_compare_triage.skill.yaml`
 * `tests/fixtures/skills/uds_trace_minimal.skill.yaml`
 * `tests/fixtures/skills/invalid_missing_entry.skill.yaml`
 
-No runtime validator exists yet in this phase.
+Provider refresh and fetch paths validate manifest shape before accepting catalog entries.
 
 ## Explicit Non-Coverage
 
-* provider fetch, refresh, and cache behavior, which belong to `#166`
 * MCP or agent execution behavior, which belongs to `#167`
-* runtime YAML parsing or schema enforcement code, which is deferred until provider implementation work lands
+* standalone manifest linting outside provider refresh/fetch workflows

@@ -122,7 +122,7 @@ And    the response shall include the refreshed DBC count
 
 ```gherkin
 Given  a mocked provider registry can resolve a provider-backed DBC ref
-When   the operator runs `canarchy decode tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json`
+When   the operator runs `canarchy decode --file tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json`
 Then   the system shall decode using the resolved local DBC path
 And    `data.dbc_source` shall include provider, logical DBC name, version, and path
 ```

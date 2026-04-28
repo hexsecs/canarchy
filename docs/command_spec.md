@@ -14,13 +14,13 @@ Implemented and verified in the current codebase:
 * structured `export` for capture files and saved sessions
 * DBC-backed `decode`, `encode`, and `dbc inspect`
 * DBC provider workflows for `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list`, `dbc cache prune`, and `dbc cache refresh`
-* J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, and `dm1`
+* J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, and `compare`
 * session `save`, `load`, and `show`
 * shell one-shot command execution
 * initial text-mode `tui` shell over the shared command layer
 * UDS `scan`, `trace`, and `services`
 * `config show` for effective transport configuration inspection
-* `re counters` and `re entropy` for passive file-backed analysis
+* `re signals`, `re counters`, `re entropy`, and `re correlate` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
 * structured JSON and JSONL output
 * explicit error schema and exit codes
@@ -34,7 +34,7 @@ Important current behavior:
 * the default `python-can` interface is `socketcan`; set `interface` in the config file or `CANARCHY_PYTHON_CAN_INTERFACE` to change it
 * DBC-backed commands accept local paths and provider refs such as `opendbc:<name>` or `comma:<name>`
 * `decode`, `encode`, and `dbc inspect` include `data.dbc_source` in structured output so callers can see the provider, logical DBC name, pinned version, and resolved local path
-* placeholder-only commands still return `status: planned` and `implementation: command surface scaffold`
+* placeholder-only commands, currently limited to the `fuzz` family, still return `status: planned` and `implementation: command surface scaffold`
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
 * specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
 * file-backed analysis commands currently support standard timestamped candump log files with `.candump` and `.log` suffixes
@@ -58,9 +58,9 @@ canarchy <action> <object>
 Examples:
 
 * `canarchy capture can0 --json`
-* `canarchy replay tests/fixtures/sample.candump --rate 2.0 --json`
+* `canarchy replay --file tests/fixtures/sample.candump --rate 2.0 --json`
 * `canarchy j1939 monitor --pgn 65262 --json`
-* `canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json`
+* `canarchy decode --file tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json`
 
 ---
 
@@ -248,19 +248,20 @@ Notes:
 Decode frames from a capture source using a DBC file.
 
 ```bash
-canarchy decode <file> --dbc <file> [--stdin] [--json|--jsonl|--table|--raw]
+canarchy decode --file <file> --dbc <file> [--json|--jsonl|--table|--raw]
+canarchy decode --stdin --dbc <file> [--json|--jsonl|--table|--raw]
 ```
 
 Example:
 
 ```bash
-canarchy decode tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
+canarchy decode --file tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json
 ```
 
 Notes:
 
 * `--dbc` accepts a local file path or a provider ref such as `opendbc:<name>`
-* `--stdin` reads JSONL `frame` events from standard input instead of a positional capture file
+* `--stdin` reads JSONL `frame` events from standard input instead of a `--file` capture source
 * structured output includes a `dbc_source` object describing the provider-backed or local DBC resolution that was used
 
 ### encode
@@ -485,19 +486,21 @@ Notes:
 Decode a capture source into J1939 PGN observations.
 
 ```bash
-canarchy j1939 decode <file> [--stdin] [--json|--jsonl|--table|--raw]
+canarchy j1939 decode --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
+canarchy j1939 decode --stdin [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
 ```
 
 Notes:
 
-* `--stdin` reads JSONL `frame` events from standard input instead of a positional capture file
+* `--stdin` reads JSONL `frame` events from standard input instead of a `--file` capture source
+* `--dbc` enriches J1939 results with DBC-backed decoded signal events when available
 
 ### j1939 pgn
 
 Inspect events for a specific PGN from a capture file.
 
 ```bash
-canarchy j1939 pgn <pgn> --file <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 pgn <pgn> --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
 ```
 
 Example:
@@ -506,16 +509,12 @@ Example:
 canarchy j1939 pgn 65262 --file tests/fixtures/sample.candump --json
 ```
 
-```bash
-canarchy j1939 pgn <id> [--json|--jsonl|--table|--raw]
-```
-
 ### j1939 spn
 
 Inspect a curated SPN decoder over recorded J1939 traffic.
 
 ```bash
-canarchy j1939 spn <spn> --file <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 spn <spn> --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
 ```
 
 Example:
@@ -526,7 +525,8 @@ canarchy j1939 spn 110 --file tests/fixtures/sample.candump --json
 
 Notes:
 
-* the first implementation supports a curated SPN decoder set rather than a full J1939 database
+* curated metadata is built in for common SPNs
+* `--dbc` can expand coverage for SPNs exposed through DBC signal metadata
 * unsupported SPNs return a structured `J1939_SPN_UNSUPPORTED` error
 
 ### j1939 tp sessions
@@ -539,14 +539,22 @@ canarchy j1939 tp sessions --file <file> [--json|--jsonl|--table|--raw]
 
 Notes:
 
-* the first implementation focuses on BAM-style TP sessions and packet reassembly
+* the implementation handles BAM and RTS/CTS transport sessions with packet reassembly
 
 ### j1939 dm1
 
 Inspect DM1 fault traffic from direct J1939 frames and TP-reassembled payloads.
 
 ```bash
-canarchy j1939 dm1 --file <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 dm1 --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
+```
+
+### j1939 faults
+
+Summarize active DM1 faults by ECU/source address, including lamp state and suspicious DTC markers.
+
+```bash
+canarchy j1939 faults --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
 ```
 
 ### j1939 inventory
@@ -676,6 +684,21 @@ Notes:
 * the current implementation inspects nibble-aligned 4-bit fields, byte-aligned 8-bit fields, and word-aligned 16-bit fields
 * candidates are ranked by change-rate preference, observed range, and value diversity
 * arbitration IDs with fewer than 5 frames are omitted from the candidate list and reported in `low_sample_ids`
+
+### re correlate
+
+Correlate candidate bit fields against a timestamped reference series.
+
+```bash
+canarchy re correlate <file> --reference <ref.json|ref.jsonl> [--json|--jsonl|--table|--raw]
+```
+
+Notes:
+
+* this command is passive and file-backed
+* reference files may be JSON arrays, named JSON objects with `name` and `samples`, or JSONL sample streams
+* each reference sample must include numeric `timestamp` and `value` fields
+* candidates report `pearson_r`, `spearman_r`, `sample_count`, and `lag_ms`, and are ranked by absolute Pearson correlation
 
 ### re entropy
 
@@ -888,7 +911,7 @@ canarchy dbc search toyota --provider opendbc --json
 ### DBC Provider Decode
 
 ```bash
-canarchy decode tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json
+canarchy decode --file tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json
 ```
 
 ### Reverse-Engineering DBC Match
@@ -943,7 +966,6 @@ canarchy shell --command "capture can0 --raw"
 
 These commands are present in the CLI tree but not yet implemented end to end:
 
-* `re signals` and `re correlate`
 * `fuzz replay|mutate|id`
 
 These deeper capabilities are also not implemented yet even where the command surface exists:

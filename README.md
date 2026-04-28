@@ -31,10 +31,13 @@ Fully implemented and tested:
 * `gateway` — bridge frames between two interfaces (unidirectional and bidirectional)
 * `replay` — deterministic replay planning from candump files
 * `decode`, `encode` — DBC-backed signal decode and encode
-* `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1` — J1939 operator workflows across live, file-backed, and decoded views
+* `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, `compare` — J1939 operator workflows across live, file-backed, and decoded views
 * `uds scan`, `trace`, `services` — UDS diagnostic workflows and service catalog, including initial transport-backed scan/trace heuristics
+* `re signals` — file-backed signal-candidate ranking across 4-bit, 8-bit, and 16-bit fields
 * `re counters` — file-backed counter-candidate detection for reverse-engineering workflows
 * `re entropy` — file-backed entropy ranking across arbitration IDs and byte positions
+* `re correlate` — file-backed correlation of candidate fields against timestamped reference series
+* `re match-dbc`, `re shortlist-dbc` — provider-backed DBC candidate ranking against captures
 * `session save`, `load`, `show` — session management
 * `export` — structured artifact export
 * `shell` — interactive REPL and `--command` scripting mode
@@ -42,7 +45,6 @@ Fully implemented and tested:
 
 Present in the CLI surface but not yet fully implemented:
 
-* `re signals`, `re correlate` — reverse-engineering helpers (planned)
 * `fuzz replay`, `fuzz mutate`, `fuzz id` — active fuzzing (planned)
 
 Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
@@ -136,12 +138,12 @@ Current implementation:
 # Capture and decode
 canarchy capture can0 --candump
 canarchy capture can0 --jsonl
-canarchy decode trace.candump --dbc vehicle.dbc --jsonl
+canarchy decode --file trace.candump --dbc vehicle.dbc --jsonl
 
 # J1939 heavy vehicle analysis
-canarchy j1939 decode trace.candump --table
+canarchy j1939 decode --file trace.candump --table
 canarchy j1939 spn 110 --file trace.candump --table   # Engine Coolant Temp
-canarchy j1939 dm1 trace.candump --table               # Active fault codes
+canarchy j1939 dm1 --file trace.candump --table        # Active fault codes
 
 # Pipe events into downstream tools
 canarchy j1939 spn 110 --file trace.candump --jsonl \
@@ -150,7 +152,7 @@ canarchy j1939 spn 110 --file trace.candump --jsonl \
 # Active workflows
 canarchy generate can0 --count 10 --gap 50 --id 7DF --jsonl
 canarchy gateway can0 239.0.0.1 --count 100
-canarchy replay trace.candump --rate 2.0 --json
+canarchy replay --file trace.candump --rate 2.0 --json
 ```
 
 Use `--candump` for a human-oriented live view. Use `--jsonl` when feeding output to scripts or agents — every line is a typed event from the [canonical schema](docs/event-schema.md).
