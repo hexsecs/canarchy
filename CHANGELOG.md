@@ -7,18 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-### Documentation
-
-* Marked the first-phase repository-backed skills provider workflow as a current capability in top-level project documentation so the skills umbrella issue reflects the implemented manifest, provider, cache, and agent-reference surface.
-* Audited current operator, design, and test documentation for stale command-status and command-syntax references, aligning reverse-engineering helper status and file-backed examples with the implemented CLI surface.
-* Defined the phase-1 agent and MCP integration model for CANarchy skills, including the decision to keep skills CLI-discovered and out of the MCP tool/resource/prompt surface while documenting how agents should select, fetch, and reference skill provenance.
-* Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
-* Added dedicated current-state design and test specs for `j1939 monitor` and `config show`, and aligned the surrounding J1939 spec language with the current `j1939 tp sessions` command surface.
-* Defined the first version of the CANarchy skill manifest schema, added matching test-spec coverage, and added canonical example manifests so future skills provider and MCP work can build against a stable contract.
-
-### Fixed
-
-* Fixed the MCP `j1939_tp` tool to invoke the current `j1939 tp sessions --file <file>` CLI surface instead of the older bare `j1939 tp <file>` form, and tightened MCP argv coverage around that mapping.
+## [0.6.0] - 2026-04-28
 
 ### Added
 
@@ -29,10 +18,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added automatic frame cap for `j1939 summary`, `j1939 dm1`, `j1939 faults`, `j1939 inventory`, and `j1939 compare` on captures exceeding 50 MB when no `--max-frames` or `--seconds` limit is specified. Analysis is capped at 500,000 frames and a warning is included in the response. Use `--max-frames` or `--seconds` to override. Closes #163.
 * Added structured failure handling and cache-path validation to the GitHub-backed skills provider workflow so `skills fetch` and `skills cache refresh` reject download failures and manifest path traversal attempts without uncaught exceptions.
 
+### Fixed
+
+* Fixed the MCP `j1939_tp` tool to invoke the current `j1939 tp sessions --file <file>` CLI surface instead of the older bare `j1939 tp <file>` form, and tightened MCP argv coverage around that mapping.
+
 ### Documentation
 
+* Marked the first-phase repository-backed skills provider workflow as a current capability in top-level project documentation so the skills umbrella issue reflects the implemented manifest, provider, cache, and agent-reference surface.
+* Audited current operator, design, and test documentation for stale command-status and command-syntax references, aligning reverse-engineering helper status and file-backed examples with the implemented CLI surface.
+* Defined the phase-1 agent and MCP integration model for CANarchy skills, including the decision to keep skills CLI-discovered and out of the MCP tool/resource/prompt surface while documenting how agents should select, fetch, and reference skill provenance.
 * Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
+* Added dedicated current-state design and test specs for `j1939 monitor` and `config show`, and aligned the surrounding J1939 spec language with the current `j1939 tp sessions` command surface.
+* Defined the first version of the CANarchy skill manifest schema, added matching test-spec coverage, and added canonical example manifests so future skills provider and MCP work can build against a stable contract.
 * Documented the new multi-capture `j1939 compare` workflow across the J1939 design/test specs, command reference, and agent-facing command guidance.
+* Clarified the release workflow so GitHub release notes use the full matching changelog version section verbatim instead of a summary.
 
 ## [0.5.0] - 2026-04-25
 
