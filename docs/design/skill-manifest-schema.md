@@ -5,13 +5,13 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented |
-| Command surface | none yet; repository-backed skill manifest contract |
+| Command surface | `canarchy skills provider list`, `skills search`, `skills fetch`, `skills cache list`, `skills cache refresh` consume this manifest contract |
 | Primary area | agent integration, MCP, documentation |
 | Related specs | `docs/design/mcp-server.md`, `docs/design/dbc-provider-workflows.md`, `docs/design/plugin-model.md` |
 
 ## Goal
 
-Define a stable, versioned manifest schema for CANarchy skills so repository-backed skill providers, future cache workflows, and future MCP or agent integration all build against one inspectable contract instead of repository-specific conventions.
+Define a stable, versioned manifest schema for CANarchy skills so repository-backed skill providers, cache workflows, and future MCP or agent integration all build against one inspectable contract instead of repository-specific conventions.
 
 ## User-Facing Motivation
 
@@ -26,15 +26,15 @@ Operators and agents need skills to be discoverable and reproducible. A provider
 | `REQ-SKILLMAN-03` | Ubiquitous | Each manifest shall identify one skill with a stable provider-facing reference composed from provider identity and skill name. |
 | `REQ-SKILLMAN-04` | Ubiquitous | Each manifest shall describe at minimum the skill name, summary, content entry file, domain tags, compatibility metadata, and provenance metadata needed for repository-backed provider workflows. |
 | `REQ-SKILLMAN-05` | Optional feature | Where optional metadata is included, the manifest schema shall allow examples, dependencies, supported capture types, required tools, and deprecation metadata without changing the meaning of the required core fields. |
-| `REQ-SKILLMAN-06` | Unwanted behaviour | If a manifest omits required identity, provenance, compatibility, or content-entry fields, the future validation path shall reject it as invalid rather than guessing missing metadata. |
+| `REQ-SKILLMAN-06` | Unwanted behaviour | If a manifest omits required identity, provenance, compatibility, or content-entry fields, the provider validation path shall reject it as invalid rather than guessing missing metadata. |
 | `REQ-SKILLMAN-07` | Ubiquitous | The schema shall be suitable for repository-backed providers, catalog search, fetch/cache provenance reporting, and future MCP or agent discovery workflows without exposing provider-specific runtime objects. |
-| `REQ-SKILLMAN-08` | State-driven | While only schema documentation exists and no runtime validator has landed yet, the project shall provide canonical example manifests that future provider and validation work can test against. |
+| `REQ-SKILLMAN-08` | State-driven | While provider validation is available, the project shall provide canonical example manifests that provider and schema-validation tests can exercise. |
 
 ## Command Surface
 
 ```text
-No direct CLI command is introduced in this phase.
-This schema is a contract for future `skills` provider/catalog/fetch/cache workflows.
+No direct manifest-only CLI command is introduced in this phase.
+This schema is consumed by the `skills` provider/catalog/fetch/cache workflows.
 ```
 
 ## Responsibilities And Boundaries
@@ -44,11 +44,10 @@ In scope:
 * a versioned manifest format for one skill per manifest
 * required versus optional field definitions
 * a clear split between identity, provenance, compatibility, and content-entry metadata
-* example manifests suitable for future provider and validation tests
+* example manifests suitable for provider and validation tests
 
 Out of scope:
 
-* provider transport, cloning, fetch, or cache implementation
 * runtime skill execution or MCP tool exposure
 * repository authentication or trust policy
 * plugin execution semantics outside the skill metadata contract
@@ -164,13 +163,13 @@ Suggested input/output fields:
 
 ## Output Contracts
 
-No CLI output mode is introduced in this phase. Future provider and cache commands shall surface manifest-derived metadata through the standard CANarchy result envelope.
+No manifest-only CLI output mode is introduced in this phase. Provider and cache commands surface manifest-derived metadata through the standard CANarchy result envelope.
 
 ## Error Contracts
 
-No runtime error codes are implemented in this phase. The future validation path should reserve structured errors for invalid manifests rather than silently tolerating missing required fields.
+Provider workflows reject invalid manifests through structured errors rather than silently tolerating missing required fields.
 
-Suggested future validation codes:
+Validation codes:
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|

@@ -340,7 +340,7 @@ The architecture is intentionally ahead of some implementations. These are the m
 * live transport coverage is currently limited by the `python-can` integration and configured interfaces
 * some protocol commands still rely on explicit sample/reference data providers instead of true transport-backed execution, although `j1939 monitor`, `uds scan`, and `uds trace` now have initial real backend paths when `python-can` is selected
 * the TUI is still a minimal text-mode shell, not yet the richer pane-driven dashboard described in [TUI plan](tui_plan.md)
-* reverse-engineering now has an initial shared analysis subsystem for heuristic ranking (`re signals`, `re counters`, `re entropy`) and provider-backed schema matching (`re match-dbc`, `re shortlist-dbc`); reference-series correlation remains unimplemented
+* reverse-engineering now has a shared analysis subsystem for heuristic ranking (`re signals`, `re counters`, `re entropy`), reference-series correlation (`re correlate`), and provider-backed schema matching (`re match-dbc`, `re shortlist-dbc`)
 * plugin architecture is planned conceptually but not yet implemented as a stable extension boundary
 
 ## Future Plugin Boundary

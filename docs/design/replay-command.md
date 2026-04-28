@@ -20,9 +20,9 @@ Replay is a core lab workflow for reproducing traffic patterns, validating tooli
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| `REQ-REPLAY-01` | Ubiquitous | The system shall provide a `canarchy replay <file>` command for deterministic replay planning over capture files. |
-| `REQ-REPLAY-02` | Event-driven | When `replay <file>` is invoked, the system shall produce a replay plan preserving the capture frame count and deriving duration from the capture timeline. |
-| `REQ-REPLAY-03` | Event-driven | When `replay <file> --rate <factor>` is invoked, the system shall scale relative event timing by the specified rate factor. |
+| `REQ-REPLAY-01` | Ubiquitous | The system shall provide a `canarchy replay --file <file>` command for deterministic replay planning over capture files. |
+| `REQ-REPLAY-02` | Event-driven | When `replay --file <file>` is invoked, the system shall produce a replay plan preserving the capture frame count and deriving duration from the capture timeline. |
+| `REQ-REPLAY-03` | Event-driven | When `replay --file <file> --rate <factor>` is invoked, the system shall scale relative event timing by the specified rate factor. |
 | `REQ-REPLAY-04` | Event-driven | When `replay` is invoked, the system shall return a replay plan that remains machine-readable without emitting duplicated active-transmit safety warnings in structured output. |
 | `REQ-REPLAY-05` | Unwanted behaviour | If `--rate` is zero or negative, the system shall return a structured error with code `INVALID_RATE` and exit code 1. |
 | `REQ-REPLAY-06` | Unwanted behaviour | If the capture source file is missing or unreadable, the system shall return a structured error with code `CAPTURE_SOURCE_UNAVAILABLE` and exit code 2. |
@@ -30,7 +30,7 @@ Replay is a core lab workflow for reproducing traffic patterns, validating tooli
 ## Command Surface
 
 ```text
-canarchy replay <file> [--rate <factor>] [--json] [--jsonl] [--table] [--raw]
+canarchy replay --file <file> [--rate <factor>] [--json] [--jsonl] [--table] [--raw]
 ```
 
 ## Responsibilities And Boundaries

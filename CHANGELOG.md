@@ -9,6 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
+* Audited current operator, design, and test documentation for stale command-status and command-syntax references, aligning reverse-engineering helper status and file-backed examples with the implemented CLI surface.
 * Defined the phase-1 agent and MCP integration model for CANarchy skills, including the decision to keep skills CLI-discovered and out of the MCP tool/resource/prompt surface while documenting how agents should select, fetch, and reference skill provenance.
 * Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
 * Added dedicated current-state design and test specs for `j1939 monitor` and `config show`, and aligned the surrounding J1939 spec language with the current `j1939 tp sessions` command surface.

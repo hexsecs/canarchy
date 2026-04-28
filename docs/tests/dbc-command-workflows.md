@@ -73,7 +73,7 @@ Then   the result shall include a frame and associated frame events
 
 ```gherkin
 Given  the files `tests/fixtures/sample.candump` and `tests/fixtures/sample.dbc` are available
-When   the operator runs `canarchy decode sample.candump --dbc sample.dbc --json`
+When   the operator runs `canarchy decode --file sample.candump --dbc sample.dbc --json`
 Then   the result shall include a matched message count
 And    the result shall include decoded-message events for known messages
 ```
@@ -99,7 +99,7 @@ And    the result shall include associated frame events
 
 ```gherkin
 Given  the file `tests/fixtures/invalid.dbc` contains malformed DBC content
-When   the operator runs `canarchy decode sample.candump --dbc invalid.dbc --json`
+When   the operator runs `canarchy decode --file sample.candump --dbc invalid.dbc --json`
 Then   the command shall exit with code `3`
 And    `errors[0].code` shall equal `"DBC_LOAD_FAILED"`
 ```

@@ -31,7 +31,7 @@ DBC-backed workflows are central to protocol-aware CAN analysis. Operators shoul
 ## Command Surface
 
 ```text
-canarchy decode <file> --dbc <file> [--json] [--jsonl] [--table] [--raw]
+canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--table] [--raw]
 canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--table] [--raw]
 ```
 

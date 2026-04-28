@@ -29,7 +29,7 @@
 
 ```gherkin
 Given  the J1939 decoder backend is replaced with a test double
-When   the operator runs `canarchy j1939 decode tests/fixtures/j1939_heavy_vehicle.candump --json`
+When   the operator runs `canarchy j1939 decode --file tests/fixtures/j1939_heavy_vehicle.candump --json`
 Then   the system shall route the command through the decoder abstraction
 And    the CLI layer shall shape the returned records into the standard CANarchy envelope
 ```
@@ -108,7 +108,7 @@ And    the result shall expose DBC-derived fields according to the documented pr
 
 ```gherkin
 Given  the configured J1939 decoder backend fails during initialization
-When   the operator runs `canarchy j1939 decode tests/fixtures/j1939_heavy_vehicle.candump --json`
+When   the operator runs `canarchy j1939 decode --file tests/fixtures/j1939_heavy_vehicle.candump --json`
 Then   the system shall exit with code `3`
 And    `errors[0].code` shall equal `"J1939_DECODER_UNAVAILABLE"`
 ```

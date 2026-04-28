@@ -4,13 +4,13 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Partial |
+| Status | Implemented |
 | Command surface | `canarchy re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, `re shortlist-dbc` |
 | Primary area | CLI, analysis |
 
 ## Goal
 
-Provide evidence-driven reverse-engineering helpers over recorded CAN traffic so operators can identify likely signals, counters, entropy-heavy fields, candidate DBC matches, and future correlations without treating heuristics as ground truth.
+Provide evidence-driven reverse-engineering helpers over recorded CAN traffic so operators can identify likely signals, counters, entropy-heavy fields, reference-series correlations, and candidate DBC matches without treating heuristics as ground truth.
 
 ## User-Facing Motivation
 
@@ -29,7 +29,7 @@ Operators analysing unknown traffic need repeatable helpers that summarise likel
 | `REQ-RE-07` | Ubiquitous | Reverse-engineering output shall include confidence, score, or rationale fields that distinguish heuristic inferences from established facts. |
 | `REQ-RE-08` | Ubiquitous | The commands shall support `--json`, `--jsonl`, and `--table` output modes. |
 | `REQ-RE-09` | Unwanted behaviour | If `re correlate` is invoked without `--reference`, the system shall return a structured error with code `RE_REFERENCE_REQUIRED` and exit code 1. |
-| `REQ-RE-10` | Unwanted behaviour | If the reference file is missing, malformed, or does not match the required timestamped numeric sample schema, the system shall return a structured error with code `RE_REFERENCE_INVALID` and exit code 1. |
+| `REQ-RE-10` | Unwanted behaviour | If the reference file is missing, malformed, or does not match the required timestamped numeric sample schema, the system shall return a structured error with code `INVALID_REFERENCE_FILE` and exit code 1. |
 | `REQ-RE-11` | Event-driven | When `re match-dbc <capture>` is invoked, the system shall rank candidate DBCs by comparing provider-catalog message IDs against the capture's observed arbitration IDs. |
 | `REQ-RE-12` | Event-driven | When `re shortlist-dbc <capture> --make <brand>` is invoked, the system shall pre-filter provider-catalog candidates by make before ranking them against the capture. |
 
@@ -44,14 +44,13 @@ canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json] [--js
 canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--table] [--raw]
 ```
 
-### Initial scope assumptions
+### Scope assumptions
 
-The first implementation should be file-backed and deterministic. Live capture subscriptions, interactive tuning, and OEM-specific knowledge are explicitly deferred.
+The implementation is file-backed and deterministic. Live capture subscriptions, interactive tuning, and OEM-specific knowledge are explicitly deferred.
 
 Current implementation note:
 
-* `re signals`, `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc` are implemented as deterministic file-backed helpers
-* `re correlate` remains deferred
+* `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, and `re shortlist-dbc` are implemented as deterministic file-backed helpers
 
 ## Responsibilities And Boundaries
 
@@ -237,5 +236,5 @@ Table output shall present compact ranked candidate summaries with confidence/sc
 
 ## Deferred Decisions
 
-* exact candidate schemas and whether they should also be modelled as typed events
+* whether reverse-engineering candidates should also be modelled as typed events
 * threshold and scoring models for counter and entropy ranking

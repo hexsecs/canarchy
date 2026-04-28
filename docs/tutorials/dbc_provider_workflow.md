@@ -76,7 +76,7 @@ Structured output includes `data.dbc_source`, which records the provider, logica
 Use the same provider ref directly with `decode`:
 
 ```bash
-canarchy decode tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt --json
+canarchy decode --file tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt --json
 ```
 
 This avoids copying or hard-coding a separate local path.

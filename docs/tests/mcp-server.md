@@ -45,7 +45,7 @@ And    `canarchy mcp serve --help` shall exit with code `0`
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `capture_info`, `decode`, `encode`, `dbc_inspect`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_inventory`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`
+Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `capture_info`, `decode`, `encode`, `dbc_inspect`, `dbc_provider_list`, `dbc_search`, `dbc_fetch`, `dbc_cache_list`, `dbc_cache_prune`, `dbc_cache_refresh`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`, `j1939_inventory`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`, `re_correlate`, `re_counters`, `re_entropy`, `re_match_dbc`, `re_shortlist_dbc`
 ```
 
 **Fixture:** none.
@@ -57,7 +57,7 @@ Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   at least 26 tools shall be returned — one per registered MCP tool in the current curated surface
+Then   at least 38 tools shall be returned — one per registered MCP tool in the current curated surface
 ```
 
 **Fixture:** none.
@@ -187,10 +187,10 @@ And    `"tui"` shall not appear in the set of tool names
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   `"dbc_search"` shall not appear in the set of tool names
-And    `"dbc_fetch"` shall not appear in the set of tool names
-And    `"re_counters"` shall not appear in the set of tool names
-And    `"re_match_dbc"` shall not appear in the set of tool names
+Then   `"skills_search"` shall not appear in the set of tool names
+And    `"skills_fetch"` shall not appear in the set of tool names
+And    `"j1939_compare"` shall not appear in the set of tool names
+And    `"re_signals"` shall not appear in the set of tool names
 ```
 
 **Fixture:** none.

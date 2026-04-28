@@ -75,7 +75,7 @@ And    <additional assertion>
 
 ```gherkin
 Given  the scaffold backend is active and `sample.candump` is present
-When   the operator runs `canarchy replay sample.candump --rate 0 --json`
+When   the operator runs `canarchy replay --file sample.candump --rate 0 --json`
 Then   the system shall exit with code 1
 And    the response shall contain an error with code `"INVALID_RATE"`
 ```

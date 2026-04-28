@@ -60,6 +60,12 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 | `decode` | `canarchy decode` |
 | `encode` | `canarchy encode` |
 | `dbc_inspect` | `canarchy dbc inspect` |
+| `dbc_provider_list` | `canarchy dbc provider list` |
+| `dbc_search` | `canarchy dbc search` |
+| `dbc_fetch` | `canarchy dbc fetch` |
+| `dbc_cache_list` | `canarchy dbc cache list` |
+| `dbc_cache_prune` | `canarchy dbc cache prune` |
+| `dbc_cache_refresh` | `canarchy dbc cache refresh` |
 | `export` | `canarchy export` |
 | `session_save` | `canarchy session save` |
 | `session_load` | `canarchy session load` |
@@ -76,13 +82,17 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 | `uds_trace` | `canarchy uds trace` |
 | `uds_services` | `canarchy uds services` |
 | `config_show` | `canarchy config show` |
+| `re_correlate` | `canarchy re correlate` |
+| `re_counters` | `canarchy re counters` |
+| `re_entropy` | `canarchy re entropy` |
+| `re_match_dbc` | `canarchy re match-dbc` |
+| `re_shortlist_dbc` | `canarchy re shortlist-dbc` |
 
 Current exclusions:
 
-* DBC provider and cache commands such as `dbc search` and `dbc fetch`
 * skills provider and cache commands such as `skills search` and `skills fetch`
 * CLI-only workflows such as `j1939 compare` that are not yet exposed as MCP tools
-* reverse-engineering helpers such as `re signals`, `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc`
+* CLI-only workflows such as `j1939 faults` and `re signals` that are not yet exposed as MCP tools
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
 
 ### Skills Workflow

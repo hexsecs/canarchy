@@ -139,19 +139,19 @@ CANarchy can operate on standard timestamped candump log files.
 Summarize a capture:
 
 ```bash
-canarchy stats tests/fixtures/sample.candump --json
+canarchy stats --file tests/fixtures/sample.candump --json
 ```
 
 Filter for a specific arbitration ID:
 
 ```bash
-canarchy filter tests/fixtures/sample.candump 'id==0x18FEEE31' --json
+canarchy filter 'id==0x18FEEE31' --file tests/fixtures/sample.candump --json
 ```
 
 Replay a capture with deterministic timing:
 
 ```bash
-canarchy replay tests/fixtures/sample.candump --rate 1.0 --json
+canarchy replay --file tests/fixtures/sample.candump --rate 1.0 --json
 ```
 
 ## Discover and Use DBC Files
@@ -168,7 +168,7 @@ canarchy dbc search toyota --provider opendbc --limit 5 --json
 Decode using a provider ref instead of a local file path:
 
 ```bash
-canarchy decode tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json
+canarchy decode --file tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json
 ```
 
 Structured output for `decode`, `encode`, and `dbc inspect` includes a `data.dbc_source` object so you can see which local or provider-backed DBC resolution was used.
