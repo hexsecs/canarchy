@@ -29,7 +29,7 @@ For the first public release, use TestPyPI first.
 5. Build and verify artifacts locally from the release version.
 6. Publish to TestPyPI first if this is the first release or if the release workflow changed.
 7. Publish to PyPI from the same release version or tag.
-8. Create the GitHub release notes from the changelog.
+8. Create the GitHub release notes from the full versioned changelog section for `X.Y.Z`; do not summarize or shorten the release notes.
 9. After the release is cut and the release artifacts are published, advance `src/canarchy/__init__.py` on `main` to the next development version in a follow-up commit.
 
 ## Development Version Naming
@@ -120,5 +120,6 @@ If trusted publishing is not ready yet, use an API token with the narrowest poss
 ## Notes
 
 * Release tags should match the package version exactly, prefixed with `v`.
+* GitHub release notes should use the complete text from the matching `CHANGELOG.md` version section verbatim.
 * If the release introduces breaking CLI or output-contract changes, bump the major version according to the documented SemVer policy.
 * If publication metadata or workflow changes, repeat the TestPyPI path before the next real PyPI release.
