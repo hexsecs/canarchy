@@ -38,6 +38,7 @@ Fully implemented and tested:
 * `re entropy` — file-backed entropy ranking across arbitration IDs and byte positions
 * `re correlate` — file-backed correlation of candidate fields against timestamped reference series
 * `re match-dbc`, `re shortlist-dbc` — provider-backed DBC candidate ranking against captures
+* `skills provider list`, `skills search`, `skills fetch`, `skills cache list`, `skills cache refresh` — repository-backed CANarchy skill discovery, caching, and provenance workflows
 * `session save`, `load`, `show` — session management
 * `export` — structured artifact export
 * `shell` — interactive REPL and `--command` scripting mode
