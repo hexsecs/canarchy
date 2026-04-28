@@ -41,7 +41,7 @@ canarchy mcp serve
 
 The `serve` subcommand accepts no positional arguments or output flags. The server runs until the stdio transport closes (client disconnect or EOF).
 
-The current MCP tool surface is a curated non-interactive subset of the CLI. It intentionally excludes interactive commands and some newer command families that do not yet have MCP adapters.
+The current MCP tool surface is a curated non-interactive subset of the CLI. It intentionally excludes interactive commands and some newer command families that do not yet have MCP adapters. Skills are not exposed as MCP tools, resources, or prompts in phase 1; agents discover and fetch skills through the CLI provider workflow before optionally using MCP for individual referenced commands that are already exposed.
 
 ## Tool Naming Convention
 
@@ -128,3 +128,4 @@ Out of scope:
 * authentication or access control
 * plugin or custom tool registration
 * exposing every implemented CLI command automatically
+* exposing CANarchy skills as MCP tools, resources, prompts, or a separate MCP discovery surface in phase 1

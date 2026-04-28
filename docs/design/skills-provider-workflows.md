@@ -58,7 +58,7 @@ In scope:
 Out of scope:
 
 * skill execution semantics
-* MCP tool exposure for skills
+* MCP tool, resource, or prompt exposure for skills
 * interactive skill invocation UX
 * repository authentication and trust policy beyond the current provider config
 
@@ -133,3 +133,4 @@ Skills provider and cache workflows emit the command name on success or the firs
 * whether additional provider implementations beyond GitHub should ship in the first stable series
 * whether cache management should later include prune or eager prefetch commands
 * whether future provider metadata should expose trust or signature information
+* whether a later phase should expose skills through MCP tools, resources, prompts, or a dedicated discovery capability
