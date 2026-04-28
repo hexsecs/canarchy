@@ -70,6 +70,7 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 | `j1939_spn` | `canarchy j1939 spn` |
 | `j1939_tp` | `canarchy j1939 tp sessions` |
 | `j1939_dm1` | `canarchy j1939 dm1` |
+| `j1939_summary` | `canarchy j1939 summary` |
 | `j1939_inventory` | `canarchy j1939 inventory` |
 | `uds_scan` | `canarchy uds scan` |
 | `uds_trace` | `canarchy uds trace` |
@@ -83,6 +84,30 @@ Current exclusions:
 * CLI-only workflows such as `j1939 compare` that are not yet exposed as MCP tools
 * reverse-engineering helpers such as `re signals`, `re counters`, `re entropy`, `re match-dbc`, and `re shortlist-dbc`
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
+
+### Skills Workflow
+
+CANarchy skills are phase-1 workflow descriptors, not MCP tools. Agents should discover and fetch skills through the CLI provider workflow, inspect the cached manifest and entry file, then run the referenced CANarchy commands explicitly through either the CLI or the MCP tools that already exist.
+
+Recommended flow:
+
+1. Run `canarchy skills search <domain-or-task> --json`.
+2. Select a provider-qualified reference such as `github:j1939_compare_triage`.
+3. Run `canarchy skills fetch <provider>:<skill> --json`.
+4. Read `local_manifest_path` and `local_entry_path` from the fetch result.
+5. Check `compatibility`, `required_tools`, `inputs`, `outputs`, `skill.tags`, and `skill.domains` before applying the workflow.
+6. Run required CANarchy commands explicitly and record the selected skill reference plus provenance in the final analysis.
+
+Example:
+
+```bash
+canarchy skills search j1939 --provider github --json
+canarchy skills fetch github:j1939_compare_triage --json
+canarchy j1939 summary --file baseline.candump --json
+canarchy j1939 compare --file baseline.candump --file after-start.candump --json
+```
+
+If MCP is available, agents may use MCP for commands that are already exposed as tools, such as `j1939_summary`. The skill itself is still selected and fetched through the CLI in phase 1, and `compatibility.mcp=false` means the agent should not assume MCP invocation is supported for the skill workflow.
 
 ### Response Format
 

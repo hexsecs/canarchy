@@ -424,7 +424,8 @@ Notes:
 
 * the first provider implementation is GitHub-backed and consumes `.skill.yaml` manifests that follow the CANarchy skill manifest schema
 * `skills fetch` returns both the cached manifest path and the cached skill entry path
-* skills provider/cache commands are currently CLI-only and are not yet exposed as MCP tools
+* skills provider/cache commands are currently CLI-only and are not exposed as MCP tools, resources, or prompts in phase 1
+* agents should use skills as workflow descriptors: search, fetch, inspect compatibility/provenance, then run referenced CANarchy commands explicitly
 
 ### session save
 
