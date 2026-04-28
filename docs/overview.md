@@ -24,6 +24,7 @@ Implemented and exercised in the current codebase:
 * `re entropy` for file-backed per-ID and per-byte entropy ranking
 * `re correlate` for correlating candidate fields against timestamped reference series
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
+* repository-backed skills provider workflows for discovering, fetching, caching, and referencing agent-oriented CANarchy skills
 * session `save`, `load`, and `show`
 * structured `export` for capture files and saved sessions
 * shell command reuse through `canarchy shell --command ...`

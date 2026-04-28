@@ -9,6 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
+* Marked the first-phase repository-backed skills provider workflow as a current capability in top-level project documentation so the skills umbrella issue reflects the implemented manifest, provider, cache, and agent-reference surface.
 * Audited current operator, design, and test documentation for stale command-status and command-syntax references, aligning reverse-engineering helper status and file-backed examples with the implemented CLI surface.
 * Defined the phase-1 agent and MCP integration model for CANarchy skills, including the decision to keep skills CLI-discovered and out of the MCP tool/resource/prompt surface while documenting how agents should select, fetch, and reference skill provenance.
 * Clarified the agent workflow policy so non-trivial work is expected to happen on dedicated branches and be delivered through pull requests by default rather than direct pushes to `main`.
