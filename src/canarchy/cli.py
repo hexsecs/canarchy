@@ -3942,6 +3942,28 @@ def format_skills_table(result: CommandResult) -> list[str]:
     return lines
 
 
+def format_datasets_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    if result.command == "datasets search":
+        lines.append(f"query: {result.data.get('query', '')}")
+        lines.append(f"results: {result.data.get('count', 0)}")
+        for item in result.data.get("results", []):
+            formats = ",".join(item.get("formats", []))
+            targets = ",".join(item.get("conversion_targets", []))
+            lines.append(
+                f"  {item['provider']}:{item['name']}  "
+                f"protocol={item.get('protocol_family', '')}  "
+                f"formats={formats or '-'}  "
+                f"targets={targets or '-'}  "
+                f"license={item.get('license', '')}  "
+                f"size={item.get('size_description', '')}"
+            )
+            lines.append(f"    source: {item.get('source_url', '')}")
+            if item.get("access_notes"):
+                lines.append(f"    access: {item['access_notes']}")
+    return lines
+
+
 def emit_live_capture(args: argparse.Namespace, output_format: str) -> int:
     """Stream live capture frames until Ctrl+C, honouring *output_format*.
 
@@ -4189,6 +4211,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "table" and result.ok and result.command in SKILLS_COMMANDS:
         for line in format_skills_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command == "datasets search":
+        for line in format_datasets_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
