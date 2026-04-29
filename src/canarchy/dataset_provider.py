@@ -158,10 +158,16 @@ def get_registry() -> DatasetProviderRegistry:
 
 
 def _build_default_registry() -> DatasetProviderRegistry:
+    from canarchy.dataset_cache import load_datasets_config
     from canarchy.dataset_catalog import PublicDatasetProvider
 
+    cfg = load_datasets_config()
     registry = DatasetProviderRegistry()
-    registry.register(PublicDatasetProvider())
+
+    catalog_cfg = cfg.get("providers", {}).get("catalog", {})
+    if catalog_cfg.get("enabled", True):
+        registry.register(PublicDatasetProvider())
+
     return registry
 
 

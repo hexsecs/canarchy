@@ -199,6 +199,18 @@ class DatasetProviderRegistryTests(unittest.TestCase):
         self.assertIsNot(first, second)
         self.assertIsNotNone(second.get_provider("catalog"))
 
+    def test_config_enabled_false_suppresses_catalog_provider(self) -> None:
+        cfg = {
+            "default_provider": "catalog",
+            "search_order": ["catalog"],
+            "providers": {"catalog": {"enabled": False}},
+        }
+        with patch("canarchy.dataset_cache.load_datasets_config", return_value=cfg):
+            reset_registry()
+            registry = get_registry()
+        self.assertIsNone(registry.get_provider("catalog"))
+        reset_registry()
+
     def test_fetch_unknown_provider_raises_error(self) -> None:
         registry = DatasetProviderRegistry()
         with self.assertRaises(DatasetError) as ctx:
