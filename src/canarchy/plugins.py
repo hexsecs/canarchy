@@ -222,8 +222,6 @@ def _load_entry_point_plugins(registry: PluginRegistry) -> None:
             try:
                 plugin_cls = ep.load()
                 register_fn(plugin_cls())
-            except PluginError:
-                raise
             except Exception as exc:
                 warnings.warn(
                     f"Failed to load plugin '{ep.name}' from group '{group}': {exc}",

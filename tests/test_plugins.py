@@ -342,6 +342,28 @@ class ThirdPartyProcessorTests(unittest.TestCase):
         self.assertEqual(entries[0]["name"], "test-adapter")
         self.assertIn("supported_extensions", entries[0])
 
+    def test_entry_point_plugin_error_is_isolated_not_reraised(self) -> None:
+        """A PluginError from a third-party entry point should warn, not blow up the registry."""
+        import importlib.metadata
+        from unittest.mock import MagicMock, patch
+
+        bad_ep = MagicMock()
+        bad_ep.name = "bad-third-party"
+        bad_ep.load.side_effect = PluginError(
+            code="PLUGIN_INCOMPATIBLE",
+            message="bad plugin version",
+        )
+
+        with patch.object(importlib.metadata, "entry_points", return_value=[bad_ep]):
+            import warnings as _warnings
+            with _warnings.catch_warnings(record=True) as caught:
+                _warnings.simplefilter("always")
+                from canarchy.plugins import _load_entry_point_plugins
+                _load_entry_point_plugins(self.registry)
+
+        self.assertEqual(len(self.registry.list_processors()), 0)
+        self.assertTrue(any("bad-third-party" in str(w.message) for w in caught))
+
 
 # ---------------------------------------------------------------------------
 # TEST-PLUGIN-15/16/17  CLI integration: RE commands route through registry
