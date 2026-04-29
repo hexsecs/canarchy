@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from canarchy.dataset_catalog import PublicDatasetProvider
-from canarchy.dataset_convert import ConversionError, convert_file
+from canarchy.dataset_convert import ConversionError, convert_file, stream_file
 from canarchy.dataset_provider import (
     DatasetDescriptor,
     DatasetError,
@@ -297,6 +297,42 @@ class DatasetConvertTests(unittest.TestCase):
             # ID should be uppercase hex without leading zeros beyond necessary
             self.assertRegex(first_line, r"\([0-9.]+\) can0 [0-9A-F]+#[0-9A-F]*")
 
+    def test_stream_hcrl_csv_to_jsonl_preserves_chunk_metadata(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "stream.jsonl")
+            result = stream_file(
+                src,
+                source_format="hcrl-csv",
+                output_format="jsonl",
+                destination=dest,
+                chunk_size=2,
+                provider_ref="catalog:hcrl-car-hacking",
+            )
+            self.assertEqual(result["frame_count"], 6)
+            self.assertEqual(result["chunks"], 3)
+            events = [json.loads(line) for line in Path(dest).read_text().splitlines()]
+            self.assertEqual(events[0]["payload"]["dataset"]["frame_offset"], 0)
+            self.assertEqual(events[2]["payload"]["dataset"]["chunk_index"], 1)
+            self.assertEqual(events[2]["payload"]["dataset"]["chunk_position"], 0)
+            self.assertEqual(events[0]["payload"]["dataset"]["provider_ref"], "catalog:hcrl-car-hacking")
+
+    def test_stream_hcrl_csv_to_candump_writes_incrementally(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "stream.log")
+            result = stream_file(src, source_format="hcrl-csv", output_format="candump", destination=dest)
+            lines = Path(dest).read_text().splitlines()
+            self.assertEqual(result["frame_count"], 6)
+            self.assertEqual(len(lines), 6)
+            self.assertTrue(lines[0].startswith("(0.000000) can0 "))
+
+    def test_stream_invalid_chunk_size_raises_conversion_error(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        with self.assertRaises(ConversionError) as ctx:
+            stream_file(src, source_format="hcrl-csv", output_format="jsonl", chunk_size=0)
+        self.assertEqual(ctx.exception.code, "INVALID_CHUNK_SIZE")
+
 
 # ---------------------------------------------------------------------------
 # CLI integration
@@ -407,3 +443,45 @@ class CliIntegrationTests(unittest.TestCase):
         data = json.loads(out)
         self.assertTrue(data["ok"])
         self.assertEqual(data["data"]["output_format"], "jsonl")
+
+    def test_datasets_stream_hcrl_to_stdout_jsonl(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "hcrl-csv",
+            "--format", "jsonl",
+            "--chunk-size", "2",
+            "--provider-ref", "catalog:hcrl-car-hacking",
+        )
+        self.assertEqual(code, 0)
+        events = [json.loads(line) for line in out.splitlines()]
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[2]["payload"]["dataset"]["chunk_index"], 1)
+
+    def test_datasets_stream_json_summary_does_not_emit_frames(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "hcrl-csv",
+            "--format", "jsonl",
+            "--chunk-size", "2",
+            "--json",
+        )
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["frame_count"], 6)
+        self.assertEqual(data["data"]["chunks"], 3)
+
+    def test_datasets_stream_invalid_chunk_size_returns_structured_error(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "hcrl-csv",
+            "--format", "jsonl",
+            "--chunk-size", "0",
+        )
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["errors"][0]["code"], "INVALID_CHUNK_SIZE")

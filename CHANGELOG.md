@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+* Added `canarchy datasets stream` for chunked streaming of downloaded dataset files to candump or JSONL, including JSONL provenance metadata for provider refs, frame offsets, and chunk positions so large datasets can be piped into analysis without buffering the full conversion in memory.
+
 ## [0.6.0] - 2026-04-28
 
 ### Added

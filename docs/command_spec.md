@@ -14,6 +14,7 @@ Implemented and verified in the current codebase:
 * structured `export` for capture files and saved sessions
 * DBC-backed `decode`, `encode`, and `dbc inspect`
 * DBC provider workflows for `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list`, `dbc cache prune`, and `dbc cache refresh`
+* dataset provider workflows for `datasets provider list`, `datasets search`, `datasets inspect`, `datasets fetch`, `datasets cache list`, `datasets cache refresh`, `datasets convert`, and `datasets stream`
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, and `compare`
 * session `save`, `load`, and `show`
 * shell one-shot command execution
@@ -427,6 +428,85 @@ Notes:
 * `skills fetch` returns both the cached manifest path and the cached skill entry path
 * skills provider/cache commands are currently CLI-only and are not exposed as MCP tools, resources, or prompts in phase 1
 * agents should use skills as workflow descriptors: search, fetch, inspect compatibility/provenance, then run referenced CANarchy commands explicitly
+
+### datasets provider list
+
+List registered public CAN dataset providers.
+
+```bash
+canarchy datasets provider list [--json|--jsonl|--table|--raw]
+```
+
+### datasets search
+
+Search public CAN dataset provider catalogs by name, protocol, or keyword.
+
+```bash
+canarchy datasets search [query] [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+```
+
+### datasets inspect
+
+Show full metadata for a dataset ref.
+
+```bash
+canarchy datasets inspect <provider>:<dataset> [--json|--jsonl|--table|--raw]
+```
+
+### datasets fetch
+
+Record dataset provenance in the local cache. This does not download large dataset payloads.
+
+```bash
+canarchy datasets fetch <provider>:<dataset> [--json|--jsonl|--table|--raw]
+```
+
+### datasets cache list
+
+List cached dataset provider manifests and provenance records.
+
+```bash
+canarchy datasets cache list [--json|--jsonl|--table|--raw]
+```
+
+### datasets cache refresh
+
+Refresh the built-in dataset catalog manifest.
+
+```bash
+canarchy datasets cache refresh [--provider <name>] [--json|--jsonl|--table|--raw]
+```
+
+### datasets convert
+
+Convert a downloaded dataset file to a CANarchy-compatible capture format.
+
+```bash
+canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>] [--json|--jsonl|--table|--raw]
+```
+
+### datasets stream
+
+Stream a downloaded dataset file to candump or JSONL without loading the full conversion into memory.
+
+```bash
+canarchy datasets stream <file> --source-format hcrl-csv --format candump|jsonl [--chunk-size <n>] [--provider-ref <ref>] [--output <path>] [--json]
+```
+
+Examples:
+
+```bash
+canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --provider-ref catalog:hcrl-car-hacking
+canarchy datasets stream sample.csv --source-format hcrl-csv --format candump --output sample.candump
+canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --json
+```
+
+Notes:
+
+* without `--json`, stream records are written directly to stdout or `--output`
+* JSONL stream records include `payload.dataset.provider_ref`, `frame_offset`, `chunk_index`, and `chunk_position`
+* with `--json`, stdout contains the standard result envelope and reports `frame_count` and `chunks`
+* live-bus replay from dataset streams is not part of this command; use explicit replay workflows after writing a capture file
 
 ### session save
 

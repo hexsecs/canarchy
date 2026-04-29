@@ -439,6 +439,15 @@ canarchy
     fetch
     cache list
     cache refresh
+  datasets
+    provider list
+    search
+    inspect
+    fetch
+    cache list
+    cache refresh
+    convert
+    stream
   export
   session
     save
