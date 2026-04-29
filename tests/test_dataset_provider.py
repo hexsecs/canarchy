@@ -472,3 +472,16 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["data"]["frame_count"], 6)
         self.assertEqual(data["data"]["chunks"], 3)
+
+    def test_datasets_stream_invalid_chunk_size_returns_structured_error(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "hcrl-csv",
+            "--format", "jsonl",
+            "--chunk-size", "0",
+        )
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["errors"][0]["code"], "INVALID_CHUNK_SIZE")

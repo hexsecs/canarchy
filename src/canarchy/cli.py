@@ -4026,9 +4026,8 @@ def emit_dataset_stream(args: argparse.Namespace) -> int:
             provider_ref=getattr(args, "provider_ref", None),
         )
     except ConversionError as exc:
-        result = CommandResult(
-            command=args.command,
-            ok=False,
+        result = error_result(
+            args.command,
             errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
         )
         emit_result(result, "json")
