@@ -442,7 +442,7 @@ canarchy datasets provider list [--json|--jsonl|--table|--raw]
 Search public CAN dataset provider catalogs by name, protocol, or keyword.
 
 ```bash
-canarchy datasets search [query] [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+canarchy datasets search [query] [--provider <name>] [--limit <n>] [--verbose] [--json|--jsonl|--table|--raw]
 ```
 
 ### datasets inspect
@@ -503,6 +503,7 @@ canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --js
 
 Notes:
 
+* `datasets search` defaults to a compact human-readable table; use `--verbose` for detailed result blocks with descriptions, source URLs, and access notes
 * without `--json`, stream records are written directly to stdout or `--output`
 * JSONL stream records include `payload.dataset.provider_ref`, `frame_offset`, `chunk_index`, and `chunk_position`
 * with `--json`, stdout contains the standard result envelope and reports `frame_count` and `chunks`

@@ -374,11 +374,23 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_search_default_output_is_human_readable(self) -> None:
         code, out, _ = run_cli("datasets", "search", "hcrl")
         self.assertEqual(code, 0)
-        self.assertIn("query: hcrl", out)
-        self.assertIn("results: 9", out)
+        self.assertIn('Datasets matching "hcrl" (9)', out)
+        self.assertIn("REF", out)
+        self.assertIn("PROTOCOL", out)
         self.assertIn("catalog:hcrl-car-hacking", out)
-        self.assertIn("protocol=can", out)
+        self.assertIn("CAN", out)
         self.assertNotIn("results: [{", out)
+        self.assertIn("Use `canarchy datasets inspect <ref>`", out)
+
+    def test_datasets_search_verbose_output_shows_details(self) -> None:
+        code, out, _ = run_cli("datasets", "search", "hcrl", "--verbose")
+        self.assertEqual(code, 0)
+        self.assertIn('Datasets matching "hcrl" (9)', out)
+        self.assertIn("catalog:hcrl-car-hacking", out)
+        self.assertIn("  Protocol: CAN", out)
+        self.assertIn("  Description: HCRL Car-Hacking Dataset", out)
+        self.assertIn("  Source: https://ocslab.hksecurity.net/Datasets/car-hacking-dataset", out)
+        self.assertIn("  Access: Research-use agreement", out)
 
     def test_datasets_inspect_known(self) -> None:
         code, out, _ = run_cli("datasets", "inspect", "road", "--json")
