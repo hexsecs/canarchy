@@ -75,55 +75,40 @@ class PluginRegistry:
     # --- registration ---
 
     def register_processor(self, plugin: ProcessorPlugin) -> None:
-        """Register a processor plugin. Raises PluginError on version mismatch or duplicate name."""
-        _require_api_version(plugin.api_version, plugin.name)
-        if not isinstance(plugin, ProcessorPlugin):
-            raise PluginError(
-                code="PLUGIN_INVALID",
-                message=f"Plugin '{plugin.name}' does not implement ProcessorPlugin.",
-                hint="Ensure the class has 'name', 'api_version', and 'process(frames, **kwargs)' members.",
-            )
-        if plugin.name in self._processors:
+        """Register a processor plugin. Raises PluginError on invalid interface, version mismatch, or duplicate name."""
+        name = _require_interface(plugin, ProcessorPlugin, "process(frames, **kwargs)")
+        _require_api_version(plugin.api_version, name)
+        if name in self._processors:
             raise PluginError(
                 code="PLUGIN_DUPLICATE",
-                message=f"A processor named '{plugin.name}' is already registered.",
+                message=f"A processor named '{name}' is already registered.",
                 hint="Use a unique name or unregister the existing processor first.",
             )
-        self._processors[plugin.name] = plugin
+        self._processors[name] = plugin
 
     def register_sink(self, plugin: SinkPlugin) -> None:
-        """Register a sink plugin. Raises PluginError on version mismatch or duplicate name."""
-        _require_api_version(plugin.api_version, plugin.name)
-        if not isinstance(plugin, SinkPlugin):
-            raise PluginError(
-                code="PLUGIN_INVALID",
-                message=f"Plugin '{plugin.name}' does not implement SinkPlugin.",
-                hint="Ensure the class has 'name', 'api_version', 'supported_formats', and 'write()' members.",
-            )
-        if plugin.name in self._sinks:
+        """Register a sink plugin. Raises PluginError on invalid interface, version mismatch, or duplicate name."""
+        name = _require_interface(plugin, SinkPlugin, "supported_formats and write()")
+        _require_api_version(plugin.api_version, name)
+        if name in self._sinks:
             raise PluginError(
                 code="PLUGIN_DUPLICATE",
-                message=f"A sink named '{plugin.name}' is already registered.",
+                message=f"A sink named '{name}' is already registered.",
                 hint="Use a unique name or unregister the existing sink first.",
             )
-        self._sinks[plugin.name] = plugin
+        self._sinks[name] = plugin
 
     def register_input_adapter(self, plugin: InputAdapterPlugin) -> None:
-        """Register an input adapter plugin. Raises PluginError on version mismatch or duplicate name."""
-        _require_api_version(plugin.api_version, plugin.name)
-        if not isinstance(plugin, InputAdapterPlugin):
-            raise PluginError(
-                code="PLUGIN_INVALID",
-                message=f"Plugin '{plugin.name}' does not implement InputAdapterPlugin.",
-                hint="Ensure the class has 'name', 'api_version', 'supported_extensions', and 'read()' members.",
-            )
-        if plugin.name in self._input_adapters:
+        """Register an input adapter plugin. Raises PluginError on invalid interface, version mismatch, or duplicate name."""
+        name = _require_interface(plugin, InputAdapterPlugin, "supported_extensions and read()")
+        _require_api_version(plugin.api_version, name)
+        if name in self._input_adapters:
             raise PluginError(
                 code="PLUGIN_DUPLICATE",
-                message=f"An input adapter named '{plugin.name}' is already registered.",
+                message=f"An input adapter named '{name}' is already registered.",
                 hint="Use a unique name or unregister the existing adapter first.",
             )
-        self._input_adapters[plugin.name] = plugin
+        self._input_adapters[name] = plugin
 
     # --- lookup ---
 
@@ -156,6 +141,29 @@ class PluginRegistry:
             }
             for a in self._input_adapters.values()
         ]
+
+
+def _require_interface(plugin: Any, protocol: type, required: str) -> str:
+    """Validate that plugin satisfies the protocol and return its name.
+
+    Raises PluginError(PLUGIN_INVALID) for missing attributes or a failed isinstance check,
+    so callers always receive a structured error instead of a raw AttributeError.
+    """
+    try:
+        name = plugin.name
+    except AttributeError:
+        raise PluginError(
+            code="PLUGIN_INVALID",
+            message=f"Plugin object is missing a 'name' attribute.",
+            hint=f"Ensure the class declares 'name', 'api_version', and {required}.",
+        )
+    if not isinstance(plugin, protocol):
+        raise PluginError(
+            code="PLUGIN_INVALID",
+            message=f"Plugin '{name}' does not implement {protocol.__name__}.",
+            hint=f"Ensure the class declares 'name', 'api_version', and {required}.",
+        )
+    return name
 
 
 def _require_api_version(api_version: str, plugin_name: str) -> None:

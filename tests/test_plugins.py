@@ -176,6 +176,28 @@ class RegistrationValidationTests(unittest.TestCase):
             self.registry.register_processor(NoProcessMethod())  # type: ignore[arg-type]
         self.assertEqual(ctx.exception.code, "PLUGIN_INVALID")
 
+    def test_plugin_missing_name_attribute_raises_plugin_invalid(self) -> None:
+        class NoNameAttr:
+            api_version = CANARCHY_API_VERSION
+
+            def process(self, frames: list[CanFrame], **kwargs: Any) -> ProcessorResult:
+                return ProcessorResult(candidates=[], metadata={})
+
+        with self.assertRaises(PluginError) as ctx:
+            self.registry.register_processor(NoNameAttr())  # type: ignore[arg-type]
+        self.assertEqual(ctx.exception.code, "PLUGIN_INVALID")
+
+    def test_plugin_missing_name_does_not_raise_attribute_error(self) -> None:
+        class NoNameAttr:
+            api_version = CANARCHY_API_VERSION
+
+        try:
+            self.registry.register_processor(NoNameAttr())  # type: ignore[arg-type]
+        except PluginError:
+            pass
+        except AttributeError:
+            self.fail("register_processor raised AttributeError instead of PluginError")
+
     def test_incompatible_sink_version_raises_plugin_incompatible(self) -> None:
         class BadSinkVersion:
             name = "bad-sink"
