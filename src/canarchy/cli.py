@@ -59,13 +59,14 @@ TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
 SKILLS_COMMANDS = {"skills provider list", "skills search", "skills fetch", "skills cache list", "skills cache refresh"}
+DATASETS_COMMANDS = {"datasets provider list", "datasets search", "datasets inspect", "datasets fetch", "datasets cache list", "datasets cache refresh", "datasets convert"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory", "j1939 compare"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
 RE_COMMANDS = {"re signals", "re counters", "re entropy", "re correlate", "re match-dbc", "re shortlist-dbc"}
 ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
-IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | SKILLS_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
+IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | SKILLS_COMMANDS | DATASETS_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
 
 
 class CliUsageError(Exception):
@@ -374,6 +375,63 @@ def build_parser() -> CanarchyArgumentParser:
     skills_cache_refresh.add_argument("--provider", default="github", help="provider to refresh (default: github)")
     add_output_arguments(skills_cache_refresh)
     skills_cache_refresh.set_defaults(command="skills cache refresh")
+
+    datasets = subparsers.add_parser("datasets", help="discover and inspect public CAN datasets")
+    datasets_subparsers = datasets.add_subparsers(dest="datasets_action", required=True)
+
+    datasets_provider = datasets_subparsers.add_parser("provider", help="manage dataset providers")
+    datasets_provider_subparsers = datasets_provider.add_subparsers(dest="datasets_provider_action", required=True)
+    datasets_provider_list = datasets_provider_subparsers.add_parser("list", help="list registered dataset providers")
+    add_output_arguments(datasets_provider_list)
+    datasets_provider_list.set_defaults(command="datasets provider list")
+
+    datasets_search = datasets_subparsers.add_parser("search", help="search datasets across providers")
+    datasets_search.add_argument("query", nargs="?", default="", help="search query (name, protocol, or keyword)")
+    datasets_search.add_argument("--provider", help="restrict search to a specific provider")
+    datasets_search.add_argument("--limit", type=int, default=20, help="maximum results (default: 20)")
+    add_output_arguments(datasets_search)
+    datasets_search.set_defaults(command="datasets search")
+
+    datasets_inspect = datasets_subparsers.add_parser("inspect", help="show full metadata for a dataset")
+    datasets_inspect.add_argument("ref", help="dataset ref (e.g. catalog:road or just road)")
+    add_output_arguments(datasets_inspect)
+    datasets_inspect.set_defaults(command="datasets inspect")
+
+    datasets_fetch = datasets_subparsers.add_parser("fetch", help="record provenance for a dataset")
+    datasets_fetch.add_argument("ref", help="dataset ref (e.g. catalog:road)")
+    add_output_arguments(datasets_fetch)
+    datasets_fetch.set_defaults(command="datasets fetch")
+
+    datasets_cache = datasets_subparsers.add_parser("cache", help="manage the local datasets cache")
+    datasets_cache_subparsers = datasets_cache.add_subparsers(dest="datasets_cache_action", required=True)
+    datasets_cache_list = datasets_cache_subparsers.add_parser("list", help="list cached dataset providers")
+    add_output_arguments(datasets_cache_list)
+    datasets_cache_list.set_defaults(command="datasets cache list")
+    datasets_cache_refresh = datasets_cache_subparsers.add_parser("refresh", help="refresh dataset catalog manifest")
+    datasets_cache_refresh.add_argument("--provider", default="catalog", help="provider to refresh (default: catalog)")
+    add_output_arguments(datasets_cache_refresh)
+    datasets_cache_refresh.set_defaults(command="datasets cache refresh")
+
+    datasets_convert = datasets_subparsers.add_parser(
+        "convert", help="convert a downloaded dataset file to candump or JSONL"
+    )
+    datasets_convert.add_argument("file", help="path to the downloaded dataset file")
+    datasets_convert.add_argument(
+        "--source-format",
+        required=True,
+        choices=["hcrl-csv"],
+        help="source file format (hcrl-csv: HCRL Timestamp,ID,DLC,Data CSV)",
+    )
+    datasets_convert.add_argument(
+        "--format",
+        dest="output_format",
+        required=True,
+        choices=["candump", "jsonl"],
+        help="output format",
+    )
+    datasets_convert.add_argument("--output", help="output file path (defaults to source path with new suffix)")
+    add_output_arguments(datasets_convert)
+    datasets_convert.set_defaults(command="datasets convert")
 
     export = subparsers.add_parser("export", help="export session data")
     export.add_argument("source")
@@ -2561,6 +2619,138 @@ def skills_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[
     raise AssertionError(f"unsupported skills command: {args.command}")
 
 
+def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.dataset_cache import cache_list
+    from canarchy.dataset_provider import DatasetError, get_registry
+
+    registry = get_registry()
+
+    if args.command == "datasets provider list":
+        return ({"providers": registry.list_providers()}, [], [])
+
+    if args.command == "datasets search":
+        query = getattr(args, "query", "") or ""
+        provider_filter = [args.provider] if getattr(args, "provider", None) else None
+        limit = getattr(args, "limit", 20)
+        results = registry.search(query, providers=provider_filter, limit=limit)
+        items = [
+            {
+                "provider": d.provider,
+                "name": d.name,
+                "version": d.version,
+                "protocol_family": d.protocol_family,
+                "formats": list(d.formats),
+                "size_description": d.size_description,
+                "license": d.license,
+                "source_url": d.source_url,
+                "conversion_targets": list(d.conversion_targets),
+                "access_notes": d.access_notes,
+            }
+            for d in results
+        ]
+        warns: list[str] = []
+        if not items:
+            warns.append("No datasets matched the query.")
+        return ({"query": query, "count": len(items), "results": items}, [], warns)
+
+    if args.command == "datasets inspect":
+        try:
+            descriptor = registry.inspect(args.ref)
+        except DatasetError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        return (
+            {
+                "ref": args.ref,
+                "provider": descriptor.provider,
+                "name": descriptor.name,
+                "version": descriptor.version,
+                "source_url": descriptor.source_url,
+                "license": descriptor.license,
+                "access_notes": descriptor.access_notes,
+                "protocol_family": descriptor.protocol_family,
+                "formats": list(descriptor.formats),
+                "size_description": descriptor.size_description,
+                "description": descriptor.description,
+                "conversion_targets": list(descriptor.conversion_targets),
+                "metadata": descriptor.metadata,
+            },
+            [],
+            [],
+        )
+
+    if args.command == "datasets fetch":
+        try:
+            resolution = registry.fetch(args.ref)
+        except DatasetError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        return (
+            {
+                "ref": args.ref,
+                "provider": resolution.descriptor.provider,
+                "name": resolution.descriptor.name,
+                "cache_path": str(resolution.cache_path),
+                "is_cached": resolution.is_cached,
+                "provenance": resolution.provenance,
+                "source_url": resolution.descriptor.source_url,
+                "download_instructions": (
+                    f"Dataset provenance recorded. Download the data manually from: "
+                    f"{resolution.descriptor.source_url}"
+                    + (f" — Note: {resolution.descriptor.access_notes}" if resolution.descriptor.access_notes else "")
+                ),
+            },
+            [],
+            [],
+        )
+
+    if args.command == "datasets cache list":
+        entries = cache_list()
+        return ({"entries": entries, "count": len(entries)}, [], [])
+
+    if args.command == "datasets cache refresh":
+        provider_name = getattr(args, "provider", "catalog")
+        provider = registry.get_provider(provider_name)
+        if provider is None:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(
+                    code="DATASET_PROVIDER_NOT_FOUND",
+                    message=f"Provider '{provider_name}' is not registered.",
+                    hint=f"Available providers: {', '.join(p['name'] for p in registry.list_providers())}.",
+                )],
+            )
+        descriptors = provider.refresh()
+        return ({"provider": provider_name, "dataset_count": len(descriptors)}, [], [])
+
+    if args.command == "datasets convert":
+        from canarchy.dataset_convert import ConversionError, convert_file
+
+        try:
+            result = convert_file(
+                args.file,
+                source_format=args.source_format,
+                output_format=args.output_format,
+                destination=getattr(args, "output", None),
+            )
+        except ConversionError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        return (result, [], [])
+
+    raise AssertionError(f"unsupported datasets command: {args.command}")
+
+
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
     backend_metadata = transport.backend_metadata()
@@ -3004,6 +3194,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(skills_data)
         data["events"] = skills_events
         warnings.extend(skills_warnings)
+    elif args.command in DATASETS_COMMANDS:
+        datasets_data, datasets_events, datasets_warnings = datasets_payload(args)
+        data.update(datasets_data)
+        data["events"] = datasets_events
+        warnings.extend(datasets_warnings)
     elif args.command in UDS_COMMANDS:
         uds_data, uds_events, uds_warnings = uds_payload(args)
         data.update(uds_data)
