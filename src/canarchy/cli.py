@@ -3948,8 +3948,11 @@ def format_datasets_table(result: CommandResult) -> list[str]:
     if result.command == "datasets provider list":
         lines = ["Dataset providers"]
         for provider in result.data.get("providers", []):
-            status = "registered" if provider.get("registered") else "unregistered"
-            lines.append(f"  {provider['name']} ({status})")
+            status = "enabled" if provider.get("registered") else "disabled"
+            description = "built-in public CAN dataset catalog"
+            lines.append(f"  {provider['name']} - {description} ({status})")
+        lines.append("")
+        lines.append("Search datasets with `canarchy datasets search <query>`.")
         return lines
 
     if result.command != "datasets search":

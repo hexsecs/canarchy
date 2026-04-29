@@ -357,7 +357,8 @@ class CliIntegrationTests(unittest.TestCase):
         code, out, _ = run_cli("datasets", "provider", "list")
         self.assertEqual(code, 0)
         self.assertIn("Dataset providers", out)
-        self.assertIn("catalog (registered)", out)
+        self.assertIn("catalog - built-in public CAN dataset catalog (enabled)", out)
+        self.assertIn("Search datasets with `canarchy datasets search <query>`.", out)
         self.assertNotIn("providers: [{", out)
 
     def test_datasets_search_all(self) -> None:
