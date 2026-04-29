@@ -389,6 +389,7 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_search.add_argument("query", nargs="?", default="", help="search query (name, protocol, or keyword)")
     datasets_search.add_argument("--provider", help="restrict search to a specific provider")
     datasets_search.add_argument("--limit", type=int, default=20, help="maximum results (default: 20)")
+    datasets_search.add_argument("--verbose", action="store_true", help="show detailed dataset search results")
     add_output_arguments(datasets_search)
     datasets_search.set_defaults(command="datasets search")
 
@@ -2666,6 +2667,7 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
                 "size_description": d.size_description,
                 "license": d.license,
                 "source_url": d.source_url,
+                "description": d.description,
                 "conversion_targets": list(d.conversion_targets),
                 "access_notes": d.access_notes,
             }
@@ -3943,24 +3945,59 @@ def format_skills_table(result: CommandResult) -> list[str]:
 
 
 def format_datasets_table(result: CommandResult) -> list[str]:
-    lines = [f"command: {result.command}"]
-    if result.command == "datasets search":
-        lines.append(f"query: {result.data.get('query', '')}")
-        lines.append(f"results: {result.data.get('count', 0)}")
-        for item in result.data.get("results", []):
-            formats = ",".join(item.get("formats", []))
-            targets = ",".join(item.get("conversion_targets", []))
-            lines.append(
-                f"  {item['provider']}:{item['name']}  "
-                f"protocol={item.get('protocol_family', '')}  "
-                f"formats={formats or '-'}  "
-                f"targets={targets or '-'}  "
-                f"license={item.get('license', '')}  "
-                f"size={item.get('size_description', '')}"
-            )
-            lines.append(f"    source: {item.get('source_url', '')}")
+    if result.command != "datasets search":
+        return [f"command: {result.command}"]
+
+    query = result.data.get("query", "")
+    count = result.data.get("count", 0)
+    results = result.data.get("results", [])
+    title_query = query or "all"
+    if result.data.get("verbose"):
+        lines = [f"Datasets matching \"{title_query}\" ({count})", ""]
+        for item in results:
+            lines.append(f"{item['provider']}:{item['name']}")
+            lines.append(f"  Protocol: {item.get('protocol_family', '').upper()}")
+            lines.append(f"  Formats: {', '.join(item.get('formats', [])) or '-'}")
+            lines.append(f"  Outputs: {', '.join(item.get('conversion_targets', [])) or '-'}")
+            lines.append(f"  License: {item.get('license', '')}")
+            lines.append(f"  Size: {item.get('size_description', '')}")
+            lines.append(f"  Description: {item.get('description', '')}")
+            lines.append(f"  Source: {item.get('source_url', '')}")
             if item.get("access_notes"):
-                lines.append(f"    access: {item['access_notes']}")
+                lines.append(f"  Access: {item['access_notes']}")
+            lines.append("")
+        return lines[:-1] if lines and lines[-1] == "" else lines
+
+    rows = []
+    for item in results:
+        rows.append(
+            {
+                "ref": f"{item['provider']}:{item['name']}",
+                "protocol": item.get("protocol_family", "").upper(),
+                "format": ",".join(item.get("formats", [])) or "-",
+                "outputs": ",".join(item.get("conversion_targets", [])) or "-",
+                "license": item.get("license", ""),
+                "size": item.get("size_description", ""),
+            }
+        )
+    columns = [
+        ("REF", "ref"),
+        ("PROTOCOL", "protocol"),
+        ("FORMAT", "format"),
+        ("OUTPUTS", "outputs"),
+        ("LICENSE", "license"),
+        ("SIZE", "size"),
+    ]
+    widths = {
+        key: max([len(header), *(len(row[key]) for row in rows)] or [len(header)])
+        for header, key in columns
+    }
+    lines = [f"Datasets matching \"{title_query}\" ({count})", ""]
+    lines.append("  ".join(header.ljust(widths[key]) for header, key in columns))
+    for row in rows:
+        lines.append("  ".join(row[key].ljust(widths[key]) for _, key in columns))
+    lines.append("")
+    lines.append("Use `canarchy datasets inspect <ref>` for full metadata.")
     return lines
 
 
