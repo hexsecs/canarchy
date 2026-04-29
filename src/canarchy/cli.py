@@ -3945,6 +3945,13 @@ def format_skills_table(result: CommandResult) -> list[str]:
 
 
 def format_datasets_table(result: CommandResult) -> list[str]:
+    if result.command == "datasets provider list":
+        lines = ["Dataset providers"]
+        for provider in result.data.get("providers", []):
+            status = "registered" if provider.get("registered") else "unregistered"
+            lines.append(f"  {provider['name']} ({status})")
+        return lines
+
     if result.command != "datasets search":
         return [f"command: {result.command}"]
 
@@ -4253,7 +4260,7 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command == "datasets search":
+    if output_format == "table" and result.ok and result.command in {"datasets provider list", "datasets search"}:
         for line in format_datasets_table(result):
             print(line)
         for warning in payload["warnings"]:
