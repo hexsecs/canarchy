@@ -13,7 +13,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
-* Made `canarchy datasets search <query>` default to a compact readable table instead of dumping raw Python result dictionaries, added `--verbose` for detailed result blocks, and preserved explicit JSON output for automation.
+* Made `canarchy datasets provider list` and `canarchy datasets search <query>` default to compact readable output instead of dumping raw Python result dictionaries, added `--verbose` for detailed search result blocks, and preserved explicit JSON output for automation.
 
 ## [0.6.0] - 2026-04-28
 
