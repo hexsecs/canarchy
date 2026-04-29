@@ -1029,6 +1029,26 @@ Notes:
 * the result reports `protocol_decoder` as `built-in` by default
 * negative responses may include `negative_response_code` and `negative_response_name`
 
+### Dataset Analysis (CANdid)
+
+The CANdid dataset (VehicleSec 2025) provides candump-format CAN logs ready for direct analysis:
+
+```bash
+# Summarize a CANdid capture
+canarchy stats --file 2_driving_CAN.log --json
+canarchy capture-info --file 2_driving_CAN.log --json
+
+# Filter for specific IDs
+canarchy filter 'id==0x123' --file 2_steering_CAN.log --json
+
+# Reverse-engineering helpers
+canarchy re entropy --file 2_driving_CAN.log
+canarchy re counters --file 2_driving_CAN.log
+
+# Inspect the catalog entry
+canarchy datasets inspect catalog:candid --json
+```
+
 ### Session Save
 
 ```bash

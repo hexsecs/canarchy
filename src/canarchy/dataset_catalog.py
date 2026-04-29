@@ -229,6 +229,33 @@ _CATALOG: list[dict[str, Any]] = [
             "csv_note": "SynCAN CSV has a 'Time' column and per-signal value columns, not raw byte payloads.",
         },
     },
+    {
+        "name": "candid",
+        "version": "vehiclesec25",
+        "source_url": "https://doi.org/10.25909/29068553",
+        "license": "CC BY 4.0",
+        "protocol_family": "can",
+        "formats": ("candump",),
+        "size_description": "~13.7 GB",
+        "description": (
+            "CANdid: A CAN bus dataset for vehicle security research from VehicleSec 2025. "
+            "Raw CAN logs captured from 10 modern passenger vehicles during controlled maneuvers "
+            "(braking, steering, indicator, lights, gears, engine, driving). "
+            "CAN logs are in can-utils candump format and can be used directly with CANarchy. "
+            "Also includes annotation logs, GPS traces, metadata JSON, and cabin/dashboard video."
+        ),
+        "access_notes": "Download via Figshare: https://doi.org/10.25909/29068553. Figshare account may be required.",
+        "conversion_targets": ("jsonl",),
+        "metadata": {
+            "publisher": "VehicleSec 2025 / University of South Australia",
+            "paper": "https://www.usenix.org/conference/vehiclesec25/presentation/howson",
+            "vehicle_type": "passenger",
+            "vehicle_count": 10,
+            "maneuvers": ["brakes", "steering", "indicator", "lights", "gears", "engine", "driving"],
+            "artifacts": ["CAN.log", "annot.log", "GPS.log", "meta.json", "cabin.mp4", "dashboard.mp4"],
+            "note": "CAN logs (*_CAN.log) are ready for capture-info, stats, filter, re entropy, re counters.",
+        },
+    },
 ]
 
 

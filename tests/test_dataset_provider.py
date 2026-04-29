@@ -126,6 +126,22 @@ class PublicDatasetProviderTests(unittest.TestCase):
         self.assertEqual(desc.license, "MIT")
         self.assertIn("candump", desc.conversion_targets)
 
+    def test_candid_is_in_catalog(self) -> None:
+        desc = self.provider.inspect("candid")
+        self.assertEqual(desc.license, "CC BY 4.0")
+        self.assertEqual(desc.protocol_family, "can")
+        self.assertEqual(desc.version, "vehiclesec25")
+        self.assertIn("candump", desc.formats)
+        self.assertIn("jsonl", desc.conversion_targets)
+        self.assertIn("10.25909", desc.source_url)
+
+    def test_candid_metadata_has_paper_and_vehicle_count(self) -> None:
+        desc = self.provider.inspect("candid")
+        self.assertIn("paper", desc.metadata)
+        self.assertEqual(desc.metadata["vehicle_count"], 10)
+        self.assertIn("CAN logs", desc.metadata["note"])
+        self.assertIn("capture-info", desc.metadata["note"])
+
     def test_fetch_records_provenance_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):

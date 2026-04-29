@@ -154,6 +154,32 @@ Replay a capture with deterministic timing:
 canarchy replay --file tests/fixtures/sample.candump --rate 1.0 --json
 ```
 
+## Analyze CANdid Dataset Files
+
+The [CANdid dataset](https://doi.org/10.25909/29068553) (VehicleSec 2025) provides candump-format CAN logs from 10 passenger vehicles. After downloading, use `*_CAN.log` files directly:
+
+Summarize a CANdid capture:
+```bash
+canarchy stats --file 2_driving_CAN.log --json
+canarchy capture-info --file 2_driving_CAN.log --json
+```
+
+Filter for specific arbitration IDs:
+```bash
+canarchy filter 'id==0x123' --file 2_steering_CAN.log --json
+```
+
+Run reverse-engineering helpers:
+```bash
+canarchy re entropy --file 2_driving_CAN.log
+canarchy re counters --file 2_driving_CAN.log
+```
+
+The catalog entry includes metadata about annotations, GPS traces, and video artifacts:
+```bash
+canarchy datasets inspect catalog:candid --json
+```
+
 ## Discover and Use DBC Files
 
 CANarchy can work with local DBC files or provider-backed refs.
