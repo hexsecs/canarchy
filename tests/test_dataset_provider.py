@@ -353,6 +353,13 @@ class CliIntegrationTests(unittest.TestCase):
         names = [p["name"] for p in data["data"]["providers"]]
         self.assertIn("catalog", names)
 
+    def test_datasets_provider_list_default_output_is_human_readable(self) -> None:
+        code, out, _ = run_cli("datasets", "provider", "list")
+        self.assertEqual(code, 0)
+        self.assertIn("Dataset providers", out)
+        self.assertIn("catalog (registered)", out)
+        self.assertNotIn("providers: [{", out)
+
     def test_datasets_search_all(self) -> None:
         code, out, _ = run_cli("datasets", "search", "--json")
         self.assertEqual(code, 0)
