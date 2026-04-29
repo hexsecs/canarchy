@@ -59,7 +59,7 @@ TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
 SKILLS_COMMANDS = {"skills provider list", "skills search", "skills fetch", "skills cache list", "skills cache refresh"}
-DATASETS_COMMANDS = {"datasets provider list", "datasets search", "datasets inspect", "datasets fetch", "datasets cache list", "datasets cache refresh", "datasets convert"}
+DATASETS_COMMANDS = {"datasets provider list", "datasets search", "datasets inspect", "datasets fetch", "datasets cache list", "datasets cache refresh", "datasets convert", "datasets stream"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory", "j1939 compare"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
@@ -432,6 +432,29 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_convert.add_argument("--output", help="output file path (defaults to source path with new suffix)")
     add_output_arguments(datasets_convert)
     datasets_convert.set_defaults(command="datasets convert")
+
+    datasets_stream = datasets_subparsers.add_parser(
+        "stream", help="stream a downloaded dataset file to candump or JSONL"
+    )
+    datasets_stream.add_argument("file", help="path to the downloaded dataset file")
+    datasets_stream.add_argument(
+        "--source-format",
+        required=True,
+        choices=["hcrl-csv"],
+        help="source file format (hcrl-csv: HCRL Timestamp,ID,DLC,Data CSV)",
+    )
+    datasets_stream.add_argument(
+        "--format",
+        dest="output_format",
+        required=True,
+        choices=["candump", "jsonl"],
+        help="stream output format",
+    )
+    datasets_stream.add_argument("--output", help="output file path; omit or use '-' for stdout")
+    datasets_stream.add_argument("--chunk-size", type=int, default=1000, help="frames per metadata chunk (default: 1000)")
+    datasets_stream.add_argument("--provider-ref", help="dataset provider ref to preserve in JSONL provenance")
+    add_output_arguments(datasets_stream)
+    datasets_stream.set_defaults(command="datasets stream")
 
     export = subparsers.add_parser("export", help="export session data")
     export.add_argument("source")
@@ -2748,6 +2771,33 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
             ) from exc
         return (result, [], [])
 
+    if args.command == "datasets stream":
+        from canarchy.dataset_convert import ConversionError, stream_file
+
+        destination = getattr(args, "output", None)
+        if destination in (None, "-"):
+            destination = None if not getattr(args, "json", False) else None
+        try:
+            if getattr(args, "json", False) and destination is None:
+                import os
+
+                destination = os.devnull
+            result = stream_file(
+                args.file,
+                source_format=args.source_format,
+                output_format=args.output_format,
+                destination=destination,
+                chunk_size=getattr(args, "chunk_size", 1000),
+                provider_ref=getattr(args, "provider_ref", None),
+            )
+        except ConversionError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        return (result, [], [])
+
     raise AssertionError(f"unsupported datasets command: {args.command}")
 
 
@@ -3963,6 +4013,29 @@ def emit_live_gateway(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def emit_dataset_stream(args: argparse.Namespace) -> int:
+    from canarchy.dataset_convert import ConversionError, stream_file
+
+    try:
+        stream_file(
+            args.file,
+            source_format=args.source_format,
+            output_format=args.output_format,
+            destination=getattr(args, "output", None),
+            chunk_size=getattr(args, "chunk_size", 1000),
+            provider_ref=getattr(args, "provider_ref", None),
+        )
+    except ConversionError as exc:
+        result = CommandResult(
+            command=args.command,
+            ok=False,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        )
+        emit_result(result, "json")
+        return EXIT_USER_ERROR
+    return EXIT_OK
+
+
 def _emit_warnings_jsonl(payload: dict[str, Any], result: CommandResult) -> None:
     for warning in payload["warnings"]:
         print(
@@ -4330,6 +4403,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return emit_live_capture(args, output_format)
     if args.command == "gateway" and output_format in {"table", "raw"}:
         return emit_live_gateway(args)
+    if args.command == "datasets stream" and not args.json:
+        return emit_dataset_stream(args)
 
     exit_code, result = execute_command(argv)
     if result is not None:

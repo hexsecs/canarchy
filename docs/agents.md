@@ -91,6 +91,7 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 Current exclusions:
 
 * skills provider and cache commands such as `skills search` and `skills fetch`
+* dataset provider and streaming commands such as `datasets search`, `datasets fetch`, and `datasets stream`
 * CLI-only workflows such as `j1939 compare` that are not yet exposed as MCP tools
 * CLI-only workflows such as `j1939 faults` and `re signals` that are not yet exposed as MCP tools
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
@@ -154,6 +155,6 @@ tool: send {"interface": "vcan0", "frame_id": "0x7DF", "data": "0201F1"}
 
 ### Notes
 
-* Streaming is not supported in v1 — live-capture tools (`capture`, `gateway`) return a buffered batch from the active backend.
+* MCP streaming is not supported in v1 — live-capture tools (`capture`, `gateway`) return a buffered batch from the active backend. Use CLI `datasets stream` for dataset-file JSONL or candump pipelines.
 * `shell`, `tui`, and `mcp serve` are not exposed as MCP tools.
 * Error codes are identical to the CLI, so existing JSON-parsing logic transfers without changes.

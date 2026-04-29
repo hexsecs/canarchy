@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented (Phase 1) |
-| Issue | #216 |
+| Status | Implemented (Phase 2) |
+| Issue | #216, #220 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -31,6 +31,7 @@ canarchy datasets fetch <ref>
 canarchy datasets cache list
 canarchy datasets cache refresh [--provider <name>]
 canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>]
+canarchy datasets stream <file> --source-format hcrl-csv --format candump|jsonl [--chunk-size N] [--provider-ref <ref>] [--output <path>]
 ```
 
 All commands follow the standard `--json`, `--jsonl`, `--table`, `--raw` output modes.
@@ -154,6 +155,37 @@ column (if present) is preserved in `payload.label`.
 
 ---
 
+## Streaming
+
+`datasets stream` is the streaming-oriented companion to `datasets convert`. It parses supported
+dataset files incrementally and writes each output record directly to stdout or `--output` without
+building a full in-memory frame list.
+
+### Requirements
+
+| ID | Type | Requirement |
+|----|------|-------------|
+| REQ-DATASET-STREAM-01 | Ubiquitous | The system shall stream supported dataset files without loading all parsed frames into memory. |
+| REQ-DATASET-STREAM-02 | Ubiquitous | The system shall support `candump` and `jsonl` stream output formats for supported dataset source formats. |
+| REQ-DATASET-STREAM-03 | Optional feature | Where `--provider-ref` is specified, the system shall include the provider reference in JSONL dataset provenance metadata. |
+| REQ-DATASET-STREAM-04 | Ubiquitous | The system shall include `frame_offset`, `chunk_index`, and `chunk_position` metadata on JSONL streamed frame events. |
+| REQ-DATASET-STREAM-05 | Unwanted behaviour | If `--chunk-size` is less than 1, the system shall return a structured `INVALID_CHUNK_SIZE` error. |
+| REQ-DATASET-STREAM-06 | Unwanted behaviour | If the source file is malformed, the system shall return a structured `MALFORMED_SOURCE` error instead of emitting partial success as a normal completion. |
+
+### JSONL Stream Event
+
+```json
+{"event_type": "frame", "source": "hcrl-csv", "timestamp": 0.0, "payload": {"arbitration_id": 790, "data": "0000000000000000", "interface": null, "dataset": {"provider_ref": "catalog:hcrl-car-hacking", "frame_offset": 0, "chunk_index": 0, "chunk_position": 0}}}
+```
+
+### Notes
+
+- `datasets stream` writes stream records directly unless `--json` is requested.
+- With `--json`, the command returns the standard result envelope with `frame_count`, `chunks`, and stream configuration metadata.
+- Active live-bus replay remains out of scope for this increment; dataset streams can be saved or piped into existing file/stdin-aware analysis commands.
+
+---
+
 ## Non-Goals (Phase 1)
 
 - Vendoring large external datasets into the repository
@@ -169,4 +201,5 @@ column (if present) is preserved in `payload.label`.
 - Automated download for small, openly-licensed datasets (e.g., SynCAN)
 - Additional source formats (SynCAN CSV, ROAD CSV, comma.ai msgpack)
 - `datasets convert` reading from a provider ref (after fetch downloads the data)
-- Streaming conversion for large files (feeds into issue #220)
+- Provider-specific streaming adapters for remote datasets such as commaCarSegments
+- Explicit safe live-bus replay from dataset streams
