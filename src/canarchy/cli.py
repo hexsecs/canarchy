@@ -2764,62 +2764,80 @@ def _build_match_catalog(
 def reverse_engineering_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.plugins import get_registry
+
     transport = LocalTransport()
     if args.command == "re signals":
         frames = transport.frames_from_file(args.file)
-        analysis = signal_analysis(frames)
-        warnings: list[str] = []
-        if analysis["candidate_count"] == 0:
-            warnings.append("No likely signal candidates met the current heuristic threshold.")
+        processor = get_registry().get_processor("signal-analysis")
+        if processor is None:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(
+                    code="PLUGIN_NOT_FOUND",
+                    message="Built-in processor 'signal-analysis' is not registered.",
+                    hint="Ensure the plugin registry has not been modified.",
+                )],
+            )
+        result = processor.process(frames)
         return (
             {
                 "mode": "passive",
                 "file": args.file,
-                "analysis": "signal_inference",
-                "candidate_count": analysis["candidate_count"],
-                "candidates": analysis["candidates"],
-                "analysis_by_id": analysis["analysis_by_id"],
-                "low_sample_ids": analysis["low_sample_ids"],
-                "implementation": "file-backed heuristic analysis",
+                **result.metadata,
+                "candidates": result.candidates,
             },
             [],
-            warnings,
+            result.warnings,
         )
     if args.command == "re counters":
         frames = transport.frames_from_file(args.file)
-        candidates = counter_candidates(frames)
-        warnings: list[str] = []
-        if not candidates:
-            warnings.append("No likely counters met the current heuristic threshold.")
+        processor = get_registry().get_processor("counter-candidates")
+        if processor is None:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(
+                    code="PLUGIN_NOT_FOUND",
+                    message="Built-in processor 'counter-candidates' is not registered.",
+                    hint="Ensure the plugin registry has not been modified.",
+                )],
+            )
+        result = processor.process(frames)
         return (
             {
                 "mode": "passive",
                 "file": args.file,
-                "analysis": "counter_detection",
-                "candidate_count": len(candidates),
-                "candidates": candidates,
-                "implementation": "file-backed heuristic analysis",
+                **result.metadata,
+                "candidates": result.candidates,
             },
             [],
-            warnings,
+            result.warnings,
         )
     if args.command == "re entropy":
         frames = transport.frames_from_file(args.file)
-        candidates = entropy_candidates(frames)
-        warnings: list[str] = []
-        if not candidates:
-            warnings.append("No arbitration IDs with payload bytes were found for entropy analysis.")
+        processor = get_registry().get_processor("entropy-candidates")
+        if processor is None:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(
+                    code="PLUGIN_NOT_FOUND",
+                    message="Built-in processor 'entropy-candidates' is not registered.",
+                    hint="Ensure the plugin registry has not been modified.",
+                )],
+            )
+        result = processor.process(frames)
         return (
             {
                 "mode": "passive",
                 "file": args.file,
-                "analysis": "entropy_ranking",
-                "candidate_count": len(candidates),
-                "candidates": candidates,
-                "implementation": "file-backed heuristic analysis",
+                **result.metadata,
+                "candidates": result.candidates,
             },
             [],
-            warnings,
+            result.warnings,
         )
     if args.command in {"re match-dbc", "re shortlist-dbc"}:
         capture_file = args.capture

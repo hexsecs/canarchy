@@ -343,20 +343,41 @@ The architecture is intentionally ahead of some implementations. These are the m
 * reverse-engineering now has a shared analysis subsystem for heuristic ranking (`re signals`, `re counters`, `re entropy`), reference-series correlation (`re correlate`), and provider-backed schema matching (`re match-dbc`, `re shortlist-dbc`)
 * plugin architecture is planned conceptually but not yet implemented as a stable extension boundary
 
-## Future Plugin Boundary
+## Plugin Model
 
-The intended future plugin model should extend the shared engine and command path, not bypass it.
+The plugin registry (`src/canarchy/plugins.py`) provides three stable extension points that let
+third-party packages add analysis processors, output sinks, and input adapters without forking.
 
-Target extension areas:
+Plugins are discovered at startup via Python entry points and must declare a compatible `api_version`.
+The registry follows the same lazy-singleton pattern as the DBC and skills provider registries.
 
-* protocol helpers
-* analysis modules
-* output sinks
-* command registrations
+**Extension points:**
+
+* `ProcessorPlugin` — analysis processors: consume frames, return ranked candidates
+* `SinkPlugin` — output sinks: write command payloads to custom destinations
+* `InputAdapterPlugin` — input adapters: yield frames from custom file formats
+
+**Entry point groups:**
+
+| Group | Extension point |
+|-------|----------------|
+| `canarchy.processors` | `ProcessorPlugin` |
+| `canarchy.sinks` | `SinkPlugin` |
+| `canarchy.input_adapters` | `InputAdapterPlugin` |
+
+Built-in processors for the three heuristic reverse-engineering commands (`re counters`,
+`re entropy`, `re signals`) are registered by the default registry build and serve as the
+proof-of-contract migration. The `reverse_engineering_payload()` command handler routes these
+commands through `get_registry().get_processor(name)` rather than calling the underlying
+analysis functions directly.
+
+See `docs/design/plugin-model.md` for the full design spec and `docs/plugin-guide.md` for the
+third-party author guide.
 
 Non-goal:
 
 * UI-only behavior that cannot also be reached through the canonical CLI surface
+* Command registration via plugins (deferred to a later phase)
 
 ## Design Summary
 
