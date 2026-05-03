@@ -448,6 +448,7 @@ canarchy
     cache refresh
     convert
     stream
+    replay
   export
   session
     save

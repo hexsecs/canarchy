@@ -32,6 +32,7 @@ canarchy datasets cache list
 canarchy datasets cache refresh [--provider <name>]
 canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>]
 canarchy datasets stream <file> --source-format hcrl-csv --format candump|jsonl [--chunk-size N] [--provider-ref <ref>] [--output <path>]
+canarchy datasets replay <dataset-ref-or-url> [--format candump|jsonl] [--rate N] [--max-frames N]
 ```
 
 All commands follow the standard `--json`, `--jsonl`, `--table`, `--raw` output modes.
@@ -183,6 +184,16 @@ building a full in-memory frame list.
 - `datasets stream` writes stream records directly unless `--json` is requested.
 - With `--json`, the command returns the standard result envelope with `frame_count`, `chunks`, and stream configuration metadata.
 - Active live-bus replay remains out of scope for this increment; dataset streams can be saved or piped into existing file/stdin-aware analysis commands.
+
+### Remote Replay Requirements
+
+| ID | Type | Requirement |
+|----|------|-------------|
+| REQ-DATASET-REPLAY-01 | Ubiquitous | The system shall accept a direct remote candump URL as a dataset replay source. |
+| REQ-DATASET-REPLAY-02 | Optional feature | Where replay metadata is available for a dataset descriptor, the system shall accept a dataset ref such as `catalog:candid` as a replay source. |
+| REQ-DATASET-REPLAY-03 | Ubiquitous | The system shall stream remote replay frames incrementally without requiring a complete local dataset file. |
+| REQ-DATASET-REPLAY-04 | Ubiquitous | The system shall support candump and JSONL stdout replay formats. |
+| REQ-DATASET-REPLAY-05 | Optional feature | Where `--json` is specified, the system shall emit a standard result envelope without interleaving frame records. |
 
 ---
 

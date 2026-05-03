@@ -254,6 +254,11 @@ _CATALOG: list[dict[str, Any]] = [
             "maneuvers": ["brakes", "steering", "indicator", "lights", "gears", "engine", "driving"],
             "artifacts": ["CAN.log", "annot.log", "GPS.log", "meta.json", "cabin.mp4", "dashboard.mp4"],
             "note": "CAN logs (*_CAN.log) are ready for capture-info, stats, filter, re entropy, re counters.",
+            "replay": {
+                "default_file": "2_brakes_CAN.log",
+                "download_url": "https://ndownloader.figshare.com/files/54551156",
+                "source_format": "candump",
+            },
         },
     },
 ]

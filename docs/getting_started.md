@@ -156,7 +156,16 @@ canarchy replay --file tests/fixtures/sample.candump --rate 1.0 --json
 
 ## Analyze CANdid Dataset Files
 
-The [CANdid dataset](https://doi.org/10.25909/29068553) (VehicleSec 2025) provides candump-format CAN logs from 10 passenger vehicles. After downloading, use `*_CAN.log` files directly:
+The [CANdid dataset](https://doi.org/10.25909/29068553) (VehicleSec 2025) provides candump-format CAN logs from 10 passenger vehicles.
+
+Replay the default CANdid catalog stream directly from the remote provider without downloading the full file first:
+
+```bash
+canarchy datasets replay catalog:candid --rate 1.0
+canarchy datasets replay catalog:candid --format jsonl --rate 10 --max-frames 1000
+```
+
+After downloading specific `*_CAN.log` files, use them directly with file-backed analysis commands:
 
 Summarize a CANdid capture:
 ```bash

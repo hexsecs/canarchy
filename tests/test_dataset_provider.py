@@ -10,8 +10,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import requests
+
 from canarchy.dataset_catalog import PublicDatasetProvider
-from canarchy.dataset_convert import ConversionError, convert_file, stream_file
+from canarchy.dataset_convert import ConversionError, convert_file, stream_file, stream_replay
 from canarchy.dataset_provider import (
     DatasetDescriptor,
     DatasetError,
@@ -23,6 +25,24 @@ from canarchy.dataset_provider import (
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+class FakeStreamingResponse:
+    def __init__(self, lines: list[str]) -> None:
+        self.lines = lines
+
+    def __enter__(self) -> "FakeStreamingResponse":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        return None
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def iter_lines(self):
+        for line in self.lines:
+            yield line.encode()
 
 
 def run_cli(*argv: str) -> tuple[int, str, str]:
@@ -349,6 +369,38 @@ class DatasetConvertTests(unittest.TestCase):
             stream_file(src, source_format="hcrl-csv", output_format="jsonl", chunk_size=0)
         self.assertEqual(ctx.exception.code, "INVALID_CHUNK_SIZE")
 
+    def test_stream_missing_source_file_raises_conversion_error(self) -> None:
+        with self.assertRaises(ConversionError) as ctx:
+            stream_file("/nonexistent/path.csv", source_format="hcrl-csv", output_format="jsonl")
+        self.assertEqual(ctx.exception.code, "SOURCE_NOT_FOUND")
+
+    def test_stream_replay_reads_remote_candump_without_local_file(self) -> None:
+        response = FakeStreamingResponse([
+            "(0.000000) can0 316#0000000000000000",
+            "(0.001000) can0 18F#0000000000600000",
+        ])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response) as get:
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                result = stream_replay("https://example.test/candid.log", rate=1000.0)
+        get.assert_called_once_with("https://example.test/candid.log", stream=True)
+        self.assertEqual(result["frame_count"], 2)
+        self.assertEqual(result["output_format"], "candump")
+        self.assertIn("316#0000000000000000", stdout.getvalue())
+
+    def test_stream_replay_json_summary_suppresses_frame_output(self) -> None:
+        response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response):
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                result = stream_replay("https://example.test/candid.log", emit_frames=False)
+        self.assertEqual(result["frame_count"], 1)
+        self.assertEqual(stdout.getvalue(), "")
+
+    def test_stream_replay_http_failure_raises_conversion_error(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get", side_effect=requests.ConnectionError("offline")):
+            with self.assertRaises(ConversionError) as ctx:
+                stream_replay("https://example.test/candid.log")
+        self.assertEqual(ctx.exception.code, "DATASET_REPLAY_FETCH_FAILED")
+
 
 # ---------------------------------------------------------------------------
 # CLI integration
@@ -529,3 +581,53 @@ class CliIntegrationTests(unittest.TestCase):
         data = json.loads(out)
         self.assertFalse(data["ok"])
         self.assertEqual(data["errors"][0]["code"], "INVALID_CHUNK_SIZE")
+
+    def test_datasets_stream_missing_source_returns_structured_error(self) -> None:
+        code, out, _ = run_cli(
+            "datasets", "stream", "/nonexistent/path.csv",
+            "--source-format", "hcrl-csv",
+            "--format", "jsonl",
+        )
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["errors"][0]["code"], "SOURCE_NOT_FOUND")
+
+    def test_datasets_replay_catalog_ref_json_summary(self) -> None:
+        response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--rate", "1000",
+                "--max-frames", "1",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["ref"], "catalog:candid")
+        self.assertEqual(data["data"]["default_file"], "2_brakes_CAN.log")
+        self.assertEqual(data["data"]["frame_count"], 1)
+        self.assertNotIn("316#", out.splitlines()[0])
+
+    def test_datasets_replay_direct_url_streams_frames(self) -> None:
+        response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response):
+            code, out, _ = run_cli(
+                "datasets", "replay", "https://example.test/candid.log",
+                "--rate", "1000",
+                "--max-frames", "1",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "(0.000000) can0 316#0000000000000000")
+
+    def test_datasets_replay_http_failure_returns_structured_error(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get", side_effect=requests.ConnectionError("offline")):
+            code, out, _ = run_cli(
+                "datasets", "replay", "https://example.test/candid.log",
+                "--json",
+            )
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["errors"][0]["code"], "DATASET_REPLAY_FETCH_FAILED")

@@ -14,7 +14,7 @@ Implemented and verified in the current codebase:
 * structured `export` for capture files and saved sessions
 * DBC-backed `decode`, `encode`, and `dbc inspect`
 * DBC provider workflows for `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list`, `dbc cache prune`, and `dbc cache refresh`
-* dataset provider workflows for `datasets provider list`, `datasets search`, `datasets inspect`, `datasets fetch`, `datasets cache list`, `datasets cache refresh`, `datasets convert`, and `datasets stream`
+* dataset provider workflows for `datasets provider list`, `datasets search`, `datasets inspect`, `datasets fetch`, `datasets cache list`, `datasets cache refresh`, `datasets convert`, `datasets stream`, and `datasets replay`
 * J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, and `compare`
 * session `save`, `load`, and `show`
 * shell one-shot command execution
@@ -508,6 +508,30 @@ Notes:
 * JSONL stream records include `payload.dataset.provider_ref`, `frame_offset`, `chunk_index`, and `chunk_position`
 * with `--json`, stdout contains the standard result envelope and reports `frame_count` and `chunks`
 * live-bus replay from dataset streams is not part of this command; use explicit replay workflows after writing a capture file
+
+### datasets replay
+
+Stream a remote candump dataset file directly to stdout with replay timing. The source may be a direct candump download URL or a replayable dataset ref such as `catalog:candid`.
+
+```bash
+canarchy datasets replay <dataset-ref-or-url> [--format candump|jsonl] [--rate <multiplier>] [--max-frames <n>] [--json]
+```
+
+Examples:
+
+```bash
+canarchy datasets replay catalog:candid --rate 1.0
+canarchy datasets replay catalog:candid --format jsonl --rate 10 --max-frames 1000
+canarchy datasets replay https://ndownloader.figshare.com/files/54551156 --rate 1000 --max-frames 10
+canarchy datasets replay catalog:candid --rate 1000 --max-frames 10 --json
+```
+
+Notes:
+
+* without `--json`, replayed frames are written directly to stdout as candump or JSONL records for piping
+* with `--json`, stdout contains a clean standard result envelope with replay metadata and no frame records
+* replay downloads incrementally from the remote HTTP response and does not require a complete local dataset file
+* `catalog:candid` currently resolves to the CANdid `2_brakes_CAN.log` Figshare file as its default replay source
 
 ### session save
 
