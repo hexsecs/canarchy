@@ -17,6 +17,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Fixed
 
 * Made `canarchy datasets provider list` and `canarchy datasets search <query>` default to compact readable output instead of dumping raw Python result dictionaries, added `--verbose` for detailed search result blocks, and preserved explicit JSON output for automation.
+* Fixed MCP `stats` and `filter` tool argument mapping so they invoke the current CLI grammar (`stats --file <file>` and `filter <expr> --file <file>`) and return successful canonical envelopes. Closes #237.
 
 ## [0.6.0] - 2026-04-28
 

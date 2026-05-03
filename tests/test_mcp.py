@@ -83,6 +83,34 @@ def test_call_tool_capture_info():
     assert payload["data"]["unique_ids"] == 3
 
 
+def test_call_tool_stats_uses_file_flag():
+    results = asyncio.run(
+        handle_call_tool("stats", {"file": str(FIXTURES / "sample.candump")})
+    )
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "stats"
+    assert payload["data"]["total_frames"] == 3
+    assert payload["data"]["unique_arbitration_ids"] == 3
+
+
+def test_call_tool_filter_orders_expression_before_file_flag():
+    results = asyncio.run(
+        handle_call_tool(
+            "filter",
+            {"file": str(FIXTURES / "sample.candump"), "expression": "id==0x18FEEE31"},
+        )
+    )
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "filter"
+    assert len(payload["data"]["events"]) == 1
+    frame = payload["data"]["events"][0]["payload"]["frame"]
+    assert frame["arbitration_id"] == 0x18FEEE31
+
+
 # --- TEST-MCP-07: invalid frame_id returns structured error ----------------
 
 def test_call_tool_send_invalid_frame_id():
@@ -137,6 +165,19 @@ def test_build_argv_capture():
 def test_build_argv_capture_info():
     argv = _build_argv("capture_info", {"file": "trace.candump"})
     assert argv == ["capture-info", "--file", "trace.candump", "--json"]
+
+
+def test_build_argv_stats_uses_file_flag():
+    argv = _build_argv("stats", {"file": "trace.candump", "max_frames": 50})
+    assert argv == ["stats", "--file", "trace.candump", "--max-frames", "50", "--json"]
+
+
+def test_build_argv_filter_uses_expression_then_file_flag():
+    argv = _build_argv(
+        "filter",
+        {"file": "trace.candump", "expression": "id==0x123", "seconds": 2.5},
+    )
+    assert argv == ["filter", "id==0x123", "--file", "trace.candump", "--seconds", "2.5", "--json"]
 
 
 def test_build_argv_j1939_monitor_with_pgn():
