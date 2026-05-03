@@ -105,10 +105,18 @@ def stream_file(
             hint="Use `--chunk-size` with a positive integer.",
         )
 
+    src = Path(source_path)
+    if not src.exists():
+        raise ConversionError(
+            code="SOURCE_NOT_FOUND",
+            message=f"Source file not found: {source_path}",
+            hint="Provide a valid path to a downloaded dataset file.",
+        )
+
     if source_format == "hcrl-csv":
-        frames = _parse_hcrl_csv(Path(source_path))
+        frames = _parse_hcrl_csv(src)
     elif source_format == "candump":
-        frames = _parse_candump(Path(source_path))
+        frames = _parse_candump(src)
     else:
         raise AssertionError(f"unhandled source format: {source_format}")
 
@@ -190,41 +198,48 @@ def stream_replay(
     start_time = time.monotonic()
     output = handle or sys.stdout
 
-    with requests.get(source_url, stream=True) as resp:
-        resp.raise_for_status()
-        for line in resp.iter_lines():
-            if not line or not line.strip():
-                continue
-            
-            # iter_lines() returns bytes, decode to string
-            if isinstance(line, bytes):
-                line = line.decode("utf-8", errors="replace")
-            
-            # Parse candump line to get timestamp
-            frame = _parse_candump_line(line)
-            if frame is None:
-                continue
-            
-            if max_frames is not None and frame_count >= max_frames:
-                break
-            frame_count += 1
-            
-            # Timing: sleep to maintain original timing * rate
-            if last_timestamp is not None and frame["timestamp"] > last_timestamp:
-                delay = (frame["timestamp"] - last_timestamp) / rate
-                if delay > 0:
-                    time.sleep(min(delay, 1.0))  # Cap sleeps at 1s for safety
-            
-            last_timestamp = frame["timestamp"]
-            
-            if emit_frames:
-                if output_format == "candump":
-                    output_line = f"({frame['timestamp']:.6f}) {frame.get('interface') or 'can0'} {frame['arbitration_id']:X}#{frame['data'].hex().upper()}"
-                elif output_format == "jsonl":
-                    output_line = json.dumps(_frame_to_event(frame, source=source_format))
-                else:
-                    raise AssertionError(f"unhandled output format: {output_format}")
-                print(output_line, file=output, flush=True)
+    try:
+        with requests.get(source_url, stream=True) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line or not line.strip():
+                    continue
+
+                # iter_lines() returns bytes, decode to string
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8", errors="replace")
+
+                # Parse candump line to get timestamp
+                frame = _parse_candump_line(line)
+                if frame is None:
+                    continue
+
+                if max_frames is not None and frame_count >= max_frames:
+                    break
+                frame_count += 1
+
+                # Timing: sleep to maintain original timing * rate
+                if last_timestamp is not None and frame["timestamp"] > last_timestamp:
+                    delay = (frame["timestamp"] - last_timestamp) / rate
+                    if delay > 0:
+                        time.sleep(min(delay, 1.0))  # Cap sleeps at 1s for safety
+
+                last_timestamp = frame["timestamp"]
+
+                if emit_frames:
+                    if output_format == "candump":
+                        output_line = f"({frame['timestamp']:.6f}) {frame.get('interface') or 'can0'} {frame['arbitration_id']:X}#{frame['data'].hex().upper()}"
+                    elif output_format == "jsonl":
+                        output_line = json.dumps(_frame_to_event(frame, source=source_format))
+                    else:
+                        raise AssertionError(f"unhandled output format: {output_format}")
+                    print(output_line, file=output, flush=True)
+    except requests.RequestException as exc:
+        raise ConversionError(
+            code="DATASET_REPLAY_FETCH_FAILED",
+            message=f"Failed to stream replay source: {source_url}",
+            hint="Check the dataset replay URL, network connectivity, and provider availability.",
+        ) from exc
             
     elapsed = time.monotonic() - start_time
     return {
