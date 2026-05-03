@@ -526,7 +526,7 @@ Notes:
 Stream a remote candump dataset file directly to stdout with replay timing. The source may be a direct candump download URL or a replayable dataset ref such as `catalog:candid`.
 
 ```bash
-canarchy datasets replay <dataset-ref-or-url> [--format candump|jsonl] [--rate <multiplier>] [--max-frames <n>] [--json]
+canarchy datasets replay <dataset-ref-or-url> [--format candump|jsonl] [--rate <multiplier>] [--max-frames <n>] [--dry-run] [--json]
 ```
 
 Examples:
@@ -536,6 +536,7 @@ canarchy datasets replay catalog:candid --rate 1.0
 canarchy datasets replay catalog:candid --format jsonl --rate 10 --max-frames 1000
 canarchy datasets replay https://ndownloader.figshare.com/files/54551156 --rate 1000 --max-frames 10
 canarchy datasets replay catalog:candid --rate 1000 --max-frames 10 --json
+canarchy datasets replay catalog:candid --dry-run --json
 ```
 
 Notes:
@@ -543,6 +544,7 @@ Notes:
 * without `--json`, replayed frames are written directly to stdout as candump or JSONL records for piping
 * with `--json`, stdout contains a clean standard result envelope with replay metadata and no frame records
 * replay downloads incrementally from the remote HTTP response and does not require a complete local dataset file
+* `--dry-run` resolves replay source metadata without opening the remote stream
 * `catalog:candid` currently resolves to the CANdid `2_brakes_CAN.log` Figshare file as its default replay source
 
 ### session save

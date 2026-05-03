@@ -663,3 +663,53 @@ class CliIntegrationTests(unittest.TestCase):
         data = json.loads(out)
         self.assertFalse(data["ok"])
         self.assertEqual(data["errors"][0]["code"], "DATASET_REPLAY_FETCH_FAILED")
+
+    def test_datasets_replay_catalog_ref_dry_run_does_not_open_stream(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get") as get:
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl",
+                "--rate", "10",
+                "--max-frames", "5",
+                "--dry-run",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        get.assert_not_called()
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["ref"], "catalog:candid")
+        self.assertEqual(data["data"]["default_file"], "2_brakes_CAN.log")
+        self.assertEqual(data["data"]["output_format"], "jsonl")
+        self.assertEqual(data["data"]["rate"], 10.0)
+        self.assertEqual(data["data"]["max_frames"], 5)
+        self.assertTrue(data["data"]["dry_run"])
+        self.assertTrue(data["data"]["would_stream"])
+        self.assertFalse(data["data"]["streamed"])
+
+    def test_datasets_replay_direct_url_dry_run_does_not_open_stream(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get") as get:
+            code, out, _ = run_cli(
+                "datasets", "replay", "https://example.test/candid.log",
+                "--dry-run",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        get.assert_not_called()
+        data = json.loads(out)
+        self.assertEqual(data["data"]["source_type"], "url")
+        self.assertEqual(data["data"]["download_url"], "https://example.test/candid.log")
+        self.assertTrue(data["data"]["is_replayable"])
+
+    def test_datasets_replay_index_dry_run_returns_structured_error(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get") as get:
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:pivot-auto-datasets",
+                "--dry-run",
+                "--json",
+            )
+        self.assertEqual(code, 1)
+        get.assert_not_called()
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["errors"][0]["code"], "DATASET_REPLAY_UNAVAILABLE")

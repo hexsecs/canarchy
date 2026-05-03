@@ -468,6 +468,7 @@ def build_parser() -> CanarchyArgumentParser:
     )
     datasets_replay.add_argument("--rate", type=float, default=1.0, help="playback rate multiplier (default: 1.0 real-time)")
     datasets_replay.add_argument("--max-frames", type=int, default=None, help="stop after N frames")
+    datasets_replay.add_argument("--dry-run", action="store_true", help="resolve replay source metadata without opening the stream")
     add_output_arguments(datasets_replay)
     datasets_replay.set_defaults(command="datasets replay")
 
@@ -2819,6 +2820,8 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
 
         try:
             replay_source = resolve_dataset_replay_source(args.source, registry)
+            if getattr(args, "dry_run", False):
+                return (dataset_replay_plan(args, replay_source), [], [])
             result = stream_replay(
                 replay_source["download_url"],
                 source_format=replay_source["source_format"],
@@ -2868,12 +2871,27 @@ def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
     return {
         "source": source,
         "source_type": "dataset_ref",
+        "is_replayable": True,
         "provider": descriptor.provider,
         "name": descriptor.name,
         "ref": f"{descriptor.provider}:{descriptor.name}",
         "default_file": replay.get("default_file"),
         "download_url": replay["download_url"],
         "source_format": replay.get("source_format", "candump"),
+    }
+
+
+def dataset_replay_plan(args: argparse.Namespace, replay_source: dict[str, Any]) -> dict[str, Any]:
+    """Return replay source resolution metadata without opening the remote stream."""
+    return {
+        **replay_source,
+        "dry_run": True,
+        "is_replayable": True,
+        "output_format": args.output_format,
+        "rate": args.rate,
+        "max_frames": getattr(args, "max_frames", None),
+        "streamed": False,
+        "would_stream": True,
     }
 
 
@@ -4582,7 +4600,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return emit_live_gateway(args)
     if args.command == "datasets stream" and not args.json:
         return emit_dataset_stream(args)
-    if args.command == "datasets replay" and not args.json:
+    if args.command == "datasets replay" and not args.json and not getattr(args, "dry_run", False):
         return emit_dataset_replay(args)
 
     exit_code, result = execute_command(argv)

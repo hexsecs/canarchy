@@ -32,7 +32,7 @@ canarchy datasets cache list
 canarchy datasets cache refresh [--provider <name>]
 canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>]
 canarchy datasets stream <file> --source-format hcrl-csv --format candump|jsonl [--chunk-size N] [--provider-ref <ref>] [--output <path>]
-canarchy datasets replay <dataset-ref-or-url> [--format candump|jsonl] [--rate N] [--max-frames N]
+canarchy datasets replay <dataset-ref-or-url> [--format candump|jsonl] [--rate N] [--max-frames N] [--dry-run]
 ```
 
 All commands follow the standard `--json`, `--jsonl`, `--table`, `--raw` output modes.
@@ -205,6 +205,7 @@ building a full in-memory frame list.
 | REQ-DATASET-REPLAY-04 | Ubiquitous | The system shall support candump and JSONL stdout replay formats. |
 | REQ-DATASET-REPLAY-05 | Optional feature | Where `--json` is specified, the system shall emit a standard result envelope without interleaving frame records. |
 | REQ-DATASET-REPLAY-06 | Unwanted behaviour | If replay stdout is closed by a downstream pipeline consumer, the system shall stop replay cleanly without printing a Python traceback. |
+| REQ-DATASET-REPLAY-07 | Optional feature | Where `--dry-run` is specified, the system shall resolve replay source metadata without opening the remote stream. |
 
 ---
 
