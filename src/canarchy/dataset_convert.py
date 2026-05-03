@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
 import sys
 import time
@@ -197,6 +198,7 @@ def stream_replay(
     last_timestamp = None
     start_time = time.monotonic()
     output = handle or sys.stdout
+    stop_reason = "eof"
 
     try:
         with requests.get(source_url, stream=True) as resp:
@@ -215,6 +217,7 @@ def stream_replay(
                     continue
 
                 if max_frames is not None and frame_count >= max_frames:
+                    stop_reason = "max_frames"
                     break
                 frame_count += 1
 
@@ -233,7 +236,12 @@ def stream_replay(
                         output_line = json.dumps(_frame_to_event(frame, source=source_format))
                     else:
                         raise AssertionError(f"unhandled output format: {output_format}")
-                    print(output_line, file=output, flush=True)
+                    try:
+                        print(output_line, file=output, flush=True)
+                    except BrokenPipeError:
+                        stop_reason = "broken_pipe"
+                        _silence_broken_stdout(output)
+                        break
     except requests.RequestException as exc:
         raise ConversionError(
             code="DATASET_REPLAY_FETCH_FAILED",
@@ -249,8 +257,21 @@ def stream_replay(
         "rate": rate,
         "frame_count": frame_count,
         "elapsed_seconds": elapsed,
+        "stop_reason": stop_reason,
         "streamed": True,
     }
+
+
+def _silence_broken_stdout(output: IO[str]) -> None:
+    """Prevent Python shutdown from printing a second BrokenPipeError."""
+    if output is not sys.stdout:
+        return
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
+    except (AttributeError, OSError, ValueError):
+        pass
 
 
 def _parse_candump(path: Path) -> Iterator[dict]:

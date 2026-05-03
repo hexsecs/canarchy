@@ -204,6 +204,7 @@ building a full in-memory frame list.
 | REQ-DATASET-REPLAY-03 | Ubiquitous | The system shall stream remote replay frames incrementally without requiring a complete local dataset file. |
 | REQ-DATASET-REPLAY-04 | Ubiquitous | The system shall support candump and JSONL stdout replay formats. |
 | REQ-DATASET-REPLAY-05 | Optional feature | Where `--json` is specified, the system shall emit a standard result envelope without interleaving frame records. |
+| REQ-DATASET-REPLAY-06 | Unwanted behaviour | If replay stdout is closed by a downstream pipeline consumer, the system shall stop replay cleanly without printing a Python traceback. |
 
 ---
 
