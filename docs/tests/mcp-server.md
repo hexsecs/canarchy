@@ -15,7 +15,7 @@
 | REQ-MCP-01 | `mcp serve` subcommand starts MCP server | TEST-MCP-01 |
 | REQ-MCP-02 | Each selected CLI command surfaces as an MCP tool | TEST-MCP-02, TEST-MCP-03 |
 | REQ-MCP-03 | Input schemas derived from argparse definitions | TEST-MCP-04 |
-| REQ-MCP-04 | Tool responses use canonical event envelope | TEST-MCP-05, TEST-MCP-06, TEST-MCP-19 |
+| REQ-MCP-04 | Tool responses use canonical event envelope | TEST-MCP-05, TEST-MCP-06, TEST-MCP-19, TEST-MCP-20, TEST-MCP-21 |
 | REQ-MCP-05 | Invalid inputs return same error codes as CLI | TEST-MCP-07, TEST-MCP-08 |
 | REQ-MCP-06 | Tool discovery returns all registered MCP tools with metadata | TEST-MCP-02, TEST-MCP-03 |
 | REQ-MCP-07 | stdio transport only | TEST-MCP-01 |
@@ -112,6 +112,34 @@ When   `handle_call_tool("capture_info", {"file": "tests/fixtures/sample.candump
 Then   the response `text` shall parse as JSON with `ok` equal to `true`
 And    `command` shall equal `"capture-info"`
 And    `data.frame_count` and `data.unique_ids` shall both be greater than `0`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-MCP-20` — `stats` maps file input to current CLI grammar
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("stats", {"file": "tests/fixtures/sample.candump"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"stats"`
+And    the result shall report the expected frame and arbitration-ID counts
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-MCP-21` — `filter` maps expression and file input to current CLI grammar
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("filter", {"file": "tests/fixtures/sample.candump", "expression": "id==0x18FEEE31"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"filter"`
+And    the result shall contain one matching frame
 ```
 
 **Fixture:** `tests/fixtures/sample.candump`.
