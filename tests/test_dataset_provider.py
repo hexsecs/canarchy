@@ -701,6 +701,20 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(data["data"]["download_url"], "https://example.test/candid.log")
         self.assertTrue(data["data"]["is_replayable"])
 
+    def test_datasets_replay_dry_run_validates_rate_before_plan(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get") as get:
+            code, out, _ = run_cli(
+                "datasets", "replay", "https://example.test/candid.log",
+                "--rate", "0",
+                "--dry-run",
+                "--json",
+            )
+        self.assertEqual(code, 1)
+        get.assert_not_called()
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["errors"][0]["code"], "INVALID_RATE")
+
     def test_datasets_replay_index_dry_run_returns_structured_error(self) -> None:
         with patch("canarchy.dataset_convert.requests.get") as get:
             code, out, _ = run_cli(

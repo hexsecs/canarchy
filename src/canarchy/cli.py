@@ -2820,6 +2820,7 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
 
         try:
             replay_source = resolve_dataset_replay_source(args.source, registry)
+            validate_dataset_replay_options(args, replay_source)
             if getattr(args, "dry_run", False):
                 return (dataset_replay_plan(args, replay_source), [], [])
             result = stream_replay(
@@ -2893,6 +2894,25 @@ def dataset_replay_plan(args: argparse.Namespace, replay_source: dict[str, Any])
         "streamed": False,
         "would_stream": True,
     }
+
+
+def validate_dataset_replay_options(args: argparse.Namespace, replay_source: dict[str, Any]) -> None:
+    """Validate replay options that dry-run plans claim would be streamable."""
+    from canarchy.dataset_convert import ConversionError
+
+    source_format = replay_source.get("source_format", "candump")
+    if source_format != "candump":
+        raise ConversionError(
+            code="UNSUPPORTED_SOURCE_FORMAT",
+            message=f"Streaming replay only supports candump format, got '{source_format}'.",
+            hint="Use source_format='candump' for streaming replay.",
+        )
+    if args.rate <= 0:
+        raise ConversionError(
+            code="INVALID_RATE",
+            message=f"Replay rate must be positive, got {args.rate}.",
+            hint="Use a positive rate like 1.0 (real-time) or 0.5 (half-speed).",
+        )
 
 
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
