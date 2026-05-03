@@ -453,6 +453,18 @@ Show full metadata for a dataset ref.
 canarchy datasets inspect <provider>:<dataset> [--json|--jsonl|--table|--raw]
 ```
 
+Examples:
+
+```bash
+canarchy datasets search pivot
+canarchy datasets inspect catalog:pivot-auto-datasets --json
+```
+
+Notes:
+
+* `catalog:pivot-auto-datasets` is a curated external source index, not a directly downloadable or replayable dataset
+* inspect linked source pages for per-dataset access terms, file formats, and conversion/replay suitability
+
 ### datasets fetch
 
 Record dataset provenance in the local cache. This does not download large dataset payloads.

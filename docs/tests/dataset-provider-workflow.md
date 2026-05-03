@@ -6,12 +6,34 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233 |
+| Issues | #216, #220, #233, #235 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
 
 ## Test Cases
+
+### TEST-DATASET-CATALOG-01: Pivot Auto Dataset Index Metadata
+
+```gherkin
+Given the built-in public dataset catalog provider
+When the operator inspects `pivot-auto-datasets`
+Then the descriptor identifies `https://pivot-auto.org/datasets/` as the source URL
+And the descriptor reports mixed per-dataset licensing
+And metadata marks the entry as a curated index with notable CAN sources
+```
+
+**Fixture:** embedded catalog metadata in `src/canarchy/dataset_catalog.py`
+
+### TEST-DATASET-CATALOG-02: Search Finds Pivot Auto Dataset Index
+
+```gherkin
+Given the built-in public dataset catalog provider
+When the operator searches for `pivot`
+Then the results include `pivot-auto-datasets`
+```
+
+**Fixture:** embedded catalog metadata in `src/canarchy/dataset_catalog.py`
 
 ### TEST-DATASET-STREAM-01: Stream HCRL CSV To JSONL With Chunk Metadata
 
@@ -99,6 +121,7 @@ And frame records are not interleaved into the JSON output
 
 | Requirement | Tests |
 |-------------|-------|
+| Catalog metadata completeness | TEST-DATASET-CATALOG-01, TEST-DATASET-CATALOG-02 |
 | REQ-DATASET-STREAM-01 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02, TEST-DATASET-STREAM-04 |
 | REQ-DATASET-STREAM-02 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02 |
 | REQ-DATASET-STREAM-03 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-04 |

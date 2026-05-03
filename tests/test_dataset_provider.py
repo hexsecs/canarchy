@@ -162,6 +162,19 @@ class PublicDatasetProviderTests(unittest.TestCase):
         self.assertIn("CAN logs", desc.metadata["note"])
         self.assertIn("capture-info", desc.metadata["note"])
 
+    def test_pivot_auto_dataset_index_is_in_catalog(self) -> None:
+        desc = self.provider.inspect("pivot-auto-datasets")
+        self.assertEqual(desc.source_url, "https://pivot-auto.org/datasets/")
+        self.assertEqual(desc.license, "Mixed / varies by linked dataset")
+        self.assertEqual(desc.formats, ("catalog",))
+        self.assertEqual(desc.metadata["source_type"], "curated-index")
+        self.assertIn("HCRL CAN/CAN-FD/J1939 datasets", desc.metadata["notable_can_sources"])
+
+    def test_search_pivot_returns_pivot_auto_index(self) -> None:
+        results = self.provider.search("pivot")
+        names = [r.name for r in results]
+        self.assertIn("pivot-auto-datasets", names)
+
     def test_fetch_records_provenance_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
