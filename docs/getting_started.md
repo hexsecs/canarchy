@@ -189,6 +189,19 @@ The catalog entry includes metadata about annotations, GPS traces, and video art
 canarchy datasets inspect catalog:candid --json
 ```
 
+## Discover More Public CAN Dataset Sources
+
+CANarchy also documents curated dataset indexes, such as the PIVOT Auto dataset page, that point to multiple external CAN, CAN-FD, J1939, intrusion-detection, and automotive research datasets.
+
+Search for the PIVOT Auto catalog entry:
+
+```bash
+canarchy datasets search pivot
+canarchy datasets inspect catalog:pivot-auto-datasets --json
+```
+
+The PIVOT entry is an index, not a directly replayable dataset. Follow the linked source pages for downloads, licenses, and file formats, then use the relevant CANarchy analysis workflow for the files you obtain.
+
 ## Discover and Use DBC Files
 
 CANarchy can work with local DBC files or provider-backed refs.

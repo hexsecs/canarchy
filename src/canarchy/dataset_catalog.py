@@ -261,6 +261,54 @@ _CATALOG: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "pivot-auto-datasets",
+        "version": None,
+        "source_url": "https://pivot-auto.org/datasets/",
+        "license": "Mixed / varies by linked dataset",
+        "protocol_family": "can",
+        "formats": ("catalog",),
+        "size_description": "Catalog / varies by linked dataset",
+        "description": (
+            "PIVOT Auto Datasets: curated automotive and transportation dataset index. "
+            "The open community section lists CAN and in-vehicle networking sources including "
+            "CarDS, CANdid, ROAD, ORNL intermittent fault and DriverID datasets, Colorado State "
+            "J1939/heavy-vehicle data, Korea University CAN/CAN-FD/J1939 intrusion datasets, SynCAN, "
+            "TU Eindhoven CAN intrusion datasets, CrySyS CAN traces, ECUPrint, and related sources."
+        ),
+        "access_notes": (
+            "Index only; follow each linked dataset page for downloads, license, registration, "
+            "and format details. Contact info@pivot-auto.org for PIVOT updates."
+        ),
+        "conversion_targets": (),
+        "metadata": {
+            "publisher": "PIVOT Project",
+            "vehicle_type": "mixed",
+            "source_type": "curated-index",
+            "categories": [
+                "open community datasets",
+                "Geotab datasets",
+                "industry datasets",
+                "government datasets",
+                "transportation datasets",
+                "connected and autonomous vehicle datasets",
+            ],
+            "notable_can_sources": [
+                "CarDS",
+                "CANdid",
+                "ROAD",
+                "ORNL Intermittent Fault Dataset",
+                "ORNL DriverID Dataset",
+                "Colorado State J1939 datasets",
+                "HCRL CAN/CAN-FD/J1939 datasets",
+                "SynCAN",
+                "TU Eindhoven CAN intrusion datasets",
+                "CrySyS CAN traces",
+                "UPT ECUPrint",
+            ],
+            "note": "Use this catalog entry to discover external CAN datasets; inspect linked sources before choosing conversion or replay workflows.",
+        },
+    },
 ]
 
 
