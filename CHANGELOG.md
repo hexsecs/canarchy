@@ -11,6 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 * Added `canarchy datasets stream` for chunked streaming of downloaded dataset files to candump or JSONL, including JSONL provenance metadata for provider refs, frame offsets, and chunk positions so large datasets can be piped into analysis without buffering the full conversion in memory.
 * Added `candid` (CANdid) dataset to the built-in catalog: VehicleSec 2025 paper dataset with 10-passenger-vehicle candump-format CAN logs, annotations, GPS, metadata, and video. Ref: `catalog:candid`. Closes #225.
+* Added `canarchy datasets replay` for Netflix-style streaming playback from a direct candump URL or replayable dataset ref such as `catalog:candid`, with candump/JSONL stdout output, rate control, and JSON summary mode. Closes #233.
 
 ### Fixed
 

@@ -59,7 +59,7 @@ TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
 DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
 SKILLS_COMMANDS = {"skills provider list", "skills search", "skills fetch", "skills cache list", "skills cache refresh"}
-DATASETS_COMMANDS = {"datasets provider list", "datasets search", "datasets inspect", "datasets fetch", "datasets cache list", "datasets cache refresh", "datasets convert", "datasets stream"}
+DATASETS_COMMANDS = {"datasets provider list", "datasets search", "datasets inspect", "datasets fetch", "datasets cache list", "datasets cache refresh", "datasets convert", "datasets stream", "datasets replay"}
 J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory", "j1939 compare"}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
@@ -456,6 +456,20 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_stream.add_argument("--provider-ref", help="dataset provider ref to preserve in JSONL provenance")
     add_output_arguments(datasets_stream)
     datasets_stream.set_defaults(command="datasets stream")
+
+    datasets_replay = datasets_subparsers.add_parser("replay", help="Netflix-style streaming replay from a dataset ref or URL")
+    datasets_replay.add_argument("source", help="dataset ref (e.g. catalog:candid) or remote candump URL")
+    datasets_replay.add_argument(
+        "--format",
+        dest="output_format",
+        default="candump",
+        choices=["candump", "jsonl"],
+        help="stream output format (default: candump)",
+    )
+    datasets_replay.add_argument("--rate", type=float, default=1.0, help="playback rate multiplier (default: 1.0 real-time)")
+    datasets_replay.add_argument("--max-frames", type=int, default=None, help="stop after N frames")
+    add_output_arguments(datasets_replay)
+    datasets_replay.set_defaults(command="datasets replay")
 
     export = subparsers.add_parser("export", help="export session data")
     export.add_argument("source")
@@ -2800,7 +2814,67 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
             ) from exc
         return (result, [], [])
 
+    if args.command == "datasets replay":
+        from canarchy.dataset_convert import ConversionError, stream_replay
+
+        try:
+            replay_source = resolve_dataset_replay_source(args.source, registry)
+            result = stream_replay(
+                replay_source["download_url"],
+                source_format=replay_source["source_format"],
+                output_format=args.output_format,
+                rate=args.rate,
+                max_frames=getattr(args, "max_frames", None),
+                emit_frames=False,
+            )
+        except ConversionError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        except DatasetError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        return ({**result, **replay_source}, [], [])
+
     raise AssertionError(f"unsupported datasets command: {args.command}")
+
+
+def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
+    """Resolve a replay source from either a direct URL or dataset descriptor metadata."""
+    if source.startswith(("http://", "https://")):
+        return {
+            "source": source,
+            "source_type": "url",
+            "download_url": source,
+            "source_format": "candump",
+        }
+
+    from canarchy.dataset_provider import DatasetError
+
+    descriptor = registry.inspect(source)
+    replay = descriptor.metadata.get("replay") if isinstance(descriptor.metadata, dict) else None
+    if not isinstance(replay, dict) or not replay.get("download_url"):
+        raise DatasetError(
+            code="DATASET_REPLAY_UNAVAILABLE",
+            message=f"Dataset '{source}' does not define a replayable remote file.",
+            hint="Use `canarchy datasets inspect <ref>` to review available metadata, or pass a direct candump download URL.",
+        )
+
+    return {
+        "source": source,
+        "source_type": "dataset_ref",
+        "provider": descriptor.provider,
+        "name": descriptor.name,
+        "ref": f"{descriptor.provider}:{descriptor.name}",
+        "default_file": replay.get("default_file"),
+        "download_url": replay["download_url"],
+        "source_format": replay.get("source_format", "candump"),
+    }
 
 
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -4101,6 +4175,37 @@ def emit_dataset_stream(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def emit_dataset_replay(args: argparse.Namespace) -> int:
+    """Handle datasets replay command - stream frames from a dataset ref or URL."""
+    from canarchy.dataset_provider import DatasetError, get_registry
+    from canarchy.dataset_convert import ConversionError, stream_replay
+
+    try:
+        replay_source = resolve_dataset_replay_source(args.source, get_registry())
+        result = stream_replay(
+            replay_source["download_url"],
+            source_format=replay_source["source_format"],
+            output_format=args.output_format,
+            rate=args.rate,
+            max_frames=getattr(args, "max_frames", None),
+        )
+    except ConversionError as exc:
+        result = error_result(
+            args.command,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        )
+        emit_result(result, "json")
+        return EXIT_USER_ERROR
+    except DatasetError as exc:
+        result = error_result(
+            args.command,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        )
+        emit_result(result, "json")
+        return EXIT_USER_ERROR
+    return EXIT_OK
+
+
 def _emit_warnings_jsonl(payload: dict[str, Any], result: CommandResult) -> None:
     for warning in payload["warnings"]:
         print(
@@ -4477,6 +4582,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return emit_live_gateway(args)
     if args.command == "datasets stream" and not args.json:
         return emit_dataset_stream(args)
+    if args.command == "datasets replay" and not args.json:
+        return emit_dataset_replay(args)
 
     exit_code, result = execute_command(argv)
     if result is not None:

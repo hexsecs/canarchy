@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220 |
+| Issues | #216, #220, #233 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -70,6 +70,29 @@ And frame events are not emitted to stdout
 
 **Fixture:** `tests/fixtures/dataset_hcrl_sample.csv`
 
+### TEST-DATASET-REPLAY-01: Remote Candump Replay Without Local File
+
+```gherkin
+Given a mocked remote candump HTTP response
+When the operator replays the remote URL
+Then candump frames are emitted to stdout
+And no complete local dataset file is required
+```
+
+**Fixture:** mocked `requests.get` response in `tests/test_dataset_provider.py`
+
+### TEST-DATASET-REPLAY-02: Catalog Ref Replay JSON Summary
+
+```gherkin
+Given the CANdid catalog entry defines default replay metadata
+When the operator runs `canarchy datasets replay catalog:candid --json`
+Then stdout contains a standard JSON result envelope
+And the result identifies `catalog:candid` and the default replay file
+And frame records are not interleaved into the JSON output
+```
+
+**Fixture:** mocked `requests.get` response in `tests/test_dataset_provider.py`
+
 ---
 
 ## Traceability
@@ -82,11 +105,16 @@ And frame events are not emitted to stdout
 | REQ-DATASET-STREAM-04 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-04 |
 | REQ-DATASET-STREAM-05 | TEST-DATASET-STREAM-03 |
 | REQ-DATASET-STREAM-06 | Covered by existing malformed HCRL CSV conversion tests in `tests/test_dataset_provider.py` |
+| REQ-DATASET-REPLAY-01 | TEST-DATASET-REPLAY-01 |
+| REQ-DATASET-REPLAY-02 | TEST-DATASET-REPLAY-02 |
+| REQ-DATASET-REPLAY-03 | TEST-DATASET-REPLAY-01 |
+| REQ-DATASET-REPLAY-04 | TEST-DATASET-REPLAY-01, TEST-DATASET-REPLAY-02 |
+| REQ-DATASET-REPLAY-05 | TEST-DATASET-REPLAY-02 |
 
 ---
 
 ## Not Tested
 
-- Remote provider-specific streaming adapters are not tested because this increment only streams local downloaded dataset files.
+- Remote provider-specific replay is tested with mocked HTTP responses only; tests do not perform network downloads.
 - Live-bus replay is not tested because active replay is intentionally deferred.
 - Network access is not tested; all tests use checked-in fixtures.
