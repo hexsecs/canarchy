@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233, #235 |
+| Issues | #216, #220, #233, #235, #242 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -34,6 +34,18 @@ Then the results include `pivot-auto-datasets`
 ```
 
 **Fixture:** embedded catalog metadata in `src/canarchy/dataset_catalog.py`
+
+### TEST-DATASET-CATALOG-03: Search And Inspect Expose Machine Fields
+
+```gherkin
+Given the built-in public dataset catalog provider
+When the operator requests dataset search and inspect JSON output
+Then each descriptor includes `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`
+And replayable datasets identify their default replay file
+And curated index datasets identify themselves as indexes
+```
+
+**Fixture:** embedded catalog metadata and CLI JSON assertions in `tests/test_dataset_provider.py`
 
 ### TEST-DATASET-STREAM-01: Stream HCRL CSV To JSONL With Chunk Metadata
 
@@ -139,6 +151,17 @@ And no remote stream is opened
 
 **Fixture:** mocked `requests.get` assertion in `tests/test_dataset_provider.py`
 
+### TEST-DATASET-REPLAY-05: Curated Index Replay Returns Specific Error
+
+```gherkin
+Given `catalog:pivot-auto-datasets` is a curated index entry
+When the operator requests dataset replay for that ref
+Then the command fails with `DATASET_INDEX_NOT_REPLAYABLE`
+And no remote stream is opened
+```
+
+**Fixture:** embedded catalog metadata and mocked `requests.get` assertion in `tests/test_dataset_provider.py`
+
 ---
 
 ## Traceability
@@ -148,6 +171,7 @@ And no remote stream is opened
 | REQ-DATASET-CATALOG-01 | TEST-DATASET-CATALOG-01, TEST-DATASET-CATALOG-02 |
 | REQ-DATASET-CATALOG-02 | TEST-DATASET-CATALOG-01 |
 | REQ-DATASET-CATALOG-03 | TEST-DATASET-CATALOG-01 |
+| REQ-DATASET-CATALOG-04 | TEST-DATASET-CATALOG-03 |
 | REQ-DATASET-STREAM-01 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02, TEST-DATASET-STREAM-04 |
 | REQ-DATASET-STREAM-02 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02 |
 | REQ-DATASET-STREAM-03 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-04 |
@@ -161,6 +185,7 @@ And no remote stream is opened
 | REQ-DATASET-REPLAY-05 | TEST-DATASET-REPLAY-02 |
 | REQ-DATASET-REPLAY-06 | TEST-DATASET-REPLAY-03 |
 | REQ-DATASET-REPLAY-07 | TEST-DATASET-REPLAY-04 |
+| REQ-DATASET-REPLAY-08 | TEST-DATASET-REPLAY-05 |
 
 ---
 

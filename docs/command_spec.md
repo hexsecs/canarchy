@@ -462,6 +462,7 @@ canarchy datasets inspect catalog:pivot-auto-datasets --json
 
 Notes:
 
+* JSON `datasets search` and `datasets inspect` results include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`
 * `catalog:pivot-auto-datasets` is a curated external source index, not a directly downloadable or replayable dataset
 * inspect linked source pages for per-dataset access terms, file formats, and conversion/replay suitability
 
@@ -545,6 +546,7 @@ Notes:
 * with `--json`, stdout contains a clean standard result envelope with replay metadata and no frame records
 * replay downloads incrementally from the remote HTTP response and does not require a complete local dataset file
 * `--dry-run` resolves replay source metadata without opening the remote stream
+* replaying a curated index entry fails with `DATASET_INDEX_NOT_REPLAYABLE`; other non-replayable datasets fail with `DATASET_REPLAY_UNAVAILABLE`
 * `catalog:candid` currently resolves to the CANdid `2_brakes_CAN.log` Figshare file as its default replay source
 
 ### session save

@@ -13,6 +13,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added `candid` (CANdid) dataset to the built-in catalog: VehicleSec 2025 paper dataset with 10-passenger-vehicle candump-format CAN logs, annotations, GPS, metadata, and video. Ref: `catalog:candid`. Closes #225.
 * Added `canarchy datasets replay` for Netflix-style streaming playback from a direct candump URL or replayable dataset ref such as `catalog:candid`, with candump/JSONL stdout output, rate control, and JSON summary mode. Closes #233.
 * Added `canarchy datasets replay --dry-run` so operators and agents can resolve replay metadata for dataset refs or direct URLs without opening the remote stream. Closes #247.
+* Added stable machine-friendly dataset JSON fields (`ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`) for dataset search and inspect results. Closes #242.
 * Added `pivot-auto-datasets` to the built-in catalog as a curated source index for CAN, CAN-FD, J1939, and broader automotive datasets listed by the PIVOT Project. Closes #235.
 
 ### Fixed
@@ -20,6 +21,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Made `canarchy datasets provider list` and `canarchy datasets search <query>` default to compact readable output instead of dumping raw Python result dictionaries, added `--verbose` for detailed search result blocks, and preserved explicit JSON output for automation.
 * Fixed MCP `stats` and `filter` tool argument mapping so they invoke the current CLI grammar (`stats --file <file>` and `filter <expr> --file <file>`) and return successful canonical envelopes. Closes #237.
 * Made `canarchy datasets replay` stop cleanly on closed stdout pipes instead of printing a Python `BrokenPipeError` traceback. Closes #240.
+* Made dataset replay return `DATASET_INDEX_NOT_REPLAYABLE` for curated dataset indexes so automation can distinguish index entries from other non-replayable datasets. Closes #242.
 
 ## [0.6.0] - 2026-04-28
 

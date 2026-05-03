@@ -2672,22 +2672,7 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
         provider_filter = [args.provider] if getattr(args, "provider", None) else None
         limit = getattr(args, "limit", 20)
         results = registry.search(query, providers=provider_filter, limit=limit)
-        items = [
-            {
-                "provider": d.provider,
-                "name": d.name,
-                "version": d.version,
-                "protocol_family": d.protocol_family,
-                "formats": list(d.formats),
-                "size_description": d.size_description,
-                "license": d.license,
-                "source_url": d.source_url,
-                "description": d.description,
-                "conversion_targets": list(d.conversion_targets),
-                "access_notes": d.access_notes,
-            }
-            for d in results
-        ]
+        items = [dataset_descriptor_payload(d, include_metadata=False) for d in results]
         warns: list[str] = []
         if not items:
             warns.append("No datasets matched the query.")
@@ -2702,25 +2687,7 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
                 exit_code=EXIT_USER_ERROR,
                 errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
             ) from exc
-        return (
-            {
-                "ref": args.ref,
-                "provider": descriptor.provider,
-                "name": descriptor.name,
-                "version": descriptor.version,
-                "source_url": descriptor.source_url,
-                "license": descriptor.license,
-                "access_notes": descriptor.access_notes,
-                "protocol_family": descriptor.protocol_family,
-                "formats": list(descriptor.formats),
-                "size_description": descriptor.size_description,
-                "description": descriptor.description,
-                "conversion_targets": list(descriptor.conversion_targets),
-                "metadata": descriptor.metadata,
-            },
-            [],
-            [],
-        )
+        return (dataset_descriptor_payload(descriptor, include_metadata=True), [], [])
 
     if args.command == "datasets fetch":
         try:
@@ -2854,6 +2821,10 @@ def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
         return {
             "source": source,
             "source_type": "url",
+            "is_replayable": True,
+            "is_index": False,
+            "default_replay_file": None,
+            "download_url_available": True,
             "download_url": source,
             "source_format": "candump",
         }
@@ -2863,6 +2834,13 @@ def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
     descriptor = registry.inspect(source)
     replay = descriptor.metadata.get("replay") if isinstance(descriptor.metadata, dict) else None
     if not isinstance(replay, dict) or not replay.get("download_url"):
+        machine = dataset_machine_fields(descriptor)
+        if machine["is_index"]:
+            raise DatasetError(
+                code="DATASET_INDEX_NOT_REPLAYABLE",
+                message=f"Dataset index '{source}' does not define a replayable remote file.",
+                hint="Use `canarchy datasets inspect <ref>` to review linked dataset sources, then pass a replayable dataset ref or direct candump URL.",
+            )
         raise DatasetError(
             code="DATASET_REPLAY_UNAVAILABLE",
             message=f"Dataset '{source}' does not define a replayable remote file.",
@@ -2873,13 +2851,55 @@ def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
         "source": source,
         "source_type": "dataset_ref",
         "is_replayable": True,
+        "is_index": False,
         "provider": descriptor.provider,
         "name": descriptor.name,
         "ref": f"{descriptor.provider}:{descriptor.name}",
         "default_file": replay.get("default_file"),
+        "default_replay_file": replay.get("default_file"),
+        "download_url_available": True,
         "download_url": replay["download_url"],
         "source_format": replay.get("source_format", "candump"),
     }
+
+
+def dataset_machine_fields(descriptor: Any) -> dict[str, Any]:
+    """Return stable machine fields for dataset catalog results."""
+    metadata = descriptor.metadata if isinstance(descriptor.metadata, dict) else {}
+    replay = metadata.get("replay") if isinstance(metadata, dict) else None
+    replay_download_url = replay.get("download_url") if isinstance(replay, dict) else None
+    default_replay_file = replay.get("default_file") if isinstance(replay, dict) else None
+    source_type = metadata.get("source_type") if isinstance(metadata, dict) else None
+    is_index = source_type == "curated-index" or "catalog" in descriptor.formats
+    return {
+        "ref": f"{descriptor.provider}:{descriptor.name}",
+        "is_replayable": bool(replay_download_url),
+        "is_index": is_index,
+        "default_replay_file": default_replay_file,
+        "download_url_available": bool(replay_download_url),
+        "source_type": source_type or ("index" if is_index else "dataset"),
+    }
+
+
+def dataset_descriptor_payload(descriptor: Any, *, include_metadata: bool) -> dict[str, Any]:
+    """Return JSON-stable dataset descriptor fields for search and inspect."""
+    payload = {
+        **dataset_machine_fields(descriptor),
+        "provider": descriptor.provider,
+        "name": descriptor.name,
+        "version": descriptor.version,
+        "protocol_family": descriptor.protocol_family,
+        "formats": list(descriptor.formats),
+        "size_description": descriptor.size_description,
+        "license": descriptor.license,
+        "source_url": descriptor.source_url,
+        "description": descriptor.description,
+        "conversion_targets": list(descriptor.conversion_targets),
+        "access_notes": descriptor.access_notes,
+    }
+    if include_metadata:
+        payload["metadata"] = descriptor.metadata
+    return payload
 
 
 def dataset_replay_plan(args: argparse.Namespace, replay_source: dict[str, Any]) -> dict[str, Any]:
