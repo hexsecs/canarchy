@@ -127,6 +127,18 @@ And the result reports `stop_reason` as `broken_pipe`
 
 **Fixture:** mocked `requests.get` response and broken-pipe writer in `tests/test_dataset_provider.py`
 
+### TEST-DATASET-REPLAY-04: Dry Run Resolves Replay Source Without Streaming
+
+```gherkin
+Given the CANdid catalog entry defines default replay metadata
+When the operator runs `canarchy datasets replay catalog:candid --dry-run --json`
+Then stdout contains a standard JSON result envelope
+And the result identifies the resolved replay source, output format, rate, and frame limit
+And no remote stream is opened
+```
+
+**Fixture:** mocked `requests.get` assertion in `tests/test_dataset_provider.py`
+
 ---
 
 ## Traceability
@@ -148,6 +160,7 @@ And the result reports `stop_reason` as `broken_pipe`
 | REQ-DATASET-REPLAY-04 | TEST-DATASET-REPLAY-01, TEST-DATASET-REPLAY-02 |
 | REQ-DATASET-REPLAY-05 | TEST-DATASET-REPLAY-02 |
 | REQ-DATASET-REPLAY-06 | TEST-DATASET-REPLAY-03 |
+| REQ-DATASET-REPLAY-07 | TEST-DATASET-REPLAY-04 |
 
 ---
 

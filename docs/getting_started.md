@@ -161,6 +161,7 @@ The [CANdid dataset](https://doi.org/10.25909/29068553) (VehicleSec 2025) provid
 Replay the default CANdid catalog stream directly from the remote provider without downloading the full file first:
 
 ```bash
+canarchy datasets replay catalog:candid --dry-run --json
 canarchy datasets replay catalog:candid --rate 1.0
 canarchy datasets replay catalog:candid --format jsonl --rate 10 --max-frames 1000
 ```
