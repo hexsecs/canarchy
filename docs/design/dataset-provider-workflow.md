@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented (Phase 2) |
-| Issue | #216, #220 |
+| Issue | #216, #220, #233, #235 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -106,7 +106,7 @@ Config section: `[datasets]` in `~/.canarchy/config.toml` (mirrors `[dbc]` and `
 
 ## Built-in Catalog Provider
 
-`PublicDatasetProvider` (name: `catalog`) embeds metadata for 12 public CAN research datasets:
+`PublicDatasetProvider` (name: `catalog`) embeds metadata for public CAN research datasets and curated dataset indexes:
 
 | Dataset | Protocol | License | Size |
 |---------|----------|---------|------|
@@ -122,8 +122,18 @@ Config section: `[datasets]` in `~/.canarchy/config.toml` (mirrors `[dbc]` and `
 | `hcrl-x-canids` | CAN | Research use | Unknown |
 | `hcrl-challenge-2020` | CAN | Research use | Unknown |
 | `syncan` | CAN | MIT | ~100 MB |
+| `candid` | CAN | CC BY 4.0 | ~13.7 GB |
+| `pivot-auto-datasets` | CAN | Mixed / varies | Catalog / varies |
 
 No network access is required for `search`, `inspect`, or `provider list`.
+
+### Catalog Requirements
+
+| ID | Type | Requirement |
+|----|------|-------------|
+| REQ-DATASET-CATALOG-01 | Ubiquitous | The system shall expose built-in catalog entries through `datasets search` and `datasets inspect` without network access. |
+| REQ-DATASET-CATALOG-02 | Ubiquitous | The system shall include source URL, license or access terms, protocol family, formats, size description, description, and metadata for each built-in catalog entry. |
+| REQ-DATASET-CATALOG-03 | Optional feature | Where a catalog entry represents a curated external index instead of a directly downloadable dataset, the system shall mark the entry as an index in metadata and describe that linked sources have their own access terms and formats. |
 
 ---
 
