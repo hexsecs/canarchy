@@ -115,6 +115,18 @@ And frame records are not interleaved into the JSON output
 
 **Fixture:** mocked `requests.get` response in `tests/test_dataset_provider.py`
 
+### TEST-DATASET-REPLAY-03: Closed Replay Stdout Stops Cleanly
+
+```gherkin
+Given a mocked remote candump HTTP response
+And a replay output handle that raises `BrokenPipeError`
+When the operator replays the remote URL
+Then replay stops without raising a traceback
+And the result reports `stop_reason` as `broken_pipe`
+```
+
+**Fixture:** mocked `requests.get` response and broken-pipe writer in `tests/test_dataset_provider.py`
+
 ---
 
 ## Traceability
@@ -135,6 +147,7 @@ And frame records are not interleaved into the JSON output
 | REQ-DATASET-REPLAY-03 | TEST-DATASET-REPLAY-01 |
 | REQ-DATASET-REPLAY-04 | TEST-DATASET-REPLAY-01, TEST-DATASET-REPLAY-02 |
 | REQ-DATASET-REPLAY-05 | TEST-DATASET-REPLAY-02 |
+| REQ-DATASET-REPLAY-06 | TEST-DATASET-REPLAY-03 |
 
 ---
 

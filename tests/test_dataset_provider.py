@@ -45,6 +45,11 @@ class FakeStreamingResponse:
             yield line.encode()
 
 
+class BrokenPipeWriter(io.StringIO):
+    def write(self, s: str) -> int:
+        raise BrokenPipeError("closed pipe")
+
+
 def run_cli(*argv: str) -> tuple[int, str, str]:
     from canarchy.cli import main
 
@@ -413,6 +418,20 @@ class DatasetConvertTests(unittest.TestCase):
             with self.assertRaises(ConversionError) as ctx:
                 stream_replay("https://example.test/candid.log")
         self.assertEqual(ctx.exception.code, "DATASET_REPLAY_FETCH_FAILED")
+
+    def test_stream_replay_broken_pipe_stops_cleanly(self) -> None:
+        response = FakeStreamingResponse([
+            "(0.000000) can0 316#0000000000000000",
+            "(0.001000) can0 18F#0000000000600000",
+        ])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response):
+            result = stream_replay(
+                "https://example.test/candid.log",
+                rate=1000.0,
+                handle=BrokenPipeWriter(),
+            )
+        self.assertEqual(result["frame_count"], 1)
+        self.assertEqual(result["stop_reason"], "broken_pipe")
 
 
 # ---------------------------------------------------------------------------
