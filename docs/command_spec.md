@@ -122,18 +122,15 @@ Notes:
 Filter a capture source by a simple expression.
 
 ```bash
-canarchy filter <expression> (--file <path> | --stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--compact|--table|--raw]
+canarchy filter <expression> (--file <path> | --file - | --stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--compact|--table|--raw]
 ```
-
-Supported expressions today:
-
-* `all`
-* `id==0x18FEEE31`
-* `pgn==65262`
+```
 
 Notes:
 
-* `--stdin` reads JSONL `frame` events from standard input instead of a positional capture file
+* `--file -` or `--stdin` reads candump text (or JSONL `frame` events when `--jsonl` is set) from standard input instead of a file
+* `--stdin` alone implies candump text from stdin; combine with `--jsonl` for JSONL FrameEvents
+* For JSONL stdin with `filter`, each line must be a valid `frame` event JSON object
 
 ### capture-info
 
@@ -141,9 +138,13 @@ Inspect a candump capture quickly before running deeper analysis.
 
 ```bash
 canarchy capture-info --file <path> [--json|--jsonl|--table|--raw]
+canarchy capture-info --file - [--json|--jsonl|--table|--raw]
 ```
 
-Returns capture metadata only:
+Notes:
+
+* `--file -` reads candump text from standard input instead of a file
+* Returns capture metadata only:
 
 * `frame_count`
 * `first_timestamp`
@@ -160,7 +161,12 @@ Summarize a capture source.
 
 ```bash
 canarchy stats --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--table|--raw]
+canarchy stats --file - [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--table|--raw]
 ```
+
+Notes:
+
+* `--file -` reads candump text from standard input instead of a file
 
 ### generate
 
@@ -547,10 +553,12 @@ canarchy datasets replay catalog:candid --dry-run --json
 Notes:
 
 * without `--json`, replayed frames are written directly to stdout as candump or JSONL records for piping
-* JSONL replay frame events include `payload.dataset.provider_ref`, `source_url`, `replay_file`, `default_replay_file`, `source_format`, `source_type`, and `frame_offset`
+* JSONL replay frame events include `payload.dataset.provider_ref`, `source_url`, `replay_file`, `default_replay_file`, `source_format`, and `source_type`
 * with `--json`, stdout contains a clean standard result envelope with replay metadata and no frame records
-* `--list-files --json` returns replayable file entries with stable `id`, `name`, `size_bytes`, `format`, and `source_url` fields
+* `--list-files --json` returns replay file entries with stable `id`, `name`, `size_bytes`, `format`, and `source_url` fields
 * `--file` accepts a replay file `id` or `name`; unknown files fail with `DATASET_REPLAY_FILE_NOT_FOUND`
+* Curated indexes that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`
+* Stdin pipeline: pipe `datasets replay` output into `stats --file -`, `capture-info --file -`, or `filter --file -` for analysis without temporary files
 * JSON summary output reports `stop_reason`, including `eof`, `max_frames`, `max_seconds`, `broken_pipe`, or `interrupted`
 * replay downloads incrementally from the remote HTTP response and does not require a complete local dataset file
 * `--dry-run` resolves replay source metadata without opening the remote stream

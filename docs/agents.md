@@ -167,3 +167,4 @@ tool: send {"interface": "vcan0", "frame_id": "0x7DF", "data": "0201F1"}
 * MCP streaming is not supported in v1 — live-capture tools (`capture`, `gateway`) return a buffered batch from the active backend. Use CLI `datasets stream` for local dataset-file JSONL or candump pipelines, and `datasets replay` for remote dataset-ref or URL playback to stdout.
 * `shell`, `tui`, and `mcp serve` are not exposed as MCP tools.
 * Error codes are identical to the CLI, so existing JSON-parsing logic transfers without changes.
+* Stdin pipelines: `capture-info`, `stats`, `filter` now accept `--file -` or `--stdin` to read candump text from stdin. For `filter --jsonl --stdin`, each line must be a JSONL FrameEvent. This enables piping `datasets replay` output directly into analysis commands without temporary files.
