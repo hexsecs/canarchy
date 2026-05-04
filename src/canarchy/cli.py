@@ -4160,6 +4160,70 @@ def format_skills_table(result: CommandResult) -> list[str]:
     return lines
 
 
+def format_dataset_inspect(result: CommandResult) -> list[str]:
+    """Format human-readable output for datasets inspect."""
+    data = result.data
+    lines = []
+    ref = data.get("ref", "")
+    is_replayable = data.get("is_replayable", False)
+    is_index = data.get("is_index", False)
+
+    # Title with type indicators
+    type_labels = []
+    if is_index:
+        type_labels.append("INDEX")
+    if is_replayable:
+        type_labels.append("REPLAYABLE")
+    type_str = f" [{', '.join(type_labels)}]" if type_labels else ""
+    lines.append(f"Dataset: {ref}{type_str}")
+    lines.append("")
+
+    # Basic info
+    lines.append("Basic information")
+    lines.append(f"  Provider: {data.get('provider', '')}")
+    lines.append(f"  Name: {data.get('name', '')}")
+    lines.append(f"  Version: {data.get('version', '')}")
+    lines.append(f"  Protocol: {data.get('protocol_family', '').upper()}")
+    lines.append(f"  License: {data.get('license', '')}")
+    lines.append(f"  Size: {data.get('size_description', '')}")
+    lines.append(f"  Description: {data.get('description', '')}")
+    lines.append("")
+
+    # Format support
+    lines.append("Format support")
+    lines.append(f"  Source formats: {', '.join(data.get('formats', [])) or '-'}")
+    lines.append(f"  Output formats: {', '.join(data.get('conversion_targets', [])) or '-'}")
+    lines.append("")
+
+    # Source URLs section
+    lines.append("Source information")
+    lines.append(f"  Source URL: {data.get('source_url', '')}")
+    if is_replayable:
+        metadata = data.get("metadata", {})
+        replay = metadata.get("replay", {}) if isinstance(metadata, dict) else {}
+        download_url = replay.get("download_url") if isinstance(replay, dict) else None
+        default_file = replay.get("default_file") if isinstance(replay, dict) else None
+        if download_url:
+            lines.append(f"  Replay download URL: {download_url}")
+        if default_file:
+            lines.append(f"  Default replay file: {default_file}")
+        if replay and isinstance(replay, dict) and "files" in replay:
+            lines.append("  Replay files:")
+            for f in replay["files"]:
+                f_id = f.get("id", "")
+                f_name = f.get("name", "")
+                f_format = f.get("format", "")
+                lines.append(f"    {f_id} ({f_format}): {f_name}")
+    if is_index:
+        lines.append("  Note: This is a curated index, not directly replayable.")
+        lines.append("  Use `canarchy datasets search <keyword>` to find specific datasets from this index.")
+    if data.get("access_notes"):
+        lines.append(f"  Access notes: {data['access_notes']}")
+    lines.append("")
+
+    return lines
+
+
 def format_datasets_table(result: CommandResult) -> list[str]:
     if result.command == "datasets provider list":
         lines = ["Dataset providers"]
@@ -4174,11 +4238,22 @@ def format_datasets_table(result: CommandResult) -> list[str]:
     query = result.data.get("query", "")
     count = result.data.get("count", 0)
     results = result.data.get("results", [])
-    title_query = query or "all"
+    is_empty_query = not query
+    title_query = "All datasets" if is_empty_query else f"\"{query}\""
+    
     if result.data.get("verbose"):
-        lines = [f"Datasets matching \"{title_query}\" ({count})", ""]
+        lines = [f"Datasets matching {title_query} ({count})", ""]
         for item in results:
-            lines.append(f"{item['provider']}:{item['name']}")
+            ref = f"{item['provider']}:{item['name']}"
+            is_replayable = item.get("is_replayable", False)
+            is_index = item.get("is_index", False)
+            type_labels = []
+            if is_index:
+                type_labels.append("INDEX")
+            if is_replayable:
+                type_labels.append("REPLAYABLE")
+            type_str = f" [{', '.join(type_labels)}]" if type_labels else ""
+            lines.append(f"{ref}{type_str}")
             lines.append(f"  Protocol: {item.get('protocol_family', '').upper()}")
             lines.append(f"  Formats: {', '.join(item.get('formats', [])) or '-'}")
             lines.append(f"  Outputs: {', '.join(item.get('conversion_targets', [])) or '-'}")
@@ -4186,13 +4261,29 @@ def format_datasets_table(result: CommandResult) -> list[str]:
             lines.append(f"  Size: {item.get('size_description', '')}")
             lines.append(f"  Description: {item.get('description', '')}")
             lines.append(f"  Source: {item.get('source_url', '')}")
+            if is_replayable and item.get("default_replay_file"):
+                lines.append(f"  Default replay file: {item['default_replay_file']}")
+            if is_index:
+                lines.append(f"  Note: This is a curated index, not directly replayable.")
             if item.get("access_notes"):
                 lines.append(f"  Access: {item['access_notes']}")
             lines.append("")
-        return lines[:-1] if lines and lines[-1] == "" else lines
+        lines.append("")
+        lines.append("TYPE: INDEX=curated index, PLAY=replayable")
+        lines.append("Use `canarchy datasets inspect <ref>` for full metadata.")
+        return lines
 
+    # Compact table output
     rows = []
     for item in results:
+        is_replayable = item.get("is_replayable", False)
+        is_index = item.get("is_index", False)
+        if is_index:
+            type_indicator = "INDEX"
+        elif is_replayable:
+            type_indicator = "PLAY"
+        else:
+            type_indicator = "-"
         rows.append(
             {
                 "ref": f"{item['provider']}:{item['name']}",
@@ -4201,6 +4292,7 @@ def format_datasets_table(result: CommandResult) -> list[str]:
                 "outputs": ",".join(item.get("conversion_targets", [])) or "-",
                 "license": item.get("license", ""),
                 "size": item.get("size_description", ""),
+                "type": type_indicator,
             }
         )
     columns = [
@@ -4210,16 +4302,18 @@ def format_datasets_table(result: CommandResult) -> list[str]:
         ("OUTPUTS", "outputs"),
         ("LICENSE", "license"),
         ("SIZE", "size"),
+        ("TYPE", "type"),
     ]
     widths = {
         key: max([len(header), *(len(row[key]) for row in rows)] or [len(header)])
         for header, key in columns
     }
-    lines = [f"Datasets matching \"{title_query}\" ({count})", ""]
+    lines = [f"Datasets matching {title_query} ({count})", ""]
     lines.append("  ".join(header.ljust(widths[key]) for header, key in columns))
     for row in rows:
         lines.append("  ".join(row[key].ljust(widths[key]) for _, key in columns))
     lines.append("")
+    lines.append("TYPE: INDEX=curated index, PLAY=replayable")
     lines.append("Use `canarchy datasets inspect <ref>` for full metadata.")
     return lines
 
@@ -4511,6 +4605,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "table" and result.ok and result.command in {"datasets provider list", "datasets search"}:
         for line in format_datasets_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command == "datasets inspect":
+        for line in format_dataset_inspect(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

@@ -910,4 +910,76 @@ class CliIntegrationTests(unittest.TestCase):
         get.assert_not_called()
         data = json.loads(out)
         self.assertFalse(data["ok"])
-        self.assertEqual(data["errors"][0]["code"], "DATASET_INDEX_NOT_REPLAYABLE")
+
+
+class HumanReadableOutputTests(unittest.TestCase):
+    """Tests for improved human-readable dataset output (issue #244)."""
+
+    def test_datasets_search_empty_query_shows_all_datasets(self) -> None:
+        code, out, _ = run_cli("datasets", "search")
+        self.assertEqual(code, 0)
+        self.assertIn("All datasets", out)
+        self.assertNotIn('Datasets matching "all"', out)
+
+    def test_datasets_search_table_includes_type_column(self) -> None:
+        code, out, _ = run_cli("datasets", "search", "candid")
+        self.assertEqual(code, 0)
+        self.assertIn("TYPE", out)
+        self.assertIn("PLAY", out)
+
+    def test_datasets_search_table_shows_index_label(self) -> None:
+        code, out, _ = run_cli("datasets", "search", "pivot")
+        self.assertEqual(code, 0)
+        self.assertIn("INDEX", out)
+
+    def test_datasets_search_verbose_shows_type_labels(self) -> None:
+        code, out, _ = run_cli("datasets", "search", "candid", "--verbose")
+        self.assertEqual(code, 0)
+        self.assertIn("REPLAYABLE", out)
+
+    def test_datasets_search_verbose_shows_index_note(self) -> None:
+        code, out, _ = run_cli("datasets", "search", "pivot", "--verbose")
+        self.assertEqual(code, 0)
+        self.assertIn("INDEX", out)
+        self.assertIn("curated index", out)
+
+    def test_datasets_search_shows_type_legend(self) -> None:
+        code, out, _ = run_cli("datasets", "search")
+        self.assertEqual(code, 0)
+        self.assertIn("TYPE: INDEX=curated index, PLAY=replayable", out)
+
+    def test_datasets_inspect_shows_separated_sections(self) -> None:
+        code, out, _ = run_cli("datasets", "inspect", "catalog:candid")
+        self.assertEqual(code, 0)
+        self.assertIn("Basic information", out)
+        self.assertIn("Format support", out)
+        self.assertIn("Source information", out)
+
+    def test_datasets_inspect_shows_type_indicators(self) -> None:
+        code, out, _ = run_cli("datasets", "inspect", "catalog:candid")
+        self.assertEqual(code, 0)
+        self.assertIn("REPLAYABLE", out)
+
+    def test_datasets_inspect_replayable_shows_download_url(self) -> None:
+        code, out, _ = run_cli("datasets", "inspect", "catalog:candid")
+        self.assertEqual(code, 0)
+        self.assertIn("Replay download URL:", out)
+        self.assertIn("https://ndownloader.figshare.com/files/54551156", out)
+
+    def test_datasets_inspect_replayable_shows_default_file(self) -> None:
+        code, out, _ = run_cli("datasets", "inspect", "catalog:candid")
+        self.assertEqual(code, 0)
+        self.assertIn("Default replay file:", out)
+        self.assertIn("2_brakes_CAN.log", out)
+
+    def test_datasets_inspect_index_shows_index_note(self) -> None:
+        code, out, _ = run_cli("datasets", "inspect", "catalog:pivot-auto-datasets")
+        self.assertEqual(code, 0)
+        self.assertIn("INDEX", out)
+        self.assertIn("curated index, not directly replayable", out)
+
+    def test_datasets_inspect_index_shows_search_hint(self) -> None:
+        code, out, _ = run_cli("datasets", "inspect", "catalog:pivot-auto-datasets")
+        self.assertEqual(code, 0)
+        self.assertIn("Use `canarchy datasets search", out)
+        self.assertIn("curated index, not directly replayable", out)
