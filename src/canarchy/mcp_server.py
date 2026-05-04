@@ -764,6 +764,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "stats":
             argv = ["stats", "--file", a["file"]]
+            if a.get("pgn") is not None:
+                argv += ["--pgn", str(a["pgn"])]
+            if a.get("sa"):
+                argv += ["--sa", str(a["sa"])]
             if a.get("offset") is not None and a["offset"] > 0:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:

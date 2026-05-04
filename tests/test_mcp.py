@@ -246,6 +246,16 @@ def test_build_argv_stats_uses_file_flag():
     assert argv == ["stats", "--file", "trace.candump", "--max-frames", "50", "--json"]
 
 
+def test_build_argv_stats_with_pgn_and_sa():
+    argv = _build_argv("stats", {"file": "trace.candump", "pgn": 65262, "sa": "0x80,129"})
+    assert ["stats", "--file", "trace.candump"] == argv[:3]
+    assert "--pgn" in argv
+    assert "65262" in argv
+    assert "--sa" in argv
+    assert "0x80,129" in argv
+    assert argv[-1] == "--json"
+
+
 def test_build_argv_filter_uses_expression_then_file_flag():
     argv = _build_argv(
         "filter",
