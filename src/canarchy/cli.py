@@ -253,27 +253,27 @@ def build_parser() -> CanarchyArgumentParser:
     gateway.set_defaults(command="gateway")
 
     replay = subparsers.add_parser("replay", help="replay recorded traffic")
-    replay.add_argument("--file", required=True, help="path to candump capture file")
+    replay.add_argument("--file", required=True, help="path to candump capture file (use - for stdin)")
     replay.add_argument("--rate", type=float, default=1.0)
     add_output_arguments(replay)
     replay.set_defaults(command="replay")
 
     filter_parser = subparsers.add_parser("filter", help="filter recorded traffic")
     filter_parser.add_argument("expression", help="filter expression")
-    filter_parser.add_argument("--file", help="path to candump capture file")
+    filter_parser.add_argument("--file", help="path to candump capture file (use - for stdin)")
     filter_parser.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
     _add_file_analysis_arguments(filter_parser)
     add_output_arguments(filter_parser)
     filter_parser.set_defaults(command="filter")
 
     stats = subparsers.add_parser("stats", help="summarize traffic statistics")
-    stats.add_argument("--file", required=True, help="path to candump capture file")
+    stats.add_argument("--file", required=True, help="path to candump capture file (use - for stdin)")
     _add_file_analysis_arguments(stats)
     add_output_arguments(stats)
     stats.set_defaults(command="stats")
 
     capture_info = subparsers.add_parser("capture-info", help="show capture file metadata without loading frames")
-    capture_info.add_argument("--file", required=True, help="path to candump capture file")
+    capture_info.add_argument("--file", required=True, help="path to candump capture file (use - for stdin)")
     add_output_arguments(capture_info)
     capture_info.set_defaults(command="capture-info")
 
@@ -2080,7 +2080,50 @@ def transport_payload(
             [],
         )
     if args.command == "filter":
-        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
+        if args.file == "-" or args.stdin:
+            # Handle stdin - check if JSONL mode
+            if args.jsonl:
+                # Read JSONL FrameEvents from stdin
+                frames = frames_from_stdin(command=args.command)
+                return (
+                    {
+                        "mode": "passive",
+                        "file": "-",
+                        "expression": args.expression,
+                        "status": "implemented",
+                        "implementation": "stdin-analysis",
+                        "input": "stdin",
+                    },
+                    transport.filter_events("<stdin>", args.expression, frames=frames),
+                    [],
+                )
+            else:
+                # Read candump text from stdin
+                import sys
+                from canarchy.transport import parse_candump_line
+                frames = []
+                for line_number, raw_line in enumerate(sys.stdin, start=1):
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        frame = parse_candump_line(stripped, path=Path("-"), line_number=line_number)
+                        frames.append(frame)
+                    except TransportError:
+                        continue
+                return (
+                    {
+                        "mode": "passive",
+                        "file": "-",
+                        "expression": args.expression,
+                        "status": "implemented",
+                        "implementation": "stdin-analysis",
+                        "input": "stdin",
+                    },
+                    transport.filter_events("<stdin>", args.expression, frames=frames),
+                    [],
+                )
+        frames = transport.frames_from_file(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
         return (
             {
                 "mode": "passive",
@@ -2088,12 +2131,47 @@ def transport_payload(
                 "expression": args.expression,
                 "status": "implemented",
                 "implementation": "file-backed analysis",
-                "input": "stdin" if args.stdin else "file",
+                "input": "file",
             },
-            transport.filter_events(args.file if not args.stdin else "<stdin>", args.expression, frames=frames),
+            transport.filter_events(args.file, args.expression, frames=frames),
             [],
         )
     if args.command == "stats":
+        if args.file == "-":
+            # Handle stdin
+            import sys
+            from canarchy.transport import parse_candump_line, TransportStats
+            frames = []
+            for line_number, raw_line in enumerate(sys.stdin, start=1):
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    frame = parse_candump_line(stripped, path=Path("-"), line_number=line_number)
+                    frames.append(frame)
+                except TransportError:
+                    continue
+            if not frames:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[ErrorDetail(code="CAPTURE_EMPTY", message="No valid frames read from stdin.")],
+                )
+            # Calculate stats
+            unique_ids = len(set(f.arbitration_id for f in frames))
+            interfaces = list(set(f.interface for f in frames))
+            stats = TransportStats(total_frames=len(frames), unique_arbitration_ids=unique_ids, interfaces=interfaces)
+            return (
+                {
+                    "mode": "passive",
+                    "file": "-",
+                    "status": "implemented",
+                    "implementation": "stdin-analysis",
+                    **stats.to_payload(),
+                },
+                [],
+                [],
+            )
         stats = transport.stats(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
         return (
             {
@@ -2107,6 +2185,50 @@ def transport_payload(
             [],
         )
     if args.command == "capture-info":
+        if args.file == "-":
+            # Handle stdin
+            import sys
+            from canarchy.transport import parse_candump_line
+            frames = []
+            for line_number, raw_line in enumerate(sys.stdin, start=1):
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    frame = parse_candump_line(stripped, path=Path("-"), line_number=line_number)
+                    frames.append(frame)
+                except TransportError:
+                    continue
+            # Calculate simple metadata
+            if not frames:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[ErrorDetail(code="CAPTURE_EMPTY", message="No valid frames read from stdin.")],
+                )
+            timestamps = [f.timestamp for f in frames]
+            unique_ids = len(set(f.arbitration_id for f in frames))
+            interfaces = list(set(f.interface for f in frames))
+            metadata_payload = {
+                "frame_count": len(frames),
+                "unique_ids": unique_ids,
+                "interfaces": interfaces,
+                "duration_seconds": max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0.0,
+                "start_time": min(timestamps),
+                "end_time": max(timestamps),
+                "scan_mode": "stdin",
+            }
+            return (
+                {
+                    "mode": "passive",
+                    "file": "-",
+                    "status": "implemented",
+                    "implementation": "stdin-metadata",
+                    **metadata_payload,
+                },
+                [],
+                [],
+            )
         metadata = transport.capture_info(args.file)
         return (
             {
