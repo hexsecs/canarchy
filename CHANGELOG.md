@@ -14,6 +14,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added `canarchy datasets replay` for Netflix-style streaming playback from a direct candump URL or replayable dataset ref such as `catalog:candid`, with candump/JSONL stdout output, rate control, and JSON summary mode. Closes #233.
 * Added `canarchy datasets replay --dry-run` so operators and agents can resolve replay metadata for dataset refs or direct URLs without opening the remote stream. Closes #247.
 * Added stable machine-friendly dataset JSON fields (`ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`) for dataset search and inspect results. Closes #242.
+* Added MCP tools for dataset provider discovery, search, inspect, fetch, cache operations, and safe replay planning so agents can use dataset metadata without shelling out. Closes #239.
 * Added `pivot-auto-datasets` to the built-in catalog as a curated source index for CAN, CAN-FD, J1939, and broader automotive datasets listed by the PIVOT Project. Closes #235.
 
 ### Fixed

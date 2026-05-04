@@ -380,6 +380,80 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="datasets_provider_list",
+        description="List registered dataset providers.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
+        name="datasets_search",
+        description="Search public CAN dataset provider catalogs by name, protocol, or keyword.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query; omit or use empty string to list datasets", "default": ""},
+                "provider": {"type": "string", "description": "Restrict search to a specific provider"},
+                "limit": {"type": "integer", "description": "Maximum results to return", "default": 20},
+            },
+        },
+    ),
+    types.Tool(
+        name="datasets_inspect",
+        description="Show full metadata for a dataset ref.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ref": {"type": "string", "description": "Dataset ref, e.g. catalog:candid"},
+            },
+            "required": ["ref"],
+        },
+    ),
+    types.Tool(
+        name="datasets_fetch",
+        description="Record dataset provenance in the local cache without downloading large dataset payloads.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ref": {"type": "string", "description": "Dataset ref, e.g. catalog:road"},
+            },
+            "required": ["ref"],
+        },
+    ),
+    types.Tool(
+        name="datasets_cache_list",
+        description="List cached dataset provider manifests and provenance records.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
+        name="datasets_cache_refresh",
+        description="Refresh the dataset provider catalog manifest.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "provider": {"type": "string", "description": "Provider to refresh", "default": "catalog"},
+            },
+        },
+    ),
+    types.Tool(
+        name="datasets_replay_plan",
+        description="Resolve dataset replay metadata for a dataset ref or URL without opening the remote stream.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "description": "Dataset ref (e.g. catalog:candid) or remote candump URL"},
+                "format": {"type": "string", "description": "Planned output format", "enum": ["candump", "jsonl"], "default": "candump"},
+                "rate": {"type": "number", "description": "Playback rate multiplier for the planned replay", "default": 1.0},
+                "max_frames": {"type": "integer", "description": "Planned frame limit"},
+            },
+            "required": ["source"],
+        },
+    ),
+    types.Tool(
         name="dbc_provider_list",
         description="List all registered DBC providers.",
         inputSchema={
@@ -687,6 +761,37 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return ["uds", "services", "--json"]
         case "config_show":
             return ["config", "show", "--json"]
+        case "datasets_provider_list":
+            return ["datasets", "provider", "list", "--json"]
+        case "datasets_search":
+            argv = ["datasets", "search"]
+            if a.get("query"):
+                argv.append(a["query"])
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            if "limit" in a:
+                argv += ["--limit", str(a["limit"])]
+            return argv + ["--json"]
+        case "datasets_inspect":
+            return ["datasets", "inspect", a["ref"], "--json"]
+        case "datasets_fetch":
+            return ["datasets", "fetch", a["ref"], "--json"]
+        case "datasets_cache_list":
+            return ["datasets", "cache", "list", "--json"]
+        case "datasets_cache_refresh":
+            argv = ["datasets", "cache", "refresh"]
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            return argv + ["--json"]
+        case "datasets_replay_plan":
+            argv = ["datasets", "replay", a["source"]]
+            if a.get("format"):
+                argv += ["--format", a["format"]]
+            if "rate" in a:
+                argv += ["--rate", str(a["rate"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            return argv + ["--dry-run", "--json"]
         case "dbc_provider_list":
             return ["dbc", "provider", "list", "--json"]
         case "dbc_search":

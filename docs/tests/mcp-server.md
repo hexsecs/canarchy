@@ -24,6 +24,7 @@
 | REQ-MCP-10 | `shell` and `tui` not exposed as MCP tools | TEST-MCP-11 |
 | REQ-MCP-11 | `call_tool` handler runs `execute_command` in a thread pool | TEST-MCP-15 |
 | REQ-MCP-12 | File-backed J1939 tools expose `max_frames` and `seconds` parameters | TEST-MCP-16, TEST-MCP-17 |
+| REQ-MCP-13 | Dataset MCP tools expose provider workflows and safe replay planning | TEST-MCP-22, TEST-MCP-23, TEST-MCP-24, TEST-MCP-25 |
 
 ## Representative Test Cases
 
@@ -45,7 +46,7 @@ And    `canarchy mcp serve --help` shall exit with code `0`
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `capture_info`, `decode`, `encode`, `dbc_inspect`, `dbc_provider_list`, `dbc_search`, `dbc_fetch`, `dbc_cache_list`, `dbc_cache_prune`, `dbc_cache_refresh`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`, `j1939_inventory`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`, `re_correlate`, `re_counters`, `re_entropy`, `re_match_dbc`, `re_shortlist_dbc`
+Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `stats`, `capture_info`, `decode`, `encode`, `dbc_inspect`, `dbc_provider_list`, `dbc_search`, `dbc_fetch`, `dbc_cache_list`, `dbc_cache_prune`, `dbc_cache_refresh`, `datasets_provider_list`, `datasets_search`, `datasets_inspect`, `datasets_fetch`, `datasets_cache_list`, `datasets_cache_refresh`, `datasets_replay_plan`, `j1939_monitor`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`, `j1939_inventory`, `uds_scan`, `uds_trace`, `uds_services`, `config_show`, `replay`, `gateway`, `generate`, `export`, `session_save`, `session_load`, `session_show`, `re_correlate`, `re_counters`, `re_entropy`, `re_match_dbc`, `re_shortlist_dbc`
 ```
 
 **Fixture:** none.
@@ -57,7 +58,7 @@ Then   the returned set shall contain at minimum: `capture`, `send`, `filter`, `
 ```gherkin
 Given  the MCP server is initialised
 When   `handle_list_tools()` is called
-Then   at least 38 tools shall be returned — one per registered MCP tool in the current curated surface
+Then   at least 45 tools shall be returned — one per registered MCP tool in the current curated surface
 ```
 
 **Fixture:** none.
@@ -143,6 +144,60 @@ And    the result shall contain one matching frame
 ```
 
 **Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-MCP-22` — Dataset search returns machine fields
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("datasets_search", {"query": "candid"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"datasets search"`
+And    the result shall include stable machine fields such as `ref`, `is_replayable`, and `default_replay_file`
+```
+
+**Fixture:** embedded dataset catalog.
+
+---
+
+### `TEST-MCP-23` — Dataset inspect returns index metadata
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("datasets_inspect", {"ref": "catalog:pivot-auto-datasets"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    the result shall report `is_index=true` and `is_replayable=false`
+```
+
+**Fixture:** embedded dataset catalog.
+
+---
+
+### `TEST-MCP-24` — Dataset replay plan does not stream
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("datasets_replay_plan", {"source": "catalog:candid"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"datasets replay"`
+And    the result shall report `dry_run=true` and `streamed=false`
+```
+
+**Fixture:** embedded dataset catalog.
+
+---
+
+### `TEST-MCP-25` — Dataset replay plan preserves index errors
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("datasets_replay_plan", {"source": "catalog:pivot-auto-datasets"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `false`
+And    `errors[0].code` shall equal `"DATASET_INDEX_NOT_REPLAYABLE"`
+```
+
+**Fixture:** embedded dataset catalog.
 
 ---
 
