@@ -24,9 +24,13 @@
 | REQ-MCP-10 | `shell` and `tui` not exposed as MCP tools | TEST-MCP-11 |
 | REQ-MCP-11 | `call_tool` handler runs `execute_command` in a thread pool | TEST-MCP-15 |
 | REQ-MCP-12 | File-backed J1939 tools expose `max_frames` and `seconds` parameters | TEST-MCP-16, TEST-MCP-17 |
-| REQ-MCP-13 | Dataset MCP tools expose provider workflows and safe replay planning | TEST-MCP-22, TEST-MCP-23, TEST-MCP-24, TEST-MCP-25 |
+| REQ-MCP-13 | Dataset MCP tools expose provider workflows, safe replay planning, conversion, and replay file listing | TEST-MCP-22, TEST-MCP-23, TEST-MCP-24, TEST-MCP-25, TEST-MCP-37, TEST-MCP-38 |
 | REQ-MCP-14 | Dataset fetch returns index_instructions for curated indexes | TEST-MCP-26 |
 | REQ-MCP-15 | Dataset fetch returns download_instructions for normal datasets | TEST-MCP-27 |
+| REQ-MCP-16 | Skills provider workflows shall be exposed as MCP tools | TEST-MCP-28, TEST-MCP-29, TEST-MCP-30, TEST-MCP-31, TEST-MCP-32 |
+| REQ-MCP-17 | J1939 tools `j1939_compare`, `j1939_faults`, `j1939_tp_compare` shall be exposed as MCP tools | TEST-MCP-33, TEST-MCP-34, TEST-MCP-35 |
+| REQ-MCP-18 | `re signals` shall be exposed as MCP tool `re_signals` | TEST-MCP-36 |
+| REQ-MCP-19 | `datasets convert` and `datasets replay --list-files` shall be exposed as MCP tools | TEST-MCP-37, TEST-MCP-38 |
 
 ## Representative Test Cases
 
@@ -318,7 +322,154 @@ Given  the MCP server is initialised
 When   `handle_list_tools()` is called
 Then   for each of `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`, `j1939_inventory`
        the tool's `inputSchema.properties` shall contain `"max_frames"` of type `"integer"`
-       and `"seconds"` of type `"number"`
+        and `"seconds"` of type `"number"`
 ```
+
+---
+
+### `TEST-MCP-28` — Skills provider list exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("skills_provider_list", {})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"skills provider list"`
+And    `data.providers` shall be a list
+```
+
+**Fixture:** embedded skills catalog.
+
+---
+
+### `TEST-MCP-29` — Skills search exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("skills_search", {"query": "j1939"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"skills search"`
+And    `data.results` shall be a list
+```
+
+**Fixture:** embedded skills catalog.
+
+---
+
+### `TEST-MCP-30` — Skills fetch exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("skills_fetch", {"ref": "github:j1939_compare_triage"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"skills fetch"`
+And    the result shall include `local_manifest_path` and `local_entry_path`
+```
+
+**Fixture:** embedded skills catalog.
+
+---
+
+### `TEST-MCP-31` — Skills cache list exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("skills_cache_list", {})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"skills cache list"`
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-32` — Skills cache refresh exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("skills_cache_refresh", {"provider": "github"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `command` shall equal `"skills cache refresh"`
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-33` — `j1939_compare` exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("j1939_compare", {"files": ["a.candump", "b.candump"]})` is called
+Then   `command` shall equal `"j1939 compare"`
+And    the argv shall contain both file names and `--json`
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-34` — `j1939_faults` exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("j1939_faults", {"file": "trace.candump"})` is called
+Then   `command` shall equal `"j1939 faults"`
+And    the argv shall contain `"--file", "trace.candump", "--json"`
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-35` — `j1939_tp_compare` exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("j1939_tp_compare", {"file": "trace.candump", "sa": "0x80,0x81"})` is called
+Then   `command` shall equal `"j1939 tp compare"`
+And    the argv shall contain `"--sa", "0x80,0x81", "--json"`
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-36` — `re_signals` exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("re_signals", {"file": "trace.candump"})` is called
+Then   `command` shall equal `"re signals"`
+And    the argv shall equal `["re", "signals", "trace.candump", "--json"]`
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-37` — `datasets_convert` exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("datasets_convert", {"file": "sample.csv", "source_format": "hcrl-csv", "format": "jsonl"})` is called
+Then   `command` shall equal `"datasets convert"`
+And    the argv shall contain `"--source-format", "hcrl-csv", "--format", "jsonl"`
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-38` — `datasets_replay_files` exposed as MCP tool
+
+```gherkin
+Given  the MCP server is initialised
+When   `handle_call_tool("datasets_replay_files", {"source": "catalog:candid"})` is called
+Then   `command` shall equal `"datasets replay"`
+And    the argv shall contain `"--list-files", "--json"`
+And    the result shall include `data.count` and `data.files`
+```
+
+**Fixture:** embedded dataset catalog.
 
 **Fixture:** none.

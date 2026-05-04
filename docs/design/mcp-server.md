@@ -31,8 +31,10 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-09` | Ubiquitous | The `mcp` package shall be declared as a project dependency in `pyproject.toml`. |
 | `REQ-MCP-10` | Ubiquitous | The server shall not expose `shell` or `tui` as MCP tools; those are interactive front-end commands with no RPC equivalent. |
 | `REQ-MCP-11` | Event-driven | The `call_tool` handler shall execute `execute_command` in a thread pool via `asyncio.to_thread` so that the asyncio event loop is not blocked during file I/O or analysis, preventing MCP keepalive timeouts on large captures. |
-| `REQ-MCP-12` | Ubiquitous | File-backed J1939 tools (`j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`, `j1939_inventory`) shall expose optional `max_frames` (integer) and `seconds` (number) parameters that bound analysis to the first N frames or first T seconds of the capture, respectively. |
-| `REQ-MCP-13` | Ubiquitous | Dataset provider workflows selected for MCP shall expose provider list, search, inspect, fetch, cache list, cache refresh, and safe replay planning tools while excluding streaming dataset frame output. |
+| `REQ-MCP-12` | Ubiquitous | File-backed J1939 tools (`j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_tp_compare`, `j1939_dm1`, `j1939_faults`, `j1939_summary`, `j1939_inventory`, `j1939_compare`) shall expose optional `max_frames` (integer) and `seconds` (number) parameters that bound analysis to the first N frames or first T seconds of the capture, respectively. |
+| `REQ-MCP-13` | Ubiquitous | Dataset provider workflows selected for MCP shall expose provider list, search, inspect, fetch, cache list, cache refresh, conversion, replay file listing, and safe replay planning tools while excluding streaming dataset frame output. |
+| `REQ-MCP-14` | Ubiquitous | Skills provider workflows selected for MCP shall expose provider list, search, fetch, cache list, and cache refresh tools while preserving the same CLI result envelope. |
+| `REQ-MCP-15` | Ubiquitous | Reverse-engineering helpers selected for MCP shall include `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, and `re shortlist-dbc`. |
 
 ## Command Surface
 
@@ -42,7 +44,7 @@ canarchy mcp serve
 
 The `serve` subcommand accepts no positional arguments or output flags. The server runs until the stdio transport closes (client disconnect or EOF).
 
-The current MCP tool surface is a curated non-interactive subset of the CLI. It intentionally excludes interactive commands and some newer command families that do not yet have MCP adapters. Skills are not exposed as MCP tools, resources, or prompts in phase 1; agents discover and fetch skills through the CLI provider workflow before optionally using MCP for individual referenced commands that are already exposed.
+The current MCP tool surface is a curated non-interactive subset of the CLI. It intentionally excludes interactive commands and streaming workflows that do not fit MCP's buffered tool-response model.
 
 ## Tool Naming Convention
 
@@ -74,9 +76,12 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `j1939 pgn` | `j1939_pgn` |
 | `j1939 spn` | `j1939_spn` |
 | `j1939 tp sessions` | `j1939_tp` |
+| `j1939 tp compare` | `j1939_tp_compare` |
 | `j1939 dm1` | `j1939_dm1` |
+| `j1939 faults` | `j1939_faults` |
 | `j1939 summary` | `j1939_summary` |
 | `j1939 inventory` | `j1939_inventory` |
+| `j1939 compare` | `j1939_compare` |
 | `uds scan` | `uds_scan` |
 | `uds trace` | `uds_trace` |
 | `uds services` | `uds_services` |
@@ -87,12 +92,34 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `datasets fetch` | `datasets_fetch` |
 | `datasets cache list` | `datasets_cache_list` |
 | `datasets cache refresh` | `datasets_cache_refresh` |
+| `datasets convert` | `datasets_convert` |
 | `datasets replay --dry-run` | `datasets_replay_plan` |
+| `datasets replay --list-files` | `datasets_replay_files` |
+| `skills provider list` | `skills_provider_list` |
+| `skills search` | `skills_search` |
+| `skills fetch` | `skills_fetch` |
+| `skills cache list` | `skills_cache_list` |
+| `skills cache refresh` | `skills_cache_refresh` |
+| `re signals` | `re_signals` |
 | `re correlate` | `re_correlate` |
 | `re counters` | `re_counters` |
 | `re entropy` | `re_entropy` |
 | `re match-dbc` | `re_match_dbc` |
 | `re shortlist-dbc` | `re_shortlist_dbc` |
+
+## MCP Coverage Decisions
+
+| CLI surface | MCP status | Rationale |
+|-------------|------------|-----------|
+| Transport, DBC, DBC provider, session, export, UDS, config | Exposed | Non-interactive commands with bounded JSON envelopes. |
+| Dataset provider/cache/fetch/search/inspect/convert | Exposed | Metadata and local conversion workflows return bounded JSON envelopes. |
+| `datasets replay --dry-run` and `datasets replay --list-files` | Exposed | Safe planning and manifest inspection do not open or stream remote frame data. |
+| `datasets stream` and non-dry-run `datasets replay` | Excluded | They emit frame records to stdout and require streaming semantics outside MCP's current buffered response model. |
+| Skills provider/cache/search/fetch | Exposed | They are non-interactive provider workflows with canonical JSON envelopes. |
+| J1939 analysis including `j1939 compare`, `j1939 faults`, and TP compare | Exposed | File-backed analysis commands are safe, bounded, and deterministic. |
+| Reverse-engineering helpers including `re signals` | Exposed | File-backed analysis commands are safe and deterministic. |
+| `shell`, `tui`, `mcp serve` | Excluded | Interactive or service commands have no direct one-shot MCP tool equivalent. |
+| `fuzz` placeholder commands | Deferred | Active fuzzing workflows are command-surface scaffolds and need separate safety design before MCP exposure. |
 
 ## Response Envelope
 

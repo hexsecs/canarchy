@@ -94,14 +94,23 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 | `re_entropy` | `canarchy re entropy` |
 | `re_match_dbc` | `canarchy re match-dbc` |
 | `re_shortlist_dbc` | `canarchy re shortlist-dbc` |
+| `j1939_tp_compare` | `canarchy j1939 tp compare` |
+| `j1939_faults` | `canarchy j1939 faults` |
+| `j1939_compare` | `canarchy j1939 compare` |
+| `re_signals` | `canarchy re signals` |
+| `datasets_convert` | `canarchy datasets convert` |
+| `datasets_replay_files` | `canarchy datasets replay --list-files` |
+| `skills_provider_list` | `canarchy skills provider list` |
+| `skills_search` | `canarchy skills search` |
+| `skills_fetch` | `canarchy skills fetch` |
+| `skills_cache_list` | `canarchy skills cache list` |
+| `skills_cache_refresh` | `canarchy skills cache refresh` |
 
 Current exclusions:
 
-* skills provider and cache commands such as `skills search` and `skills fetch`
 * dataset streaming commands that emit frame records, such as `datasets stream` and non-dry-run `datasets replay`
-* CLI-only workflows such as `j1939 compare` that are not yet exposed as MCP tools
-* CLI-only workflows such as `j1939 faults` and `re signals` that are not yet exposed as MCP tools
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
+* `fuzz` placeholder commands (deferred until active fuzzing safety design is complete)
 
 For dataset workflows, agents should prefer MCP dataset tools when available. `datasets_search` and `datasets_inspect` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. `datasets_fetch` distinguishes curated indexes from normal dataset entries with `is_index`, `index_instructions`, and `download_instructions`. Use `datasets_replay_plan` for safe replay preflight; use CLI `datasets replay --list-files --json` to choose a replay file and `--file <id-or-name>` to select it. Use `max_frames` or `max_seconds` to bound replay. Actual frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 
