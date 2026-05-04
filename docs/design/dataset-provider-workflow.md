@@ -135,6 +135,7 @@ No network access is required for `search`, `inspect`, or `provider list`.
 | REQ-DATASET-CATALOG-02 | Ubiquitous | The system shall include source URL, license or access terms, protocol family, formats, size description, description, and metadata for each built-in catalog entry. |
 | REQ-DATASET-CATALOG-03 | Optional feature | Where a catalog entry represents a curated external index instead of a directly downloadable dataset, the system shall mark the entry as an index in metadata and describe that linked sources have their own access terms and formats. |
 | REQ-DATASET-CATALOG-04 | Ubiquitous | The system shall include stable machine fields for JSON dataset search and inspect results: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. |
+| REQ-DATASET-CATALOG-05 | Optional feature | Where a dataset entry is a curated index, the `datasets fetch` response shall include an `is_index` field and an `index_instructions` field with guidance to visit the index page and discover datasets, while normal datasets continue to use `download_instructions`. |
 
 ---
 

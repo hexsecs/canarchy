@@ -879,7 +879,9 @@ class LocalTransport:
     def _frames_for_file(self, file_name: str) -> list[CanFrame]:
         return list(self.iter_frames_from_file(file_name))
 
-    def _capture_file_path(self, file_name: str) -> Path:
+    def _capture_file_path(self, file_name: str) -> Path | None:
+        if file_name == "-":
+            return None  # Signal to use stdin
         path = Path(file_name)
         if file_name.lower() in {"missing.log", "missing", "offline.log"} or not path.exists():
             raise TransportError(
@@ -931,7 +933,7 @@ class LocalTransport:
 
 
 def iter_candump_file(
-    path: Path,
+    path: Path | None,
     *,
     offset: int = 0,
     max_frames: int | None = None,
@@ -940,13 +942,23 @@ def iter_candump_file(
     yielded = 0
     parsed_count = 0
     start_timestamp: float | None = None
-    with path.open(encoding="utf-8") as handle:
+    
+    if path is None:
+        # Read from stdin
+        import sys
+        handle = sys.stdin
+        path_for_parse = Path("-")  # For error messages
+    else:
+        handle = path.open(encoding="utf-8")
+        path_for_parse = path
+    
+    try:
         for line_number, raw_line in enumerate(handle, start=1):
             stripped = raw_line.strip()
             if not stripped:
                 continue
             try:
-                frame = parse_candump_line(stripped, path=path, line_number=line_number)
+                frame = parse_candump_line(stripped, path=path_for_parse, line_number=line_number)
             except TransportError:
                 continue
             parsed_count += 1
@@ -960,6 +972,9 @@ def iter_candump_file(
             yielded += 1
             if max_frames is not None and yielded >= max_frames:
                 break
+    finally:
+        if path is not None:
+            handle.close()
 
 
 def load_candump_file(path: Path) -> list[CanFrame]:

@@ -3261,6 +3261,51 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["data"], "11223344")
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_filter_stdin_json_input_is_independent_of_output_format(self, _mock_cfg):
+        """Test that --stdin parses JSONL FrameEvents even when output is --json."""
+        frame1_json = ('{"event_type": "frame", "payload": {"frame": '
+                      '{"arbitration_id": 419360305, "data": "11223344", '
+                      '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
+                      '"source": "test"}')
+        frame2_json = ('{"event_type": "frame", "payload": {"frame": '
+                      '{"arbitration_id": 123, "data": "deadbeef", '
+                      '"is_extended_id": false, "timestamp": 0.1, "interface": "can0"}}, '
+                      '"source": "test"}')
+        input_data = frame1_json + "\n" + frame2_json + "\n"
+
+        exit_code, stdout, _ = run_cli(
+            "filter", "--stdin", "id==0x18FEEE31", "--json",
+            input=input_data,
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        data = json.loads(stdout)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["input"], "stdin-jsonl")
+        self.assertEqual(data["data"]["frame_count"], 1)
+        self.assertEqual(data["data"]["frames"][0]["arbitration_id"], 419360305)
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    def test_stats_stdin_honors_bounds(self, _mock_cfg):
+        """Test that stats --file - applies offset, max-frames, and seconds bounds."""
+        input_data = (
+            "(0.000000) can0 123#112233\n"
+            "(0.100000) can1 456#AABBCC\n"
+            "(0.300000) can0 789#DDEEFF\n"
+        )
+
+        exit_code, stdout, _ = run_cli(
+            "stats", "--file", "-", "--offset", "1", "--max-frames", "1", "--json",
+            input=input_data,
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        data = json.loads(stdout)
+        self.assertEqual(data["data"]["total_frames"], 1)
+        self.assertEqual(data["data"]["unique_arbitration_ids"], 1)
+        self.assertEqual(data["data"]["interfaces"], ["can1"])
+
+    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_j1939_decode_stdin_jsonl_composition(self, _mock_cfg):
         """Test that j1939 decode can read JSONL FrameEvents from stdin and decode them."""
         # Generate a J1939 frame

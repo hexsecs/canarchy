@@ -245,6 +245,61 @@ And    `data.first_timestamp` and `data.last_timestamp` shall be parseable from 
 
 ---
 
+### `TEST-TRANSPORT-17` — Filter reads candump text from stdin with `--file -`
+
+```gherkin
+Given  stdin provides candump text: `(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n`
+When   the operator runs `canarchy filter id==0x456 --file -`
+Then   the output shall contain exactly one candump-style line
+And    the line shall match arbitration ID `0x456`
+```
+
+**Fixture:** none (stdin simulated in test).
+
+---
+
+### `TEST-TRANSPORT-18` — Filter reads JSONL FrameEvents from stdin independently of output format
+
+```gherkin
+Given  stdin provides JSONL FrameEvent lines for two frames, one matching `id==0x18FEEE31`
+When   the operator runs `canarchy filter id==0x18FEEE31 --stdin --json`
+Then   the response shall parse as JSON with `ok` equal to `true`
+And    `data.frame_count` shall equal `1`
+And    `data.frames[0].arbitration_id` shall equal `419360305`
+```
+
+**Fixture:** none (stdin simulated in test).
+
+---
+
+### `TEST-TRANSPORT-19` — Stats reads candump text from stdin with `--file -`
+
+```gherkin
+Given  stdin provides candump text: `(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.300000) can0 789#DDEEFF\n`
+When   the operator runs `canarchy stats --file - --offset 1 --max-frames 1 --json`
+Then   `data.total_frames` shall equal `1`
+And    `data.unique_arbitration_ids` shall equal `1`
+And    `data.interfaces` shall equal `["can1"]`
+```
+
+**Fixture:** none (stdin simulated in test).
+
+---
+
+### `TEST-TRANSPORT-20` — Capture-info reads candump text from stdin with `--file -`
+
+```gherkin
+Given  stdin provides candump text: `(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n`
+When   the operator runs `canarchy capture-info --file - --json`
+Then   `data.frame_count` shall equal `2`
+And    `data.scan_mode` shall equal `"stdin"`
+And    `data.file` shall equal `"-"`
+```
+
+**Fixture:** none (stdin simulated in test).
+
+---
+
 ## Fixtures And Environment
 
 * `tests/fixtures/sample.candump`

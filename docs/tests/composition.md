@@ -78,7 +78,7 @@ Then   the result shall include J1939 decoded-message events with PGN and source
 
 ```gherkin
 Given  the file `tests/fixtures/sample.candump` is available
-When   the operator runs `canarchy filter --stdin id==0x123 sample.candump --json`
+When   the operator runs `canarchy filter --stdin id==0x123 --file tests/fixtures/sample.candump --json`
 Then   the command shall exit with code `1`
 And    `errors[0].code` shall equal `"STDIN_AND_FILE_SPECIFIED"`
 ```

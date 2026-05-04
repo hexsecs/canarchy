@@ -21,6 +21,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added `pivot-auto-datasets` to the built-in catalog as a curated source index for CAN, CAN-FD, J1939, and broader automotive datasets listed by the PIVOT Project. Closes #235.
 * Added human-readable dataset search and inspect output improvements: empty search shows "All datasets" instead of "Datasets matching \"all\"", search table includes TYPE column (INDEX/PLAY), verbose output shows type labels and index notes, and inspect output now has separated sections (Basic information, Format support, Source information) with clear replay URLs and index notes. Closes #244.
 * Clarified `datasets fetch` output for curated index entries: responses now include `is_index` field, `index_instructions` with guidance to visit the index page and discover datasets, and clearer human-readable messaging. Normal dataset fetch continues to use `download_instructions`. Closes #246.
+* Added stdin pipeline support for file-backed analysis commands: `capture-info`, `stats`, `filter`, and other commands now accept `-` as file argument to read candump data from stdin. This enables piping `datasets replay` output directly into analysis commands without temporary files. Closes #238.
 
 ### Fixed
 

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import multiprocessing
 import os
 import queue
+import sys
 import tempfile
 import threading
 import time
@@ -686,6 +690,83 @@ class CaptureMetadataTests(unittest.TestCase):
         meta = _fast_capture_metadata(FIXTURES / "sample.candump")
         payload = meta.to_payload()
         self.assertEqual(payload["scan_mode"], "estimated")
+
+
+class StdinSupportTests(unittest.TestCase):
+    """Tests for stdin pipeline support (issue #238)."""
+
+    def test_iter_candump_file_reads_from_stdin(self) -> None:
+        import io
+        import sys
+        from canarchy.transport import iter_candump_file
+        
+        # Simulate stdin with sample candump lines
+        test_input = "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n"
+        old_stdin = sys.stdin
+        sys.stdin = io.StringIO(test_input)
+        try:
+            frames = list(iter_candump_file(None))
+        finally:
+            sys.stdin = old_stdin
+        
+        self.assertEqual(len(frames), 2)
+        self.assertEqual(frames[0].arbitration_id, 0x123)
+        self.assertEqual(frames[1].arbitration_id, 0x456)
+
+    def test_iter_candump_file_stdin_respects_offset(self) -> None:
+        import io
+        import sys
+        from canarchy.transport import iter_candump_file
+        
+        test_input = "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.200000) can0 789#DDEEFF\n"
+        old_stdin = sys.stdin
+        sys.stdin = io.StringIO(test_input)
+        try:
+            frames = list(iter_candump_file(None, offset=1))
+        finally:
+            sys.stdin = old_stdin
+        
+        self.assertEqual(len(frames), 2)
+        self.assertEqual(frames[0].arbitration_id, 0x456)
+
+    def test_iter_candump_file_stdin_respects_max_frames(self) -> None:
+        import io
+        import sys
+        from canarchy.transport import iter_candump_file
+        
+        test_input = "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.200000) can0 789#DDEEFF\n"
+        old_stdin = sys.stdin
+        sys.stdin = io.StringIO(test_input)
+        try:
+            frames = list(iter_candump_file(None, max_frames=1))
+        finally:
+            sys.stdin = old_stdin
+        
+        self.assertEqual(len(frames), 1)
+
+    def test_capture_info_stdin_returns_metadata(self) -> None:
+        import io
+        import json
+        import sys
+        from canarchy.cli import main
+        
+        test_input = "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n"
+        old_stdin = sys.stdin
+        sys.stdin = io.StringIO(test_input)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                code = main(["capture-info", "--file", "-", "--json"])
+        finally:
+            sys.stdin = old_stdin
+        
+        self.assertEqual(code, 0)
+        data = json.loads(stdout.getvalue())
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["file"], "-")
+        self.assertEqual(data["data"]["implementation"], "stdin-metadata")
+        self.assertEqual(data["data"]["frame_count"], 2)
 
 
 if __name__ == "__main__":
