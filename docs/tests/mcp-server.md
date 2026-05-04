@@ -25,6 +25,8 @@
 | REQ-MCP-11 | `call_tool` handler runs `execute_command` in a thread pool | TEST-MCP-15 |
 | REQ-MCP-12 | File-backed J1939 tools expose `max_frames` and `seconds` parameters | TEST-MCP-16, TEST-MCP-17 |
 | REQ-MCP-13 | Dataset MCP tools expose provider workflows and safe replay planning | TEST-MCP-22, TEST-MCP-23, TEST-MCP-24, TEST-MCP-25 |
+| REQ-MCP-14 | Dataset fetch returns index_instructions for curated indexes | TEST-MCP-26 |
+| REQ-MCP-15 | Dataset fetch returns download_instructions for normal datasets | TEST-MCP-27 |
 
 ## Representative Test Cases
 
@@ -202,82 +204,34 @@ And    `errors[0].code` shall equal `"DATASET_INDEX_NOT_REPLAYABLE"`
 
 ---
 
-### `TEST-MCP-07` — `send` with invalid frame_id returns structured error
+### `TEST-MCP-26` — Dataset fetch returns index_instructions for curated indexes
 
 ```gherkin
 Given  the MCP server is initialised
-When   `handle_call_tool("send", {"interface": "can0", "frame_id": "not_hex", "data": "1122"})` is called
-Then   the response shall parse as JSON with `ok` equal to `false`
-And    at least one error shall have `code` equal to `"INVALID_FRAME_ID"`
+When   `handle_call_tool("datasets_fetch", {"ref": "catalog:pivot-auto-datasets"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `data.is_index` shall equal `true`
+And    `data.index_instructions` shall be a non-empty string
+And    `data.index_instructions` shall contain `"Visit the index page"`
 ```
 
-**Fixture:** none.
+**Fixture:** embedded dataset catalog.
 
 ---
 
-### `TEST-MCP-08` — `replay` with zero rate returns structured error
+### `TEST-MCP-27` — Dataset fetch returns download_instructions for normal datasets
 
 ```gherkin
 Given  the MCP server is initialised
-When   `handle_call_tool("replay", {"file": "any.candump", "rate": 0.0})` is called
-Then   the response shall parse as JSON with `ok` equal to `false`
-And    `errors[0].code` shall equal `"INVALID_RATE"`
+When   `handle_call_tool("datasets_fetch", {"ref": "catalog:road"})` is called
+Then   the response `text` shall parse as JSON with `ok` equal to `true`
+And    `data.is_index` shall equal `false`
+And    `data.index_instructions` shall be `null`
+And    `data.download_instructions` shall be a non-empty string
+And    `data.download_instructions` shall contain `"Download the data manually"`
 ```
 
-**Fixture:** any candump file path.
-
----
-
-### `TEST-MCP-09` — Unknown tool name raises ValueError
-
-```gherkin
-Given  the MCP server is initialised
-When   `handle_call_tool("nonexistent_tool", {})` is called
-Then   a `ValueError` shall be raised
-And    the error message shall reference the unknown tool name
-```
-
-**Fixture:** none.
-
----
-
-### `TEST-MCP-10` — `mcp` dependency declared in pyproject.toml
-
-```gherkin
-Given  `pyproject.toml` is available in the repository root
-When   the `[project.dependencies]` list is read
-Then   an entry matching `mcp>=...` shall be present
-```
-
-**Fixture:** `pyproject.toml`.
-
----
-
-### `TEST-MCP-11` — `shell` and `tui` are not MCP tools
-
-```gherkin
-Given  the MCP server is initialised
-When   `handle_list_tools()` is called
-Then   `"shell"` shall not appear in the set of tool names
-And    `"tui"` shall not appear in the set of tool names
-```
-
-**Fixture:** none.
-
----
-
-### `TEST-MCP-12` — Unregistered implemented commands are excluded from MCP
-
-```gherkin
-Given  the MCP server is initialised
-When   `handle_list_tools()` is called
-Then   `"skills_search"` shall not appear in the set of tool names
-And    `"skills_fetch"` shall not appear in the set of tool names
-And    `"j1939_compare"` shall not appear in the set of tool names
-And    `"re_signals"` shall not appear in the set of tool names
-```
-
-**Fixture:** none.
+**Fixture:** embedded dataset catalog.
 
 ---
 

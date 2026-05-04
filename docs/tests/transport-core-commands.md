@@ -245,6 +245,61 @@ And    `data.first_timestamp` and `data.last_timestamp` shall be parseable from 
 
 ---
 
+### `TEST-TRANSPORT-17` — Filter reads candump text from stdin with `--file -`
+
+```gherkin
+Given  stdin provides candump text: `(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n`
+When   the operator runs `canarchy filter id==0x456 --file -`
+Then   the output shall contain exactly one candump-style line
+And    the line shall match arbitration ID `0x456`
+```
+
+**Fixture:** none (stdin simulated in test).
+
+---
+
+### `TEST-TRANSPORT-18` — Filter reads JSONL FrameEvents from stdin with `--jsonl --stdin`
+
+```gherkin
+Given  stdin provides JSONL FrameEvent lines for two frames, one matching `id==0x18FEEE31`
+When   the operator runs `canarchy filter id==0x18FEEE31 --stdin --jsonl`
+Then   the output shall contain exactly one JSONL line
+And    the parsed event shall have `event_type` equal to `"frame"`
+And    the parsed event's `payload.frame.arbitration_id` shall equal `419360305`
+```
+
+**Fixture:** none (stdin simulated in test).
+
+---
+
+### `TEST-TRANSPORT-19` — Stats reads candump text from stdin with `--file -`
+
+```gherkin
+Given  stdin provides candump text: `(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n`
+When   the operator runs `canarchy stats --file - --json`
+Then   `data.total_frames` shall equal `2`
+And    `data.unique_arbitration_ids` shall equal `2`
+And    `data.interfaces` shall contain `"can0"` and `"can1"`
+```
+
+**Fixture:** none (stdin simulated in test).
+
+---
+
+### `TEST-TRANSPORT-20` — Capture-info reads candump text from stdin with `--file -`
+
+```gherkin
+Given  stdin provides candump text: `(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n`
+When   the operator runs `canarchy capture-info --file - --json`
+Then   `data.frame_count` shall equal `2`
+And    `data.scan_mode` shall equal `"stdin"`
+And    `data.file` shall equal `"-"`
+```
+
+**Fixture:** none (stdin simulated in test).
+
+---
+
 ## Fixtures And Environment
 
 * `tests/fixtures/sample.candump`
