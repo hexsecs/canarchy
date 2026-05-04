@@ -433,6 +433,45 @@ class DatasetConvertTests(unittest.TestCase):
         self.assertEqual(result["frame_count"], 1)
         self.assertEqual(result["stop_reason"], "broken_pipe")
 
+    def test_stream_replay_max_seconds_stops_by_capture_time(self) -> None:
+        response = FakeStreamingResponse([
+            "(10.000000) can0 316#0000000000000000",
+            "(10.500000) can0 18F#0000000000600000",
+            "(11.100000) can0 123#AA",
+        ])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response):
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                result = stream_replay("https://example.test/candid.log", rate=1000.0, max_seconds=1.0)
+        self.assertEqual(result["frame_count"], 2)
+        self.assertEqual(result["stop_reason"], "max_seconds")
+        self.assertNotIn("123#AA", stdout.getvalue())
+
+    def test_stream_replay_jsonl_includes_dataset_provenance(self) -> None:
+        response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
+        provenance = {
+            "provider_ref": "catalog:candid",
+            "source_url": "https://example.test/candid.log",
+            "replay_file": "2_brakes_CAN.log",
+            "default_replay_file": "2_brakes_CAN.log",
+            "source_type": "dataset_ref",
+        }
+        with patch("canarchy.dataset_convert.requests.get", return_value=response):
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                result = stream_replay(
+                    "https://example.test/candid.log",
+                    output_format="jsonl",
+                    provenance=provenance,
+                )
+        self.assertEqual(result["frame_count"], 1)
+        event = json.loads(stdout.getvalue())
+        dataset = event["payload"]["dataset"]
+        self.assertEqual(dataset["provider_ref"], "catalog:candid")
+        self.assertEqual(dataset["source_url"], "https://example.test/candid.log")
+        self.assertEqual(dataset["replay_file"], "2_brakes_CAN.log")
+        self.assertEqual(dataset["default_replay_file"], "2_brakes_CAN.log")
+        self.assertEqual(dataset["source_format"], "candump")
+        self.assertEqual(dataset["frame_offset"], 0)
+
 
 # ---------------------------------------------------------------------------
 # CLI integration
@@ -675,6 +714,25 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(data["data"]["frame_count"], 1)
         self.assertNotIn("316#", out.splitlines()[0])
 
+    def test_datasets_replay_max_seconds_json_summary(self) -> None:
+        response = FakeStreamingResponse([
+            "(0.000000) can0 316#0000000000000000",
+            "(0.500000) can0 18F#0000000000600000",
+            "(1.100000) can0 123#AA",
+        ])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--rate", "1000",
+                "--max-seconds", "1.0",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(data["data"]["frame_count"], 2)
+        self.assertEqual(data["data"]["max_seconds"], 1.0)
+        self.assertEqual(data["data"]["stop_reason"], "max_seconds")
+
     def test_datasets_replay_direct_url_streams_frames(self) -> None:
         response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
         with patch("canarchy.dataset_convert.requests.get", return_value=response):
@@ -685,6 +743,25 @@ class CliIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertEqual(out.strip(), "(0.000000) can0 316#0000000000000000")
+
+    def test_datasets_replay_catalog_ref_jsonl_includes_provenance(self) -> None:
+        response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl",
+                "--rate", "1000",
+                "--max-frames", "1",
+            )
+        self.assertEqual(code, 0)
+        event = json.loads(out)
+        dataset = event["payload"]["dataset"]
+        self.assertEqual(dataset["provider_ref"], "catalog:candid")
+        self.assertEqual(dataset["source_url"], "https://ndownloader.figshare.com/files/54551156")
+        self.assertEqual(dataset["replay_file"], "2_brakes_CAN.log")
+        self.assertEqual(dataset["default_replay_file"], "2_brakes_CAN.log")
+        self.assertEqual(dataset["frame_offset"], 0)
+        self.assertEqual(dataset["source_format"], "candump")
 
     def test_datasets_replay_http_failure_returns_structured_error(self) -> None:
         with patch("canarchy.dataset_convert.requests.get", side_effect=requests.ConnectionError("offline")):
@@ -704,6 +781,7 @@ class CliIntegrationTests(unittest.TestCase):
                 "--format", "jsonl",
                 "--rate", "10",
                 "--max-frames", "5",
+                "--max-seconds", "2.5",
                 "--dry-run",
                 "--json",
             )
@@ -716,6 +794,7 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(data["data"]["output_format"], "jsonl")
         self.assertEqual(data["data"]["rate"], 10.0)
         self.assertEqual(data["data"]["max_frames"], 5)
+        self.assertEqual(data["data"]["max_seconds"], 2.5)
         self.assertTrue(data["data"]["dry_run"])
         self.assertTrue(data["data"]["would_stream"])
         self.assertFalse(data["data"]["streamed"])

@@ -165,6 +165,8 @@ def stream_replay(
     output_format: str = "candump",
     rate: float = 1.0,
     max_frames: int | None = None,
+    max_seconds: float | None = None,
+    provenance: dict | None = None,
     emit_frames: bool = True,
     handle: IO[str] | None = None,
 ) -> dict:
@@ -193,9 +195,16 @@ def stream_replay(
             message=f"Replay rate must be positive, got {rate}.",
             hint="Use a positive rate like 1.0 (real-time) or 0.5 (half-speed).",
         )
+    if max_seconds is not None and max_seconds <= 0:
+        raise ConversionError(
+            code="INVALID_MAX_SECONDS",
+            message=f"Replay max seconds must be positive, got {max_seconds}.",
+            hint="Use `--max-seconds` with a positive duration.",
+        )
 
     frame_count = 0
     last_timestamp = None
+    first_timestamp = None
     start_time = time.monotonic()
     output = handle or sys.stdout
     stop_reason = "eof"
@@ -216,9 +225,16 @@ def stream_replay(
                 if frame is None:
                     continue
 
+                if first_timestamp is None:
+                    first_timestamp = frame["timestamp"]
+                capture_elapsed = frame["timestamp"] - first_timestamp
+                if max_seconds is not None and capture_elapsed > max_seconds:
+                    stop_reason = "max_seconds"
+                    break
                 if max_frames is not None and frame_count >= max_frames:
                     stop_reason = "max_frames"
                     break
+                frame_offset = frame_count
                 frame_count += 1
 
                 # Timing: sleep to maintain original timing * rate
@@ -233,7 +249,13 @@ def stream_replay(
                     if output_format == "candump":
                         output_line = f"({frame['timestamp']:.6f}) {frame.get('interface') or 'can0'} {frame['arbitration_id']:X}#{frame['data'].hex().upper()}"
                     elif output_format == "jsonl":
-                        output_line = json.dumps(_frame_to_event(frame, source=source_format))
+                        event = _frame_to_event(frame, source=source_format)
+                        event["payload"]["dataset"] = {
+                            **(provenance or {}),
+                            "frame_offset": frame_offset,
+                            "source_format": source_format,
+                        }
+                        output_line = json.dumps(event)
                     else:
                         raise AssertionError(f"unhandled output format: {output_format}")
                     try:
@@ -242,6 +264,8 @@ def stream_replay(
                         stop_reason = "broken_pipe"
                         _silence_broken_stdout(output)
                         break
+    except KeyboardInterrupt:
+        stop_reason = "interrupted"
     except requests.RequestException as exc:
         raise ConversionError(
             code="DATASET_REPLAY_FETCH_FAILED",
@@ -255,6 +279,7 @@ def stream_replay(
         "source_format": source_format,
         "output_format": output_format,
         "rate": rate,
+        "max_seconds": max_seconds,
         "frame_count": frame_count,
         "elapsed_seconds": elapsed,
         "stop_reason": stop_reason,
