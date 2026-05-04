@@ -2080,49 +2080,36 @@ def transport_payload(
             [],
         )
     if args.command == "filter":
-        if args.file == "-" or args.stdin:
-            # Handle stdin - check if JSONL mode
-            if args.jsonl:
-                # Read JSONL FrameEvents from stdin
-                frames = frames_from_stdin(command=args.command)
-                return (
-                    {
-                        "mode": "passive",
-                        "file": "-",
-                        "expression": args.expression,
-                        "status": "implemented",
-                        "implementation": "stdin-analysis",
-                        "input": "stdin",
-                    },
-                    transport.filter_events("<stdin>", args.expression, frames=frames),
-                    [],
-                )
-            else:
-                # Read candump text from stdin
-                import sys
-                from canarchy.transport import parse_candump_line
-                frames = []
-                for line_number, raw_line in enumerate(sys.stdin, start=1):
-                    stripped = raw_line.strip()
-                    if not stripped:
-                        continue
-                    try:
-                        frame = parse_candump_line(stripped, path=Path("-"), line_number=line_number)
-                        frames.append(frame)
-                    except TransportError:
-                        continue
-                return (
-                    {
-                        "mode": "passive",
-                        "file": "-",
-                        "expression": args.expression,
-                        "status": "implemented",
-                        "implementation": "stdin-analysis",
-                        "input": "stdin",
-                    },
-                    transport.filter_events("<stdin>", args.expression, frames=frames),
-                    [],
-                )
+        if args.stdin:
+            frames = frames_from_stdin(command=args.command)
+            return (
+                {
+                    "mode": "passive",
+                    "file": "-",
+                    "expression": args.expression,
+                    "status": "implemented",
+                    "implementation": "stdin-analysis",
+                    "input": "stdin-jsonl",
+                },
+                transport.filter_events("<stdin>", args.expression, frames=frames),
+                [],
+            )
+        if args.file == "-":
+            from canarchy.transport import iter_candump_file
+
+            frames = list(iter_candump_file(None, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds))
+            return (
+                {
+                    "mode": "passive",
+                    "file": "-",
+                    "expression": args.expression,
+                    "status": "implemented",
+                    "implementation": "stdin-analysis",
+                    "input": "stdin-candump",
+                },
+                transport.filter_events("<stdin>", args.expression, frames=frames),
+                [],
+            )
         frames = transport.frames_from_file(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
         return (
             {
@@ -2138,19 +2125,9 @@ def transport_payload(
         )
     if args.command == "stats":
         if args.file == "-":
-            # Handle stdin
-            import sys
-            from canarchy.transport import parse_candump_line, TransportStats
-            frames = []
-            for line_number, raw_line in enumerate(sys.stdin, start=1):
-                stripped = raw_line.strip()
-                if not stripped:
-                    continue
-                try:
-                    frame = parse_candump_line(stripped, path=Path("-"), line_number=line_number)
-                    frames.append(frame)
-                except TransportError:
-                    continue
+            from canarchy.transport import TransportStats, iter_candump_file
+
+            frames = list(iter_candump_file(None, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds))
             if not frames:
                 raise CommandError(
                     command=args.command,

@@ -258,14 +258,14 @@ And    the line shall match arbitration ID `0x456`
 
 ---
 
-### `TEST-TRANSPORT-18` — Filter reads JSONL FrameEvents from stdin with `--jsonl --stdin`
+### `TEST-TRANSPORT-18` — Filter reads JSONL FrameEvents from stdin independently of output format
 
 ```gherkin
 Given  stdin provides JSONL FrameEvent lines for two frames, one matching `id==0x18FEEE31`
-When   the operator runs `canarchy filter id==0x18FEEE31 --stdin --jsonl`
-Then   the output shall contain exactly one JSONL line
-And    the parsed event shall have `event_type` equal to `"frame"`
-And    the parsed event's `payload.frame.arbitration_id` shall equal `419360305`
+When   the operator runs `canarchy filter id==0x18FEEE31 --stdin --json`
+Then   the response shall parse as JSON with `ok` equal to `true`
+And    `data.frame_count` shall equal `1`
+And    `data.frames[0].arbitration_id` shall equal `419360305`
 ```
 
 **Fixture:** none (stdin simulated in test).
@@ -275,11 +275,11 @@ And    the parsed event's `payload.frame.arbitration_id` shall equal `419360305`
 ### `TEST-TRANSPORT-19` — Stats reads candump text from stdin with `--file -`
 
 ```gherkin
-Given  stdin provides candump text: `(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n`
-When   the operator runs `canarchy stats --file - --json`
-Then   `data.total_frames` shall equal `2`
-And    `data.unique_arbitration_ids` shall equal `2`
-And    `data.interfaces` shall contain `"can0"` and `"can1"`
+Given  stdin provides candump text: `(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.300000) can0 789#DDEEFF\n`
+When   the operator runs `canarchy stats --file - --offset 1 --max-frames 1 --json`
+Then   `data.total_frames` shall equal `1`
+And    `data.unique_arbitration_ids` shall equal `1`
+And    `data.interfaces` shall equal `["can1"]`
 ```
 
 **Fixture:** none (stdin simulated in test).

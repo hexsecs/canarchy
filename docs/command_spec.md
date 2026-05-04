@@ -128,9 +128,9 @@ canarchy filter <expression> (--file <path> | --file - | --stdin) [--offset <n>]
 
 Notes:
 
-* `--file -` or `--stdin` reads candump text (or JSONL `frame` events when `--jsonl` is set) from standard input instead of a file
-* `--stdin` alone implies candump text from stdin; combine with `--jsonl` for JSONL FrameEvents
-* For JSONL stdin with `filter`, each line must be a valid `frame` event JSON object
+* `--file -` reads candump text from standard input instead of a file and still honors `--offset`, `--max-frames`, and `--seconds`
+* `--stdin` reads JSONL `frame` events from standard input regardless of output format
+* For `filter --stdin`, each line must be a valid `frame` event JSON object
 
 ### capture-info
 
