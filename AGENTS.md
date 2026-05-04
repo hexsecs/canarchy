@@ -483,7 +483,7 @@ canarchy
 
 This tree is a starting point, not a lock.
 
-For dataset automation, agents should prefer MCP dataset tools when available, or explicit CLI JSON output otherwise. `datasets_search` / `datasets search --json` and `datasets_inspect` / `datasets inspect --json` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. Use MCP `datasets_replay_plan` or CLI `datasets replay --dry-run --json` for safe replay preflight; actual dataset frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
+For dataset automation, agents should prefer MCP dataset tools when available, or explicit CLI JSON output otherwise. `datasets_search` / `datasets search --json` and `datasets_inspect` / `datasets inspect --json` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. Use MCP `datasets_replay_plan` or CLI `datasets replay --dry-run --json` for safe replay preflight; use `--max-frames` or `--max-seconds` to bound replay. Actual dataset frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 
 ---
 

@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233, #235, #242 |
+| Issues | #216, #220, #233, #235, #242, #245 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -162,6 +162,29 @@ And no remote stream is opened
 
 **Fixture:** embedded catalog metadata and mocked `requests.get` assertion in `tests/test_dataset_provider.py`
 
+### TEST-DATASET-REPLAY-06: Replay Stops At Max Seconds
+
+```gherkin
+Given a mocked remote candump HTTP response with frames beyond a one-second capture-time window
+When the operator runs `canarchy datasets replay catalog:candid --max-seconds 1.0 --json`
+Then stdout contains a standard JSON result envelope
+And the result reports only frames inside the window
+And the result reports `stop_reason` as `max_seconds`
+```
+
+**Fixture:** mocked `requests.get` response in `tests/test_dataset_provider.py`
+
+### TEST-DATASET-REPLAY-07: JSONL Replay Includes Dataset Provenance
+
+```gherkin
+Given the CANdid catalog entry defines default replay metadata
+When the operator runs `canarchy datasets replay catalog:candid --format jsonl`
+Then each emitted frame event includes dataset provenance metadata
+And the metadata identifies provider ref, source URL, replay file, default replay file, source format, source type, and frame offset
+```
+
+**Fixture:** mocked `requests.get` response in `tests/test_dataset_provider.py`
+
 ---
 
 ## Traceability
@@ -186,6 +209,8 @@ And no remote stream is opened
 | REQ-DATASET-REPLAY-06 | TEST-DATASET-REPLAY-03 |
 | REQ-DATASET-REPLAY-07 | TEST-DATASET-REPLAY-04 |
 | REQ-DATASET-REPLAY-08 | TEST-DATASET-REPLAY-05 |
+| REQ-DATASET-REPLAY-09 | TEST-DATASET-REPLAY-06 |
+| REQ-DATASET-REPLAY-10 | TEST-DATASET-REPLAY-07 |
 
 ---
 

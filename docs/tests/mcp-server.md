@@ -178,10 +178,11 @@ And    the result shall report `is_index=true` and `is_replayable=false`
 
 ```gherkin
 Given  the MCP server is initialised
-When   `handle_call_tool("datasets_replay_plan", {"source": "catalog:candid"})` is called
+When   `handle_call_tool("datasets_replay_plan", {"source": "catalog:candid", "max_seconds": 2.5})` is called
 Then   the response `text` shall parse as JSON with `ok` equal to `true`
 And    `command` shall equal `"datasets replay"`
 And    the result shall report `dry_run=true` and `streamed=false`
+And    the result shall preserve the requested `max_seconds` value
 ```
 
 **Fixture:** embedded dataset catalog.

@@ -468,6 +468,7 @@ def build_parser() -> CanarchyArgumentParser:
     )
     datasets_replay.add_argument("--rate", type=float, default=1.0, help="playback rate multiplier (default: 1.0 real-time)")
     datasets_replay.add_argument("--max-frames", type=int, default=None, help="stop after N frames")
+    datasets_replay.add_argument("--max-seconds", type=float, default=None, help="stop after N seconds of capture time")
     datasets_replay.add_argument("--dry-run", action="store_true", help="resolve replay source metadata without opening the stream")
     add_output_arguments(datasets_replay)
     datasets_replay.set_defaults(command="datasets replay")
@@ -2796,6 +2797,8 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
                 output_format=args.output_format,
                 rate=args.rate,
                 max_frames=getattr(args, "max_frames", None),
+                max_seconds=getattr(args, "max_seconds", None),
+                provenance=dataset_replay_provenance(replay_source),
                 emit_frames=False,
             )
         except ConversionError as exc:
@@ -2827,6 +2830,7 @@ def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
             "download_url_available": True,
             "download_url": source,
             "source_format": "candump",
+            "replay_file": None,
         }
 
     from canarchy.dataset_provider import DatasetError
@@ -2860,6 +2864,7 @@ def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
         "download_url_available": True,
         "download_url": replay["download_url"],
         "source_format": replay.get("source_format", "candump"),
+        "replay_file": replay.get("default_file"),
     }
 
 
@@ -2911,8 +2916,20 @@ def dataset_replay_plan(args: argparse.Namespace, replay_source: dict[str, Any])
         "output_format": args.output_format,
         "rate": args.rate,
         "max_frames": getattr(args, "max_frames", None),
+        "max_seconds": getattr(args, "max_seconds", None),
         "streamed": False,
         "would_stream": True,
+    }
+
+
+def dataset_replay_provenance(replay_source: dict[str, Any]) -> dict[str, Any]:
+    """Return JSONL provenance metadata for replayed dataset frames."""
+    return {
+        "provider_ref": replay_source.get("ref") or replay_source.get("source"),
+        "source_url": replay_source.get("download_url"),
+        "replay_file": replay_source.get("replay_file") or replay_source.get("default_replay_file"),
+        "default_replay_file": replay_source.get("default_replay_file"),
+        "source_type": replay_source.get("source_type"),
     }
 
 
@@ -2932,6 +2949,13 @@ def validate_dataset_replay_options(args: argparse.Namespace, replay_source: dic
             code="INVALID_RATE",
             message=f"Replay rate must be positive, got {args.rate}.",
             hint="Use a positive rate like 1.0 (real-time) or 0.5 (half-speed).",
+        )
+    max_seconds = getattr(args, "max_seconds", None)
+    if max_seconds is not None and max_seconds <= 0:
+        raise ConversionError(
+            code="INVALID_MAX_SECONDS",
+            message=f"Replay max seconds must be positive, got {max_seconds}.",
+            hint="Use `--max-seconds` with a positive duration.",
         )
 
 
@@ -4246,6 +4270,8 @@ def emit_dataset_replay(args: argparse.Namespace) -> int:
             output_format=args.output_format,
             rate=args.rate,
             max_frames=getattr(args, "max_frames", None),
+            max_seconds=getattr(args, "max_seconds", None),
+            provenance=dataset_replay_provenance(replay_source),
         )
     except ConversionError as exc:
         result = error_result(

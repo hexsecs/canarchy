@@ -449,6 +449,7 @@ _TOOLS: list[types.Tool] = [
                 "format": {"type": "string", "description": "Planned output format", "enum": ["candump", "jsonl"], "default": "candump"},
                 "rate": {"type": "number", "description": "Playback rate multiplier for the planned replay", "default": 1.0},
                 "max_frames": {"type": "integer", "description": "Planned frame limit"},
+                "max_seconds": {"type": "number", "description": "Planned capture-time limit in seconds"},
             },
             "required": ["source"],
         },
@@ -791,6 +792,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--rate", str(a["rate"])]
             if a.get("max_frames") is not None:
                 argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("max_seconds") is not None:
+                argv += ["--max-seconds", str(a["max_seconds"])]
             return argv + ["--dry-run", "--json"]
         case "dbc_provider_list":
             return ["dbc", "provider", "list", "--json"]
