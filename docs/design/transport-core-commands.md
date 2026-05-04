@@ -23,24 +23,26 @@ Operators need a stable base command set that supports passive live observation,
 | `REQ-TRANSPORT-01` | Ubiquitous | The system shall provide `capture`, `send`, `filter`, `stats`, and `capture-info` commands as the foundational transport command set. |
 | `REQ-TRANSPORT-02` | Event-driven | When `capture <interface>` is invoked, the system shall stream frame events through the live capture path for all output formats. |
 | `REQ-TRANSPORT-03` | Event-driven | When `send <interface> <frame-id> <data>` is invoked, the system shall emit a preflight active-transmit warning to `stderr` and then transmit the specified frame. |
-| `REQ-TRANSPORT-04` | Event-driven | When `filter <expression> --file <path>` is invoked, the system shall return only the frame events from the capture file that satisfy the expression. |
-| `REQ-TRANSPORT-05` | Event-driven | When `stats --file <path>` is invoked, the system shall return a deterministic summary including total frame count and unique arbitration ID count. |
+| `REQ-TRANSPORT-04` | Event-driven | When `filter <expression> --file <path>` or `filter <expression> --file -` is invoked, the system shall return only the frame events from the candump input that satisfy the expression. |
+| `REQ-TRANSPORT-05` | Event-driven | When `stats --file <path>` or `stats --file -` is invoked, the system shall return a deterministic summary including total frame count and unique arbitration ID count. |
 | `REQ-TRANSPORT-06` | Event-driven | When `capture` or `send` is invoked, the system shall expose the effective transport backend name and configuration metadata in the result. |
 | `REQ-TRANSPORT-07` | Unwanted behaviour | If a transport interface is unavailable or a backend open fails, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
 | `REQ-TRANSPORT-08` | Unwanted behaviour | If a capture file cannot be parsed, the system shall return a structured error with code `CAPTURE_SOURCE_INVALID` and exit code 2. |
 | `REQ-TRANSPORT-09` | Unwanted behaviour | If a capture file format is unsupported, the system shall return a structured error with code `CAPTURE_FORMAT_UNSUPPORTED` and exit code 2. |
 | `REQ-TRANSPORT-10` | Unwanted behaviour | If `filter` receives an invalid expression, the system shall return a structured error with code `INVALID_FILTER_EXPRESSION` and exit code 2. |
-| `REQ-TRANSPORT-11` | Event-driven | When `capture-info --file <path>` is invoked, the system shall return capture metadata including frame count, first and last timestamps, duration, unique IDs, interfaces, and suggested `max_frames` and `seconds` bounds for follow-on analysis. |
+| `REQ-TRANSPORT-11` | Event-driven | When `capture-info --file <path>` or `capture-info --file -` is invoked, the system shall return capture metadata including frame count, first and last timestamps, duration, unique IDs, interfaces, and suggested `max_frames` and `seconds` bounds for follow-on analysis. |
 | `REQ-TRANSPORT-12` | Performance | When `capture-info` is invoked on a file larger than 50 MB, the system shall use a fast head+tail scan to estimate metadata rather than parsing every frame, and shall set `scan_mode` to `"estimated"` in the response. |
+| `REQ-TRANSPORT-13` | Optional feature | Where `--file -` is specified for `filter`, `stats`, or `capture-info`, the system shall read candump text from stdin instead of requiring a capture file path. |
+| `REQ-TRANSPORT-14` | Optional feature | Where `--stdin` is specified for `filter`, the system shall read JSONL FrameEvents from stdin independently of the selected output format. |
 
 ## Command Surface
 
 ```text
 canarchy capture <interface> [--candump] [--json] [--jsonl] [--table] [--raw]
 canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--table] [--raw]
-canarchy filter <expression> --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--table] [--raw]
-canarchy stats --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--table] [--raw]
-canarchy capture-info --file <path> [--json] [--jsonl] [--table] [--raw]
+canarchy filter <expression> (--file <path>|--file -|--stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--table] [--raw]
+canarchy stats --file <path|-> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--table] [--raw]
+canarchy capture-info --file <path|-> [--json] [--jsonl] [--table] [--raw]
 ```
 
 ## Responsibilities And Boundaries

@@ -32,7 +32,8 @@ Large heavy-vehicle captures often contain millions of frames. Analysts need to 
 ## Command Surface
 
 ```text
-canarchy j1939 decode <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 decode --file <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 decode --stdin [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 pgn <pgn> --file <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 spn <spn> --file <capture> [--dbc <path|provider-ref>] [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 tp sessions --file <capture> [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]

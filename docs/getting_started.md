@@ -164,6 +164,19 @@ Replay the default CANdid catalog stream directly from the remote provider witho
 canarchy datasets replay catalog:candid --dry-run --json
 canarchy datasets replay catalog:candid --rate 1.0
 canarchy datasets replay catalog:candid --format jsonl --rate 10 --max-frames 1000
+canarchy datasets replay catalog:candid --list-files --json
+canarchy datasets replay catalog:candid --file 2_indicator_CAN.log --rate 1000 --max-frames 10
+```
+
+Remote replay writes candump or JSONL records to stdout unless `--json` is requested. Use `--list-files --json` to inspect the embedded CANdid replay manifest, then pass `--file <id-or-name>` to select a specific replay file.
+
+You can also pipe remote candump replay directly into stdin-aware analysis commands without creating a temporary file:
+
+```bash
+canarchy datasets replay catalog:candid --rate 1000 --max-frames 100 \
+  | canarchy stats --file - --json
+canarchy datasets replay catalog:candid --rate 1000 --max-frames 100 \
+  | canarchy capture-info --file - --json
 ```
 
 After downloading specific `*_CAN.log` files, use them directly with file-backed analysis commands:

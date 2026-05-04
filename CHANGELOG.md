@@ -30,6 +30,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Made `canarchy datasets replay` stop cleanly on closed stdout pipes instead of printing a Python `BrokenPipeError` traceback. Closes #240.
 * Made dataset replay return `DATASET_INDEX_NOT_REPLAYABLE` for curated dataset indexes so automation can distinguish index entries from other non-replayable datasets. Closes #242.
 
+### Documentation
+
+* Audited and refreshed operator, agent, design, and test documentation for current dataset replay/fetch behavior, MCP dataset coverage, stdin pipeline semantics, and file-backed command grammar. Closes #259.
+
 ## [0.6.0] - 2026-04-28
 
 ### Added

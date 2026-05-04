@@ -162,12 +162,13 @@ Live transport uses `python-can` by default. Set `CANARCHY_PYTHON_CAN_INTERFACE`
 
 Current file support:
 
-* file-backed workflows such as `filter`, `stats`, `decode`, `j1939 decode`, and `replay` now read standard timestamped candump log files
+* file-backed workflows such as `filter`, `stats`, `decode`, `j1939 decode`, and `replay` read standard timestamped candump log files
 * `j1939 pgn` inspects recorded traffic with `--file <capture.candump>`
 * the supported log form today is `(timestamp) interface frame#data`
 * additional supported candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier such as `20000080#0000000000000000`
-* supported capture-file suffixes today are `.candump` and `.log`
-* malformed candump log lines return structured transport errors instead of falling back to sample data
+* supported capture-file suffixes today are `.candump` and `.log`; `capture-info --file -`, `stats --file -`, and `filter --file -` can read candump text from stdin
+* `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin
+* malformed candump log lines are skipped during capture parsing rather than falling back to sample data; commands that require capture metadata or explicitly validate stdin emptiness return structured errors when no valid frames are available
 
 ### Structured Output
 

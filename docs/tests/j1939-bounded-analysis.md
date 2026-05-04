@@ -26,7 +26,7 @@
 
 ```gherkin
 Given  a capture fixture contains more J1939 frames than the requested frame bound
-When   the operator runs `canarchy j1939 decode <capture> --max-frames 3 --json`
+When   the operator runs `canarchy j1939 decode --file <capture> --max-frames 3 --json`
 Then   the system shall return only records derived from the first three capture frames
 And    the command shall remain otherwise valid JSON output
 ```
