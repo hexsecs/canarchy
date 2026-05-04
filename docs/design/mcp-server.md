@@ -32,6 +32,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-10` | Ubiquitous | The server shall not expose `shell` or `tui` as MCP tools; those are interactive front-end commands with no RPC equivalent. |
 | `REQ-MCP-11` | Event-driven | The `call_tool` handler shall execute `execute_command` in a thread pool via `asyncio.to_thread` so that the asyncio event loop is not blocked during file I/O or analysis, preventing MCP keepalive timeouts on large captures. |
 | `REQ-MCP-12` | Ubiquitous | File-backed J1939 tools (`j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_dm1`, `j1939_summary`, `j1939_inventory`) shall expose optional `max_frames` (integer) and `seconds` (number) parameters that bound analysis to the first N frames or first T seconds of the capture, respectively. |
+| `REQ-MCP-13` | Ubiquitous | Dataset provider workflows selected for MCP shall expose provider list, search, inspect, fetch, cache list, cache refresh, and safe replay planning tools while excluding streaming dataset frame output. |
 
 ## Command Surface
 
@@ -80,6 +81,13 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `uds trace` | `uds_trace` |
 | `uds services` | `uds_services` |
 | `config show` | `config_show` |
+| `datasets provider list` | `datasets_provider_list` |
+| `datasets search` | `datasets_search` |
+| `datasets inspect` | `datasets_inspect` |
+| `datasets fetch` | `datasets_fetch` |
+| `datasets cache list` | `datasets_cache_list` |
+| `datasets cache refresh` | `datasets_cache_refresh` |
+| `datasets replay --dry-run` | `datasets_replay_plan` |
 | `re correlate` | `re_correlate` |
 | `re counters` | `re_counters` |
 | `re entropy` | `re_entropy` |
@@ -131,6 +139,7 @@ In scope:
 * stdio MCP transport only
 * buffered (non-streaming) tool responses for all commands including live-capture variants (scaffold backend returns a fixed event batch)
 * a curated non-interactive CLI subset covering transport, protocol, export, session, and configuration workflows
+* dataset provider metadata workflows and dry-run replay planning for dataset refs or direct URLs
 
 Out of scope:
 
@@ -140,3 +149,4 @@ Out of scope:
 * plugin or custom tool registration
 * exposing every implemented CLI command automatically
 * exposing CANarchy skills as MCP tools, resources, prompts, or a separate MCP discovery surface in phase 1
+* streaming dataset frame output through MCP; agents should use `datasets_replay_plan` for preflight metadata and the CLI for actual stdout streaming

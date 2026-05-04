@@ -18,6 +18,8 @@ _EXPECTED_TOOLS = {
     "j1939_monitor", "j1939_decode", "j1939_pgn", "j1939_spn", "j1939_tp", "j1939_dm1", "j1939_inventory",
     "uds_scan", "uds_trace", "uds_services",
     "config_show",
+    "datasets_provider_list", "datasets_search", "datasets_inspect", "datasets_fetch", "datasets_cache_list",
+    "datasets_cache_refresh", "datasets_replay_plan",
 }
 
 
@@ -109,6 +111,56 @@ def test_call_tool_filter_orders_expression_before_file_flag():
     assert len(payload["data"]["events"]) == 1
     frame = payload["data"]["events"][0]["payload"]["frame"]
     assert frame["arbitration_id"] == 0x18FEEE31
+
+
+def test_call_tool_datasets_search_returns_machine_fields():
+    results = asyncio.run(handle_call_tool("datasets_search", {"query": "candid"}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "datasets search"
+    assert payload["data"]["count"] >= 1
+    result = payload["data"]["results"][0]
+    assert result["ref"] == "catalog:candid"
+    assert result["is_replayable"] is True
+    assert result["default_replay_file"] == "2_brakes_CAN.log"
+
+
+def test_call_tool_datasets_inspect_index_returns_machine_fields():
+    results = asyncio.run(handle_call_tool("datasets_inspect", {"ref": "catalog:pivot-auto-datasets"}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "datasets inspect"
+    assert payload["data"]["is_index"] is True
+    assert payload["data"]["is_replayable"] is False
+    assert payload["data"]["source_type"] == "curated-index"
+
+
+def test_call_tool_datasets_replay_plan_does_not_stream():
+    results = asyncio.run(
+        handle_call_tool(
+            "datasets_replay_plan",
+            {"source": "catalog:candid", "format": "jsonl", "rate": 10.0, "max_frames": 5},
+        )
+    )
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "datasets replay"
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["streamed"] is False
+    assert payload["data"]["would_stream"] is True
+    assert payload["data"]["output_format"] == "jsonl"
+    assert payload["data"]["max_frames"] == 5
+
+
+def test_call_tool_datasets_replay_plan_index_error():
+    results = asyncio.run(handle_call_tool("datasets_replay_plan", {"source": "catalog:pivot-auto-datasets"}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["command"] == "datasets replay"
+    assert payload["errors"][0]["code"] == "DATASET_INDEX_NOT_REPLAYABLE"
 
 
 # --- TEST-MCP-07: invalid frame_id returns structured error ----------------
@@ -236,6 +288,22 @@ def test_build_argv_generate_with_options():
     assert "5" in argv
     assert "--extended" in argv
     assert argv[-1] == "--json"
+
+
+def test_build_argv_datasets_search_with_options():
+    argv = _build_argv("datasets_search", {"query": "j1939", "provider": "catalog", "limit": 5})
+    assert argv == ["datasets", "search", "j1939", "--provider", "catalog", "--limit", "5", "--json"]
+
+
+def test_build_argv_datasets_replay_plan_forces_dry_run():
+    argv = _build_argv(
+        "datasets_replay_plan",
+        {"source": "catalog:candid", "format": "jsonl", "rate": 10.0, "max_frames": 100},
+    )
+    assert argv == [
+        "datasets", "replay", "catalog:candid", "--format", "jsonl", "--rate", "10.0",
+        "--max-frames", "100", "--dry-run", "--json",
+    ]
 
 
 # --- TEST-MCP-13: _build_argv raises for unknown tool ---------------------

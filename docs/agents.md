@@ -66,6 +66,13 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 | `dbc_cache_list` | `canarchy dbc cache list` |
 | `dbc_cache_prune` | `canarchy dbc cache prune` |
 | `dbc_cache_refresh` | `canarchy dbc cache refresh` |
+| `datasets_provider_list` | `canarchy datasets provider list` |
+| `datasets_search` | `canarchy datasets search` |
+| `datasets_inspect` | `canarchy datasets inspect` |
+| `datasets_fetch` | `canarchy datasets fetch` |
+| `datasets_cache_list` | `canarchy datasets cache list` |
+| `datasets_cache_refresh` | `canarchy datasets cache refresh` |
+| `datasets_replay_plan` | `canarchy datasets replay --dry-run` |
 | `export` | `canarchy export` |
 | `session_save` | `canarchy session save` |
 | `session_load` | `canarchy session load` |
@@ -91,12 +98,12 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 Current exclusions:
 
 * skills provider and cache commands such as `skills search` and `skills fetch`
-* dataset provider and streaming commands such as `datasets search`, `datasets fetch`, `datasets stream`, and `datasets replay`
+* dataset streaming commands that emit frame records, such as `datasets stream` and non-dry-run `datasets replay`
 * CLI-only workflows such as `j1939 compare` that are not yet exposed as MCP tools
 * CLI-only workflows such as `j1939 faults` and `re signals` that are not yet exposed as MCP tools
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
 
-For CLI-only dataset workflows, agents should prefer explicit JSON output. `datasets search --json` and `datasets inspect --json` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE` from `datasets replay`.
+For dataset workflows, agents should prefer MCP dataset tools when available. `datasets_search` and `datasets_inspect` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. Use `datasets_replay_plan` for safe replay preflight; actual frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 
 ### Skills Workflow
 
