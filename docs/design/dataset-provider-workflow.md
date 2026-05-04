@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented (Phase 2) |
-| Issue | #216, #220, #233, #235, #241, #242, #245 |
+| Issue | #216, #220, #233, #235, #241, #242, #243, #245 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -31,7 +31,7 @@ canarchy datasets fetch <ref>
 canarchy datasets cache list
 canarchy datasets cache refresh [--provider <name>]
 canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>]
-canarchy datasets stream <file> --source-format hcrl-csv --format candump|jsonl [--chunk-size N] [--provider-ref <ref>] [--output <path>]
+canarchy datasets stream <file> --source-format hcrl-csv|candump --format candump|jsonl [--chunk-size N] [--provider-ref <ref>] [--output <path>]
 canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--list-files] [--format candump|jsonl] [--rate N] [--max-frames N] [--max-seconds N] [--dry-run]
 ```
 
@@ -148,6 +148,7 @@ file into a CANarchy-native format.
 | Source format | Description | Output formats |
 |--------------|-------------|----------------|
 | `hcrl-csv` | HCRL Car-Hacking CSV: `Timestamp,ID,DLC,Data[,Label]` | `candump`, `jsonl` |
+| `candump` | can-utils timestamped log lines such as `(0.000000) can0 123#AABB` | `candump`, `jsonl` |
 
 ### candump output
 

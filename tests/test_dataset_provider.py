@@ -658,6 +658,29 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(len(events), 6)
         self.assertEqual(events[2]["payload"]["dataset"]["chunk_index"], 1)
 
+    def test_datasets_stream_candump_to_stdout_jsonl(self) -> None:
+        src = str(FIXTURES / "sample.candump")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "candump",
+            "--format", "jsonl",
+            "--provider-ref", "catalog:candid",
+        )
+        self.assertEqual(code, 0)
+        events = [json.loads(line) for line in out.splitlines()]
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0]["source"], "candump")
+        self.assertEqual(events[0]["payload"]["dataset"]["provider_ref"], "catalog:candid")
+
+    def test_datasets_stream_help_lists_candump_source_format(self) -> None:
+        from canarchy.cli import main
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as ctx:
+            main(("datasets", "stream", "--help"))
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("{hcrl-csv,candump}", stdout.getvalue())
+
     def test_datasets_stream_json_summary_does_not_emit_frames(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(

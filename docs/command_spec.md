@@ -503,13 +503,14 @@ canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl
 Stream a downloaded dataset file to candump or JSONL without loading the full conversion into memory.
 
 ```bash
-canarchy datasets stream <file> --source-format hcrl-csv --format candump|jsonl [--chunk-size <n>] [--provider-ref <ref>] [--output <path>] [--json]
+canarchy datasets stream <file> --source-format hcrl-csv|candump --format candump|jsonl [--chunk-size <n>] [--provider-ref <ref>] [--output <path>] [--json]
 ```
 
 Examples:
 
 ```bash
 canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --provider-ref catalog:hcrl-car-hacking
+canarchy datasets stream sample.log --source-format candump --format jsonl --provider-ref catalog:candid
 canarchy datasets stream sample.csv --source-format hcrl-csv --format candump --output sample.candump
 canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --json
 ```
