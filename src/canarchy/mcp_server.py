@@ -113,6 +113,8 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "pgn": {"type": "integer", "description": "Filter by transfer PGN"},
+                "sa": {"type": "string", "description": "Filter by source address (comma-separated hex or decimal)"},
                 "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
@@ -299,6 +301,22 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="j1939_tp_compare",
+        description="Compare J1939 transport protocol sessions across source addresses in a capture file.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+                "sa": {"type": "string", "description": "Comma-separated source addresses to compare (hex or decimal)"},
+                "pgn": {"type": "integer", "description": "Filter by transfer PGN"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+            },
+            "required": ["file", "sa"],
+        },
+    ),
+    types.Tool(
         name="j1939_dm1",
         description="Inspect J1939 DM1 diagnostic messages in a capture file. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
@@ -308,6 +326,21 @@ _TOOLS: list[types.Tool] = [
                 "dbc": {"type": "string", "description": "Enrich DM1 DTC names with a local DBC path or provider ref"},
                 "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
                 "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
+        name="j1939_faults",
+        description="Summarize J1939 DM1 faults by ECU from a capture file. Use max_frames or seconds to limit processing on large captures.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+                "dbc": {"type": "string", "description": "Enrich DTC names with a local DBC path or provider ref"},
+                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames"},
                 "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
             "required": ["file"],
@@ -339,6 +372,24 @@ _TOOLS: list[types.Tool] = [
                 "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
             },
             "required": ["file"],
+        },
+    ),
+    types.Tool(
+        name="j1939_compare",
+        description="Compare two or more J1939 capture files for PGN, source-address, TP, and fault differences.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Two or more candump capture files to compare",
+                },
+                "offset": {"type": "integer", "description": "Skip the first N frames from each capture file"},
+                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames per capture"},
+                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of each capture"},
+            },
+            "required": ["files"],
         },
     ),
     types.Tool(
@@ -440,6 +491,20 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="datasets_convert",
+        description="Convert a downloaded dataset file to candump or JSONL without streaming frame records through MCP.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to the downloaded dataset file"},
+                "source_format": {"type": "string", "description": "Source file format", "enum": ["hcrl-csv"]},
+                "format": {"type": "string", "description": "Output format", "enum": ["candump", "jsonl"]},
+                "output": {"type": "string", "description": "Output file path (defaults to source path with new suffix)"},
+            },
+            "required": ["file", "source_format", "format"],
+        },
+    ),
+    types.Tool(
         name="datasets_replay_plan",
         description="Resolve dataset replay metadata for a dataset ref or URL without opening the remote stream.",
         inputSchema={
@@ -453,6 +518,61 @@ _TOOLS: list[types.Tool] = [
                 "max_seconds": {"type": "number", "description": "Planned capture-time limit in seconds"},
             },
             "required": ["source"],
+        },
+    ),
+    types.Tool(
+        name="datasets_replay_files",
+        description="List replayable files for a dataset ref without opening the remote stream.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "description": "Replayable dataset ref (e.g. catalog:candid)"},
+            },
+            "required": ["source"],
+        },
+    ),
+    types.Tool(
+        name="skills_provider_list",
+        description="List registered skills providers.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    types.Tool(
+        name="skills_search",
+        description="Search skills across registered providers by name, tag, or keyword.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query (name, tag, or keyword)"},
+                "provider": {"type": "string", "description": "Restrict search to a specific provider"},
+                "limit": {"type": "integer", "description": "Maximum results to return", "default": 20},
+            },
+            "required": ["query"],
+        },
+    ),
+    types.Tool(
+        name="skills_fetch",
+        description="Fetch and cache a skill by provider ref.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ref": {"type": "string", "description": "Skill ref (e.g. github:j1939_compare_triage)"},
+            },
+            "required": ["ref"],
+        },
+    ),
+    types.Tool(
+        name="skills_cache_list",
+        description="List cached skills providers and entries.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    types.Tool(
+        name="skills_cache_refresh",
+        description="Refresh a skills provider catalog from upstream.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "provider": {"type": "string", "description": "Provider to refresh", "default": "github"},
+            },
         },
     ),
     types.Tool(
@@ -513,6 +633,17 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "provider": {"type": "string", "description": "Provider to refresh", "default": "opendbc"},
             },
+        },
+    ),
+    types.Tool(
+        name="re_signals",
+        description="Analyze changing bit fields and infer signal candidates from a capture file.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+            },
+            "required": ["file"],
         },
     ),
     types.Tool(
@@ -633,6 +764,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "stats":
             argv = ["stats", "--file", a["file"]]
+            if a.get("pgn") is not None:
+                argv += ["--pgn", str(a["pgn"])]
+            if a.get("sa"):
+                argv += ["--sa", str(a["sa"])]
             if a.get("offset") is not None and a["offset"] > 0:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
@@ -643,7 +778,7 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
         case "capture_info":
             return ["capture-info", "--file", a["file"], "--json"]
         case "decode":
-            argv = ["decode", a["file"], "--dbc", a["dbc"]]
+            argv = ["decode", "--file", a["file"], "--dbc", a["dbc"]]
             if a.get("offset") is not None and a["offset"] > 0:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
@@ -685,7 +820,7 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--pgn", str(a["pgn"])]
             return argv + ["--json"]
         case "j1939_decode":
-            argv = ["j1939", "decode", a["file"]]
+            argv = ["j1939", "decode", "--file", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
             if a.get("offset") is not None and a["offset"] > 0:
@@ -719,6 +854,21 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "j1939_tp":
             argv = ["j1939", "tp", "sessions", "--file", a["file"]]
+            if a.get("pgn") is not None:
+                argv += ["--pgn", str(a["pgn"])]
+            if a.get("sa"):
+                argv += ["--sa", a["sa"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
+        case "j1939_tp_compare":
+            argv = ["j1939", "tp", "compare", "--file", a["file"], "--sa", a["sa"]]
+            if a.get("pgn") is not None:
+                argv += ["--pgn", str(a["pgn"])]
             if a.get("offset") is not None and a["offset"] > 0:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
@@ -727,7 +877,18 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_dm1":
-            argv = ["j1939", "dm1", a["file"]]
+            argv = ["j1939", "dm1", "--file", a["file"]]
+            if a.get("dbc"):
+                argv += ["--dbc", a["dbc"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
+        case "j1939_faults":
+            argv = ["j1939", "faults", "--file", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
             if a.get("offset") is not None and a["offset"] > 0:
@@ -738,7 +899,7 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_summary":
-            argv = ["j1939", "summary", a["file"]]
+            argv = ["j1939", "summary", "--file", a["file"]]
             if a.get("offset") is not None and a["offset"] > 0:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
@@ -748,6 +909,15 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "j1939_inventory":
             argv = ["j1939", "inventory", "--file", a["file"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
+        case "j1939_compare":
+            argv = ["j1939", "compare"] + [str(file) for file in a["files"]]
             if a.get("offset") is not None and a["offset"] > 0:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
@@ -785,6 +955,11 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("provider"):
                 argv += ["--provider", a["provider"]]
             return argv + ["--json"]
+        case "datasets_convert":
+            argv = ["datasets", "convert", a["file"], "--source-format", a["source_format"], "--format", a["format"]]
+            if a.get("output"):
+                argv += ["--output", a["output"]]
+            return argv + ["--json"]
         case "datasets_replay_plan":
             argv = ["datasets", "replay", a["source"]]
             if a.get("format"):
@@ -798,6 +973,26 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("max_seconds") is not None:
                 argv += ["--max-seconds", str(a["max_seconds"])]
             return argv + ["--dry-run", "--json"]
+        case "datasets_replay_files":
+            return ["datasets", "replay", a["source"], "--list-files", "--json"]
+        case "skills_provider_list":
+            return ["skills", "provider", "list", "--json"]
+        case "skills_search":
+            argv = ["skills", "search", a["query"]]
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            if "limit" in a:
+                argv += ["--limit", str(a["limit"])]
+            return argv + ["--json"]
+        case "skills_fetch":
+            return ["skills", "fetch", a["ref"], "--json"]
+        case "skills_cache_list":
+            return ["skills", "cache", "list", "--json"]
+        case "skills_cache_refresh":
+            argv = ["skills", "cache", "refresh"]
+            if a.get("provider"):
+                argv += ["--provider", a["provider"]]
+            return argv + ["--json"]
         case "dbc_provider_list":
             return ["dbc", "provider", "list", "--json"]
         case "dbc_search":
@@ -821,6 +1016,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("provider"):
                 argv += ["--provider", a["provider"]]
             return argv + ["--json"]
+        case "re_signals":
+            return ["re", "signals", a["file"], "--json"]
         case "re_correlate":
             return ["re", "correlate", a["file"], "--reference", a["reference"], "--json"]
         case "re_counters":
