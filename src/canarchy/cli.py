@@ -467,6 +467,8 @@ def build_parser() -> CanarchyArgumentParser:
         help="stream output format (default: candump)",
     )
     datasets_replay.add_argument("--rate", type=float, default=1.0, help="playback rate multiplier (default: 1.0 real-time)")
+    datasets_replay.add_argument("--file", dest="replay_file", help="replay file id or name from the dataset manifest")
+    datasets_replay.add_argument("--list-files", action="store_true", help="list replayable files without opening a remote stream")
     datasets_replay.add_argument("--max-frames", type=int, default=None, help="stop after N frames")
     datasets_replay.add_argument("--max-seconds", type=float, default=None, help="stop after N seconds of capture time")
     datasets_replay.add_argument("--dry-run", action="store_true", help="resolve replay source metadata without opening the stream")
@@ -2787,7 +2789,9 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
         from canarchy.dataset_convert import ConversionError, stream_replay
 
         try:
-            replay_source = resolve_dataset_replay_source(args.source, registry)
+            replay_source = resolve_dataset_replay_source(args.source, registry, replay_file=getattr(args, "replay_file", None))
+            if getattr(args, "list_files", False):
+                return (dataset_replay_files_payload(replay_source), [], [])
             validate_dataset_replay_options(args, replay_source)
             if getattr(args, "dry_run", False):
                 return (dataset_replay_plan(args, replay_source), [], [])
@@ -2818,7 +2822,7 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
     raise AssertionError(f"unsupported datasets command: {args.command}")
 
 
-def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
+def resolve_dataset_replay_source(source: str, registry: Any, *, replay_file: str | None = None) -> dict[str, Any]:
     """Resolve a replay source from either a direct URL or dataset descriptor metadata."""
     if source.startswith(("http://", "https://")):
         return {
@@ -2851,6 +2855,10 @@ def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
             hint="Use `canarchy datasets inspect <ref>` to review available metadata, or pass a direct candump download URL.",
         )
 
+    files = replay_files(replay)
+    selected_file = select_replay_file(files, replay_file or replay.get("default_file"), source)
+    download_url = selected_file.get("source_url") or replay["download_url"]
+    source_format = selected_file.get("format") or replay.get("source_format", "candump")
     return {
         "source": source,
         "source_type": "dataset_ref",
@@ -2862,9 +2870,61 @@ def resolve_dataset_replay_source(source: str, registry: Any) -> dict[str, Any]:
         "default_file": replay.get("default_file"),
         "default_replay_file": replay.get("default_file"),
         "download_url_available": True,
-        "download_url": replay["download_url"],
-        "source_format": replay.get("source_format", "candump"),
-        "replay_file": replay.get("default_file"),
+        "download_url": download_url,
+        "source_format": source_format,
+        "replay_file": selected_file.get("name"),
+        "replay_file_id": selected_file.get("id"),
+        "replay_files": files,
+    }
+
+
+def replay_files(replay: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return stable replayable file entries from replay metadata."""
+    files = replay.get("files") if isinstance(replay, dict) else None
+    if isinstance(files, list) and files:
+        return [dict(file) for file in files if isinstance(file, dict)]
+    default_file = replay.get("default_file") if isinstance(replay, dict) else None
+    download_url = replay.get("download_url") if isinstance(replay, dict) else None
+    source_format = replay.get("source_format", "candump") if isinstance(replay, dict) else "candump"
+    return [{"id": default_file, "name": default_file, "format": source_format, "size_bytes": None, "source_url": download_url}]
+
+
+def select_replay_file(files: list[dict[str, Any]], requested: str | None, source: str) -> dict[str, Any]:
+    """Select a replay file by stable id or name."""
+    if not files:
+        from canarchy.dataset_provider import DatasetError
+
+        raise DatasetError(
+            code="DATASET_REPLAY_FILE_NOT_FOUND",
+            message=f"Dataset '{source}' does not define replayable files.",
+            hint="Use `canarchy datasets inspect <ref>` to review replay metadata.",
+        )
+    if requested is None:
+        return files[0]
+    for file in files:
+        if requested in {str(file.get("id")), str(file.get("name"))}:
+            return file
+    from canarchy.dataset_provider import DatasetError
+
+    raise DatasetError(
+        code="DATASET_REPLAY_FILE_NOT_FOUND",
+        message=f"Replay file '{requested}' was not found for dataset '{source}'.",
+        hint="Use `canarchy datasets replay <ref> --list-files --json` to list replayable file ids.",
+    )
+
+
+def dataset_replay_files_payload(replay_source: dict[str, Any]) -> dict[str, Any]:
+    """Return replay file manifest metadata without opening the remote stream."""
+    files = replay_source.get("replay_files") or []
+    return {
+        "source": replay_source.get("source"),
+        "source_type": replay_source.get("source_type"),
+        "ref": replay_source.get("ref"),
+        "default_replay_file": replay_source.get("default_replay_file"),
+        "selected_file": replay_source.get("replay_file"),
+        "count": len(files),
+        "files": files,
+        "streamed": False,
     }
 
 
@@ -4263,7 +4323,7 @@ def emit_dataset_replay(args: argparse.Namespace) -> int:
     from canarchy.dataset_convert import ConversionError, stream_replay
 
     try:
-        replay_source = resolve_dataset_replay_source(args.source, get_registry())
+        replay_source = resolve_dataset_replay_source(args.source, get_registry(), replay_file=getattr(args, "replay_file", None))
         result = stream_replay(
             replay_source["download_url"],
             source_format=replay_source["source_format"],
@@ -4666,7 +4726,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return emit_live_gateway(args)
     if args.command == "datasets stream" and not args.json:
         return emit_dataset_stream(args)
-    if args.command == "datasets replay" and not args.json and not getattr(args, "dry_run", False):
+    if args.command == "datasets replay" and not args.json and not getattr(args, "dry_run", False) and not getattr(args, "list_files", False):
         return emit_dataset_replay(args)
 
     exit_code, result = execute_command(argv)

@@ -448,6 +448,7 @@ _TOOLS: list[types.Tool] = [
                 "source": {"type": "string", "description": "Dataset ref (e.g. catalog:candid) or remote candump URL"},
                 "format": {"type": "string", "description": "Planned output format", "enum": ["candump", "jsonl"], "default": "candump"},
                 "rate": {"type": "number", "description": "Playback rate multiplier for the planned replay", "default": 1.0},
+                "file": {"type": "string", "description": "Replay file id or name from the dataset manifest"},
                 "max_frames": {"type": "integer", "description": "Planned frame limit"},
                 "max_seconds": {"type": "number", "description": "Planned capture-time limit in seconds"},
             },
@@ -788,6 +789,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["datasets", "replay", a["source"]]
             if a.get("format"):
                 argv += ["--format", a["format"]]
+            if a.get("file"):
+                argv += ["--file", a["file"]]
             if "rate" in a:
                 argv += ["--rate", str(a["rate"])]
             if a.get("max_frames") is not None:

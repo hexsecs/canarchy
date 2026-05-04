@@ -141,7 +141,7 @@ def test_call_tool_datasets_replay_plan_does_not_stream():
     results = asyncio.run(
         handle_call_tool(
             "datasets_replay_plan",
-            {"source": "catalog:candid", "format": "jsonl", "rate": 10.0, "max_frames": 5, "max_seconds": 2.5},
+            {"source": "catalog:candid", "format": "jsonl", "file": "2_indicator_CAN.log", "rate": 10.0, "max_frames": 5, "max_seconds": 2.5},
         )
     )
     assert len(results) == 1
@@ -152,6 +152,7 @@ def test_call_tool_datasets_replay_plan_does_not_stream():
     assert payload["data"]["streamed"] is False
     assert payload["data"]["would_stream"] is True
     assert payload["data"]["output_format"] == "jsonl"
+    assert payload["data"]["replay_file"] == "2_indicator_CAN.log"
     assert payload["data"]["max_frames"] == 5
     assert payload["data"]["max_seconds"] == 2.5
 
@@ -299,10 +300,10 @@ def test_build_argv_datasets_search_with_options():
 def test_build_argv_datasets_replay_plan_forces_dry_run():
     argv = _build_argv(
         "datasets_replay_plan",
-        {"source": "catalog:candid", "format": "jsonl", "rate": 10.0, "max_frames": 100, "max_seconds": 2.5},
+        {"source": "catalog:candid", "format": "jsonl", "file": "2_indicator_CAN.log", "rate": 10.0, "max_frames": 100, "max_seconds": 2.5},
     )
     assert argv == [
-        "datasets", "replay", "catalog:candid", "--format", "jsonl", "--rate", "10.0",
+        "datasets", "replay", "catalog:candid", "--format", "jsonl", "--file", "2_indicator_CAN.log", "--rate", "10.0",
         "--max-frames", "100", "--max-seconds", "2.5", "--dry-run", "--json",
     ]
 

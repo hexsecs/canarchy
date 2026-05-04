@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233, #235, #242, #245 |
+| Issues | #216, #220, #233, #235, #241, #242, #245 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -185,6 +185,40 @@ And the metadata identifies provider ref, source URL, replay file, default repla
 
 **Fixture:** mocked `requests.get` response in `tests/test_dataset_provider.py`
 
+### TEST-DATASET-REPLAY-08: List Replayable Files
+
+```gherkin
+Given the CANdid catalog entry defines replay file metadata
+When the operator runs `canarchy datasets replay catalog:candid --list-files --json`
+Then stdout contains a standard JSON result envelope
+And the result lists replayable files with stable ids, names, sizes, formats, and source URLs
+And no remote stream is opened
+```
+
+**Fixture:** embedded catalog metadata and mocked `requests.get` assertion in `tests/test_dataset_provider.py`
+
+### TEST-DATASET-REPLAY-09: Replay Selected File
+
+```gherkin
+Given the CANdid catalog entry defines multiple replayable CAN logs
+When the operator runs `canarchy datasets replay catalog:candid --file 2_indicator_CAN.log --json`
+Then replay uses the selected file's source URL
+And JSON summary output identifies the selected replay file
+```
+
+**Fixture:** embedded catalog metadata and mocked `requests.get` response in `tests/test_dataset_provider.py`
+
+### TEST-DATASET-REPLAY-10: Unknown Replay File Returns Structured Error
+
+```gherkin
+Given the CANdid catalog entry defines replay file metadata
+When the operator runs `canarchy datasets replay catalog:candid --file missing_CAN.log --json`
+Then the command fails with `DATASET_REPLAY_FILE_NOT_FOUND`
+And no remote stream is opened
+```
+
+**Fixture:** embedded catalog metadata and mocked `requests.get` assertion in `tests/test_dataset_provider.py`
+
 ---
 
 ## Traceability
@@ -211,6 +245,9 @@ And the metadata identifies provider ref, source URL, replay file, default repla
 | REQ-DATASET-REPLAY-08 | TEST-DATASET-REPLAY-05 |
 | REQ-DATASET-REPLAY-09 | TEST-DATASET-REPLAY-06 |
 | REQ-DATASET-REPLAY-10 | TEST-DATASET-REPLAY-07 |
+| REQ-DATASET-REPLAY-11 | TEST-DATASET-REPLAY-08 |
+| REQ-DATASET-REPLAY-12 | TEST-DATASET-REPLAY-09 |
+| REQ-DATASET-REPLAY-13 | TEST-DATASET-REPLAY-10 |
 
 ---
 

@@ -714,6 +714,53 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(data["data"]["frame_count"], 1)
         self.assertNotIn("316#", out.splitlines()[0])
 
+    def test_datasets_replay_list_files_returns_manifest_without_streaming(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get") as get:
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--list-files",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        get.assert_not_called()
+        data = json.loads(out)
+        self.assertEqual(data["data"]["ref"], "catalog:candid")
+        self.assertEqual(data["data"]["default_replay_file"], "2_brakes_CAN.log")
+        self.assertGreaterEqual(data["data"]["count"], 2)
+        first = data["data"]["files"][0]
+        for key in ("id", "name", "size_bytes", "format", "source_url"):
+            self.assertIn(key, first)
+        self.assertEqual(first["id"], "2_brakes_CAN.log")
+
+    def test_datasets_replay_selected_file_uses_manifest_url(self) -> None:
+        response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
+        with patch("canarchy.dataset_convert.requests.get", return_value=response) as get:
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--file", "2_indicator_CAN.log",
+                "--rate", "1000",
+                "--max-frames", "1",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        get.assert_called_once_with("https://ndownloader.figshare.com/files/54551552", stream=True)
+        data = json.loads(out)
+        self.assertEqual(data["data"]["replay_file"], "2_indicator_CAN.log")
+        self.assertEqual(data["data"]["replay_file_id"], "2_indicator_CAN.log")
+        self.assertEqual(data["data"]["download_url"], "https://ndownloader.figshare.com/files/54551552")
+
+    def test_datasets_replay_unknown_file_returns_structured_error(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get") as get:
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--file", "missing_CAN.log",
+                "--json",
+            )
+        self.assertEqual(code, 1)
+        get.assert_not_called()
+        data = json.loads(out)
+        self.assertEqual(data["errors"][0]["code"], "DATASET_REPLAY_FILE_NOT_FOUND")
+
     def test_datasets_replay_max_seconds_json_summary(self) -> None:
         response = FakeStreamingResponse([
             "(0.000000) can0 316#0000000000000000",
@@ -791,6 +838,8 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["data"]["ref"], "catalog:candid")
         self.assertEqual(data["data"]["default_file"], "2_brakes_CAN.log")
+        self.assertEqual(data["data"]["replay_file"], "2_brakes_CAN.log")
+        self.assertGreaterEqual(len(data["data"]["replay_files"]), 2)
         self.assertEqual(data["data"]["output_format"], "jsonl")
         self.assertEqual(data["data"]["rate"], 10.0)
         self.assertEqual(data["data"]["max_frames"], 5)
