@@ -527,7 +527,7 @@ Notes:
 Stream a remote candump dataset file directly to stdout with replay timing. The source may be a direct candump download URL or a replayable dataset ref such as `catalog:candid`.
 
 ```bash
-canarchy datasets replay <dataset-ref-or-url> [--format candump|jsonl] [--rate <multiplier>] [--max-frames <n>] [--max-seconds <seconds>] [--dry-run] [--json]
+canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--list-files] [--format candump|jsonl] [--rate <multiplier>] [--max-frames <n>] [--max-seconds <seconds>] [--dry-run] [--json]
 ```
 
 Examples:
@@ -536,6 +536,8 @@ Examples:
 canarchy datasets replay catalog:candid --rate 1.0
 canarchy datasets replay catalog:candid --format jsonl --rate 10 --max-frames 1000
 canarchy datasets replay catalog:candid --format jsonl --rate 10 --max-seconds 30
+canarchy datasets replay catalog:candid --list-files --json
+canarchy datasets replay catalog:candid --file 2_indicator_CAN.log --rate 1000 --max-frames 10 --json
 canarchy datasets replay https://ndownloader.figshare.com/files/54551156 --rate 1000 --max-frames 10
 canarchy datasets replay catalog:candid --rate 1000 --max-frames 10 --json
 canarchy datasets replay catalog:candid --dry-run --json
@@ -546,6 +548,8 @@ Notes:
 * without `--json`, replayed frames are written directly to stdout as candump or JSONL records for piping
 * JSONL replay frame events include `payload.dataset.provider_ref`, `source_url`, `replay_file`, `default_replay_file`, `source_format`, `source_type`, and `frame_offset`
 * with `--json`, stdout contains a clean standard result envelope with replay metadata and no frame records
+* `--list-files --json` returns replayable file entries with stable `id`, `name`, `size_bytes`, `format`, and `source_url` fields
+* `--file` accepts a replay file `id` or `name`; unknown files fail with `DATASET_REPLAY_FILE_NOT_FOUND`
 * JSON summary output reports `stop_reason`, including `eof`, `max_frames`, `max_seconds`, `broken_pipe`, or `interrupted`
 * replay downloads incrementally from the remote HTTP response and does not require a complete local dataset file
 * `--dry-run` resolves replay source metadata without opening the remote stream

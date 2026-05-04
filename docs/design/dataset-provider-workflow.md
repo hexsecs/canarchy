@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented (Phase 2) |
-| Issue | #216, #220, #233, #235, #242, #245 |
+| Issue | #216, #220, #233, #235, #241, #242, #245 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -32,7 +32,7 @@ canarchy datasets cache list
 canarchy datasets cache refresh [--provider <name>]
 canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>]
 canarchy datasets stream <file> --source-format hcrl-csv --format candump|jsonl [--chunk-size N] [--provider-ref <ref>] [--output <path>]
-canarchy datasets replay <dataset-ref-or-url> [--format candump|jsonl] [--rate N] [--max-frames N] [--max-seconds N] [--dry-run]
+canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--list-files] [--format candump|jsonl] [--rate N] [--max-frames N] [--max-seconds N] [--dry-run]
 ```
 
 All commands follow the standard `--json`, `--jsonl`, `--table`, `--raw` output modes.
@@ -210,6 +210,9 @@ building a full in-memory frame list.
 | REQ-DATASET-REPLAY-08 | Unwanted behaviour | If a curated dataset index is requested as a replay source, the system shall return a structured `DATASET_INDEX_NOT_REPLAYABLE` error. |
 | REQ-DATASET-REPLAY-09 | Optional feature | Where `--max-seconds` is specified, the system shall stop replay after the requested capture-time window and report `stop_reason=max_seconds`. |
 | REQ-DATASET-REPLAY-10 | Optional feature | Where JSONL replay output is specified, the system shall include dataset provenance metadata on each frame event, including provider ref or URL, source URL, replay file, default replay file, frame offset, source format, and source type. |
+| REQ-DATASET-REPLAY-11 | Optional feature | Where replay file metadata is available for a dataset descriptor, the system shall list replayable files with stable id, name, size, format, and source URL fields. |
+| REQ-DATASET-REPLAY-12 | Optional feature | Where `--file` is specified, the system shall replay the selected file by id or name instead of the default replay file. |
+| REQ-DATASET-REPLAY-13 | Unwanted behaviour | If `--file` names a file that is not present in the replay manifest, the system shall return `DATASET_REPLAY_FILE_NOT_FOUND`. |
 
 ---
 

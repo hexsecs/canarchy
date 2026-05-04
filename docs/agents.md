@@ -103,7 +103,7 @@ Current exclusions:
 * CLI-only workflows such as `j1939 faults` and `re signals` that are not yet exposed as MCP tools
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
 
-For dataset workflows, agents should prefer MCP dataset tools when available. `datasets_search` and `datasets_inspect` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. Use `datasets_replay_plan` for safe replay preflight; use `max_frames` or `max_seconds` to bound replay. Actual frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
+For dataset workflows, agents should prefer MCP dataset tools when available. `datasets_search` and `datasets_inspect` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. Use `datasets_replay_plan` for safe replay preflight; use CLI `datasets replay --list-files --json` to choose a replay file and `--file <id-or-name>` to select it. Use `max_frames` or `max_seconds` to bound replay. Actual frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 
 ### Skills Workflow
 
