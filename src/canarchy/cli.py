@@ -2701,6 +2701,28 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
                 exit_code=EXIT_USER_ERROR,
                 errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
             ) from exc
+        
+        # Determine if this is a curated index
+        metadata = resolution.descriptor.metadata if isinstance(resolution.descriptor.metadata, dict) else {}
+        source_type = metadata.get("source_type") if isinstance(metadata, dict) else None
+        is_index = source_type == "curated-index" or "catalog" in resolution.descriptor.formats
+        
+        # Build appropriate instructions
+        if is_index:
+            index_instructions = (
+                f"Curated index entry. Visit the index page to discover datasets: "
+                f"{resolution.descriptor.source_url}"
+                + (f" — Note: {resolution.descriptor.access_notes}" if resolution.descriptor.access_notes else "")
+                + f"\n  Use `canarchy datasets search` to find specific datasets from this index."
+            )
+            download_instructions = index_instructions
+        else:
+            download_instructions = (
+                f"Dataset provenance recorded. Download the data manually from: "
+                f"{resolution.descriptor.source_url}"
+                + (f" — Note: {resolution.descriptor.access_notes}" if resolution.descriptor.access_notes else "")
+            )
+        
         return (
             {
                 "ref": args.ref,
@@ -2710,11 +2732,9 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
                 "is_cached": resolution.is_cached,
                 "provenance": resolution.provenance,
                 "source_url": resolution.descriptor.source_url,
-                "download_instructions": (
-                    f"Dataset provenance recorded. Download the data manually from: "
-                    f"{resolution.descriptor.source_url}"
-                    + (f" — Note: {resolution.descriptor.access_notes}" if resolution.descriptor.access_notes else "")
-                ),
+                "is_index": is_index,
+                "index_instructions": index_instructions if is_index else None,
+                "download_instructions": download_instructions,
             },
             [],
             [],
