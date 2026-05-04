@@ -467,7 +467,10 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertGreater(data["data"]["count"], 0)
         result = data["data"]["results"][0]
-        for key in ("name", "protocol_family", "license", "source_url", "conversion_targets"):
+        for key in (
+            "ref", "name", "protocol_family", "license", "source_url", "conversion_targets",
+            "is_replayable", "is_index", "default_replay_file", "download_url_available", "source_type",
+        ):
             self.assertIn(key, result)
 
     def test_datasets_search_query(self) -> None:
@@ -507,6 +510,36 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(data["data"]["name"], "road")
         self.assertIn("description", data["data"])
         self.assertIn("source_url", data["data"])
+        self.assertEqual(data["data"]["ref"], "catalog:road")
+        self.assertFalse(data["data"]["is_replayable"])
+        self.assertFalse(data["data"]["is_index"])
+        self.assertFalse(data["data"]["download_url_available"])
+        self.assertIsNone(data["data"]["default_replay_file"])
+        self.assertEqual(data["data"]["source_type"], "dataset")
+
+    def test_datasets_inspect_replayable_dataset_has_machine_fields(self) -> None:
+        code, out, _ = run_cli("datasets", "inspect", "catalog:candid", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["ref"], "catalog:candid")
+        self.assertTrue(data["data"]["is_replayable"])
+        self.assertFalse(data["data"]["is_index"])
+        self.assertTrue(data["data"]["download_url_available"])
+        self.assertEqual(data["data"]["default_replay_file"], "2_brakes_CAN.log")
+        self.assertEqual(data["data"]["source_type"], "dataset")
+
+    def test_datasets_inspect_index_dataset_has_machine_fields(self) -> None:
+        code, out, _ = run_cli("datasets", "inspect", "catalog:pivot-auto-datasets", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["ref"], "catalog:pivot-auto-datasets")
+        self.assertFalse(data["data"]["is_replayable"])
+        self.assertTrue(data["data"]["is_index"])
+        self.assertFalse(data["data"]["download_url_available"])
+        self.assertIsNone(data["data"]["default_replay_file"])
+        self.assertEqual(data["data"]["source_type"], "curated-index")
 
     def test_datasets_inspect_unknown_fails(self) -> None:
         code, out, _ = run_cli("datasets", "inspect", "nonexistent-xyz", "--json")
@@ -726,4 +759,4 @@ class CliIntegrationTests(unittest.TestCase):
         get.assert_not_called()
         data = json.loads(out)
         self.assertFalse(data["ok"])
-        self.assertEqual(data["errors"][0]["code"], "DATASET_REPLAY_UNAVAILABLE")
+        self.assertEqual(data["errors"][0]["code"], "DATASET_INDEX_NOT_REPLAYABLE")

@@ -96,6 +96,8 @@ Current exclusions:
 * CLI-only workflows such as `j1939 faults` and `re signals` that are not yet exposed as MCP tools
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
 
+For CLI-only dataset workflows, agents should prefer explicit JSON output. `datasets search --json` and `datasets inspect --json` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE` from `datasets replay`.
+
 ### Skills Workflow
 
 CANarchy skills are phase-1 workflow descriptors, not MCP tools. Agents should discover and fetch skills through the CLI provider workflow, inspect the cached manifest and entry file, then run the referenced CANarchy commands explicitly through either the CLI or the MCP tools that already exist.

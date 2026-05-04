@@ -483,6 +483,8 @@ canarchy
 
 This tree is a starting point, not a lock.
 
+For dataset automation, agents should prefer explicit JSON output. `datasets search --json` and `datasets inspect --json` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE` from `datasets replay`.
+
 ---
 
 ## J1939 expectations

@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented (Phase 2) |
-| Issue | #216, #220, #233, #235 |
+| Issue | #216, #220, #233, #235, #242 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -134,6 +134,7 @@ No network access is required for `search`, `inspect`, or `provider list`.
 | REQ-DATASET-CATALOG-01 | Ubiquitous | The system shall expose built-in catalog entries through `datasets search` and `datasets inspect` without network access. |
 | REQ-DATASET-CATALOG-02 | Ubiquitous | The system shall include source URL, license or access terms, protocol family, formats, size description, description, and metadata for each built-in catalog entry. |
 | REQ-DATASET-CATALOG-03 | Optional feature | Where a catalog entry represents a curated external index instead of a directly downloadable dataset, the system shall mark the entry as an index in metadata and describe that linked sources have their own access terms and formats. |
+| REQ-DATASET-CATALOG-04 | Ubiquitous | The system shall include stable machine fields for JSON dataset search and inspect results: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. |
 
 ---
 
@@ -206,6 +207,7 @@ building a full in-memory frame list.
 | REQ-DATASET-REPLAY-05 | Optional feature | Where `--json` is specified, the system shall emit a standard result envelope without interleaving frame records. |
 | REQ-DATASET-REPLAY-06 | Unwanted behaviour | If replay stdout is closed by a downstream pipeline consumer, the system shall stop replay cleanly without printing a Python traceback. |
 | REQ-DATASET-REPLAY-07 | Optional feature | Where `--dry-run` is specified, the system shall resolve replay source metadata without opening the remote stream. |
+| REQ-DATASET-REPLAY-08 | Unwanted behaviour | If a curated dataset index is requested as a replay source, the system shall return a structured `DATASET_INDEX_NOT_REPLAYABLE` error. |
 
 ---
 
