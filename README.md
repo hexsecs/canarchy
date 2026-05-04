@@ -168,7 +168,7 @@ Current file support:
 * additional supported candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier such as `20000080#0000000000000000`
 * supported capture-file suffixes today are `.candump` and `.log`; `capture-info --file -`, `stats --file -`, and `filter --file -` can read candump text from stdin
 * `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin
-* malformed candump log lines are skipped during capture parsing; inputs with no valid frames return structured transport errors instead of falling back to sample data
+* malformed candump log lines are skipped during capture parsing rather than falling back to sample data; commands that require capture metadata or explicitly validate stdin emptiness return structured errors when no valid frames are available
 
 ### Structured Output
 

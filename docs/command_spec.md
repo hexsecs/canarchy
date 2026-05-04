@@ -96,7 +96,7 @@ Supported file input today:
 * supported additional candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier
 * supported CAN FD flags today are the BRS and ESI bits in the single-nibble candump flags field
 * supported capture-file suffixes today are `.candump` and `.log`; `--file -` reads candump text from stdin for commands that explicitly support it
-* malformed log lines are skipped during capture parsing; sources with no valid frames fail with structured transport errors rather than falling back to fixture data
+* malformed log lines are skipped during capture parsing rather than falling back to fixture data; commands that require capture metadata or explicitly validate stdin emptiness return structured errors when no valid frames are available
 
 ### send
 
