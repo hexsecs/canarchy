@@ -983,3 +983,44 @@ class HumanReadableOutputTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("Use `canarchy datasets search", out)
         self.assertIn("curated index, not directly replayable", out)
+
+
+class FetchWordingTests(unittest.TestCase):
+    """Tests for clarified fetch wording for curated index entries (issue #246)."""
+
+    def test_fetch_normal_dataset_returns_download_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
+                code, out, _ = run_cli("datasets", "fetch", "catalog:road", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertIn("Download the data manually", data["data"]["download_instructions"])
+        self.assertIn("index_instructions", data["data"])
+        self.assertIsNone(data["data"]["index_instructions"])
+
+    def test_fetch_curated_index_returns_index_instructions(self) -> None:
+        code, out, _ = run_cli("datasets", "fetch", "catalog:pivot-auto-datasets", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertIn("is_index", data["data"])
+        self.assertTrue(data["data"]["is_index"])
+        self.assertIn("index_instructions", data["data"])
+        self.assertIn("Curated index entry", data["data"]["index_instructions"])
+        self.assertIn("Visit the index page", data["data"]["index_instructions"])
+        self.assertIn("Use `canarchy datasets search`", data["data"]["index_instructions"])
+
+    def test_fetch_curated_index_human_output_shows_index_note(self) -> None:
+        code, out, _ = run_cli("datasets", "fetch", "catalog:pivot-auto-datasets")
+        self.assertEqual(code, 0)
+        self.assertIn("Curated index entry", out)
+        self.assertIn("Visit the index page", out)
+
+    def test_fetch_normal_dataset_human_output_shows_download_note(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
+                code, out, _ = run_cli("datasets", "fetch", "catalog:road")
+        self.assertEqual(code, 0)
+        self.assertIn("Download the data manually", out)
+        self.assertNotIn("Curated index entry", out)
