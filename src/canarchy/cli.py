@@ -441,8 +441,8 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_stream.add_argument(
         "--source-format",
         required=True,
-        choices=["hcrl-csv"],
-        help="source file format (hcrl-csv: HCRL Timestamp,ID,DLC,Data CSV)",
+        choices=["hcrl-csv", "candump"],
+        help="source file format (hcrl-csv: HCRL Timestamp,ID,DLC,Data CSV; candump: can-utils log)",
     )
     datasets_stream.add_argument(
         "--format",

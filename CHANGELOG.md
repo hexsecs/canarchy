@@ -15,6 +15,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added `canarchy datasets replay --dry-run` so operators and agents can resolve replay metadata for dataset refs or direct URLs without opening the remote stream. Closes #247.
 * Added `canarchy datasets replay --max-seconds` and JSONL replay provenance metadata so operators can time-bound remote replay and trace emitted frames back to their dataset ref or URL. Closes #245.
 * Added replay file manifests and `canarchy datasets replay --list-files` / `--file <id-or-name>` selection for replayable dataset refs such as `catalog:candid`. Closes #241.
+* Added `candump` as a public `canarchy datasets stream --source-format` option so downloaded candump logs can be streamed to candump or JSONL with provenance metadata. Closes #243.
 * Added stable machine-friendly dataset JSON fields (`ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`) for dataset search and inspect results. Closes #242.
 * Added MCP tools for dataset provider discovery, search, inspect, fetch, cache operations, and safe replay planning so agents can use dataset metadata without shelling out. Closes #239.
 * Added `pivot-auto-datasets` to the built-in catalog as a curated source index for CAN, CAN-FD, J1939, and broader automotive datasets listed by the PIVOT Project. Closes #235.

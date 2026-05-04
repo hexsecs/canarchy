@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233, #235, #241, #242, #245 |
+| Issues | #216, #220, #233, #235, #241, #242, #243, #245 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -103,6 +103,27 @@ And frame events are not emitted to stdout
 ```
 
 **Fixture:** `tests/fixtures/dataset_hcrl_sample.csv`
+
+### TEST-DATASET-STREAM-06: CLI Streams Candump Source To JSONL
+
+```gherkin
+Given a small candump fixture
+When the operator runs `canarchy datasets stream --source-format candump --format jsonl`
+Then stdout contains JSONL frame events
+And the provider ref is preserved in dataset provenance metadata
+```
+
+**Fixture:** `tests/fixtures/sample.candump`
+
+### TEST-DATASET-STREAM-07: Help Lists Supported Source Formats
+
+```gherkin
+Given the dataset stream command is available
+When the operator runs `canarchy datasets stream --help`
+Then help text lists both `hcrl-csv` and `candump` source formats
+```
+
+**Fixture:** CLI parser help text
 
 ### TEST-DATASET-REPLAY-01: Remote Candump Replay Without Local File
 
@@ -230,7 +251,7 @@ And no remote stream is opened
 | REQ-DATASET-CATALOG-03 | TEST-DATASET-CATALOG-01 |
 | REQ-DATASET-CATALOG-04 | TEST-DATASET-CATALOG-03 |
 | REQ-DATASET-STREAM-01 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02, TEST-DATASET-STREAM-04 |
-| REQ-DATASET-STREAM-02 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02 |
+| REQ-DATASET-STREAM-02 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02, TEST-DATASET-STREAM-06, TEST-DATASET-STREAM-07 |
 | REQ-DATASET-STREAM-03 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-04 |
 | REQ-DATASET-STREAM-04 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-04 |
 | REQ-DATASET-STREAM-05 | TEST-DATASET-STREAM-03 |
