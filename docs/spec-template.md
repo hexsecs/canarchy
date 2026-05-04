@@ -50,7 +50,7 @@ Unwanted behaviour:
 
 Optional feature:
   Where `--stdin` is specified, the system shall read JSONL frame events from
-  stdin instead of a positional capture file.
+  stdin instead of a `--file` capture source.
 ```
 
 ---

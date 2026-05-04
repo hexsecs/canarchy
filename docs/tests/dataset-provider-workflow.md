@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233, #235, #241, #242, #243, #245 |
+| Issues | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -43,6 +43,23 @@ When the operator requests dataset search and inspect JSON output
 Then each descriptor includes `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`
 And replayable datasets identify their default replay file
 And curated index datasets identify themselves as indexes
+```
+
+**Fixture:** embedded catalog metadata and CLI JSON assertions in `tests/test_dataset_provider.py`
+
+### TEST-DATASET-CATALOG-04: Fetch Distinguishes Index Instructions From Dataset Downloads
+
+```gherkin
+Given the built-in public dataset catalog provider
+When the operator fetches `catalog:pivot-auto-datasets`
+Then the JSON response includes `is_index=true`
+And the JSON response includes non-empty `index_instructions`
+And the index instructions guide the operator to visit the index page
+
+When the operator fetches `catalog:road`
+Then the JSON response includes `is_index=false`
+And `index_instructions` is null
+And `download_instructions` tells the operator how to obtain the dataset manually
 ```
 
 **Fixture:** embedded catalog metadata and CLI JSON assertions in `tests/test_dataset_provider.py`
@@ -250,6 +267,7 @@ And no remote stream is opened
 | REQ-DATASET-CATALOG-02 | TEST-DATASET-CATALOG-01 |
 | REQ-DATASET-CATALOG-03 | TEST-DATASET-CATALOG-01 |
 | REQ-DATASET-CATALOG-04 | TEST-DATASET-CATALOG-03 |
+| REQ-DATASET-CATALOG-05 | TEST-DATASET-CATALOG-04 |
 | REQ-DATASET-STREAM-01 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02, TEST-DATASET-STREAM-04 |
 | REQ-DATASET-STREAM-02 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-02, TEST-DATASET-STREAM-06, TEST-DATASET-STREAM-07 |
 | REQ-DATASET-STREAM-03 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-04 |

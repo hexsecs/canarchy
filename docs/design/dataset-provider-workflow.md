@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented (Phase 2) |
-| Issue | #216, #220, #233, #235, #241, #242, #243, #245 |
+| Issue | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -232,6 +232,6 @@ building a full in-memory frame list.
 
 - Automated download for small, openly-licensed datasets (e.g., SynCAN)
 - Additional source formats (SynCAN CSV, ROAD CSV, comma.ai msgpack)
-- `datasets convert` reading from a provider ref (after fetch downloads the data)
+- `datasets convert` reading from a provider ref after a future automated-download feature resolves the dataset payload
 - Provider-specific streaming adapters for remote datasets such as commaCarSegments
 - Explicit safe live-bus replay from dataset streams

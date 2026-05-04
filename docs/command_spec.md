@@ -38,7 +38,7 @@ Important current behavior:
 * placeholder-only commands, currently limited to the `fuzz` family, still return `status: planned` and `implementation: command surface scaffold`
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
 * specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
-* file-backed analysis commands currently support standard timestamped candump log files with `.candump` and `.log` suffixes
+* file-backed analysis commands support standard timestamped candump log files with `.candump` and `.log` suffixes; selected commands also support `--file -` for candump text from stdin
 
 ---
 
@@ -95,8 +95,8 @@ Supported file input today:
 * file-backed commands consume standard timestamped candump logs in the form `(timestamp) interface frame#data`
 * supported additional candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier
 * supported CAN FD flags today are the BRS and ESI bits in the single-nibble candump flags field
-* supported capture-file suffixes today are `.candump` and `.log`
-* malformed log lines fail with structured transport errors rather than silently falling back to fixture data
+* supported capture-file suffixes today are `.candump` and `.log`; `--file -` reads candump text from stdin for commands that explicitly support it
+* malformed log lines are skipped during capture parsing; sources with no valid frames fail with structured transport errors rather than falling back to fixture data
 
 ### send
 
@@ -480,6 +480,11 @@ Record dataset provenance in the local cache. This does not download large datas
 canarchy datasets fetch <provider>:<dataset> [--json|--jsonl|--table|--raw]
 ```
 
+Notes:
+
+* normal dataset entries return `download_instructions` that point operators to the source URL for manual download
+* curated index entries return `is_index=true` and `index_instructions`; there is no single dataset payload to download
+
 ### datasets cache list
 
 List cached dataset provider manifests and provenance records.
@@ -523,7 +528,7 @@ canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --js
 
 Notes:
 
-* `datasets search` defaults to a compact human-readable table; use `--verbose` for detailed result blocks with descriptions, source URLs, and access notes
+* `datasets search` defaults to a compact human-readable table with a `TYPE` column (`INDEX` for curated indexes, `PLAY` for replayable datasets); use `--verbose` for detailed result blocks with type labels, descriptions, source URLs, replay defaults, index notes, and access notes
 * without `--json`, stream records are written directly to stdout or `--output`
 * JSONL stream records include `payload.dataset.provider_ref`, `frame_offset`, `chunk_index`, and `chunk_position`
 * with `--json`, stdout contains the standard result envelope and reports `frame_count` and `chunks`
@@ -553,7 +558,7 @@ canarchy datasets replay catalog:candid --dry-run --json
 Notes:
 
 * without `--json`, replayed frames are written directly to stdout as candump or JSONL records for piping
-* JSONL replay frame events include `payload.dataset.provider_ref`, `source_url`, `replay_file`, `default_replay_file`, `source_format`, and `source_type`
+* JSONL replay frame events include `payload.dataset.provider_ref`, `source_url`, `replay_file`, `default_replay_file`, `frame_offset`, `source_format`, and `source_type`
 * with `--json`, stdout contains a clean standard result envelope with replay metadata and no frame records
 * `--list-files --json` returns replay file entries with stable `id`, `name`, `size_bytes`, `format`, and `source_url` fields
 * `--file` accepts a replay file `id` or `name`; unknown files fail with `DATASET_REPLAY_FILE_NOT_FOUND`

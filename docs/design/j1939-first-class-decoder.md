@@ -37,7 +37,8 @@ Operators need J1939 commands that scale beyond a demo-only SPN map. They should
 ## Command Surface
 
 ```text
-canarchy j1939 decode <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 decode --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 decode --stdin [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 pgn <pgn> --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 spn <spn> --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
 canarchy j1939 tp sessions --file <capture> [--json] [--jsonl] [--table] [--raw]

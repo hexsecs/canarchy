@@ -33,6 +33,7 @@ Operators and agents need richer database-aware workflows than the current thin 
 
 ```text
 canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--table] [--raw]
+canarchy decode --stdin --dbc <file> [--json] [--jsonl] [--table] [--raw]
 canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--table] [--raw]
 canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--table] [--raw]
 ```

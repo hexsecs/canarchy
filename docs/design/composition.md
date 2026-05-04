@@ -20,8 +20,8 @@ Operators and coding agents should be able to connect commands with pipes instea
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| `REQ-COMP-01` | Optional feature | Where `--stdin` is specified, `decode`, `filter`, and `j1939 decode` shall read JSONL frame events from stdin instead of a positional capture file. |
-| `REQ-COMP-02` | Unwanted behaviour | If `--stdin` is specified alongside a positional capture file, the system shall return a structured error with code `STDIN_AND_FILE_SPECIFIED` and exit code 1. |
+| `REQ-COMP-01` | Optional feature | Where `--stdin` is specified, `decode`, `filter`, and `j1939 decode` shall read JSONL frame events from stdin instead of a `--file` capture source. |
+| `REQ-COMP-02` | Unwanted behaviour | If `--stdin` is specified alongside a `--file` capture source, the system shall return a structured error with code `STDIN_AND_FILE_SPECIFIED` and exit code 1. |
 | `REQ-COMP-03` | Unwanted behaviour | If neither `--stdin` nor a capture file is provided for a command that requires one, the system shall return a structured error with code `MISSING_INPUT` and exit code 1. |
 | `REQ-COMP-04` | Event-driven | When `--stdin` is in use, the system shall validate each non-empty line as a canonical frame event before command-specific processing begins. |
 | `REQ-COMP-05` | Unwanted behaviour | If a stdin line is malformed JSON, is not a frame event, or does not decode into a valid frame, the system shall return a structured error with code `INVALID_STREAM_EVENT` and exit code 1. |
@@ -32,14 +32,14 @@ Operators and coding agents should be able to connect commands with pipes instea
 
 ```text
 canarchy decode --dbc <file> --stdin [--json|--jsonl|--table|--raw]
-canarchy filter --stdin <expression> [--json|--jsonl|--table|--raw]
+canarchy filter <expression> --stdin [--json|--jsonl|--table|--raw]
 canarchy j1939 decode --stdin [--json|--jsonl|--table|--raw]
 ```
 
 Representative usage:
 
 ```bash
-canarchy capture can0 --jsonl | canarchy filter --stdin 'id==0x18FEEE31' --jsonl
+canarchy capture can0 --jsonl | canarchy filter 'id==0x18FEEE31' --stdin --jsonl
 canarchy capture can0 --jsonl | canarchy decode --stdin --dbc truck.dbc --jsonl
 canarchy capture can0 --jsonl | canarchy j1939 decode --stdin --jsonl
 ```
@@ -86,7 +86,7 @@ Rejected input:
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|
-| `STDIN_AND_FILE_SPECIFIED` | `--stdin` is used with a positional capture file | 1 |
+| `STDIN_AND_FILE_SPECIFIED` | `--stdin` is used with a `--file` capture source | 1 |
 | `MISSING_INPUT` | neither `--stdin` nor a capture file is provided | 1 |
 | `INVALID_STREAM_EVENT` | stdin line is malformed JSON, not a frame event, or does not decode into a valid frame | 1 |
 | `NO_STREAM_EVENTS` | stdin contains no valid non-empty frame events | 1 |

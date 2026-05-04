@@ -22,7 +22,7 @@ DBC-backed workflows are central to protocol-aware CAN analysis. Operators shoul
 |----|------|-------------|
 | `REQ-DBC-01` | Ubiquitous | The system shall provide a `decode` command for DBC-backed capture decoding. |
 | `REQ-DBC-02` | Ubiquitous | The system shall provide an `encode` command for DBC-backed message encoding. |
-| `REQ-DBC-03` | Event-driven | When `decode <file> --dbc <dbc>` is invoked, the system shall emit structured `decoded_message` and `signal` events for frames that match messages in the DBC. |
+| `REQ-DBC-03` | Event-driven | When `decode --file <file> --dbc <dbc>` or `decode --stdin --dbc <dbc>` is invoked, the system shall emit structured `decoded_message` and `signal` events for frames that match messages in the DBC. |
 | `REQ-DBC-04` | Event-driven | When `encode --dbc <dbc> <message> [<signal=value>...]` is invoked, the system shall return a structured frame result suitable for downstream transmit workflows. |
 | `REQ-DBC-05` | Unwanted behaviour | If the DBC file is invalid or unreadable, the system shall return a structured error with code `DBC_LOAD_FAILED` and exit code 3. |
 | `REQ-DBC-06` | Unwanted behaviour | If the requested message name is not present in the DBC, the system shall return a structured error with code `DBC_MESSAGE_NOT_FOUND` and exit code 3. |
@@ -32,6 +32,7 @@ DBC-backed workflows are central to protocol-aware CAN analysis. Operators shoul
 
 ```text
 canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--table] [--raw]
+canarchy decode --stdin --dbc <file> [--json] [--jsonl] [--table] [--raw]
 canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--table] [--raw]
 ```
 
@@ -39,7 +40,7 @@ canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--t
 
 In scope:
 
-* decoding capture files through a DBC database
+* decoding capture files or JSONL FrameEvents from stdin through a DBC database
 * encoding named messages from signal assignments
 * structured event emission for machine-readable workflows
 

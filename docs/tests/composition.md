@@ -15,7 +15,7 @@ Validate that commands supporting `--stdin` correctly compose in pipelines, reje
 ## Coverage Requirements
 
 * `decode`, `filter`, and `j1939 decode` read JSONL frame events from stdin when `--stdin` is specified
-* `--stdin` combined with a positional file returns a structured error
+* `--stdin` combined with a `--file` capture source returns a structured error
 * missing input source returns a structured error
 * malformed stdin lines return a structured error
 * empty stdin (no valid frame events) returns a structured error
@@ -40,7 +40,7 @@ Validate that commands supporting `--stdin` correctly compose in pipelines, reje
 ```gherkin
 Given  a canonical JSONL frame event line is provided on stdin
 And    the frame has arbitration ID `0x18FEEE31`
-When   the operator runs `canarchy filter --stdin id==0x18FEEE31 --json`
+When   the operator runs `canarchy filter id==0x18FEEE31 --stdin --json`
 Then   the result shall contain exactly one frame event
 And    the event arbitration ID shall equal `0x18FEEE31`
 ```
@@ -74,11 +74,11 @@ Then   the result shall include J1939 decoded-message events with PGN and source
 
 ---
 
-### `TEST-COMP-04` — `--stdin` combined with a capture file returns an error
+### `TEST-COMP-04` — `--stdin` combined with `--file` returns an error
 
 ```gherkin
 Given  the file `tests/fixtures/sample.candump` is available
-When   the operator runs `canarchy filter --stdin id==0x123 --file tests/fixtures/sample.candump --json`
+When   the operator runs `canarchy filter id==0x123 --stdin --file tests/fixtures/sample.candump --json`
 Then   the command shall exit with code `1`
 And    `errors[0].code` shall equal `"STDIN_AND_FILE_SPECIFIED"`
 ```
@@ -104,7 +104,7 @@ And    `errors[0].code` shall equal `"MISSING_INPUT"`
 
 ```gherkin
 Given  a non-JSON or non-frame-event line is provided on stdin
-When   the operator runs `canarchy filter --stdin id==0x123 --json`
+When   the operator runs `canarchy filter id==0x123 --stdin --json`
 Then   the command shall exit with code `1`
 And    `errors[0].code` shall equal `"INVALID_STREAM_EVENT"`
 ```
@@ -117,7 +117,7 @@ And    `errors[0].code` shall equal `"INVALID_STREAM_EVENT"`
 
 ```gherkin
 Given  stdin contains only blank lines or is empty
-When   the operator runs `canarchy filter --stdin id==0x123 --json`
+When   the operator runs `canarchy filter id==0x123 --stdin --json`
 Then   the command shall exit with code `1`
 And    `errors[0].code` shall equal `"NO_STREAM_EVENTS"`
 ```
