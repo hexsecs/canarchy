@@ -99,8 +99,8 @@ canarchy datasets inspect catalog:candid --json
 canarchy datasets replay catalog:candid --list-files --json
 canarchy datasets replay catalog:candid --dry-run --max-frames 1000 --json
 canarchy datasets replay catalog:candid --file 2_brakes_CAN.log --max-frames 1000 --format jsonl
-canarchy re entropy --file sample.candump --json
-canarchy re counters --file sample.candump --json
+canarchy re entropy sample.candump --json
+canarchy re counters sample.candump --json
 ```
 
 Agent output should distinguish replayable datasets from curated indexes, state license/access notes, bound frame streaming where possible, and keep dataset provenance in results.
@@ -137,7 +137,7 @@ canarchy stats --file incident.candump --json
 canarchy j1939 summary --file incident.candump --json
 canarchy j1939 faults --file incident.candump --json
 canarchy uds services --json
-canarchy re entropy --file incident.candump --json
+canarchy re entropy incident.candump --json
 ```
 
 Agent output should include a concise executive summary, protocol findings, suspicious evidence, limitations, reproducibility commands, and follow-up questions for the operator.
