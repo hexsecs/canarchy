@@ -1020,8 +1020,15 @@ class HumanReadableOutputTests(unittest.TestCase):
     def test_datasets_search_empty_query_shows_all_datasets(self) -> None:
         code, out, _ = run_cli("datasets", "search")
         self.assertEqual(code, 0)
-        self.assertIn("All datasets", out)
+        self.assertRegex(out.splitlines()[0], r"^All datasets \(\d+\)$")
+        self.assertNotIn("Datasets matching All datasets", out)
         self.assertNotIn('Datasets matching "all"', out)
+
+    def test_datasets_search_empty_query_verbose_shows_all_datasets(self) -> None:
+        code, out, _ = run_cli("datasets", "search", "--verbose")
+        self.assertEqual(code, 0)
+        self.assertRegex(out.splitlines()[0], r"^All datasets \(\d+\)$")
+        self.assertNotIn("Datasets matching All datasets", out)
 
     def test_datasets_search_table_includes_type_column(self) -> None:
         code, out, _ = run_cli("datasets", "search", "candid")

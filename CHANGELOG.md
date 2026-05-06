@@ -27,6 +27,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+* Fixed the default `datasets search` human heading to show `All datasets (N)` instead of `Datasets matching All datasets (N)`. Closes #267.
 * Made `canarchy datasets provider list` and `canarchy datasets search <query>` default to compact readable output instead of dumping raw Python result dictionaries, added `--verbose` for detailed search result blocks, and preserved explicit JSON output for automation.
 * Fixed MCP `stats` and `filter` tool argument mapping so they invoke the current CLI grammar (`stats --file <file>` and `filter <expr> --file <file>`) and return successful canonical envelopes. Closes #237.
 * Made `canarchy datasets replay` stop cleanly on closed stdout pipes instead of printing a Python `BrokenPipeError` traceback. Closes #240.
