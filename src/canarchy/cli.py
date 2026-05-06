@@ -4204,6 +4204,21 @@ def format_dbc_table(result: CommandResult) -> list[str]:
     db = result.data.get("database", {})
     if db:
         lines.append(f"path: {db.get('path', '')}")
+        if result.data.get("signals_only"):
+            lines.append(f"signals: {result.data.get('signal_count', 0)}")
+            for signal in result.data.get("signals", []):
+                unit = f"  [{signal['unit']}]" if signal.get("unit") else ""
+                lines.append(
+                    f"  {signal['message_name']}.{signal['name']}"
+                    f"  bit={signal['start_bit']}"
+                    f"  len={signal['length']}"
+                    f"  {signal.get('byte_order', '')}"
+                    f"  scale={signal.get('scale')}"
+                    f"  offset={signal.get('offset')}"
+                    f"  {signal.get('minimum')}..{signal.get('maximum')}"
+                    f"{unit}"
+                )
+            return lines
         lines.append(f"messages: {db.get('message_count', 0)}")
         lines.append(f"signals: {db.get('signal_count', 0)}")
     for message in result.data.get("messages", []):

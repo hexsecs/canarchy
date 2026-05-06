@@ -3748,6 +3748,54 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_FORMAT_UNSUPPORTED")
         self.assertIn("unsupported file format", payload["errors"][0]["message"])
 
+    def test_dbc_inspect_signals_only_human_output_lists_signal_rows(self) -> None:
+        exit_code, stdout, stderr = run_cli("dbc", "inspect", str(FIXTURES / "sample.dbc"), "--signals-only")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        lines = stdout.splitlines()
+        self.assertIn("signals: 6", lines)
+        signal_lines = [l for l in lines if l.startswith("  ")]
+        self.assertEqual(len(signal_lines), 6)
+        coolant = next(l for l in signal_lines if "CoolantTemp" in l)
+        self.assertIn("EngineStatus1.CoolantTemp", coolant)
+        self.assertIn("bit=0", coolant)
+        self.assertIn("len=8", coolant)
+        self.assertIn("little_endian", coolant)
+        self.assertIn("scale=1", coolant)
+        self.assertIn("offset=-40", coolant)
+        self.assertIn("[degC]", coolant)
+        engine_speed = next(l for l in signal_lines if "EngineSpeed" in l and "EngineSpeed1." in l)
+        self.assertIn("EngineSpeed1.EngineSpeed", engine_speed)
+        self.assertIn("scale=0.125", engine_speed)
+        self.assertIn("[rpm]", engine_speed)
+
+    def test_dbc_inspect_signals_only_with_message_filter_limits_rows(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--signals-only", "--message", "EngineStatus1"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        lines = stdout.splitlines()
+        self.assertIn("signals: 4", lines)
+        signal_lines = [l for l in lines if l.startswith("  ")]
+        self.assertEqual(len(signal_lines), 4)
+        self.assertTrue(all("EngineStatus1." in l for l in signal_lines))
+
+    def test_dbc_inspect_signals_only_json_includes_signals_array(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--signals-only", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["signal_count"], 6)
+        self.assertEqual(len(payload["data"]["signals"]), 6)
+        signal = next(s for s in payload["data"]["signals"] if s["name"] == "CoolantTemp")
+        self.assertEqual(signal["message_name"], "EngineStatus1")
+        self.assertEqual(signal["start_bit"], 0)
+        self.assertEqual(signal["length"], 8)
+        self.assertEqual(signal["offset"], -40)
+        self.assertEqual(signal["unit"], "degC")
+
 
 class CompletionTests(unittest.TestCase):
     """Tests for tab completion in the shell and TUI."""
