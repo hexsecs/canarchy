@@ -33,6 +33,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
+* Documented five security use cases for using CANarchy with coding agents, including a CAN/J1939 capture triage workflow and fixture-backed example. Closes #271.
 * Audited and refreshed operator, agent, design, and test documentation for current dataset replay/fetch behavior, MCP dataset coverage, stdin pipeline semantics, and file-backed command grammar. Closes #259.
 
 ## [0.6.0] - 2026-04-28

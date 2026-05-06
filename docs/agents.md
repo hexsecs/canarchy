@@ -8,6 +8,8 @@
 
 CANarchy ships a native Model Context Protocol (MCP) server. Agents that support MCP tool calls can connect directly instead of spawning subprocesses and parsing stdout.
 
+For security workflow examples that combine CLI/MCP calls into complete analyst tasks, see [Security Use Cases With Coding Agents](security-use-cases.md).
+
 ### Starting the Server
 
 ```bash
