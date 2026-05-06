@@ -84,6 +84,7 @@ def stream_file(
     output_format: str,
     destination: str | None = None,
     chunk_size: int = 1000,
+    max_frames: int | None = None,
     provider_ref: str | None = None,
 ) -> dict:
     """Stream a dataset file to candump or JSONL without materializing all frames."""
@@ -104,6 +105,12 @@ def stream_file(
             code="INVALID_CHUNK_SIZE",
             message="Chunk size must be at least 1.",
             hint="Use `--chunk-size` with a positive integer.",
+        )
+    if max_frames is not None and max_frames < 1:
+        raise ConversionError(
+            code="INVALID_MAX_FRAMES",
+            message="Max frames must be at least 1.",
+            hint="Use `--max-frames` with a positive integer.",
         )
 
     src = Path(source_path)
@@ -128,6 +135,7 @@ def stream_file(
             output_format=output_format,
             source=source_format,
             chunk_size=chunk_size,
+            max_frames=max_frames,
             provider_ref=provider_ref,
         )
         destination_label = "-"
@@ -141,6 +149,7 @@ def stream_file(
                 output_format=output_format,
                 source=source_format,
                 chunk_size=chunk_size,
+                max_frames=max_frames,
                 provider_ref=provider_ref,
             )
         destination_label = str(dest)
@@ -151,6 +160,7 @@ def stream_file(
         "source_format": source_format,
         "output_format": output_format,
         "chunk_size": chunk_size,
+        "max_frames": max_frames,
         "chunks": counts["chunks"],
         "frame_count": counts["frame_count"],
         "provider_ref": provider_ref,
@@ -395,6 +405,7 @@ def _stream_frames(
     output_format: str,
     source: str,
     chunk_size: int,
+    max_frames: int | None,
     provider_ref: str | None,
 ) -> dict:
     """Stream frames to handle, emitting metadata chunks."""
@@ -403,6 +414,8 @@ def _stream_frames(
     frame_offset = 0
 
     for frame in frames:
+        if max_frames is not None and frame_count >= max_frames:
+            break
         if output_format == "candump":
             line = f"({frame['timestamp']:.6f}) can0 {frame['arbitration_id']:x}#{frame['data'].hex().upper()}\n"
         elif output_format == "jsonl":

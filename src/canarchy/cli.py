@@ -453,6 +453,7 @@ def build_parser() -> CanarchyArgumentParser:
     )
     datasets_stream.add_argument("--output", help="output file path; omit or use '-' for stdout")
     datasets_stream.add_argument("--chunk-size", type=int, default=1000, help="frames per metadata chunk (default: 1000)")
+    datasets_stream.add_argument("--max-frames", type=int, default=None, help="stop after N frames")
     datasets_stream.add_argument("--provider-ref", help="dataset provider ref to preserve in JSONL provenance")
     add_output_arguments(datasets_stream)
     datasets_stream.set_defaults(command="datasets stream")
@@ -2894,6 +2895,7 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
                 output_format=args.output_format,
                 destination=destination,
                 chunk_size=getattr(args, "chunk_size", 1000),
+                max_frames=getattr(args, "max_frames", None),
                 provider_ref=getattr(args, "provider_ref", None),
             )
         except ConversionError as exc:
@@ -4518,6 +4520,7 @@ def emit_dataset_stream(args: argparse.Namespace) -> int:
             output_format=args.output_format,
             destination=getattr(args, "output", None),
             chunk_size=getattr(args, "chunk_size", 1000),
+            max_frames=getattr(args, "max_frames", None),
             provider_ref=getattr(args, "provider_ref", None),
         )
     except ConversionError as exc:

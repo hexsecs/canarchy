@@ -23,6 +23,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Clarified `datasets fetch` output for curated index entries: responses now include `is_index` field, `index_instructions` with guidance to visit the index page and discover datasets, and clearer human-readable messaging. Normal dataset fetch continues to use `download_instructions`. Closes #246.
 * Added stdin pipeline support for file-backed analysis commands: `capture-info`, `stats`, `filter`, and other commands now accept `-` as file argument to read candump data from stdin. This enables piping `datasets replay` output directly into analysis commands without temporary files. Closes #238.
 * Exposed additional CLI commands as MCP tools: `j1939 compare`, `j1939 faults`, `j1939 tp compare`, `re signals`, `datasets convert`, `datasets replay --list-files`, and full skills provider/cache/search/fetch workflows. Closes #226.
+* Added `canarchy datasets stream --max-frames` so local downloaded dataset files can be streamed with a bounded frame count, matching safe replay workflows. Closes #270.
 
 ### Fixed
 
@@ -34,6 +35,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Documentation
 
 * Documented five security use cases for using CANarchy with coding agents, including a CAN/J1939 capture triage workflow and fixture-backed example. Closes #271.
+* Documented dataset stream and replay bounding semantics for agents, including the difference between frame limits and JSONL chunk metadata. Closes #268.
 * Audited and refreshed operator, agent, design, and test documentation for current dataset replay/fetch behavior, MCP dataset coverage, stdin pipeline semantics, and file-backed command grammar. Closes #259.
 
 ## [0.6.0] - 2026-04-28

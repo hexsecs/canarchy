@@ -381,11 +381,36 @@ class DatasetConvertTests(unittest.TestCase):
             self.assertEqual(len(lines), 6)
             self.assertTrue(lines[0].startswith("(0.000000) can0 "))
 
+    def test_stream_hcrl_csv_respects_max_frames(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "stream.jsonl")
+            result = stream_file(
+                src,
+                source_format="hcrl-csv",
+                output_format="jsonl",
+                destination=dest,
+                chunk_size=2,
+                max_frames=3,
+            )
+            events = [json.loads(line) for line in Path(dest).read_text().splitlines()]
+            self.assertEqual(result["frame_count"], 3)
+            self.assertEqual(result["chunks"], 2)
+            self.assertEqual(result["max_frames"], 3)
+            self.assertEqual(len(events), 3)
+            self.assertEqual(events[-1]["payload"]["dataset"]["frame_offset"], 2)
+
     def test_stream_invalid_chunk_size_raises_conversion_error(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         with self.assertRaises(ConversionError) as ctx:
             stream_file(src, source_format="hcrl-csv", output_format="jsonl", chunk_size=0)
         self.assertEqual(ctx.exception.code, "INVALID_CHUNK_SIZE")
+
+    def test_stream_invalid_max_frames_raises_conversion_error(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        with self.assertRaises(ConversionError) as ctx:
+            stream_file(src, source_format="hcrl-csv", output_format="jsonl", max_frames=0)
+        self.assertEqual(ctx.exception.code, "INVALID_MAX_FRAMES")
 
     def test_stream_missing_source_file_raises_conversion_error(self) -> None:
         with self.assertRaises(ConversionError) as ctx:
@@ -658,6 +683,33 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(len(events), 6)
         self.assertEqual(events[2]["payload"]["dataset"]["chunk_index"], 1)
 
+    def test_datasets_stream_hcrl_to_stdout_jsonl_respects_max_frames(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "hcrl-csv",
+            "--format", "jsonl",
+            "--chunk-size", "2",
+            "--max-frames", "3",
+        )
+        self.assertEqual(code, 0)
+        events = [json.loads(line) for line in out.splitlines()]
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[-1]["payload"]["dataset"]["frame_offset"], 2)
+
+    def test_datasets_stream_candump_stdout_respects_max_frames(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "hcrl-csv",
+            "--format", "candump",
+            "--max-frames", "2",
+        )
+        self.assertEqual(code, 0)
+        lines = out.splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("(0.000000) can0 "))
+
     def test_datasets_stream_candump_to_stdout_jsonl(self) -> None:
         src = str(FIXTURES / "sample.candump")
         code, out, _ = run_cli(
@@ -680,6 +732,7 @@ class CliIntegrationTests(unittest.TestCase):
             main(("datasets", "stream", "--help"))
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("{hcrl-csv,candump}", stdout.getvalue())
+        self.assertIn("--max-frames", stdout.getvalue())
 
     def test_datasets_stream_json_summary_does_not_emit_frames(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
@@ -696,6 +749,23 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(data["data"]["frame_count"], 6)
         self.assertEqual(data["data"]["chunks"], 3)
 
+    def test_datasets_stream_json_summary_reports_max_frames(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "hcrl-csv",
+            "--format", "jsonl",
+            "--chunk-size", "2",
+            "--max-frames", "3",
+            "--json",
+        )
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["frame_count"], 3)
+        self.assertEqual(data["data"]["chunks"], 2)
+        self.assertEqual(data["data"]["max_frames"], 3)
+
     def test_datasets_stream_invalid_chunk_size_returns_structured_error(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(
@@ -708,6 +778,19 @@ class CliIntegrationTests(unittest.TestCase):
         data = json.loads(out)
         self.assertFalse(data["ok"])
         self.assertEqual(data["errors"][0]["code"], "INVALID_CHUNK_SIZE")
+
+    def test_datasets_stream_invalid_max_frames_returns_structured_error(self) -> None:
+        src = str(FIXTURES / "dataset_hcrl_sample.csv")
+        code, out, _ = run_cli(
+            "datasets", "stream", src,
+            "--source-format", "hcrl-csv",
+            "--format", "jsonl",
+            "--max-frames", "0",
+        )
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["errors"][0]["code"], "INVALID_MAX_FRAMES")
 
     def test_datasets_stream_missing_source_returns_structured_error(self) -> None:
         code, out, _ = run_cli(

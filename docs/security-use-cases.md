@@ -37,6 +37,7 @@ canarchy datasets convert hcrl-j1939-attack.csv \
 canarchy datasets stream CSU090AT.txt \
   --source-format candump \
   --format candump \
+  --max-frames 100000 \
   --output CSU090AT.candump \
   --json
 ```
@@ -65,7 +66,7 @@ If no J1939 dataset payload is available locally, the agent should stop after `d
 Colorado State example using `2014_KW_T270_Short_CSU090AT.zip` from the Jeremy Daily heavy vehicle CAN/J1939 page:
 
 ```bash
-canarchy datasets stream CSU090AT.txt --source-format candump --format candump --output CSU090AT.candump --json
+canarchy datasets stream CSU090AT.txt --source-format candump --format candump --max-frames 100000 --output CSU090AT.candump --json
 canarchy capture-info --file CSU090AT.candump --json
 canarchy stats --file CSU090AT.candump --json
 canarchy j1939 summary --file CSU090AT.candump --json
