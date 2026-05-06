@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import time
+from itertools import islice
 from pathlib import Path
 from typing import IO, Iterator
 
@@ -130,12 +131,11 @@ def stream_file(
 
     if destination is None or destination == "-":
         counts = _stream_frames(
-            frames,
+            _bounded_frames(frames, max_frames=max_frames),
             sys.stdout,
             output_format=output_format,
             source=source_format,
             chunk_size=chunk_size,
-            max_frames=max_frames,
             provider_ref=provider_ref,
         )
         destination_label = "-"
@@ -144,12 +144,11 @@ def stream_file(
         dest.parent.mkdir(parents=True, exist_ok=True)
         with open(dest, "w") as handle:
             counts = _stream_frames(
-                frames,
+                _bounded_frames(frames, max_frames=max_frames),
                 handle,
                 output_format=output_format,
                 source=source_format,
                 chunk_size=chunk_size,
-                max_frames=max_frames,
                 provider_ref=provider_ref,
             )
         destination_label = str(dest)
@@ -405,7 +404,6 @@ def _stream_frames(
     output_format: str,
     source: str,
     chunk_size: int,
-    max_frames: int | None,
     provider_ref: str | None,
 ) -> dict:
     """Stream frames to handle, emitting metadata chunks."""
@@ -414,8 +412,6 @@ def _stream_frames(
     frame_offset = 0
 
     for frame in frames:
-        if max_frames is not None and frame_count >= max_frames:
-            break
         if output_format == "candump":
             line = f"({frame['timestamp']:.6f}) can0 {frame['arbitration_id']:x}#{frame['data'].hex().upper()}\n"
         elif output_format == "jsonl":
@@ -443,6 +439,12 @@ def _stream_frames(
     else:
         chunks = (frame_count // chunk_size) + 1
     return {"frame_count": frame_count, "chunks": chunks}
+
+
+def _bounded_frames(frames: Iterator[dict], *, max_frames: int | None) -> Iterator[dict]:
+    if max_frames is None:
+        return frames
+    return islice(frames, max_frames)
 
 
 def _write_candump(frames: list[dict], dest: Path) -> None:

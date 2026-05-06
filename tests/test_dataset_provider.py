@@ -400,6 +400,25 @@ class DatasetConvertTests(unittest.TestCase):
             self.assertEqual(len(events), 3)
             self.assertEqual(events[-1]["payload"]["dataset"]["frame_offset"], 2)
 
+    def test_stream_hcrl_csv_max_frames_does_not_parse_trailing_bad_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "sample.csv"
+            dest = Path(tmp) / "stream.log"
+            src.write_text(
+                "Timestamp,ID,DLC,Data,Label\n"
+                "0.000,316,8,00 00 00 00 00 00 00 00,Normal\n"
+                "not-a-time,316,8,00 00 00 00 00 00 00 00,Corrupt\n"
+            )
+            result = stream_file(
+                str(src),
+                source_format="hcrl-csv",
+                output_format="candump",
+                destination=str(dest),
+                max_frames=1,
+            )
+            self.assertEqual(result["frame_count"], 1)
+            self.assertEqual(len(dest.read_text().splitlines()), 1)
+
     def test_stream_invalid_chunk_size_raises_conversion_error(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         with self.assertRaises(ConversionError) as ctx:
