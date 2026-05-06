@@ -120,6 +120,49 @@ class DbcTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "DBC_SIGNAL_INVALID")
 
+    def test_encode_out_of_range_value_reports_signal_and_bounds(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "encode",
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "EngineStatus1",
+            "CoolantTemp=999",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_DECODE_ERROR)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        error = payload["errors"][0]
+        self.assertEqual(error["code"], "DBC_SIGNAL_INVALID")
+        self.assertIn("CoolantTemp", error["message"])
+        self.assertIn("999", error["message"])
+        detail = error["detail"]
+        self.assertEqual(detail["signal"], "CoolantTemp")
+        self.assertEqual(detail["supplied"], 999)
+        self.assertEqual(detail["minimum"], 0)
+        self.assertEqual(detail["maximum"], 210)
+
+    def test_encode_below_minimum_value_reports_signal_and_bounds(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "encode",
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "EngineStatus1",
+            "Load=-5",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_DECODE_ERROR)
+
+        payload = json.loads(stdout)
+        error = payload["errors"][0]
+        self.assertEqual(error["code"], "DBC_SIGNAL_INVALID")
+        detail = error["detail"]
+        self.assertEqual(detail["signal"], "Load")
+        self.assertEqual(detail["supplied"], -5)
+        self.assertEqual(detail["minimum"], 0)
+        self.assertEqual(detail["maximum"], 100)
+
     def test_dbc_inspect_cli_returns_structured_metadata(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "dbc",

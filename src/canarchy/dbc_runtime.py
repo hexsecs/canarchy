@@ -289,6 +289,41 @@ def encode_message_runtime(
             hint="Use only signal names that exist in the selected DBC message.",
         )
 
+    for sig_name, sig_value in signals.items():
+        signal = message.get_signal_by_name(sig_name)
+        choices = getattr(signal, "choices", None)
+        if choices:
+            valid_labels = set(choices.values())
+            valid_keys = set(choices.keys())
+            if sig_value not in valid_labels and sig_value not in valid_keys:
+                raise DbcError(
+                    code="DBC_SIGNAL_INVALID",
+                    message=f"Signal '{sig_name}' value {sig_value!r} is not a valid choice.",
+                    hint=f"Valid choices for '{sig_name}': {', '.join(str(v) for v in sorted(valid_labels))}.",
+                    detail={
+                        "signal": sig_name,
+                        "supplied": sig_value,
+                        "choices": sorted(valid_labels),
+                    },
+                )
+        else:
+            minimum = normalize_value(signal.minimum) if signal.minimum is not None else None
+            maximum = normalize_value(signal.maximum) if signal.maximum is not None else None
+            if isinstance(sig_value, (int, float)) and minimum is not None and sig_value < minimum:
+                raise DbcError(
+                    code="DBC_SIGNAL_INVALID",
+                    message=f"Signal '{sig_name}' value {sig_value} is below the minimum of {minimum}.",
+                    hint=f"'{sig_name}' must be in the range {minimum}..{maximum}.",
+                    detail={"signal": sig_name, "supplied": sig_value, "minimum": minimum, "maximum": maximum},
+                )
+            if isinstance(sig_value, (int, float)) and maximum is not None and sig_value > maximum:
+                raise DbcError(
+                    code="DBC_SIGNAL_INVALID",
+                    message=f"Signal '{sig_name}' value {sig_value} exceeds the maximum of {maximum}.",
+                    hint=f"'{sig_name}' must be in the range {minimum}..{maximum}.",
+                    detail={"signal": sig_name, "supplied": sig_value, "minimum": minimum, "maximum": maximum},
+                )
+
     try:
         encoded = message.encode(signals)
     except Exception as exc:  # pragma: no cover
