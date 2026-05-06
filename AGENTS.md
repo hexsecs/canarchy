@@ -487,6 +487,8 @@ For dataset automation, agents should prefer MCP dataset tools when available, o
 
 For stdin pipelines, `capture-info --file -`, `stats --file -`, and `filter --file -` read candump text from stdin. `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin regardless of output format.
 
+For security workflow examples that combine commands into complete agent tasks, see `docs/security-use-cases.md`. The primary documented workflows are CAN/J1939 capture triage, dataset-driven IDS experimentation, DBC-assisted signal reconnaissance, protocol-aware incident reporting, and safe replay/regression testing.
+
 ---
 
 ## J1939 expectations

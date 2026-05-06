@@ -72,6 +72,7 @@ nav:
       - Command Spec: command_spec.md
       - Event Schema: event-schema.md
       - CAN Tool Feature Matrix: feature-matrix.md
+      - Security Use Cases With Agents: security-use-cases.md
   - Tutorials:
       - Overview: tutorials/index.md
       - Discover and Use Provider-Backed DBC Files: tutorials/dbc_provider_workflow.md
