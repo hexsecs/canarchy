@@ -31,7 +31,7 @@ canarchy datasets fetch <ref>
 canarchy datasets cache list
 canarchy datasets cache refresh [--provider <name>]
 canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>]
-canarchy datasets stream <file> --source-format hcrl-csv|candump --format candump|jsonl [--chunk-size N] [--provider-ref <ref>] [--output <path>]
+canarchy datasets stream <file> --source-format hcrl-csv|candump --format candump|jsonl [--chunk-size N] [--max-frames N] [--provider-ref <ref>] [--output <path>]
 canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--list-files] [--format candump|jsonl] [--rate N] [--max-frames N] [--max-seconds N] [--dry-run]
 ```
 
@@ -185,6 +185,8 @@ building a full in-memory frame list.
 | REQ-DATASET-STREAM-04 | Ubiquitous | The system shall include `frame_offset`, `chunk_index`, and `chunk_position` metadata on JSONL streamed frame events. |
 | REQ-DATASET-STREAM-05 | Unwanted behaviour | If `--chunk-size` is less than 1, the system shall return a structured `INVALID_CHUNK_SIZE` error. |
 | REQ-DATASET-STREAM-06 | Unwanted behaviour | If the source file is malformed, the system shall return a structured `MALFORMED_SOURCE` error instead of emitting partial success as a normal completion. |
+| REQ-DATASET-STREAM-07 | Optional feature | Where `--max-frames` is specified, the system shall stop local dataset streaming after emitting at most the requested number of frames. |
+| REQ-DATASET-STREAM-08 | Unwanted behaviour | If `--max-frames` is less than 1, the system shall return a structured `INVALID_MAX_FRAMES` error. |
 
 ### JSONL Stream Event
 
@@ -195,7 +197,9 @@ building a full in-memory frame list.
 ### Notes
 
 - `datasets stream` writes stream records directly unless `--json` is requested.
-- With `--json`, the command returns the standard result envelope with `frame_count`, `chunks`, and stream configuration metadata.
+- `--chunk-size` controls JSONL provenance chunk metadata; it does not bound the number of emitted frames.
+- `--max-frames` bounds emitted frame records for local file streaming in both candump and JSONL output modes.
+- With `--json`, the command returns the standard result envelope with `frame_count`, `chunks`, `max_frames`, and stream configuration metadata.
 - Active live-bus replay remains out of scope for this increment; dataset streams can be saved or piped into existing file/stdin-aware analysis commands.
 
 ### Remote Replay Requirements

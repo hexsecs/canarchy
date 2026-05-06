@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import time
+from itertools import islice
 from pathlib import Path
 from typing import IO, Iterator
 
@@ -84,6 +85,7 @@ def stream_file(
     output_format: str,
     destination: str | None = None,
     chunk_size: int = 1000,
+    max_frames: int | None = None,
     provider_ref: str | None = None,
 ) -> dict:
     """Stream a dataset file to candump or JSONL without materializing all frames."""
@@ -105,6 +107,12 @@ def stream_file(
             message="Chunk size must be at least 1.",
             hint="Use `--chunk-size` with a positive integer.",
         )
+    if max_frames is not None and max_frames < 1:
+        raise ConversionError(
+            code="INVALID_MAX_FRAMES",
+            message="Max frames must be at least 1.",
+            hint="Use `--max-frames` with a positive integer.",
+        )
 
     src = Path(source_path)
     if not src.exists():
@@ -123,7 +131,7 @@ def stream_file(
 
     if destination is None or destination == "-":
         counts = _stream_frames(
-            frames,
+            _bounded_frames(frames, max_frames=max_frames),
             sys.stdout,
             output_format=output_format,
             source=source_format,
@@ -136,7 +144,7 @@ def stream_file(
         dest.parent.mkdir(parents=True, exist_ok=True)
         with open(dest, "w") as handle:
             counts = _stream_frames(
-                frames,
+                _bounded_frames(frames, max_frames=max_frames),
                 handle,
                 output_format=output_format,
                 source=source_format,
@@ -151,6 +159,7 @@ def stream_file(
         "source_format": source_format,
         "output_format": output_format,
         "chunk_size": chunk_size,
+        "max_frames": max_frames,
         "chunks": counts["chunks"],
         "frame_count": counts["frame_count"],
         "provider_ref": provider_ref,
@@ -430,6 +439,12 @@ def _stream_frames(
     else:
         chunks = (frame_count // chunk_size) + 1
     return {"frame_count": frame_count, "chunks": chunks}
+
+
+def _bounded_frames(frames: Iterator[dict], *, max_frames: int | None) -> Iterator[dict]:
+    if max_frames is None:
+        return frames
+    return islice(frames, max_frames)
 
 
 def _write_candump(frames: list[dict], dest: Path) -> None:

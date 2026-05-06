@@ -514,7 +514,7 @@ canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl
 Stream a downloaded dataset file to candump or JSONL without loading the full conversion into memory.
 
 ```bash
-canarchy datasets stream <file> --source-format hcrl-csv|candump --format candump|jsonl [--chunk-size <n>] [--provider-ref <ref>] [--output <path>] [--json]
+canarchy datasets stream <file> --source-format hcrl-csv|candump --format candump|jsonl [--chunk-size <n>] [--max-frames <n>] [--provider-ref <ref>] [--output <path>] [--json]
 ```
 
 Examples:
@@ -523,6 +523,7 @@ Examples:
 canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --provider-ref catalog:hcrl-car-hacking
 canarchy datasets stream sample.log --source-format candump --format jsonl --provider-ref catalog:candid
 canarchy datasets stream sample.csv --source-format hcrl-csv --format candump --output sample.candump
+canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --max-frames 1000
 canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --json
 ```
 
@@ -531,7 +532,9 @@ Notes:
 * `datasets search` defaults to a compact human-readable table with a `TYPE` column (`INDEX` for curated indexes, `PLAY` for replayable datasets); use `--verbose` for detailed result blocks with type labels, descriptions, source URLs, replay defaults, index notes, and access notes
 * without `--json`, stream records are written directly to stdout or `--output`
 * JSONL stream records include `payload.dataset.provider_ref`, `frame_offset`, `chunk_index`, and `chunk_position`
-* with `--json`, stdout contains the standard result envelope and reports `frame_count` and `chunks`
+* `--chunk-size` controls JSONL provenance chunk metadata and does not bound emitted frames
+* `--max-frames` stops local dataset streaming after at most N emitted frames for candump and JSONL output
+* with `--json`, stdout contains the standard result envelope and reports `frame_count`, `chunks`, and `max_frames`
 * live-bus replay from dataset streams is not part of this command; use explicit replay workflows after writing a capture file
 
 ### datasets replay

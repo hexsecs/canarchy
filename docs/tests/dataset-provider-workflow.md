@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259 |
+| Issues | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #270 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -138,9 +138,42 @@ And the provider ref is preserved in dataset provenance metadata
 Given the dataset stream command is available
 When the operator runs `canarchy datasets stream --help`
 Then help text lists both `hcrl-csv` and `candump` source formats
+And help text lists `--max-frames`
 ```
 
 **Fixture:** CLI parser help text
+
+### TEST-DATASET-STREAM-08: Local Stream Respects Max Frames
+
+```gherkin
+Given a small HCRL CSV fixture with six CAN frames
+When the operator runs `canarchy datasets stream --max-frames 3`
+Then stdout contains exactly three frame records
+And JSONL dataset provenance frame offsets end at 2
+```
+
+**Fixture:** `tests/fixtures/dataset_hcrl_sample.csv`
+
+### TEST-DATASET-STREAM-09: JSON Summary Reports Max Frames
+
+```gherkin
+Given a small HCRL CSV fixture with six CAN frames
+When the operator runs `canarchy datasets stream --max-frames 3 --json`
+Then stdout contains a standard JSON result envelope
+And the result reports `frame_count=3` and `max_frames=3`
+```
+
+**Fixture:** `tests/fixtures/dataset_hcrl_sample.csv`
+
+### TEST-DATASET-STREAM-10: Reject Invalid Max Frames
+
+```gherkin
+Given a valid HCRL CSV fixture
+When the operator requests a stream with max frames 0
+Then the command fails with `INVALID_MAX_FRAMES`
+```
+
+**Fixture:** `tests/fixtures/dataset_hcrl_sample.csv`
 
 ### TEST-DATASET-REPLAY-01: Remote Candump Replay Without Local File
 
