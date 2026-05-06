@@ -3553,7 +3553,7 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         key: value
         for key, value in vars(args).items()
         if not key.endswith("_action")
-        and key not in {"command", "command_name", "json", "jsonl", "table", "raw", "ack_active"}
+        and key not in {"command", "command_name", "json", "jsonl", "compact", "table", "raw", "ack_active"}
         and value is not None
     }
     if args.command in TRANSPORT_COMMANDS:

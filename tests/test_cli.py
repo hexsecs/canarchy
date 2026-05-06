@@ -3730,6 +3730,11 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_FILTER_EXPRESSION")
 
+    def test_compact_flag_not_leaked_into_stats_json_payload(self) -> None:
+        _, stdout, _ = run_cli("stats", "--file", str(FIXTURES / "sample.candump"), "--json")
+        payload = json.loads(stdout)
+        self.assertNotIn("compact", payload["data"])
+
     def test_invalid_candump_file_returns_structured_transport_error(self) -> None:
         exit_code, stdout, stderr = run_cli("stats", "--file", str(FIXTURES / "invalid.candump"), "--json")
         self.assertEqual(exit_code, EXIT_OK)
