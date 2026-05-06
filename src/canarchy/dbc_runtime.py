@@ -309,14 +309,14 @@ def encode_message_runtime(
         else:
             minimum = normalize_value(signal.minimum) if signal.minimum is not None else None
             maximum = normalize_value(signal.maximum) if signal.maximum is not None else None
-            if minimum is not None and sig_value < minimum:
+            if isinstance(sig_value, (int, float)) and minimum is not None and sig_value < minimum:
                 raise DbcError(
                     code="DBC_SIGNAL_INVALID",
                     message=f"Signal '{sig_name}' value {sig_value} is below the minimum of {minimum}.",
                     hint=f"'{sig_name}' must be in the range {minimum}..{maximum}.",
                     detail={"signal": sig_name, "supplied": sig_value, "minimum": minimum, "maximum": maximum},
                 )
-            if maximum is not None and sig_value > maximum:
+            if isinstance(sig_value, (int, float)) and maximum is not None and sig_value > maximum:
                 raise DbcError(
                     code="DBC_SIGNAL_INVALID",
                     message=f"Signal '{sig_name}' value {sig_value} exceeds the maximum of {maximum}.",
