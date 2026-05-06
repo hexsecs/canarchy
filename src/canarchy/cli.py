@@ -4361,9 +4361,10 @@ def format_datasets_table(result: CommandResult) -> list[str]:
     results = result.data.get("results", [])
     is_empty_query = not query
     title_query = "All datasets" if is_empty_query else f"\"{query}\""
+    title = f"All datasets ({count})" if is_empty_query else f"Datasets matching {title_query} ({count})"
     
     if result.data.get("verbose"):
-        lines = [f"Datasets matching {title_query} ({count})", ""]
+        lines = [title, ""]
         for item in results:
             ref = f"{item['provider']}:{item['name']}"
             is_replayable = item.get("is_replayable", False)
@@ -4429,7 +4430,7 @@ def format_datasets_table(result: CommandResult) -> list[str]:
         key: max([len(header), *(len(row[key]) for row in rows)] or [len(header)])
         for header, key in columns
     }
-    lines = [f"Datasets matching {title_query} ({count})", ""]
+    lines = [title, ""]
     lines.append("  ".join(header.ljust(widths[key]) for header, key in columns))
     for row in rows:
         lines.append("  ".join(row[key].ljust(widths[key]) for _, key in columns))
