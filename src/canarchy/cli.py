@@ -78,11 +78,14 @@ class ErrorDetail:
     code: str
     message: str
     hint: str | None = None
+    detail: dict[str, Any] | None = None
 
-    def to_payload(self) -> dict[str, str]:
-        payload = {"code": self.code, "message": self.message}
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"code": self.code, "message": self.message}
         if self.hint:
             payload["hint"] = self.hint
+        if self.detail:
+            payload["detail"] = self.detail
         return payload
 
 
@@ -4898,7 +4901,7 @@ def execute_command(argv: Sequence[str] | None = None) -> tuple[int, CommandResu
             EXIT_DECODE_ERROR,
             error_result(
                 args.command,
-                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint, detail=exc.detail)],
             ),
         )
     except SkillError as exc:

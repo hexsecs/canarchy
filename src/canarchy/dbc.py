@@ -24,6 +24,7 @@ class DbcError(Exception):
     code: str
     message: str
     hint: str
+    detail: dict[str, Any] | None = None
 
     def __str__(self) -> str:
         return self.message
