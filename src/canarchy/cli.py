@@ -4372,6 +4372,81 @@ def format_dataset_inspect(result: CommandResult) -> list[str]:
     return lines
 
 
+def format_datasets_fetch(result: CommandResult) -> list[str]:
+    """Format human-readable output for datasets fetch."""
+    data = result.data
+    lines = []
+    ref = data.get("ref", "")
+    is_index = data.get("is_index", False)
+
+    type_str = " [INDEX]" if is_index else ""
+    lines.append(f"Dataset: {ref}{type_str}")
+    lines.append("")
+
+    lines.append("Provenance")
+    lines.append(f"  Ref: {ref}")
+    lines.append(f"  Provider: {data.get('provider', '')}")
+    lines.append(f"  Name: {data.get('name', '')}")
+    lines.append(f"  Source URL: {data.get('source_url', '')}")
+    lines.append(f"  Cache path: {data.get('cache_path', '')}")
+    lines.append(f"  Cached: {'Yes' if data.get('is_cached') else 'No'}")
+    lines.append("")
+
+    lines.append("Next steps")
+    if is_index:
+        lines.append(f"  Curated index entry. Visit the index page to discover datasets:")
+        lines.append(f"    {data.get('source_url', '')}")
+        lines.append("  Use `canarchy datasets search <keyword>` to find specific datasets from this index.")
+    else:
+        lines.append(f"  Download the data manually from:")
+        lines.append(f"    {data.get('source_url', '')}")
+    lines.append("")
+
+    return lines
+
+
+def format_datasets_replay_dry_run(result: CommandResult) -> list[str]:
+    """Format human-readable output for datasets replay --dry-run."""
+    data = result.data
+    lines = []
+    ref = data.get("ref") or data.get("source", "")
+
+    lines.append(f"Replay plan (dry run): {ref}")
+    lines.append("")
+
+    lines.append("Source")
+    lines.append(f"  Ref: {ref}")
+    source_type = data.get("source_type") or "dataset"
+    lines.append(f"  Type: {source_type}")
+    if data.get("download_url"):
+        lines.append(f"  Download URL: {data['download_url']}")
+    lines.append("")
+
+    replay_file = data.get("replay_file") or data.get("default_replay_file", "")
+    source_format = data.get("source_format", "")
+    lines.append("Selected replay file")
+    lines.append(f"  File: {replay_file}")
+    if source_format:
+        lines.append(f"  Format: {source_format}")
+    lines.append("")
+
+    lines.append("Limits")
+    rate = data.get("rate")
+    lines.append(f"  Rate: {rate} fps" if rate is not None else "  Rate: (default)")
+    max_frames = data.get("max_frames")
+    lines.append(f"  Max frames: {max_frames}" if max_frames is not None else "  Max frames: (none)")
+    max_seconds = data.get("max_seconds")
+    lines.append(f"  Max seconds: {max_seconds}" if max_seconds is not None else "  Max seconds: (none)")
+    lines.append("")
+
+    lines.append("Replay plan")
+    lines.append(f"  Output format: {data.get('output_format', '')}")
+    lines.append(f"  Would stream: {'yes' if data.get('would_stream') else 'no'}")
+    lines.append("")
+
+    return lines
+
+
 def format_datasets_table(result: CommandResult) -> list[str]:
     if result.command == "datasets provider list":
         lines = ["Dataset providers"]
@@ -4762,6 +4837,20 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "table" and result.ok and result.command == "datasets inspect":
         for line in format_dataset_inspect(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command == "datasets fetch":
+        for line in format_datasets_fetch(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "table" and result.ok and result.command == "datasets replay" and result.data.get("dry_run"):
+        for line in format_datasets_replay_dry_run(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

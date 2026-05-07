@@ -1133,3 +1133,173 @@ class FetchWordingTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("Download the data manually", out)
         self.assertNotIn("Curated index entry", out)
+
+
+class FetchHumanFormattingTests(unittest.TestCase):
+    """Human-readable formatting for datasets fetch (issue #266)."""
+
+    def test_fetch_normal_dataset_shows_provenance_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
+                code, out, _ = run_cli("datasets", "fetch", "catalog:road")
+        self.assertEqual(code, 0)
+        self.assertIn("Provenance", out)
+        self.assertIn("Ref: catalog:road", out)
+        self.assertIn("Provider: catalog", out)
+        self.assertIn("Name: road", out)
+        self.assertIn("Source URL:", out)
+        self.assertIn("Cache path:", out)
+        self.assertIn("Cached:", out)
+
+    def test_fetch_normal_dataset_shows_next_steps_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
+                code, out, _ = run_cli("datasets", "fetch", "catalog:road")
+        self.assertEqual(code, 0)
+        self.assertIn("Next steps", out)
+        self.assertIn("Download the data manually", out)
+        self.assertNotIn("download_instructions:", out)
+
+    def test_fetch_normal_dataset_title_has_no_type_label(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
+                code, out, _ = run_cli("datasets", "fetch", "catalog:road")
+        self.assertEqual(code, 0)
+        self.assertIn("Dataset: catalog:road", out)
+        self.assertNotIn("[INDEX]", out)
+
+    def test_fetch_curated_index_shows_index_label(self) -> None:
+        code, out, _ = run_cli("datasets", "fetch", "catalog:pivot-auto-datasets")
+        self.assertEqual(code, 0)
+        self.assertIn("Dataset: catalog:pivot-auto-datasets [INDEX]", out)
+
+    def test_fetch_curated_index_shows_provenance_section(self) -> None:
+        code, out, _ = run_cli("datasets", "fetch", "catalog:pivot-auto-datasets")
+        self.assertEqual(code, 0)
+        self.assertIn("Provenance", out)
+        self.assertIn("Ref: catalog:pivot-auto-datasets", out)
+        self.assertIn("Provider: catalog", out)
+        self.assertIn("Name: pivot-auto-datasets", out)
+
+    def test_fetch_curated_index_next_steps_no_raw_dict(self) -> None:
+        code, out, _ = run_cli("datasets", "fetch", "catalog:pivot-auto-datasets")
+        self.assertEqual(code, 0)
+        self.assertIn("Next steps", out)
+        self.assertIn("Curated index entry", out)
+        self.assertIn("canarchy datasets search", out)
+        self.assertNotIn("index_instructions:", out)
+        self.assertNotIn("download_instructions:", out)
+
+    def test_fetch_json_output_unchanged(self) -> None:
+        code, out, _ = run_cli("datasets", "fetch", "catalog:pivot-auto-datasets", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertIn("is_index", data["data"])
+        self.assertIn("index_instructions", data["data"])
+        self.assertIn("download_instructions", data["data"])
+
+
+class ReplayDryRunHumanFormattingTests(unittest.TestCase):
+    """Human-readable formatting for datasets replay --dry-run (issue #269)."""
+
+    def test_dry_run_catalog_ref_shows_replay_plan_header(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get"):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl", "--rate", "10",
+                "--max-frames", "5", "--max-seconds", "2.5",
+                "--dry-run",
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("Replay plan (dry run): catalog:candid", out)
+
+    def test_dry_run_shows_source_section(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get"):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl", "--rate", "10",
+                "--dry-run",
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("Source", out)
+        self.assertIn("Ref: catalog:candid", out)
+        self.assertIn("Download URL:", out)
+
+    def test_dry_run_shows_selected_replay_file(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get"):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl", "--rate", "10",
+                "--dry-run",
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("Selected replay file", out)
+        self.assertIn("File:", out)
+        self.assertIn("Format:", out)
+
+    def test_dry_run_shows_limits_section(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get"):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl", "--rate", "10",
+                "--max-frames", "5", "--max-seconds", "2.5",
+                "--dry-run",
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("Limits", out)
+        self.assertIn("Rate: 10.0 fps", out)
+        self.assertIn("Max frames: 5", out)
+        self.assertIn("Max seconds: 2.5", out)
+
+    def test_dry_run_shows_replay_plan_section(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get"):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl", "--rate", "10",
+                "--dry-run",
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("Replay plan", out)
+        self.assertIn("Output format: jsonl", out)
+        self.assertIn("Would stream: yes", out)
+
+    def test_dry_run_no_raw_key_value_dump(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get"):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl", "--rate", "10",
+                "--dry-run",
+            )
+        self.assertEqual(code, 0)
+        self.assertNotIn("dry_run:", out)
+        self.assertNotIn("replay_files:", out)
+        self.assertNotIn("compact:", out)
+        self.assertNotIn("would_stream: True", out)
+
+    def test_dry_run_no_limits_shows_none_labels(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get"):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl", "--rate", "10",
+                "--dry-run",
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("Max frames: (none)", out)
+        self.assertIn("Max seconds: (none)", out)
+
+    def test_dry_run_json_output_unchanged(self) -> None:
+        with patch("canarchy.dataset_convert.requests.get"):
+            code, out, _ = run_cli(
+                "datasets", "replay", "catalog:candid",
+                "--format", "jsonl", "--rate", "10",
+                "--max-frames", "5",
+                "--dry-run", "--json",
+            )
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["data"]["dry_run"])
+        self.assertTrue(data["data"]["would_stream"])
+        self.assertEqual(data["data"]["ref"], "catalog:candid")
+        self.assertEqual(data["data"]["max_frames"], 5)
