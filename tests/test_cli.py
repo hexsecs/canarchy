@@ -3730,6 +3730,66 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_FILTER_EXPRESSION")
 
+    def test_compact_flag_not_leaked_into_stats_json_payload(self) -> None:
+        _, stdout, _ = run_cli("stats", "--file", str(FIXTURES / "sample.candump"), "--json")
+        payload = json.loads(stdout)
+        self.assertNotIn("compact", payload["data"])
+
+    def _mock_dbc_registry(self):
+        from canarchy.dbc_provider import DbcDescriptor
+        from unittest.mock import MagicMock
+        mock_registry = MagicMock()
+        mock_registry.search.return_value = [
+            DbcDescriptor(
+                provider="opendbc",
+                name="toyota_tnga_k_pt_generated",
+                version="abc123def456",
+                source_ref="opendbc:toyota_tnga_k_pt_generated",
+                cache_path=None,
+                sha256=None,
+                metadata={"brand": "toyota"},
+            ),
+            DbcDescriptor(
+                provider="opendbc",
+                name="toyota_new_mc_pt",
+                version="abc123def456",
+                source_ref="opendbc:toyota_new_mc_pt",
+                cache_path=None,
+                sha256=None,
+                metadata={"brand": "toyota"},
+            ),
+        ]
+        return mock_registry
+
+    def test_dbc_search_compact_output_shows_source_ref_and_brand(self) -> None:
+        with patch("canarchy.dbc_provider.get_registry", return_value=self._mock_dbc_registry()):
+            _, stdout, _ = run_cli("dbc", "search", "toyota")
+        lines = stdout.splitlines()
+        self.assertIn("query: toyota", lines)
+        self.assertIn("results: 2", lines)
+        self.assertTrue(any("opendbc:toyota_tnga_k_pt_generated" in l and "(toyota)" in l for l in lines))
+
+    def test_dbc_search_verbose_output_shows_provider_version_brand(self) -> None:
+        with patch("canarchy.dbc_provider.get_registry", return_value=self._mock_dbc_registry()):
+            _, stdout, _ = run_cli("dbc", "search", "toyota", "--verbose")
+        lines = stdout.splitlines()
+        self.assertIn("results: 2", lines)
+        self.assertTrue(any("opendbc:toyota_tnga_k_pt_generated" in l for l in lines))
+        self.assertTrue(any("provider: opendbc" in l for l in lines))
+        self.assertTrue(any("version:  abc123def456" in l for l in lines))
+        self.assertTrue(any("brand:    toyota" in l for l in lines))
+
+    def test_dbc_search_verbose_json_output_unchanged(self) -> None:
+        with patch("canarchy.dbc_provider.get_registry", return_value=self._mock_dbc_registry()):
+            _, stdout, _ = run_cli("dbc", "search", "toyota", "--verbose", "--json")
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["count"], 2)
+        result = payload["data"]["results"][0]
+        self.assertEqual(result["source_ref"], "opendbc:toyota_tnga_k_pt_generated")
+        self.assertEqual(result["provider"], "opendbc")
+        self.assertEqual(result["metadata"]["brand"], "toyota")
+
     def test_invalid_candump_file_returns_structured_transport_error(self) -> None:
         exit_code, stdout, stderr = run_cli("stats", "--file", str(FIXTURES / "invalid.candump"), "--json")
         self.assertEqual(exit_code, EXIT_OK)
