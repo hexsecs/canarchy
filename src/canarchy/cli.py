@@ -4393,13 +4393,9 @@ def format_datasets_fetch(result: CommandResult) -> list[str]:
     lines.append("")
 
     lines.append("Next steps")
-    if is_index:
-        lines.append(f"  Curated index entry. Visit the index page to discover datasets:")
-        lines.append(f"    {data.get('source_url', '')}")
-        lines.append("  Use `canarchy datasets search <keyword>` to find specific datasets from this index.")
-    else:
-        lines.append(f"  Download the data manually from:")
-        lines.append(f"    {data.get('source_url', '')}")
+    instruction = data.get("index_instructions") if is_index else data.get("download_instructions", "")
+    for part in (instruction or "").split("\n"):
+        lines.append(f"  {part}" if part.strip() else "")
     lines.append("")
 
     return lines

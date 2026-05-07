@@ -1199,6 +1199,15 @@ class FetchHumanFormattingTests(unittest.TestCase):
         self.assertIn("index_instructions", data["data"])
         self.assertIn("download_instructions", data["data"])
 
+    def test_fetch_dataset_with_access_notes_shows_notes_in_next_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
+                code, out, _ = run_cli("datasets", "fetch", "catalog:hcrl-car-hacking")
+        self.assertEqual(code, 0)
+        self.assertIn("Next steps", out)
+        self.assertIn("Research-use agreement", out)
+        self.assertNotIn("download_instructions:", out)
+
 
 class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     """Human-readable formatting for datasets replay --dry-run (issue #269)."""
