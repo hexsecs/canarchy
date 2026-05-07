@@ -323,6 +323,7 @@ def build_parser() -> CanarchyArgumentParser:
     dbc_search.add_argument("query", help="search query (name, make, or keyword)")
     dbc_search.add_argument("--provider", help="restrict search to a specific provider")
     dbc_search.add_argument("--limit", type=int, default=20, help="maximum results (default: 20)")
+    dbc_search.add_argument("--verbose", action="store_true", help="show provider, version, and path details")
     add_output_arguments(dbc_search)
     dbc_search.set_defaults(command="dbc search")
 
@@ -4245,8 +4246,16 @@ def format_dbc_provider_table(result: CommandResult) -> list[str]:
         lines.append(f"results: {result.data.get('count', 0)}")
         for item in result.data.get("results", []):
             brand = item.get("metadata", {}).get("brand", "")
-            brand_text = f" ({brand})" if brand else ""
-            lines.append(f"  {item['source_ref']}{brand_text}")
+            if result.data.get("verbose"):
+                lines.append(f"  {item['source_ref']}")
+                lines.append(f"    provider: {item.get('provider', '')}")
+                if item.get("version"):
+                    lines.append(f"    version:  {item['version'][:12]}")
+                if brand:
+                    lines.append(f"    brand:    {brand}")
+            else:
+                brand_text = f" ({brand})" if brand else ""
+                lines.append(f"  {item['source_ref']}{brand_text}")
     elif result.command == "dbc fetch":
         lines.append(f"ref: {result.data.get('ref', '')}")
         lines.append(f"name: {result.data.get('name', '')}")
