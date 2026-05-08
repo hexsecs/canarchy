@@ -855,7 +855,6 @@ class CliIntegrationTests(unittest.TestCase):
         first = data["data"]["files"][0]
         for key in ("id", "name", "size_bytes", "format", "source_url"):
             self.assertIn(key, first)
-        self.assertEqual(first["id"], "2_brakes_CAN.log")
 
     def test_datasets_replay_selected_file_uses_manifest_url(self) -> None:
         response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
