@@ -166,8 +166,8 @@ canarchy datasets replay catalog:candid \
 ```
 
 ```json
-{"timestamp": 0.0, "interface": "can0", "arbitration_id": 790, "data": "0000000000000000", ...}
-{"timestamp": 0.004123, "interface": "can0", "arbitration_id": 416, "data": "0200000000000000", ...}
+{"event_type": "frame", "source": "candump", "timestamp": 0.0, "payload": {"arbitration_id": 790, "data": "0000000000000000", "interface": "can0", "label": null}}
+{"event_type": "frame", "source": "candump", "timestamp": 0.004123, "payload": {"arbitration_id": 416, "data": "0200000000000000", "interface": "can0", "label": null}}
 ...
 ```
 
@@ -186,8 +186,8 @@ canarchy datasets replay catalog:candid \
   --max-seconds 60 \
   --raw > /tmp/driving.log
 
-canarchy capture-info /tmp/driving.log
-canarchy stats /tmp/driving.log
+canarchy capture-info --file /tmp/driving.log
+canarchy stats --file /tmp/driving.log
 ```
 
 ## Dataset notes
