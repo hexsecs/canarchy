@@ -10,13 +10,13 @@
 
 ## Test Objectives
 
-Validate that `uds services` returns a stable protocol-reference catalog and renders it consistently across structured and table output modes.
+Validate that `uds services` returns a stable protocol-reference catalog and renders it consistently across structured and text output modes.
 
 ## Coverage Requirements
 
 * command succeeds without a transport interface
 * JSON output contains stable service catalog metadata
-* table output presents protocol-aware service summaries
+* text output presents protocol-aware service summaries
 * raw output follows standard command-success behavior
 
 ## Requirement Traceability
@@ -48,7 +48,7 @@ And    the result shall include a `services` list containing known entries such 
 
 ```gherkin
 Given  no transport interface or live bus connection is required
-When   the operator runs `canarchy uds services --table`
+When   the operator runs `canarchy uds services --text`
 Then   the output shall include the command header and service count
 And    the output shall include catalog rows with service and positive-response identifiers
 ```

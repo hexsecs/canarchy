@@ -12,7 +12,7 @@ Today the repository delivers:
 
 * a stable CLI surface for analysts, scripts, and coding agents
 * J1939-first heavy vehicle workflows: PGN decoding, SPN extraction, TP session reassembly, DM1 fault parsing
-* structured output (`--json`, `--jsonl`, `--table`, `--raw`) on every command
+* structured output (`--json`, `--jsonl`, `--text`, `--raw`) on every command
 * live CAN transport via `python-can` with support for socketcan, virtual bus, and UDP multicast
 * UDS scan and trace, DBC decode/encode, capture/filter/replay, and an interactive shell
 
@@ -142,9 +142,9 @@ canarchy capture can0 --jsonl
 canarchy decode --file trace.candump --dbc vehicle.dbc --jsonl
 
 # J1939 heavy vehicle analysis
-canarchy j1939 decode --file trace.candump --table
-canarchy j1939 spn 110 --file trace.candump --table   # Engine Coolant Temp
-canarchy j1939 dm1 --file trace.candump --table        # Active fault codes
+canarchy j1939 decode --file trace.candump --text
+canarchy j1939 spn 110 --file trace.candump --text   # Engine Coolant Temp
+canarchy j1939 dm1 --file trace.candump --text        # Active fault codes
 
 # Pipe events into downstream tools
 canarchy j1939 spn 110 --file trace.candump --jsonl \

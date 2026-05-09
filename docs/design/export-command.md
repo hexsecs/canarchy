@@ -10,7 +10,7 @@
 
 ## Goal
 
-Preserve structured CANarchy artifacts on disk so operators and coding agents can save event streams and session state for later analysis without scraping table output.
+Preserve structured CANarchy artifacts on disk so operators and coding agents can save event streams and session state for later analysis without scraping text output.
 
 ## User-Facing Motivation
 
@@ -33,7 +33,7 @@ Operators need a deterministic way to persist machine-readable results from curr
 ## Command Surface
 
 ```text
-canarchy export <source> <destination> [--json] [--jsonl] [--table] [--raw]
+canarchy export <source> <destination> [--json] [--jsonl] [--text] [--raw]
 ```
 
 ### Supported source forms

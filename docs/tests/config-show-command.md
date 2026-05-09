@@ -114,11 +114,11 @@ And    the source entry shall be marked as `file`
 
 ---
 
-### TEST-CONFIG-08 — Table output includes source annotations
+### TEST-CONFIG-08 — Text output includes source annotations
 
 ```gherkin
 Given  the configuration snapshot is available
-When   the operator runs `canarchy config show --table`
+When   the operator runs `canarchy config show --text`
 Then   the system shall render a human-readable configuration summary
 And    the output shall include source annotations and config-file status text
 ```

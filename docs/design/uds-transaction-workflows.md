@@ -27,7 +27,7 @@ Operators need a protocol-aware UDS surface for discovery and transaction inspec
 | `REQ-UDS-TX-07` | Optional feature | Where `--ack-active` is supplied for `uds scan`, the system shall require a confirmation response of `YES` before a diagnostic request is sent. |
 | `REQ-UDS-TX-08` | Optional feature | Where active acknowledgement is required, the system shall require `--ack-active` before `uds scan` sends a diagnostic request. |
 | `REQ-UDS-TX-04` | Event-driven | When `uds trace <interface>` is invoked, the system shall emit structured `uds_transaction` events for traced request/response exchanges. |
-| `REQ-UDS-TX-05` | Ubiquitous | UDS table output shall present service identifier, ECU address, request ID, and response ID for each transaction. |
+| `REQ-UDS-TX-05` | Ubiquitous | UDS text output shall present service identifier, ECU address, request ID, and response ID for each transaction. |
 | `REQ-UDS-TX-06` | Unwanted behaviour | If the transport interface is unavailable, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
 | `REQ-UDS-TX-09` | Event-driven | When `uds scan` or `uds trace` receives ISO 15765-2 first-frame and consecutive-frame responses, the system shall reassemble them into a single `uds_transaction` response payload before service decoding. |
 | `REQ-UDS-TX-10` | Unwanted behaviour | If a segmented UDS response is truncated or arrives out of order, the system shall emit a `uds_transaction` event with `complete` equal to `false` and the partial reassembled response payload. |
@@ -37,8 +37,8 @@ Operators need a protocol-aware UDS surface for discovery and transaction inspec
 ## Command Surface
 
 ```text
-canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--table] [--raw]
-canarchy uds trace <interface> [--json] [--jsonl] [--table] [--raw]
+canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--text] [--raw]
+canarchy uds trace <interface> [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries
@@ -47,7 +47,7 @@ In scope:
 
 * structured scan responder transactions
 * structured trace transactions
-* protocol-aware table rendering
+* protocol-aware text rendering
 * transport-backed UDS response reassembly through the shared transport layer when `python-can` is selected
 
 Out of scope:

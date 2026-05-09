@@ -37,7 +37,7 @@ Operators need a quick active-traffic workflow for lab validation, replay suppor
 ```text
 canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>]
                                [--count <n>] [--gap <ms>] [--extended] [--ack-active]
-                               [--json] [--jsonl] [--table] [--raw]
+                               [--json] [--jsonl] [--text] [--raw]
 ```
 
 ### Arguments

@@ -36,7 +36,7 @@ This updates the cached provider manifest under `~/.canarchy/cache/dbc`.
 Search by make, model family, or another keyword:
 
 ```bash
-canarchy dbc search toyota --provider opendbc --limit 5 --table
+canarchy dbc search toyota --provider opendbc --limit 5 --text
 ```
 
 This returns provider-catalog matches without downloading every DBC file.
@@ -66,7 +66,7 @@ canarchy dbc inspect opendbc:toyota_tnga_k_pt --json
 Restrict the result to a single message when needed:
 
 ```bash
-canarchy dbc inspect opendbc:toyota_tnga_k_pt --message STEER_TORQUE_SENSOR --table
+canarchy dbc inspect opendbc:toyota_tnga_k_pt --message STEER_TORQUE_SENSOR --text
 ```
 
 Structured output includes `data.dbc_source`, which records the provider, logical DBC name, pinned version, and resolved local cache path.
@@ -86,13 +86,13 @@ This avoids copying or hard-coding a separate local path.
 If you are not sure which catalog entry fits the capture best, score multiple candidates against the observed arbitration IDs:
 
 ```bash
-canarchy re match-dbc tests/fixtures/sample.candump --provider opendbc --limit 5 --table
+canarchy re match-dbc tests/fixtures/sample.candump --provider opendbc --limit 5 --text
 ```
 
 To narrow the catalog first by vehicle make:
 
 ```bash
-canarchy re shortlist-dbc tests/fixtures/sample.candump --make toyota --provider opendbc --limit 5 --table
+canarchy re shortlist-dbc tests/fixtures/sample.candump --make toyota --provider opendbc --limit 5 --text
 ```
 
 These commands are passive and file-backed. They do not decode payload semantics; they rank candidate DBCs by frequency-weighted arbitration-ID coverage.

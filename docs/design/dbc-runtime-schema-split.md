@@ -15,7 +15,7 @@ Define an internal DBC architecture that preserves CANarchy's stable CLI and eve
 
 ## User-Facing Motivation
 
-Operators and agents need richer database-aware workflows than the current thin DBC layer provides, but they also need stable outputs. A split architecture lets CANarchy adopt `cantools` where runtime metadata and validation matter, while retaining `canmatrix` for schema ingestion and future conversion-oriented workflows.
+Operators and agents need richer database-aware workflows than the current thin DBC layer provides, but they also need stext outputs. A split architecture lets CANarchy adopt `cantools` where runtime metadata and validation matter, while retaining `canmatrix` for schema ingestion and future conversion-oriented workflows.
 
 ## Requirements
 
@@ -32,10 +32,10 @@ Operators and agents need richer database-aware workflows than the current thin 
 ## Command Surface
 
 ```text
-canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--table] [--raw]
-canarchy decode --stdin --dbc <file> [--json] [--jsonl] [--table] [--raw]
-canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--table] [--raw]
-canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--table] [--raw]
+canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--text] [--raw]
+canarchy decode --stdin --dbc <file> [--json] [--jsonl] [--text] [--raw]
+canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--text] [--raw]
+canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--text] [--raw]
 ```
 
 Future schema-management commands are expected to live under a separate `canarchy db ...` namespace.
@@ -110,7 +110,7 @@ All phases complete as of April 2026:
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 1 | Done | Internal metadata types in `dbc_types.py`, facade at `dbc.py`, `DBC_SIGNAL_INVALID` aligned, fixtures expanded |
-| Phase 2 | Done | `canarchy dbc inspect` implemented, JSON/JSONL/table/raw outputs, MCP exposed |
+| Phase 2 | Done | `canarchy dbc inspect` implemented, JSON/JSONL/text/raw outputs, MCP exposed |
 | Phase 3 | Done | cantools runtime adapter at `dbc_runtime.py`, decode/encode switched, fixture parity verified |
 | Phase 4 | Deferred | canmatrix retained for future schema workflows |
 | Phase 5 | Deferred | Evaluate long-term dependency strategy later |

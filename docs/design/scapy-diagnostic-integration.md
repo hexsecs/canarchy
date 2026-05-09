@@ -30,8 +30,8 @@ Operators already have structured UDS scan and trace workflows, but deeper diagn
 ## Command Surface
 
 ```text
-canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--table] [--raw]
-canarchy uds trace <interface> [--json] [--jsonl] [--table] [--raw]
+canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--text] [--raw]
+canarchy uds trace <interface> [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries
@@ -69,7 +69,7 @@ The standard CANarchy result envelope and event schema remain unchanged except f
 
 ### Table
 
-Table output remains transaction-first and may show negative response naming and Scapy-backed response summaries when available.
+Text output remains transaction-first and may show negative response naming and Scapy-backed response summaries when available.
 
 ## Error Contracts
 

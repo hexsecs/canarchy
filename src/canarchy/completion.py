@@ -60,7 +60,7 @@ SUBCOMMANDS: dict[str, list[str]] = {
 }
 
 # Output format flags shared by every command.
-_OUTPUT = ["--json", "--jsonl", "--raw", "--table"]
+_OUTPUT = ["--json", "--jsonl", "--raw", "--text"]
 _J1939_FILE_BOUNDS = ["--offset", "--max-frames", "--seconds"]
 
 # Per-command (or per-subcommand) flag lists.

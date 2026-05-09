@@ -155,7 +155,8 @@ def add_output_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--json", action="store_true", help="emit JSON output")
     group.add_argument("--jsonl", action="store_true", help="emit JSONL output")
     group.add_argument("--compact", action="store_true", help="emit compact JSON with frame data only")
-    group.add_argument("--table", action="store_true", help="emit table output")
+    group.add_argument("--text", action="store_true", help="emit human-readable text output")
+    group.add_argument("--table", action="store_true", help=argparse.SUPPRESS)
     group.add_argument("--raw", action="store_true", help="emit raw output")
 
 
@@ -690,20 +691,24 @@ def build_parser() -> CanarchyArgumentParser:
 
 
 def format_name(args: argparse.Namespace) -> str:
-    for name in ("json", "jsonl", "compact", "table", "raw"):
+    for name in ("json", "jsonl", "compact", "text", "raw"):
         if getattr(args, name, False):
             return name
-    return "table"
+    if getattr(args, "table", False):
+        return "text"
+    return "text"
 
 
 def requested_output_format(argv: Sequence[str] | None) -> str:
     if argv is None:
-        return "table"
+        return "text"
 
-    for name in ("json", "jsonl", "compact", "table", "raw"):
+    for name in ("json", "jsonl", "compact", "text", "raw"):
         if f"--{name}" in argv:
             return name
-    return "table"
+    if "--table" in argv:
+        return "text"
+    return "text"
 
 
 def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
@@ -3554,7 +3559,18 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         key: value
         for key, value in vars(args).items()
         if not key.endswith("_action")
-        and key not in {"command", "command_name", "json", "jsonl", "compact", "table", "raw", "ack_active"}
+        and key
+        not in {
+            "command",
+            "command_name",
+            "json",
+            "jsonl",
+            "compact",
+            "text",
+            "table",
+            "raw",
+            "ack_active",
+        }
         and value is not None
     }
     if args.command in TRANSPORT_COMMANDS:
@@ -4543,11 +4559,11 @@ def emit_live_capture(args: argparse.Namespace, output_format: str) -> int:
 
     All formats stream continuously rather than returning a fixed batch:
 
-    * ``table`` / ``raw`` / ``candump`` — candump-style text line per frame
+    * ``text`` / ``table`` / ``raw`` / ``candump`` — candump-style text line per frame
     * ``json`` / ``jsonl`` — one ``json.dumps(event)`` line per frame
     """
     transport = LocalTransport()
-    text_mode = output_format in {"table", "raw"}
+    text_mode = output_format in {"text", "raw"}
     try:
         for event in transport.capture_stream_events(args.interface):
             if event.get("event_type") != "frame":
@@ -4580,7 +4596,7 @@ def emit_live_capture(args: argparse.Namespace, output_format: str) -> int:
 
 def emit_live_candump(args: argparse.Namespace) -> int:
     """Backwards-compatible wrapper — delegates to emit_live_capture."""
-    return emit_live_capture(args, "table")
+    return emit_live_capture(args, "text")
 
 
 def emit_live_gateway(args: argparse.Namespace) -> int:
@@ -4778,7 +4794,7 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         return
 
     if (
-        output_format == "table"
+        output_format == "text"
         and result.ok
         and result.command == "capture"
         and result.data.get("display") == "candump"
@@ -4789,84 +4805,84 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command == "gateway":
+    if output_format == "text" and result.ok and result.command == "gateway":
         for line in format_gateway_lines(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command in J1939_COMMANDS:
+    if output_format == "text" and result.ok and result.command in J1939_COMMANDS:
         for line in format_j1939_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command == "dbc inspect":
+    if output_format == "text" and result.ok and result.command == "dbc inspect":
         for line in format_dbc_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command in DBC_PROVIDER_COMMANDS:
+    if output_format == "text" and result.ok and result.command in DBC_PROVIDER_COMMANDS:
         for line in format_dbc_provider_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command in SKILLS_COMMANDS:
+    if output_format == "text" and result.ok and result.command in SKILLS_COMMANDS:
         for line in format_skills_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command in {"datasets provider list", "datasets search"}:
+    if output_format == "text" and result.ok and result.command in {"datasets provider list", "datasets search"}:
         for line in format_datasets_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command == "datasets inspect":
+    if output_format == "text" and result.ok and result.command == "datasets inspect":
         for line in format_dataset_inspect(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command == "datasets fetch":
+    if output_format == "text" and result.ok and result.command == "datasets fetch":
         for line in format_datasets_fetch(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command == "datasets replay" and result.data.get("dry_run"):
+    if output_format == "text" and result.ok and result.command == "datasets replay" and result.data.get("dry_run"):
         for line in format_datasets_replay_dry_run(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command in UDS_COMMANDS:
+    if output_format == "text" and result.ok and result.command in UDS_COMMANDS:
         for line in format_uds_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command in RE_COMMANDS:
+    if output_format == "text" and result.ok and result.command in RE_COMMANDS:
         for line in format_re_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command == "generate":
+    if output_format == "text" and result.ok and result.command == "generate":
         print(f"command: {result.command}")
         print(f"interface: {result.data.get('interface', 'unknown')}")
         print(f"frames: {result.data.get('frame_count', 0)}")
@@ -4876,7 +4892,7 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"warning: {warning}")
         return
 
-    if output_format == "table" and result.ok and result.command == "config show":
+    if output_format == "text" and result.ok and result.command == "config show":
         sources = result.data.get("sources", {})
         print("Effective transport configuration:")
         for field in ("backend", "interface", "capture_limit", "capture_timeout"):
@@ -5058,7 +5074,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_tui(execute_command, command=args.tui_command)
     if args.command == "capture":
         return emit_live_capture(args, output_format)
-    if args.command == "gateway" and output_format in {"table", "raw"}:
+    if args.command == "gateway" and output_format in {"text", "raw"}:
         return emit_live_gateway(args)
     if args.command == "datasets stream" and not args.json:
         return emit_dataset_stream(args)

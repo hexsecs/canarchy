@@ -35,11 +35,11 @@ Operators and agents need a repeatable way to select the right CANarchy skill fo
 ## Command Surface
 
 ```text
-canarchy skills provider list [--json] [--jsonl] [--table] [--raw]
-canarchy skills search <query> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--table] [--raw]
-canarchy skills fetch <provider>:<skill> [--json] [--jsonl] [--table] [--raw]
-canarchy skills cache list [--json] [--jsonl] [--table] [--raw]
-canarchy skills cache refresh [--provider <name>] [--json] [--jsonl] [--table] [--raw]
+canarchy skills provider list [--json] [--jsonl] [--text] [--raw]
+canarchy skills search <query> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text] [--raw]
+canarchy skills fetch <provider>:<skill> [--json] [--jsonl] [--text] [--raw]
+canarchy skills cache list [--json] [--jsonl] [--text] [--raw]
+canarchy skills cache refresh [--provider <name>] [--json] [--jsonl] [--text] [--raw]
 canarchy mcp serve
 ```
 

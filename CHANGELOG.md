@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+* Renamed the canonical human-readable output flag from `--table` to `--text`; `--table` remains accepted as a compatibility alias. Closes #286.
+
 ## [0.7.0] - 2026-05-09
 
 ### Added

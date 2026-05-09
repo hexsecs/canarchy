@@ -55,7 +55,7 @@ flowchart TD
     REP --> EV
     REF --> EV
 
-    EV --> OUT[JSON / JSONL / table / raw output]
+    EV --> OUT[JSON / JSONL / text / raw output]
     DBC --> PROV[dbc_source provenance]
     PROV --> OUT
 ```
@@ -150,7 +150,7 @@ Primary responsibilities:
 * argument parsing and validation
 * dispatch to transport, DBC provider resolution, protocol, replay, reverse-engineering, export, and session helpers
 * structured error handling and exit codes
-* shaping output for `--json`, `--jsonl`, `--table`, and `--raw`
+* shaping output for `--json`, `--jsonl`, `--text`, and `--raw`
 
 Relevant module:
 
@@ -319,7 +319,7 @@ sequenceDiagram
     Command->>Engine: decode / classify / replay / summarize
     Engine-->>Command: typed events and payloads
     Command->>Output: CommandResult
-    Output-->>User: json / jsonl / table / raw
+    Output-->>User: json / jsonl / text / raw
 ```
 
 ## Current Strengths

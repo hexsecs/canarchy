@@ -30,19 +30,19 @@ Operators need J1939 commands that scale beyond a demo-only SPN map. They should
 | `REQ-J1939F-05` | Optional feature | Where `--dbc <path|provider-ref>` is specified for a J1939 decode workflow, the system shall enrich protocol-aware results with DBC-backed signal metadata and values when the supplied DBC contains a matching J1939 definition. |
 | `REQ-J1939F-10` | Optional feature | Where no `--dbc` flag is supplied and a default J1939 DBC is configured through `CANARCHY_J1939_DBC` or `[j1939].dbc`, the system shall use that configured DBC for J1939 DBC enrichment workflows. |
 | `REQ-J1939F-06` | Event-driven | When `j1939 spn <spn>` is invoked, the system shall resolve the requested SPN through the library-backed metadata path and optional DBC input rather than limiting decode to the current curated starter map. |
-| `REQ-J1939F-07` | Ubiquitous | The system shall preserve the existing command names and standard output modes (`--json`, `--jsonl`, `--table`, `--raw`) while upgrading the decoder implementation. |
+| `REQ-J1939F-07` | Ubiquitous | The system shall preserve the existing command names and standard output modes (`--json`, `--jsonl`, `--text`, `--raw`) while upgrading the decoder implementation. |
 | `REQ-J1939F-08` | Unwanted behaviour | If the configured J1939 decoder backend cannot be initialized, the system shall return a structured error with code `J1939_DECODER_UNAVAILABLE` and exit code `3`. |
 | `REQ-J1939F-09` | Unwanted behaviour | If `j1939 spn <spn>` is requested and neither the library metadata nor an optional DBC can resolve that SPN, the system shall return a structured error with code `J1939_SPN_NOT_FOUND` and exit code `1`. |
 
 ## Command Surface
 
 ```text
-canarchy j1939 decode --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 decode --stdin [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 pgn <pgn> --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 spn <spn> --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 tp sessions --file <capture> [--json] [--jsonl] [--table] [--raw]
-canarchy j1939 dm1 --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 decode --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--text] [--raw]
+canarchy j1939 decode --stdin [--dbc <path|provider-ref>] [--json] [--jsonl] [--text] [--raw]
+canarchy j1939 pgn <pgn> --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--text] [--raw]
+canarchy j1939 spn <spn> --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--text] [--raw]
+canarchy j1939 tp sessions --file <capture> [--json] [--jsonl] [--text] [--raw]
+canarchy j1939 dm1 --file <capture> [--dbc <path|provider-ref>] [--json] [--jsonl] [--text] [--raw]
 
 # optional defaults
 # ~/.canarchy/config.toml

@@ -23,12 +23,12 @@ UDS workflows are easier to script and reason about when the command surface inc
 | `REQ-UDS-SVC-01` | Ubiquitous | The system shall provide a `canarchy uds services` command. |
 | `REQ-UDS-SVC-02` | Event-driven | When `uds services` is invoked, the system shall return a stable catalogue of UDS services including service identifier, name, positive-response service identifier, category, and subfunction requirements. |
 | `REQ-UDS-SVC-03` | Ubiquitous | The `uds services` command shall require no transport interface or live bus connection. |
-| `REQ-UDS-SVC-04` | Ubiquitous | The command shall support standard CANarchy output modes with protocol-aware table output. |
+| `REQ-UDS-SVC-04` | Ubiquitous | The command shall support standard CANarchy output modes with protocol-aware text output. |
 
 ## Command Surface
 
 ```text
-canarchy uds services [--json] [--jsonl] [--table] [--raw]
+canarchy uds services [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries
@@ -63,7 +63,7 @@ Because `uds services` is reference-only and does not emit an event stream, both
 
 ### Table
 
-Table output presents a compact service catalogue with service identifier, positive-response identifier, category, and subfunction requirement.
+Text output presents a compact service catalogue with service identifier, positive-response identifier, category, and subfunction requirement.
 
 ### Raw
 

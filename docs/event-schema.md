@@ -2,7 +2,7 @@
 
 Every CANarchy command that produces structured output emits events using a canonical envelope. This document defines that envelope and every typed event subclass.
 
-The event schema is the stable interface between CANarchy and downstream consumers: scripts, pipelines, analysis tools, and coding agents. If you are parsing CANarchy output programmatically, parse the event stream rather than the human-readable table output.
+The event schema is the stable interface between CANarchy and downstream consumers: scripts, pipelines, analysis tools, and coding agents. If you are parsing CANarchy output programmatically, parse the event stream rather than the human-readable text output.
 
 ## Canonical Envelope
 

@@ -37,7 +37,7 @@ Important current behavior:
 * `decode`, `encode`, and `dbc inspect` include `data.dbc_source` in structured output so callers can see the provider, logical DBC name, pinned version, and resolved local path
 * placeholder-only commands, currently limited to the `fuzz` family, still return `status: planned` and `implementation: command surface scaffold`
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
-* specialized table formatting exists for J1939 monitor and decode style output; other `--table` output is generic key/value rendering
+* specialized text formatting exists for J1939 monitor and decode style output; other `--text` output is generic key/value rendering
 * file-backed analysis commands support standard timestamped candump log files with `.candump` and `.log` suffixes; selected commands also support `--file -` for candump text from stdin
 
 ---
@@ -72,7 +72,7 @@ Examples:
 Capture traffic from a local interface. Structured capture uses the selected transport backend. `--candump` is a live-only mode.
 
 ```bash
-canarchy capture <interface> [--candump] [--json|--jsonl|--table|--raw]
+canarchy capture <interface> [--candump] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -88,7 +88,7 @@ Notes:
 * `--candump` keeps running and printing frames until interrupted
 * `--candump` changes the human-readable output path to a `candump`-style line format such as `(0.100000) vcan0 18F00431#AABBCCDD`
 * `--candump --json` and `--candump --jsonl` keep structured output for automation, but still require a live backend
-* default table output without `--candump` remains the generic key/value renderer
+* default text output without `--candump` remains the generic key/value renderer
 
 Supported file input today:
 
@@ -103,7 +103,7 @@ Supported file input today:
 Prepare an active transmit frame.
 
 ```bash
-canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json|--jsonl|--table|--raw]
+canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -122,7 +122,7 @@ Notes:
 Filter a capture source by a simple expression.
 
 ```bash
-canarchy filter <expression> (--file <path> | --file - | --stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--compact|--table|--raw]
+canarchy filter <expression> (--file <path> | --file - | --stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--compact|--text|--raw]
 ```
 ```
 
@@ -137,8 +137,8 @@ Notes:
 Inspect a candump capture quickly before running deeper analysis.
 
 ```bash
-canarchy capture-info --file <path> [--json|--jsonl|--table|--raw]
-canarchy capture-info --file - [--json|--jsonl|--table|--raw]
+canarchy capture-info --file <path> [--json|--jsonl|--text|--raw]
+canarchy capture-info --file - [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -160,8 +160,8 @@ Notes:
 Summarize a capture source.
 
 ```bash
-canarchy stats --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--table|--raw]
-canarchy stats --file - [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--table|--raw]
+canarchy stats --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text|--raw]
+canarchy stats --file - [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -173,14 +173,14 @@ Notes:
 Generate CAN frames from explicit, random, or incrementing inputs.
 
 ```bash
-canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>] [--count <n>] [--gap <ms>] [--extended] [--ack-active] [--json|--jsonl|--table|--raw]
+canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>] [--count <n>] [--gap <ms>] [--extended] [--ack-active] [--json|--jsonl|--text|--raw]
 ```
 
 Examples:
 
 ```bash
 canarchy generate can0 --id 0x123 --dlc 4 --data 11223344 --count 2 --gap 100 --json
-canarchy generate can0 --data I --count 4 --table
+canarchy generate can0 --data I --count 4 --text
 ```
 
 Notes:
@@ -195,7 +195,7 @@ Notes:
 Replay a capture source with deterministic timing derived from relative frame timestamps.
 
 ```bash
-canarchy replay --file <path> [--rate <factor>] [--json|--jsonl|--table|--raw]
+canarchy replay --file <path> [--rate <factor>] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -209,13 +209,13 @@ canarchy replay --file tests/fixtures/sample.candump --rate 2.0 --json
 Bridge frames from one live CAN interface to another through the `python-can` backend.
 
 ```bash
-canarchy gateway <src> <dst> [--src-backend <type>] [--dst-backend <type>] [--bidirectional] [--count <n>] [--ack-active] [--json|--jsonl|--table|--raw]
+canarchy gateway <src> <dst> [--src-backend <type>] [--dst-backend <type>] [--bidirectional] [--count <n>] [--ack-active] [--json|--jsonl|--text|--raw]
 ```
 
 Examples:
 
 ```bash
-canarchy gateway can0 can1 --table
+canarchy gateway can0 can1 --text
 canarchy gateway can0 239.0.0.1 --dst-backend udp_multicast --count 10 --json
 ```
 
@@ -224,7 +224,7 @@ Notes:
 * `gateway` requires the `python-can` backend (set in `~/.canarchy/config.toml` or via `CANARCHY_TRANSPORT_BACKEND=python-can`)
 * `--src-backend` and `--dst-backend` default to the configured `interface` value
 * `--ack-active` requests an interactive `YES` confirmation before forwarding begins
-* default table and raw output use candump-style forwarded frame lines with direction labels such as `[src->dst]`
+* default text and raw output use candump-style forwarded frame lines with direction labels such as `[src->dst]`
 * `--json` returns a standard command envelope; `--jsonl` emits one forwarded event per line for `gateway`
 
 ### export
@@ -232,7 +232,7 @@ Notes:
 Export structured artifacts for later analysis.
 
 ```bash
-canarchy export <source> <destination> [--json|--jsonl|--table|--raw]
+canarchy export <source> <destination> [--json|--jsonl|--text|--raw]
 ```
 
 Examples:
@@ -255,8 +255,8 @@ Notes:
 Decode frames from a capture source using a DBC file.
 
 ```bash
-canarchy decode --file <file> --dbc <file> [--json|--jsonl|--table|--raw]
-canarchy decode --stdin --dbc <file> [--json|--jsonl|--table|--raw]
+canarchy decode --file <file> --dbc <file> [--json|--jsonl|--text|--raw]
+canarchy decode --stdin --dbc <file> [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -276,7 +276,7 @@ Notes:
 Encode a DBC message into a frame payload.
 
 ```bash
-canarchy encode --dbc <file> <message> <signal=value>... [--json|--jsonl|--table|--raw]
+canarchy encode --dbc <file> <message> <signal=value>... [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -295,7 +295,7 @@ Notes:
 Inspect database, message, and signal metadata for a DBC file or provider ref.
 
 ```bash
-canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json|--jsonl|--table|--raw]
+canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json|--jsonl|--text|--raw]
 ```
 
 Examples:
@@ -315,7 +315,7 @@ Notes:
 List registered DBC providers.
 
 ```bash
-canarchy dbc provider list [--json|--jsonl|--table|--raw]
+canarchy dbc provider list [--json|--jsonl|--text|--raw]
 ```
 
 ### dbc search
@@ -323,7 +323,7 @@ canarchy dbc provider list [--json|--jsonl|--table|--raw]
 Search DBC catalogs across enabled providers.
 
 ```bash
-canarchy dbc search <query> [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+canarchy dbc search <query> [--provider <name>] [--limit <n>] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -337,7 +337,7 @@ canarchy dbc search toyota --provider opendbc --limit 5 --json
 Fetch and cache a DBC file from a provider.
 
 ```bash
-canarchy dbc fetch <ref> [--json|--jsonl|--table|--raw]
+canarchy dbc fetch <ref> [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -351,7 +351,7 @@ canarchy dbc fetch opendbc:toyota_tnga_k_pt_generated --json
 List cached provider manifests.
 
 ```bash
-canarchy dbc cache list [--json|--jsonl|--table|--raw]
+canarchy dbc cache list [--json|--jsonl|--text|--raw]
 ```
 
 ### dbc cache prune
@@ -359,7 +359,7 @@ canarchy dbc cache list [--json|--jsonl|--table|--raw]
 Remove stale cached provider snapshots while keeping the pinned commit.
 
 ```bash
-canarchy dbc cache prune [--provider <name>] [--json|--jsonl|--table|--raw]
+canarchy dbc cache prune [--provider <name>] [--json|--jsonl|--text|--raw]
 ```
 
 ### dbc cache refresh
@@ -367,7 +367,7 @@ canarchy dbc cache prune [--provider <name>] [--json|--jsonl|--table|--raw]
 Refresh a provider catalog from upstream.
 
 ```bash
-canarchy dbc cache refresh [--provider <name>] [--json|--jsonl|--table|--raw]
+canarchy dbc cache refresh [--provider <name>] [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -381,7 +381,7 @@ Notes:
 List registered repository-backed skills providers.
 
 ```bash
-canarchy skills provider list [--json|--jsonl|--table|--raw]
+canarchy skills provider list [--json|--jsonl|--text|--raw]
 ```
 
 ### skills search
@@ -389,7 +389,7 @@ canarchy skills provider list [--json|--jsonl|--table|--raw]
 Search repository-backed skills catalogs by name, tag, or keyword.
 
 ```bash
-canarchy skills search <query> [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+canarchy skills search <query> [--provider <name>] [--limit <n>] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -403,7 +403,7 @@ canarchy skills search j1939 --provider github --json
 Fetch and cache a repository-backed skill locally.
 
 ```bash
-canarchy skills fetch <provider>:<skill> [--json|--jsonl|--table|--raw]
+canarchy skills fetch <provider>:<skill> [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -417,7 +417,7 @@ canarchy skills fetch github:j1939_compare_triage --json
 List cached skills provider manifests.
 
 ```bash
-canarchy skills cache list [--json|--jsonl|--table|--raw]
+canarchy skills cache list [--json|--jsonl|--text|--raw]
 ```
 
 ### skills cache refresh
@@ -425,7 +425,7 @@ canarchy skills cache list [--json|--jsonl|--table|--raw]
 Refresh a skills provider catalog from upstream.
 
 ```bash
-canarchy skills cache refresh [--provider <name>] [--json|--jsonl|--table|--raw]
+canarchy skills cache refresh [--provider <name>] [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -440,7 +440,7 @@ Notes:
 List registered public CAN dataset providers.
 
 ```bash
-canarchy datasets provider list [--json|--jsonl|--table|--raw]
+canarchy datasets provider list [--json|--jsonl|--text|--raw]
 ```
 
 ### datasets search
@@ -448,7 +448,7 @@ canarchy datasets provider list [--json|--jsonl|--table|--raw]
 Search public CAN dataset provider catalogs by name, protocol, or keyword.
 
 ```bash
-canarchy datasets search [query] [--provider <name>] [--limit <n>] [--verbose] [--json|--jsonl|--table|--raw]
+canarchy datasets search [query] [--provider <name>] [--limit <n>] [--verbose] [--json|--jsonl|--text|--raw]
 ```
 
 ### datasets inspect
@@ -456,7 +456,7 @@ canarchy datasets search [query] [--provider <name>] [--limit <n>] [--verbose] [
 Show full metadata for a dataset ref.
 
 ```bash
-canarchy datasets inspect <provider>:<dataset> [--json|--jsonl|--table|--raw]
+canarchy datasets inspect <provider>:<dataset> [--json|--jsonl|--text|--raw]
 ```
 
 Examples:
@@ -477,7 +477,7 @@ Notes:
 Record dataset provenance in the local cache. This does not download large dataset payloads.
 
 ```bash
-canarchy datasets fetch <provider>:<dataset> [--json|--jsonl|--table|--raw]
+canarchy datasets fetch <provider>:<dataset> [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -490,7 +490,7 @@ Notes:
 List cached dataset provider manifests and provenance records.
 
 ```bash
-canarchy datasets cache list [--json|--jsonl|--table|--raw]
+canarchy datasets cache list [--json|--jsonl|--text|--raw]
 ```
 
 ### datasets cache refresh
@@ -498,7 +498,7 @@ canarchy datasets cache list [--json|--jsonl|--table|--raw]
 Refresh the built-in dataset catalog manifest.
 
 ```bash
-canarchy datasets cache refresh [--provider <name>] [--json|--jsonl|--table|--raw]
+canarchy datasets cache refresh [--provider <name>] [--json|--jsonl|--text|--raw]
 ```
 
 ### datasets convert
@@ -506,7 +506,7 @@ canarchy datasets cache refresh [--provider <name>] [--json|--jsonl|--table|--ra
 Convert a downloaded dataset file to a CANarchy-compatible capture format.
 
 ```bash
-canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>] [--json|--jsonl|--table|--raw]
+canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>] [--json|--jsonl|--text|--raw]
 ```
 
 ### datasets stream
@@ -578,7 +578,7 @@ Notes:
 Save a named session with useful CLI context.
 
 ```bash
-canarchy session save <name> [--interface <name>] [--dbc <file>] [--capture <file>] [--json|--jsonl|--table|--raw]
+canarchy session save <name> [--interface <name>] [--dbc <file>] [--capture <file>] [--json|--jsonl|--text|--raw]
 ```
 
 ### session load
@@ -586,7 +586,7 @@ canarchy session save <name> [--interface <name>] [--dbc <file>] [--capture <fil
 Load a previously saved session and mark it active.
 
 ```bash
-canarchy session load <name> [--json|--jsonl|--table|--raw]
+canarchy session load <name> [--json|--jsonl|--text|--raw]
 ```
 
 ### session show
@@ -594,7 +594,7 @@ canarchy session load <name> [--json|--jsonl|--table|--raw]
 Show saved sessions and the active session.
 
 ```bash
-canarchy session show [--json|--jsonl|--table|--raw]
+canarchy session show [--json|--jsonl|--text|--raw]
 ```
 
 ### shell
@@ -602,7 +602,7 @@ canarchy session show [--json|--jsonl|--table|--raw]
 Run a single shell command through the shared parser, or start a minimal interactive shell loop.
 
 ```bash
-canarchy shell [--command "capture can0 --raw"] [--json|--jsonl|--table|--raw]
+canarchy shell [--command "capture can0 --raw"] [--json|--jsonl|--text|--raw]
 ```
 
 ### j1939 monitor
@@ -610,7 +610,7 @@ canarchy shell [--command "capture can0 --raw"] [--json|--jsonl|--table|--raw]
 Inspect J1939 traffic and emit PGN-oriented structured events.
 
 ```bash
-canarchy j1939 monitor [<interface>] [--pgn <id>] [--json|--jsonl|--table|--raw]
+canarchy j1939 monitor [<interface>] [--pgn <id>] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -631,8 +631,8 @@ Notes:
 Decode a capture source into J1939 PGN observations.
 
 ```bash
-canarchy j1939 decode --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
-canarchy j1939 decode --stdin [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
+canarchy j1939 decode --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--text|--raw]
+canarchy j1939 decode --stdin [--dbc <path|provider-ref>] [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -645,7 +645,7 @@ Notes:
 Inspect events for a specific PGN from a capture file.
 
 ```bash
-canarchy j1939 pgn <pgn> --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
+canarchy j1939 pgn <pgn> --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -659,7 +659,7 @@ canarchy j1939 pgn 65262 --file tests/fixtures/sample.candump --json
 Inspect a curated SPN decoder over recorded J1939 traffic.
 
 ```bash
-canarchy j1939 spn <spn> --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
+canarchy j1939 spn <spn> --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -679,7 +679,7 @@ Notes:
 Summarize J1939 transport-protocol sessions from a capture file.
 
 ```bash
-canarchy j1939 tp sessions --file <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 tp sessions --file <file> [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -691,7 +691,7 @@ Notes:
 Inspect DM1 fault traffic from direct J1939 frames and TP-reassembled payloads.
 
 ```bash
-canarchy j1939 dm1 --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
+canarchy j1939 dm1 --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--text|--raw]
 ```
 
 ### j1939 faults
@@ -699,7 +699,7 @@ canarchy j1939 dm1 --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--t
 Summarize active DM1 faults by ECU/source address, including lamp state and suspicious DTC markers.
 
 ```bash
-canarchy j1939 faults --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--table|--raw]
+canarchy j1939 faults --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--text|--raw]
 ```
 
 ### j1939 inventory
@@ -707,7 +707,7 @@ canarchy j1939 faults --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|
 Build a source-address inventory from a J1939 capture file, including top PGNs, component-identification strings, vehicle-identification strings, and DM1 presence.
 
 ```bash
-canarchy j1939 inventory --file <file> [--json|--jsonl|--table|--raw]
+canarchy j1939 inventory --file <file> [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -727,7 +727,7 @@ Notes:
 Compare two or more J1939 capture files and highlight common versus capture-unique PGNs, source-address changes, DM1 differences, and printable TP identification changes.
 
 ```bash
-canarchy j1939 compare <file> <file> [<file> ...] [--json|--jsonl|--table|--raw]
+canarchy j1939 compare <file> <file> [<file> ...] [--json|--jsonl|--text|--raw]
 ```
 
 Example:
@@ -763,7 +763,7 @@ Notes:
 Inspect representative UDS responder discovery transactions.
 
 ```bash
-canarchy uds scan <interface> [--ack-active] [--json|--jsonl|--table|--raw]
+canarchy uds scan <interface> [--ack-active] [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -778,7 +778,7 @@ Notes:
 Inspect representative UDS request and response transactions.
 
 ```bash
-canarchy uds trace <interface> [--json|--jsonl|--table|--raw]
+canarchy uds trace <interface> [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -793,7 +793,7 @@ Notes:
 Inspect the built-in UDS service catalog.
 
 ```bash
-canarchy uds services [--json|--jsonl|--table|--raw]
+canarchy uds services [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -806,7 +806,7 @@ Notes:
 Rank likely counter fields from recorded CAN traffic.
 
 ```bash
-canarchy re counters <file> [--json|--jsonl|--table|--raw]
+canarchy re counters <file> [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -820,7 +820,7 @@ Notes:
 Rank likely signal fields from recorded CAN traffic.
 
 ```bash
-canarchy re signals <file> [--json|--jsonl|--table|--raw]
+canarchy re signals <file> [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -835,7 +835,7 @@ Notes:
 Correlate candidate bit fields against a timestamped reference series.
 
 ```bash
-canarchy re correlate <file> --reference <ref.json|ref.jsonl> [--json|--jsonl|--table|--raw]
+canarchy re correlate <file> --reference <ref.json|ref.jsonl> [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -850,7 +850,7 @@ Notes:
 Rank arbitration IDs and byte positions by Shannon entropy over recorded CAN traffic.
 
 ```bash
-canarchy re entropy <file> [--json|--jsonl|--table|--raw]
+canarchy re entropy <file> [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -864,7 +864,7 @@ Notes:
 Rank candidate DBC files against a capture using provider-backed catalog metadata.
 
 ```bash
-canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -878,7 +878,7 @@ Notes:
 Rank candidate DBC files against a capture after pre-filtering by vehicle make.
 
 ```bash
-canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json|--jsonl|--table|--raw]
+canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json|--jsonl|--text|--raw]
 ```
 
 Notes:
@@ -892,7 +892,7 @@ Notes:
 Inspect the effective transport configuration and the source of each setting.
 
 ```bash
-canarchy config show [--json|--jsonl|--table|--raw]
+canarchy config show [--json|--jsonl|--text|--raw]
 ```
 
 ### mcp serve
@@ -916,8 +916,10 @@ All commands support:
 
 * `--json`
 * `--jsonl`
-* `--table`
+* `--text`
 * `--raw`
+
+`--text` is the default when no output mode is specified. `--table` remains accepted as a compatibility alias for `--text`, but new examples and automation should use `--text`.
 
 Current behavior:
 
@@ -926,10 +928,10 @@ Current behavior:
 * event-producing commands emit each event as its own JSON line; command warnings that are not already events are emitted as `alert` event lines
 * event-less successful commands emit a single result object line
 * failed commands emit a single error result object line
-* `--table` emits a human-readable summary view, with protocol-aware pretty-printing for J1939 monitor and decode workflows
+* `--text` emits a human-readable summary view, with protocol-aware pretty-printing for J1939 monitor and decode workflows
 * `--raw` emits the command name on success or the primary error message on failure
 
-J1939 `--table` output includes:
+J1939 `--text` output includes:
 
 * PGN
 * source address

@@ -35,7 +35,7 @@ canarchy datasets stream <file> --source-format hcrl-csv|candump --format candum
 canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--list-files] [--format candump|jsonl] [--rate N] [--max-frames N] [--max-seconds N] [--dry-run]
 ```
 
-All commands follow the standard `--json`, `--jsonl`, `--table`, `--raw` output modes.
+All commands follow the standard `--json`, `--jsonl`, `--text`, `--raw` output modes.
 
 ---
 

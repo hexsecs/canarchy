@@ -20,7 +20,7 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 * `j1939 dm1` parsing for both direct and TP-reassembled messages
 * `j1939 inventory` source-address inventory assembly from identification and DM1 context
 * `j1939 compare` multi-capture PGN/source/dm1/identifier differences
-* table output for DM1 remains human-readable
+* text output for DM1 remains human-readable
 
 ## Requirement Traceability
 
@@ -101,11 +101,11 @@ And    the direct message shall preserve its source address and FMI
 
 ---
 
-### `TEST-J1939-05` — DM1 table output
+### `TEST-J1939-05` — DM1 text output
 
 ```gherkin
 Given  the fixture `j1939_dm1_tp.candump` is available
-When   the operator runs `canarchy j1939 dm1 --file j1939_dm1_tp.candump --table`
+When   the operator runs `canarchy j1939 dm1 --file j1939_dm1_tp.candump --text`
 Then   the output shall include the command header
 And    the output shall include a message section with a transport label
 And    the output shall include DTC summaries for each message
@@ -129,11 +129,11 @@ And    the session shall include a stable payload label when the transferred PGN
 
 ---
 
-### `TEST-J1939-07` — TP table output surfaces printable identification text
+### `TEST-J1939-07` — TP text output surfaces printable identification text
 
 ```gherkin
 Given  the fixture `j1939_tp_printable_id.candump` contains a printable TP identification payload
-When   the operator runs `canarchy j1939 tp sessions --file j1939_tp_printable_id.candump --table`
+When   the operator runs `canarchy j1939 tp sessions --file j1939_tp_printable_id.candump --text`
 Then   the operator-facing output shall include the payload label when available
 And    the operator-facing output shall include the decoded printable text without hiding the TP session summary context
 ```
@@ -157,11 +157,11 @@ And    the reporting source address shall include DM1 presence metadata
 
 ---
 
-### `TEST-J1939-09` — Inventory table output remains operator-friendly
+### `TEST-J1939-09` — Inventory text output remains operator-friendly
 
 ```gherkin
 Given  the fixture `j1939_inventory.candump` is available
-When   the operator runs `canarchy j1939 inventory --file j1939_inventory.candump --table`
+When   the operator runs `canarchy j1939 inventory --file j1939_inventory.candump --text`
 Then   the output shall include the command header
 And    the output shall include the decoded vehicle identification text when available
 And    the output shall include per-source rows with component-identification and DM1 presence summaries
@@ -186,11 +186,11 @@ And    the result shall include source-address identification differences when p
 
 ---
 
-### `TEST-J1939-11` — Compare table output remains operator-friendly
+### `TEST-J1939-11` — Compare text output remains operator-friendly
 
 ```gherkin
 Given  two J1939 capture fixtures with identification differences are available
-When   the operator runs `canarchy j1939 compare compare_a.candump compare_b.candump --table`
+When   the operator runs `canarchy j1939 compare compare_a.candump compare_b.candump --text`
 Then   the output shall include the command header
 And    the output shall include common-PGN and unique-source sections
 And    the output shall include the differing printable identification values

@@ -417,7 +417,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
 
-    def test_gateway_table_output_prints_header_and_direction(self) -> None:
+    def test_gateway_text_output_prints_header_and_direction(self) -> None:
         src_bus = FakeBus([self.fake_message(0x18FEEE31, bytes.fromhex("11223344"), is_extended_id=True)])
         dst_bus = FakeBus()
 
@@ -428,7 +428,7 @@ class CliTests(unittest.TestCase):
             with patch.object(PythonCanBackend, "_open_bus", new=fake_open_bus):
                 with patch.object(PythonCanBackend, "_encode_message", return_value=object()):
                     exit_code, stdout, stderr = run_cli(
-                        "gateway", "src0", "dst0", "--count", "1", "--table"
+                        "gateway", "src0", "dst0", "--count", "1", "--text"
                     )
 
         self.assertEqual(exit_code, EXIT_OK)
@@ -688,13 +688,13 @@ class CliTests(unittest.TestCase):
             ],
         )
 
-    def test_j1939_summary_table_output_is_pretty_printed(self) -> None:
+    def test_j1939_summary_text_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "summary",
             "--file",
             str(FIXTURES / "j1939_tp_printable_id.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -775,13 +775,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(nodes[3]["component_identifications"][0]["text"], "TRANS01")
         self.assertFalse(nodes[3]["dm1"]["present"])
 
-    def test_j1939_inventory_table_output_is_pretty_printed(self) -> None:
+    def test_j1939_inventory_text_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "inventory",
             "--file",
             str(FIXTURES / "j1939_inventory.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -865,13 +865,13 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertTrue(any("Large file" in w for w in payload["warnings"]))
 
-    def test_j1939_compare_table_output_is_pretty_printed(self) -> None:
+    def test_j1939_compare_text_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "compare",
             str(FIXTURES / "j1939_inventory.candump"),
             str(FIXTURES / "j1939_compare_shifted.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -893,8 +893,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["file"], str(FIXTURES / "sample.candump"))
         self.assertEqual(payload["data"]["events"][1]["payload"]["pgn"], 61444)
 
-    def test_j1939_monitor_table_output_is_pretty_printed(self) -> None:
-        exit_code, stdout, stderr = run_cli("j1939", "monitor", "--pgn", "65262", "--table")
+    def test_j1939_monitor_text_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli("j1939", "monitor", "--pgn", "65262", "--text")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
         self.assertIn("command: j1939 monitor", stdout)
@@ -906,9 +906,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("prio=6", stdout)
         self.assertIn("data=11223344", stdout)
 
-    def test_j1939_decode_table_output_is_pretty_printed(self) -> None:
+    def test_j1939_decode_text_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(
-            "j1939", "decode", "--file", str(FIXTURES / "sample.candump"), "--table"
+            "j1939", "decode", "--file", str(FIXTURES / "sample.candump"), "--text"
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -917,18 +917,18 @@ class CliTests(unittest.TestCase):
         self.assertIn("pgn=61444", stdout)
         self.assertIn("sa=0x31", stdout)
 
-    def test_j1939_decode_table_includes_pgn_label_and_sa_name(self) -> None:
+    def test_j1939_decode_text_includes_pgn_label_and_sa_name(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "j1939", "decode", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--table"
+            "j1939", "decode", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--text"
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("pgn=65262 [ET1]", stdout)
         self.assertIn("pgn=61444 [EEC1]", stdout)
         self.assertIn("sa=0x31 [Cab Controller - Primary]", stdout)
 
-    def test_j1939_decode_table_includes_pretty_j1939_spn_values(self) -> None:
+    def test_j1939_decode_text_includes_pretty_j1939_spn_values(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "j1939", "decode", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--table"
+            "j1939", "decode", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--text"
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("Engine Coolant Temperature:", stdout)
@@ -945,16 +945,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(first_event["pgn"], 65262)
         self.assertNotIn("Engine Coolant Temperature", str(payload))
 
-    def test_j1939_dm1_table_includes_sa_name(self) -> None:
+    def test_j1939_dm1_text_includes_sa_name(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "j1939", "dm1", "--file", str(FIXTURES / "j1939_dm1_tp.candump"), "--table"
+            "j1939", "dm1", "--file", str(FIXTURES / "j1939_dm1_tp.candump"), "--text"
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("sa=0x31 [Cab Controller - Primary]", stdout)
 
-    def test_j1939_summary_table_includes_pgn_labels_and_sa_names(self) -> None:
+    def test_j1939_summary_text_includes_pgn_labels_and_sa_names(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "j1939", "summary", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--table"
+            "j1939", "summary", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--text"
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("pgn=65262 [ET1]", stdout)
@@ -1243,14 +1243,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(session["decoded_text_encoding"], "ascii")
         self.assertTrue(session["decoded_text_heuristic"])
 
-    def test_j1939_tp_table_output_shows_printable_text_when_present(self) -> None:
+    def test_j1939_tp_text_output_shows_printable_text_when_present(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
             "sessions",
             "--file",
             str(FIXTURES / "j1939_tp_printable_id.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -1351,7 +1351,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(group["unique_payload_count"], 1)
         self.assertEqual(group["repeated_sources"], [0x80])
 
-    def test_j1939_tp_compare_table_output_is_pretty_printed(self) -> None:
+    def test_j1939_tp_compare_text_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
@@ -1360,7 +1360,7 @@ class CliTests(unittest.TestCase):
             str(FIXTURES / "j1939_tp_compare.candump"),
             "--sa",
             "0x80,0x83",
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -1439,14 +1439,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(session["decoded_text_encoding"], "ascii")
         self.assertTrue(session["decoded_text_heuristic"])
 
-    def test_j1939_tp_table_output_shows_printable_text_when_present(self) -> None:
+    def test_j1939_tp_text_output_shows_printable_text_when_present(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "tp",
             "sessions",
             "--file",
             str(FIXTURES / "j1939_tp_printable_id.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -1561,13 +1561,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["dbc_spn_matches"], 1)
         self.assertEqual(dtc["name"], "EngineOilTemp")
 
-    def test_j1939_dm1_table_output_is_pretty_printed(self) -> None:
+    def test_j1939_dm1_text_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "dm1",
             "--file",
             str(FIXTURES / "j1939_dm1_tp.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -1821,13 +1821,13 @@ class CliTests(unittest.TestCase):
             self.assertIn("amber_warning", lamp)
             self.assertIn("protect", lamp)
 
-    def test_j1939_faults_table_output_is_pretty_printed(self) -> None:
+    def test_j1939_faults_text_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
             "faults",
             "--file",
             str(FIXTURES / "j1939_dm1_tp.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -1970,9 +1970,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(first["decoder"], "scapy")
         self.assertEqual(first["response_summary"], "UDS / PositiveResponse DiagnosticSessionControl")
 
-    def test_uds_scan_table_output_is_pretty_printed(self) -> None:
+    def test_uds_scan_text_output_is_pretty_printed(self) -> None:
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
-            exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--table")
+            exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--text")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("warning: `uds scan` will transmit diagnostic requests", stderr)
         self.assertIn("command: uds scan", stdout)
@@ -1984,9 +1984,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("req_id=0x7DF", stdout)
         self.assertIn("resp_id=0x7E8", stdout)
 
-    def test_uds_trace_table_output_is_pretty_printed(self) -> None:
+    def test_uds_trace_text_output_is_pretty_printed(self) -> None:
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
-            exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--table")
+            exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--text")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("command: uds trace", stdout)
         self.assertIn("interface: can0", stdout)
@@ -2010,8 +2010,8 @@ class CliTests(unittest.TestCase):
         self.assertTrue(services[0]["requires_subfunction"])
         self.assertEqual(services[6]["name"], "SecurityAccess")
 
-    def test_uds_services_table_output_is_pretty_printed(self) -> None:
-        exit_code, stdout, stderr = run_cli("uds", "services", "--table")
+    def test_uds_services_text_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli("uds", "services", "--text")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
         self.assertIn("command: uds services", stdout)
@@ -2104,12 +2104,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["candidate_count"], 0)
         self.assertEqual(payload["data"]["candidates"], [])
 
-    def test_re_counters_table_output_is_ranked(self) -> None:
+    def test_re_counters_text_output_is_ranked(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "re",
             "counters",
             str(FIXTURES / "re_counter_nibble.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -2156,12 +2156,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(analysed["frame_count"], 10)
         self.assertFalse(analysed["low_sample"])
 
-    def test_re_signals_table_output_is_ranked(self) -> None:
+    def test_re_signals_text_output_is_ranked(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "re",
             "signals",
             str(FIXTURES / "re_signals_mixed.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -2218,12 +2218,12 @@ class CliTests(unittest.TestCase):
         self.assertTrue(low_sample["low_sample"])
         self.assertEqual(low_sample["frame_count"], 5)
 
-    def test_re_entropy_table_output_is_ranked(self) -> None:
+    def test_re_entropy_text_output_is_ranked(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "re",
             "entropy",
             str(FIXTURES / "re_entropy_mixed.candump"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -2276,14 +2276,14 @@ class CliTests(unittest.TestCase):
         for key in ("pearson_r", "spearman_r", "sample_count", "lag_ms"):
             self.assertIn(key, byte1)
 
-    def test_re_correlate_table_output_includes_ranked_candidates(self) -> None:
+    def test_re_correlate_text_output_includes_ranked_candidates(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "re",
             "correlate",
             str(FIXTURES / "re_correlate_linear.candump"),
             "--reference",
             str(FIXTURES / "re_correlate_reference.json"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -3112,9 +3112,9 @@ class CliTests(unittest.TestCase):
 
     @patch("canarchy.transport.time.sleep")
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
-    def test_generate_table_output_is_pretty_printed(self, _mock_cfg, _mock_sleep) -> None:
+    def test_generate_text_output_is_pretty_printed(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli(
-            "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "AABBCCDD", "--count", "2", "--table"
+            "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "AABBCCDD", "--count", "2", "--text"
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("command: generate", stdout)
@@ -3952,8 +3952,9 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("--candump", names)
         self.assertIn("--json", names)
         self.assertIn("--jsonl", names)
-        self.assertIn("--table", names)
+        self.assertIn("--text", names)
         self.assertIn("--raw", names)
+        self.assertNotIn("--table", names)
 
     def test_generate_flags_include_gap_and_count(self) -> None:
         results = self._completions("generate can0 ", "")
@@ -4038,7 +4039,7 @@ class CompletionTests(unittest.TestCase):
         names = [r.strip() for r in results]
         self.assertIn("--json", names)
         self.assertIn("--jsonl", names)
-        self.assertNotIn("--table", names)
+        self.assertNotIn("--text", names)
         self.assertNotIn("--candump", names)
 
     def test_flags_not_offered_for_unknown_command(self) -> None:
@@ -4179,19 +4180,29 @@ class ConfigShowTests(unittest.TestCase):
         # interface came from file
         self.assertEqual(sources["interface"], "file")
 
-    def test_config_show_table_output(self) -> None:
-        """Table output includes backend, interface, and config-file path."""
+    def test_config_show_text_output(self) -> None:
+        """Text output includes backend, interface, and config-file path."""
         with (
             patch("canarchy.transport._load_user_config", return_value={}),
             patch.dict(os.environ, {}, clear=True),
         ):
-            exit_code, stdout, _ = run_cli("config", "show", "--table")
+            exit_code, stdout, _ = run_cli("config", "show", "--text")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("backend: python-can", stdout)
         self.assertIn("interface: socketcan", stdout)
         self.assertIn("require_active_ack: False", stdout)
         self.assertIn("j1939_dbc: None", stdout)
         self.assertIn("config file:", stdout)
+
+    def test_table_output_flag_is_text_alias(self) -> None:
+        with (
+            patch("canarchy.transport._load_user_config", return_value={}),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            exit_code, stdout, _ = run_cli("config", "show", "--table")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("Effective transport configuration:", stdout)
+        self.assertIn("backend: python-can", stdout)
 
     def test_config_show_config_file_found_false_when_missing(self) -> None:
         """config_file_found is False when the config file does not exist."""

@@ -117,7 +117,7 @@ Why an analyst or agent needs this capability.
 ## Command Surface
 
 \```text
-canarchy <command> <args> [--json] [--jsonl] [--table] [--raw]
+canarchy <command> <args> [--json] [--jsonl] [--text] [--raw]
 \```
 
 ## Responsibilities And Boundaries
@@ -131,7 +131,7 @@ Key fields and structures returned by this command.
 
 ## Output Contracts
 
-How each output mode (`--json`, `--jsonl`, `--table`, `--raw`) behaves.
+How each output mode (`--json`, `--jsonl`, `--text`, `--raw`) behaves.
 
 ## Error Contracts
 

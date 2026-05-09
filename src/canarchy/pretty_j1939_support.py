@@ -1,6 +1,6 @@
 """pretty_j1939 integration for richer J1939 human-readable output.
 
-Provides SA names, PGN labels, and decoded SPN field values in table-mode
+Provides SA names, PGN labels, and decoded SPN field values in text-mode
 output for j1939 decode / monitor / pgn / dm1 / summary commands.
 Structured output (--json / --jsonl) is never affected.
 """

@@ -20,7 +20,7 @@ Define the expected coverage for the reverse-engineering helper family so shippe
 * representative edge cases for sparse captures, low-sample captures, and mixed arbitration IDs
 * warning and limit behavior for provider-backed DBC matching workflows
 * structured error handling for missing captures, missing or malformed reference files, and insufficient overlap
-* human-readable ranked table output for each shipped helper
+* human-readable ranked text output for each shipped helper
 
 ## Requirement Traceability
 
@@ -106,11 +106,11 @@ And    the response data shall record the selected `make`
 
 ---
 
-### `TEST-RE-06` — Table output summaries for shipped helpers
+### `TEST-RE-06` — Text output summaries for shipped helpers
 
 ```gherkin
 Given  a valid capture fixture is available
-When   the operator runs a shipped `re` helper with `--table`
+When   the operator runs a shipped `re` helper with `--text`
 Then   the output shall present a compact ranked summary
 And    score or confidence data shall be visible in the table
 ```
@@ -222,11 +222,11 @@ Then   the result data shall include a 'reference_name' field matching the name 
 
 ---
 
-### `TEST-CORR-04` — Table output for re correlate
+### `TEST-CORR-04` — Text output for re correlate
 
 ```gherkin
 Given  a valid capture fixture and reference series are available
-When   the operator runs `canarchy re correlate <fixture> --reference <ref> --table`
+When   the operator runs `canarchy re correlate <fixture> --reference <ref> --text`
 Then   the output shall present ranked candidates
 And    each candidate line shall include pearson_r, spearman_r, and lag_ms
 ```

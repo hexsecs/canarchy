@@ -31,9 +31,9 @@ DBC-backed workflows are central to protocol-aware CAN analysis. Operators shoul
 ## Command Surface
 
 ```text
-canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--table] [--raw]
-canarchy decode --stdin --dbc <file> [--json] [--jsonl] [--table] [--raw]
-canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--table] [--raw]
+canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--text] [--raw]
+canarchy decode --stdin --dbc <file> [--json] [--jsonl] [--text] [--raw]
+canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries
@@ -65,7 +65,7 @@ Event-producing commands emit one event per line; warnings without corresponding
 
 ### Table and raw
 
-Use the shared table/raw result rendering path.
+Use the shared text/raw result rendering path.
 
 ## Error Contracts
 

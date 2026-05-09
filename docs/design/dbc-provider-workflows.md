@@ -39,16 +39,16 @@ Operators often have a capture before they have the matching DBC on disk. CANarc
 ## Command Surface
 
 ```text
-canarchy dbc provider list [--json] [--jsonl] [--table] [--raw]
-canarchy dbc search <query> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--table] [--raw]
-canarchy dbc fetch <ref> [--json] [--jsonl] [--table] [--raw]
-canarchy dbc cache list [--json] [--jsonl] [--table] [--raw]
-canarchy dbc cache prune [--provider <name>] [--json] [--jsonl] [--table] [--raw]
-canarchy dbc cache refresh [--provider <name>] [--json] [--jsonl] [--table] [--raw]
-canarchy decode --file <file> --dbc <path|provider-ref> [--json] [--jsonl] [--table] [--raw]
-canarchy decode --stdin --dbc <path|provider-ref> [--json] [--jsonl] [--table] [--raw]
-canarchy encode --dbc <path|provider-ref> <message> <signal=value>... [--json] [--jsonl] [--table] [--raw]
-canarchy dbc inspect <path|provider-ref> [--message <name>] [--signals-only] [--json] [--jsonl] [--table] [--raw]
+canarchy dbc provider list [--json] [--jsonl] [--text] [--raw]
+canarchy dbc search <query> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text] [--raw]
+canarchy dbc fetch <ref> [--json] [--jsonl] [--text] [--raw]
+canarchy dbc cache list [--json] [--jsonl] [--text] [--raw]
+canarchy dbc cache prune [--provider <name>] [--json] [--jsonl] [--text] [--raw]
+canarchy dbc cache refresh [--provider <name>] [--json] [--jsonl] [--text] [--raw]
+canarchy decode --file <file> --dbc <path|provider-ref> [--json] [--jsonl] [--text] [--raw]
+canarchy decode --stdin --dbc <path|provider-ref> [--json] [--jsonl] [--text] [--raw]
+canarchy encode --dbc <path|provider-ref> <message> <signal=value>... [--json] [--jsonl] [--text] [--raw]
+canarchy dbc inspect <path|provider-ref> [--message <name>] [--signals-only] [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries
