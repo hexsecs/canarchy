@@ -15,7 +15,7 @@ Define an internal DBC architecture that preserves CANarchy's stable CLI and eve
 
 ## User-Facing Motivation
 
-Operators and agents need richer database-aware workflows than the current thin DBC layer provides, but they also need stext outputs. A split architecture lets CANarchy adopt `cantools` where runtime metadata and validation matter, while retaining `canmatrix` for schema ingestion and future conversion-oriented workflows.
+Operators and agents need richer database-aware workflows than the current thin DBC layer provides, but they also need stable outputs. A split architecture lets CANarchy adopt `cantools` where runtime metadata and validation matter, while retaining `canmatrix` for schema ingestion and future conversion-oriented workflows.
 
 ## Requirements
 

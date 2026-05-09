@@ -2,7 +2,7 @@
 
 CANarchy is a stream-first CAN analysis and manipulation runtime designed for automation, security research, and agent-driven workflows.
 
-Every command emits a [canonical event stream](event-schema.md) — structured, pipeable, and machine-readable. The CLI is the interface. JSONL is the wire format. J1939 is treated as a first-class workflow, not a plugin.
+Machine-readable output uses canonical JSON envelopes and JSONL event streams where commands produce typed events. The CLI is the interface. J1939 is treated as a first-class workflow, not a plugin.
 
 This docs site is the project documentation portal hosted from the same repository as the code.
 

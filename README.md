@@ -6,7 +6,7 @@ CANarchy is a stream-first CAN analysis and manipulation runtime designed for au
 
 The project is implemented in Python and uses `uv` for environment, dependency, and packaging workflows.
 
-Every command emits a [canonical event stream](docs/event-schema.md) — structured, pipeable, and machine-readable. The CLI is the interface. JSONL is the wire format. J1939 is a first-class citizen, not an afterthought.
+Machine-readable output uses canonical JSON envelopes and JSONL event streams where commands produce typed events. The CLI is the interface. J1939 is a first-class citizen, not an afterthought.
 
 Today the repository delivers:
 

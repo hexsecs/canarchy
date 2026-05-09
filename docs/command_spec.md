@@ -1136,4 +1136,3 @@ These commands are present in the CLI tree but not yet implemented end to end:
 These deeper capabilities are also not implemented yet even where the command surface exists:
 
 * deeper live transport integration beyond the current `python-can` transport path
-* pretty-print output tailored for UDS commands
