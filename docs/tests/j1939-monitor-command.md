@@ -73,18 +73,6 @@ And    the text output shall include the active PGN filter and protocol-first ob
 
 **Fixture:** built-in sample/reference provider.
 
----
-
-### TEST-J1939MON-05 — Raw output preserves the command-name contract
-
-```gherkin
-Given  the monitor command succeeds
-When   the operator runs `canarchy j1939 monitor --pgn 65262 --raw`
-Then   the system shall print `j1939 monitor`
-```
-
-**Fixture:** built-in sample/reference provider.
-
 ## Fixtures And Environment
 
 * built-in sample/reference J1939 provider

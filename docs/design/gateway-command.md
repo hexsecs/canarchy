@@ -36,7 +36,7 @@ canarchy gateway <src> <dst>
                  [--src-backend TYPE] [--dst-backend TYPE]
                  [--bidirectional]
                  [--count N]
-                 [--json] [--jsonl] [--text] [--raw]
+                 [--json] [--jsonl] [--text]
 ```
 
 ### Arguments
@@ -98,7 +98,7 @@ Relevant event fields:
 
 ## Output Contracts
 
-### Table and raw
+### Text
 
 Default streaming output is candump-style with a gateway header and direction labels.
 

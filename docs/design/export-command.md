@@ -33,7 +33,7 @@ Operators need a deterministic way to persist machine-readable results from curr
 ## Command Surface
 
 ```text
-canarchy export <source> <destination> [--json] [--jsonl] [--text] [--raw]
+canarchy export <source> <destination> [--json] [--jsonl] [--text]
 ```
 
 ### Supported source forms

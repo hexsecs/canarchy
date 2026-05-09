@@ -12,7 +12,7 @@ Today the repository delivers:
 
 * a stable CLI surface for analysts, scripts, and coding agents
 * J1939-first heavy vehicle workflows: PGN decoding, SPN extraction, TP session reassembly, DM1 fault parsing
-* structured output (`--json`, `--jsonl`, `--text`, `--raw`) on every command
+* structured output (`--json`, `--jsonl`, `--text`) on every command
 * live CAN transport via `python-can` with support for socketcan, virtual bus, and UDP multicast
 * UDS scan and trace, DBC decode/encode, capture/filter/replay, and an interactive shell
 

@@ -17,7 +17,6 @@ Validate that `uds services` returns a stable protocol-reference catalog and ren
 * command succeeds without a transport interface
 * JSON output contains stable service catalog metadata
 * text output presents protocol-aware service summaries
-* raw output follows standard command-success behavior
 
 ## Requirement Traceability
 
@@ -54,20 +53,6 @@ And    the output shall include catalog rows with service and positive-response 
 ```
 
 **Fixture:** none required (in-repo UDS service catalog).
-
----
-
-### `TEST-UDS-SVC-03` — Raw output behavior
-
-```gherkin
-Given  no transport interface or live bus connection is required
-When   the operator runs `canarchy uds services --raw`
-Then   the output shall emit the command name on success
-```
-
-**Fixture:** none required (in-repo UDS service catalog).
-
----
 
 ## Fixtures And Environment
 

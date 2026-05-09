@@ -585,9 +585,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_INVALID")
 
     def test_nested_j1939_command_works(self) -> None:
-        exit_code, stdout, _ = run_cli("j1939", "monitor", "--pgn", "65262", "--raw")
+        exit_code, stdout, _ = run_cli("j1939", "monitor", "--pgn", "65262", "--text")
         self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stdout.strip(), "j1939 monitor")
+        self.assertIn("command: j1939 monitor", stdout)
 
     def test_j1939_monitor_returns_observations(self) -> None:
         exit_code, stdout, _ = run_cli("j1939", "monitor", "--json")
@@ -2019,11 +2019,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("sid=0x10 name=DiagnosticSessionControl positive=0x50", stdout)
         self.assertIn("sid=0x27 name=SecurityAccess positive=0x67", stdout)
 
-    def test_uds_services_raw_output_is_command_name(self) -> None:
+    def test_raw_output_mode_is_rejected(self) -> None:
         exit_code, stdout, stderr = run_cli("uds", "services", "--raw")
-        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
         self.assertEqual(stderr, "")
-        self.assertEqual(stdout.strip(), "uds services")
+        self.assertIn("error: INVALID_ARGUMENTS: unrecognized arguments: --raw", stdout)
 
     def test_uds_transport_error_returns_backend_exit_code(self) -> None:
         with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
@@ -2555,7 +2555,7 @@ class CliTests(unittest.TestCase):
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_shell_command_reuses_cli_parser(self, _mock_cfg) -> None:
-        exit_code, stdout, stderr = run_cli("shell", "--command", "capture can0 --raw")
+        exit_code, stdout, stderr = run_cli("shell", "--command", "capture can0 --text")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
         self.assertIn(" can0 ", stdout)
@@ -2590,7 +2590,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("error: INVALID_PGN: J1939 PGN must be between 0 and 262143.", stdout)
 
     def test_tui_command_rejects_nested_frontends(self) -> None:
-        exit_code, stdout, stderr = run_cli("tui", "--command", "shell --command 'capture can0 --raw'")
+        exit_code, stdout, stderr = run_cli("tui", "--command", "shell --command 'capture can0 --text'")
 
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         self.assertEqual(stderr, "")
@@ -2601,7 +2601,7 @@ class CliTests(unittest.TestCase):
         """--help inside the shell must not exit the session."""
         # After one command containing --help (which raises SystemExit) the shell
         # should stay alive and accept a second command.
-        inputs = iter(["capture --help", "capture can0 --raw", EOFError()])
+        inputs = iter(["capture --help", "capture can0 --text", EOFError()])
 
         def fake_input(_prompt):
             val = next(inputs)
@@ -2629,7 +2629,7 @@ class CliTests(unittest.TestCase):
             # second call succeeds normally
             return 0
 
-        inputs = iter(["stats tests/fixtures/sample.candump", "capture can0 --raw", EOFError()])
+        inputs = iter(["stats tests/fixtures/sample.candump", "capture can0 --text", EOFError()])
 
         def fake_input(_prompt):
             val = next(inputs)
@@ -2647,7 +2647,7 @@ class CliTests(unittest.TestCase):
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
     def test_shell_survives_keyboard_interrupt_at_prompt(self, _mock_cfg) -> None:
         """Ctrl+C at the input prompt must not exit the shell."""
-        inputs = iter([KeyboardInterrupt(), "capture can0 --raw", EOFError()])
+        inputs = iter([KeyboardInterrupt(), "capture can0 --text", EOFError()])
 
         def fake_input(_prompt):
             val = next(inputs)
@@ -2687,7 +2687,7 @@ class CliTests(unittest.TestCase):
             call_count += 1
             raise KeyboardInterrupt
 
-        result = _run_tui_command("capture can0 --raw", state, raising_execute)
+        result = _run_tui_command("capture can0 --text", state, raising_execute)
         self.assertEqual(result, 0)
         self.assertEqual(call_count, 1)
 
@@ -2791,10 +2791,10 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["errors"][0]["code"], "INVALID_PGN")
 
-    def test_raw_error_output_is_message_only(self) -> None:
-        exit_code, stdout, _ = run_cli("j1939", "pgn", "300000", "--raw")
+    def test_text_error_output_includes_structured_error_line(self) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "pgn", "300000", "--text")
         self.assertEqual(exit_code, EXIT_USER_ERROR)
-        self.assertEqual(stdout.strip(), "J1939 PGN must be between 0 and 262143.")
+        self.assertIn("error: INVALID_PGN: J1939 PGN must be between 0 and 262143.", stdout)
 
     def test_j1939_pgn_requires_capture_file(self) -> None:
         exit_code, stdout, stderr = run_cli("j1939", "pgn", "65262", "--json")
@@ -3539,12 +3539,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(event_types.count("frame"), 2)
 
     @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
-    def test_generate_raw_output_emits_command_name(self, _mock_cfg) -> None:
+    def test_generate_rejects_raw_output_mode(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--raw"
         )
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertIn("generate", stdout.strip())
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertIn("error: INVALID_ARGUMENTS: unrecognized arguments: --raw", stdout)
 
     # --- Result data fields ---
 
@@ -3953,7 +3953,7 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("--json", names)
         self.assertIn("--jsonl", names)
         self.assertIn("--text", names)
-        self.assertIn("--raw", names)
+        self.assertNotIn("--raw", names)
         self.assertNotIn("--table", names)
 
     def test_generate_flags_include_gap_and_count(self) -> None:

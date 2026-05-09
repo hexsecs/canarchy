@@ -157,7 +157,6 @@ def add_output_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--compact", action="store_true", help="emit compact JSON with frame data only")
     group.add_argument("--text", action="store_true", help="emit human-readable text output")
     group.add_argument("--table", action="store_true", help=argparse.SUPPRESS)
-    group.add_argument("--raw", action="store_true", help="emit raw output")
 
 
 def add_active_ack_argument(parser: argparse.ArgumentParser) -> None:
@@ -691,7 +690,7 @@ def build_parser() -> CanarchyArgumentParser:
 
 
 def format_name(args: argparse.Namespace) -> str:
-    for name in ("json", "jsonl", "compact", "text", "raw"):
+    for name in ("json", "jsonl", "compact", "text"):
         if getattr(args, name, False):
             return name
     if getattr(args, "table", False):
@@ -703,7 +702,7 @@ def requested_output_format(argv: Sequence[str] | None) -> str:
     if argv is None:
         return "text"
 
-    for name in ("json", "jsonl", "compact", "text", "raw"):
+    for name in ("json", "jsonl", "compact", "text"):
         if f"--{name}" in argv:
             return name
     if "--table" in argv:
@@ -3568,7 +3567,6 @@ def build_result(args: argparse.Namespace) -> CommandResult:
             "compact",
             "text",
             "table",
-            "raw",
             "ack_active",
         }
         and value is not None
@@ -4559,11 +4557,11 @@ def emit_live_capture(args: argparse.Namespace, output_format: str) -> int:
 
     All formats stream continuously rather than returning a fixed batch:
 
-    * ``text`` / ``table`` / ``raw`` / ``candump`` — candump-style text line per frame
+    * ``text`` / ``table`` / ``candump`` — candump-style text line per frame
     * ``json`` / ``jsonl`` — one ``json.dumps(event)`` line per frame
     """
     transport = LocalTransport()
-    text_mode = output_format in {"text", "raw"}
+    text_mode = output_format == "text"
     try:
         for event in transport.capture_stream_events(args.interface):
             if event.get("event_type") != "frame":
@@ -4773,24 +4771,6 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             _emit_warnings_jsonl(payload, result)
             return
         print(json.dumps(payload, sort_keys=True))
-        return
-
-    if output_format == "raw":
-        if result.ok and result.command == "dbc inspect":
-            print(result.data.get("database", {}).get("path", result.command))
-            return
-        if result.ok and result.command == "gateway":
-            for line in format_gateway_lines(result):
-                print(line)
-            return
-        if result.ok and result.command == "capture" and result.data.get("display") == "candump":
-            for line in format_candump_lines(result):
-                print(line)
-            return
-        if result.ok:
-            print(result.command)
-        elif payload["errors"]:
-            print(payload["errors"][0]["message"])
         return
 
     if (
@@ -5074,7 +5054,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_tui(execute_command, command=args.tui_command)
     if args.command == "capture":
         return emit_live_capture(args, output_format)
-    if args.command == "gateway" and output_format in {"text", "raw"}:
+    if args.command == "gateway" and output_format == "text":
         return emit_live_gateway(args)
     if args.command == "datasets stream" and not args.json:
         return emit_dataset_stream(args)

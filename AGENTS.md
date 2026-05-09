@@ -299,7 +299,6 @@ Every command should support explicit output modes:
 * `--json`
 * `--jsonl`
 * `--text`
-* `--raw`
 
 Do not mix human decoration into JSON output.
 

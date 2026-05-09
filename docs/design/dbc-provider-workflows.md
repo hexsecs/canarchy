@@ -39,16 +39,16 @@ Operators often have a capture before they have the matching DBC on disk. CANarc
 ## Command Surface
 
 ```text
-canarchy dbc provider list [--json] [--jsonl] [--text] [--raw]
-canarchy dbc search <query> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text] [--raw]
-canarchy dbc fetch <ref> [--json] [--jsonl] [--text] [--raw]
-canarchy dbc cache list [--json] [--jsonl] [--text] [--raw]
-canarchy dbc cache prune [--provider <name>] [--json] [--jsonl] [--text] [--raw]
-canarchy dbc cache refresh [--provider <name>] [--json] [--jsonl] [--text] [--raw]
-canarchy decode --file <file> --dbc <path|provider-ref> [--json] [--jsonl] [--text] [--raw]
-canarchy decode --stdin --dbc <path|provider-ref> [--json] [--jsonl] [--text] [--raw]
-canarchy encode --dbc <path|provider-ref> <message> <signal=value>... [--json] [--jsonl] [--text] [--raw]
-canarchy dbc inspect <path|provider-ref> [--message <name>] [--signals-only] [--json] [--jsonl] [--text] [--raw]
+canarchy dbc provider list [--json] [--jsonl] [--text]
+canarchy dbc search <query> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text]
+canarchy dbc fetch <ref> [--json] [--jsonl] [--text]
+canarchy dbc cache list [--json] [--jsonl] [--text]
+canarchy dbc cache prune [--provider <name>] [--json] [--jsonl] [--text]
+canarchy dbc cache refresh [--provider <name>] [--json] [--jsonl] [--text]
+canarchy decode --file <file> --dbc <path|provider-ref> [--json] [--jsonl] [--text]
+canarchy decode --stdin --dbc <path|provider-ref> [--json] [--jsonl] [--text]
+canarchy encode --dbc <path|provider-ref> <message> <signal=value>... [--json] [--jsonl] [--text]
+canarchy dbc inspect <path|provider-ref> [--message <name>] [--signals-only] [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries
@@ -114,10 +114,6 @@ Provider and cache commands emit a single result object line because they do not
 ### Table
 
 `dbc provider list` and `dbc search` use DBC-specific table helpers. Cache and fetch workflows return compact key/value summaries.
-
-### Raw
-
-Provider and cache workflows emit the command name on success or the first error message on failure.
 
 ## Error Contracts
 

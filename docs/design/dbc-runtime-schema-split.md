@@ -32,10 +32,10 @@ Operators and agents need richer database-aware workflows than the current thin 
 ## Command Surface
 
 ```text
-canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--text] [--raw]
-canarchy decode --stdin --dbc <file> [--json] [--jsonl] [--text] [--raw]
-canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--text] [--raw]
-canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--text] [--raw]
+canarchy decode --file <file> --dbc <file> [--json] [--jsonl] [--text]
+canarchy decode --stdin --dbc <file> [--json] [--jsonl] [--text]
+canarchy encode --dbc <file> <message> <signal=value>... [--json] [--jsonl] [--text]
+canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--text]
 ```
 
 Future schema-management commands are expected to live under a separate `canarchy db ...` namespace.
@@ -88,9 +88,9 @@ The command layer continues to own all human and machine-readable output contrac
 * `decode` and `encode` shall preserve their existing envelopes and event shapes unless a design spec explicitly expands them
 * `dbc inspect` shall emit the metadata structures defined in `docs/design/dbc-inspect-command.md`
 
-### Table and raw
+### Text
 
-Table and raw formatting remain command-layer concerns and shall not depend on third-party object representations.
+Text formatting remains a command-layer concern and shall not depend on third-party object representations.
 
 ## Error Contracts
 
@@ -110,7 +110,7 @@ All phases complete as of April 2026:
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 1 | Done | Internal metadata types in `dbc_types.py`, facade at `dbc.py`, `DBC_SIGNAL_INVALID` aligned, fixtures expanded |
-| Phase 2 | Done | `canarchy dbc inspect` implemented, JSON/JSONL/text/raw outputs, MCP exposed |
+| Phase 2 | Done | `canarchy dbc inspect` implemented, JSON/JSONL/text outputs, MCP exposed |
 | Phase 3 | Done | cantools runtime adapter at `dbc_runtime.py`, decode/encode switched, fixture parity verified |
 | Phase 4 | Deferred | canmatrix retained for future schema workflows |
 | Phase 5 | Deferred | Evaluate long-term dependency strategy later |

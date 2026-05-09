@@ -31,9 +31,9 @@ Operators and coding agents should be able to connect commands with pipes instea
 ## Command Surface
 
 ```text
-canarchy decode --dbc <file> --stdin [--json|--jsonl|--text|--raw]
-canarchy filter <expression> --stdin [--json|--jsonl|--text|--raw]
-canarchy j1939 decode --stdin [--json|--jsonl|--text|--raw]
+canarchy decode --dbc <file> --stdin [--json|--jsonl|--text]
+canarchy filter <expression> --stdin [--json|--jsonl|--text]
+canarchy j1939 decode --stdin [--json|--jsonl|--text]
 ```
 
 Representative usage:

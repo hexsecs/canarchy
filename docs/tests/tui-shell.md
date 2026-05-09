@@ -73,7 +73,7 @@ Then   the output shall contain a structured `INVALID_PGN` error in the alerts p
 
 ```gherkin
 Given  the TUI is running
-When   the operator submits the command `shell --command 'capture can0 --raw'` from TUI input
+When   the operator submits the command `shell --command 'capture can0 --text'` from TUI input
 Then   the output shall contain `TUI_COMMAND_UNSUPPORTED`
 ```
 
