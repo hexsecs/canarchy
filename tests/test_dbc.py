@@ -204,12 +204,12 @@ class DbcTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "DBC_MESSAGE_NOT_FOUND")
 
-    def test_dbc_inspect_table_output(self) -> None:
+    def test_dbc_inspect_text_output(self) -> None:
         exit_code, stdout, _ = run_cli(
             "dbc",
             "inspect",
             str(FIXTURES / "sample.dbc"),
-            "--table",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("messages: 2", stdout)

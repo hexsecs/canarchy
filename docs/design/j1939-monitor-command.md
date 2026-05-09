@@ -26,12 +26,12 @@ Operators need a fast way to inspect live or sample J1939 traffic as PGN-oriente
 | `REQ-J1939MON-03` | Event-driven | When `j1939 monitor <interface>` is invoked, the system shall use the transport-backed monitor path and include the selected interface in the structured result. |
 | `REQ-J1939MON-04` | Optional feature | Where `--pgn <id>` is specified, the system shall restrict emitted observations to the selected PGN and echo the filter value in the structured result. |
 | `REQ-J1939MON-05` | Ubiquitous | The `j1939 monitor` result envelope shall expose passive-mode metadata plus J1939 observation events rather than raw-frame-only output. |
-| `REQ-J1939MON-06` | Ubiquitous | `j1939 monitor` shall preserve the standard output modes (`--json`, `--jsonl`, `--table`, `--raw`) with command-specific formatting over the same observation stream. |
+| `REQ-J1939MON-06` | Ubiquitous | `j1939 monitor` shall preserve the standard output modes (`--json`, `--jsonl`, `--text`, `--raw`) with command-specific formatting over the same observation stream. |
 
 ## Command Surface
 
 ```text
-canarchy j1939 monitor [<interface>] [--pgn <id>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 monitor [<interface>] [--pgn <id>] [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries
@@ -78,7 +78,7 @@ Each event is a J1939 PGN observation whose payload includes protocol-first fiel
 
 ### Table
 
-`--table` renders protocol-first observation lines, including PGN, source address, destination address, priority, and frame data, and shows the active `pgn_filter` when one is applied.
+`--text` renders protocol-first observation lines, including PGN, source address, destination address, priority, and frame data, and shows the active `pgn_filter` when one is applied.
 
 ### Raw
 

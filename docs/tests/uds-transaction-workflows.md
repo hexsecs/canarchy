@@ -10,7 +10,7 @@
 
 ## Test Objectives
 
-Validate the structured UDS scan/trace transaction paths, protocol-aware table output, ISO-TP multi-frame response handling, and transport failure handling.
+Validate the structured UDS scan/trace transaction paths, protocol-aware text output, ISO-TP multi-frame response handling, and transport failure handling.
 
 The current implementation covers transport-backed multi-frame response reassembly on `python-can` and explicit sample/reference behavior on the scaffold backend.
 
@@ -18,7 +18,7 @@ The current implementation covers transport-backed multi-frame response reassemb
 
 * scan JSON output with transaction events and preflight warning behavior
 * trace JSON output with transaction events
-* protocol-aware table rendering for scan and trace
+* protocol-aware text rendering for scan and trace
 * ISO-TP reassembly for first-frame and consecutive-frame responses
 * incomplete transaction reporting for truncated or out-of-order responses
 * flow-control frame filtering
@@ -72,11 +72,11 @@ And    the result shall report the active protocol decoder path
 
 ---
 
-### `TEST-UDS-TX-03` — Scan table output
+### `TEST-UDS-TX-03` — Scan text output
 
 ```gherkin
 Given  the scaffold transport backend is active
-When   the operator runs `canarchy uds scan can0 --table`
+When   the operator runs `canarchy uds scan can0 --text`
 Then   the output shall include responder and transaction sections
 And    the output shall include protocol-aware service metadata
 ```
@@ -85,11 +85,11 @@ And    the output shall include protocol-aware service metadata
 
 ---
 
-### `TEST-UDS-TX-04` — Trace table output
+### `TEST-UDS-TX-04` — Trace text output
 
 ```gherkin
 Given  the scaffold transport backend is active
-When   the operator runs `canarchy uds trace can0 --table`
+When   the operator runs `canarchy uds trace can0 --text`
 Then   the output shall include traced transaction summaries
 And    the output shall include service and identifier information for each transaction
 ```

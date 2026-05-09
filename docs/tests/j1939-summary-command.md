@@ -48,11 +48,11 @@ And    the candidate shall retain the related PGN and addressing metadata
 
 ---
 
-### TEST-J1939SUM-03 — Table output remains operator-friendly
+### TEST-J1939SUM-03 — Text output remains operator-friendly
 
 ```gherkin
 Given  a J1939 TP capture fixture contains a printable candidate identifier
-When   the operator runs `canarchy j1939 summary --file <capture> --table`
+When   the operator runs `canarchy j1939 summary --file <capture> --text`
 Then   the output shall show the summary sections for top PGNs and printable identifiers
 And    the printable text shall remain visible in the operator-facing output
 ```

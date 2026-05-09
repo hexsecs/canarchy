@@ -27,7 +27,7 @@ Operators analysing unknown traffic need repeatable helpers that summarise likel
 | `REQ-RE-05` | Event-driven | When `re entropy <file>` is invoked, the system shall rank arbitration IDs and candidate fields by Shannon entropy derived from observed value distributions. |
 | `REQ-RE-06` | Event-driven | When `re correlate <file> --reference <ref>` is invoked, the system shall correlate candidate bit fields against the reference series and return ranked correlation results. |
 | `REQ-RE-07` | Ubiquitous | Reverse-engineering output shall include confidence, score, or rationale fields that distinguish heuristic inferences from established facts. |
-| `REQ-RE-08` | Ubiquitous | The commands shall support `--json`, `--jsonl`, and `--table` output modes. |
+| `REQ-RE-08` | Ubiquitous | The commands shall support `--json`, `--jsonl`, and `--text` output modes. |
 | `REQ-RE-09` | Unwanted behaviour | If `re correlate` is invoked without `--reference`, the system shall return a structured error with code `RE_REFERENCE_REQUIRED` and exit code 1. |
 | `REQ-RE-10` | Unwanted behaviour | If the reference file is missing, malformed, or does not match the required timestamped numeric sample schema, the system shall return a structured error with code `INVALID_REFERENCE_FILE` and exit code 1. |
 | `REQ-RE-11` | Event-driven | When `re match-dbc <capture>` is invoked, the system shall rank candidate DBCs by comparing provider-catalog message IDs against the capture's observed arbitration IDs. |
@@ -36,12 +36,12 @@ Operators analysing unknown traffic need repeatable helpers that summarise likel
 ## Command Surface
 
 ```text
-canarchy re signals <file> [--json] [--jsonl] [--table] [--raw]
-canarchy re counters <file> [--json] [--jsonl] [--table] [--raw]
-canarchy re entropy <file> [--json] [--jsonl] [--table] [--raw]
-canarchy re correlate <file> --reference <file> [--json] [--jsonl] [--table] [--raw]
-canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--table] [--raw]
-canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--table] [--raw]
+canarchy re signals <file> [--json] [--jsonl] [--text] [--raw]
+canarchy re counters <file> [--json] [--jsonl] [--text] [--raw]
+canarchy re entropy <file> [--json] [--jsonl] [--text] [--raw]
+canarchy re correlate <file> --reference <file> [--json] [--jsonl] [--text] [--raw]
+canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text] [--raw]
+canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text] [--raw]
 ```
 
 ### Scope assumptions
@@ -222,7 +222,7 @@ The initial implementation may either emit a single result object line or one ca
 
 ### Table
 
-Table output shall present compact ranked candidate summaries with confidence/score and rationale visible.
+Text output shall present compact ranked candidate summaries with confidence/score and rationale visible.
 
 ## Error Contracts
 

@@ -62,13 +62,13 @@ And    the returned observations shall only report PGN `65262`
 
 ---
 
-### TEST-J1939MON-04 — Table output remains protocol-first
+### TEST-J1939MON-04 — Text output remains protocol-first
 
 ```gherkin
 Given  a PGN filter is supplied
-When   the operator runs `canarchy j1939 monitor --pgn 65262 --table`
+When   the operator runs `canarchy j1939 monitor --pgn 65262 --text`
 Then   the system shall print the command header
-And    the table output shall include the active PGN filter and protocol-first observation fields
+And    the text output shall include the active PGN filter and protocol-first observation fields
 ```
 
 **Fixture:** built-in sample/reference provider.

@@ -30,7 +30,7 @@ The fixture used in this demo is at `tests/fixtures/j1939_heavy_vehicle.candump`
 Get an overview of what's on the bus:
 
 ```bash
-canarchy j1939 decode --file tests/fixtures/j1939_heavy_vehicle.candump --table
+canarchy j1939 decode --file tests/fixtures/j1939_heavy_vehicle.candump --text
 ```
 
 ```text
@@ -60,7 +60,7 @@ You can see three PGN classes from SA=0x31:
 SPN 110 (Engine Coolant Temperature) lives in PGN 65262. Decode it directly:
 
 ```bash
-canarchy j1939 spn 110 --file tests/fixtures/j1939_heavy_vehicle.candump --table
+canarchy j1939 spn 110 --file tests/fixtures/j1939_heavy_vehicle.candump --text
 ```
 
 ```text
@@ -82,7 +82,7 @@ The coolant temperature is climbing: 85°C → 86°C → 87°C across the 550ms 
 Those TP frames in Step 1 are carrying a DM1 message. Let CANarchy reassemble and decode them:
 
 ```bash
-canarchy j1939 dm1 --file tests/fixtures/j1939_heavy_vehicle.candump --table
+canarchy j1939 dm1 --file tests/fixtures/j1939_heavy_vehicle.candump --text
 ```
 
 ```text
@@ -135,7 +135,7 @@ export CANARCHY_TRANSPORT_BACKEND=python-can
 export CANARCHY_PYTHON_CAN_INTERFACE=socketcan   # or kvaser, pcan, etc.
 
 canarchy capture can0 --candump                   # live candump view
-canarchy j1939 dm1 --file today.candump --table   # decode DM1 from saved capture
+canarchy j1939 dm1 --file today.candump --text   # decode DM1 from saved capture
 ```
 
 For cross-process demos without physical hardware, see the [Generate and Capture Demo](generate_and_capture.md) using the `udp_multicast` backend.

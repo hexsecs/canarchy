@@ -32,7 +32,7 @@ Operators often start with the question "what is in this capture and what looks 
 ## Command Surface
 
 ```text
-canarchy j1939 summary --file <capture> [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--table] [--raw]
+canarchy j1939 summary --file <capture> [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries
@@ -85,7 +85,7 @@ The command returns the standard CANarchy result envelope. `data` for `j1939 sum
 
 ## Output Contracts
 
-`--json` returns a single stable result object. `--table` presents the reconnaissance summary as compact operator-facing lines without dropping the structured field naming in the JSON contract.
+`--json` returns a single stable result object. `--text` presents the reconnaissance summary as compact operator-facing lines without dropping the structured field naming in the JSON contract.
 
 ## Deferred Decisions
 

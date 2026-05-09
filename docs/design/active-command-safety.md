@@ -33,14 +33,14 @@ Operators and automation need active workflows to remain scriptable, but active 
 ## Command Surface
 
 ```text
-canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--table] [--raw]
+canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--text] [--raw]
 canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>]
                            [--count <n>] [--gap <ms>] [--extended] [--ack-active]
-                           [--json] [--jsonl] [--table] [--raw]
+                           [--json] [--jsonl] [--text] [--raw]
 canarchy gateway <src> <dst> [--src-backend <name>] [--dst-backend <name>]
                             [--bidirectional] [--count <n>] [--ack-active]
-                            [--json] [--jsonl] [--table] [--raw]
-canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--table] [--raw]
+                            [--json] [--jsonl] [--text] [--raw]
+canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries

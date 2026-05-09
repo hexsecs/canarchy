@@ -30,7 +30,7 @@ Replay is a core lab workflow for reproducing traffic patterns, validating tooli
 ## Command Surface
 
 ```text
-canarchy replay --file <file> [--rate <factor>] [--json] [--jsonl] [--table] [--raw]
+canarchy replay --file <file> [--rate <factor>] [--json] [--jsonl] [--text] [--raw]
 ```
 
 ## Responsibilities And Boundaries

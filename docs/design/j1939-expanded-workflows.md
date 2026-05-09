@@ -211,7 +211,7 @@ The compare view is intended to answer high-value investigation questions quickl
 
 ## Output Contracts
 
-For `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 inventory`, and `j1939 compare`, both `--json` and `--jsonl` emit a single CANarchy result object because these commands return structured observations under `data` rather than event streams. Table output remains protocol-first and summarises SPN observations, TP sessions, DM1 fault content, source-address inventory rows, and multi-capture J1939 differences without dropping to raw-ID-only views. For `j1939 tp sessions`, raw `reassembled_data` remains authoritative even when heuristic text or payload labels are present.
+For `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 inventory`, and `j1939 compare`, both `--json` and `--jsonl` emit a single CANarchy result object because these commands return structured observations under `data` rather than event streams. Text output remains protocol-first and summarises SPN observations, TP sessions, DM1 fault content, source-address inventory rows, and multi-capture J1939 differences without dropping to raw-ID-only views. For `j1939 tp sessions`, raw `reassembled_data` remains authoritative even when heuristic text or payload labels are present.
 
 ## Error Contracts
 

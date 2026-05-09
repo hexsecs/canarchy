@@ -30,7 +30,7 @@ Implemented and exercised in the current codebase:
 * shell command reuse through `canarchy shell --command ...`
 * initial text-mode `tui` shell over the shared command layer
 * `config show` for effective transport configuration inspection
-* structured `--json`, `--jsonl`, `--table`, and `--raw` output modes
+* structured `--json`, `--jsonl`, `--text`, and `--raw` output modes
 
 Some protocol-oriented commands still use explicit sample/reference providers rather than true transport-backed execution. See [Architecture](architecture.md) and [Command Spec](command_spec.md) for the current boundary.
 

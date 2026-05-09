@@ -33,7 +33,7 @@ Operators often need to answer questions such as which messages exist in a datab
 ## Command Surface
 
 ```text
-canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--table] [--raw]
+canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--text] [--raw]
 ```
 
 ### Arguments
@@ -173,7 +173,7 @@ Representative lines:
 
 ### Table
 
-`--table` returns a compact summary view.
+`--text` returns a compact summary view.
 
 ```text
 command: dbc inspect

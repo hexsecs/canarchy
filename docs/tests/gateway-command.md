@@ -22,7 +22,7 @@ Validate that `gateway` forwards frames correctly, preserves structured directio
 * unreachable channel raises `TRANSPORT_UNAVAILABLE`
 * `--count 0` returns a structured user error
 * JSON output includes the correct direction label
-* table output includes the gateway header and candump-style frame lines
+* text output includes the gateway header and candump-style frame lines
 
 ## Requirement Traceability
 
@@ -130,11 +130,11 @@ And    the event `source` field shall equal `"gateway.src->dst"`
 
 ---
 
-### `TEST-GATEWAY-08` — Table output
+### `TEST-GATEWAY-08` — Text output
 
 ```gherkin
 Given  a valid gateway source and destination with one frame available
-When   the operator runs `canarchy gateway src dst --count 1 --table`
+When   the operator runs `canarchy gateway src dst --count 1 --text`
 Then   the output shall contain a `gateway:` header line
 And    the output shall contain at least one candump-style frame line
 ```

@@ -36,7 +36,7 @@ canarchy gateway <src> <dst>
                  [--src-backend TYPE] [--dst-backend TYPE]
                  [--bidirectional]
                  [--count N]
-                 [--json] [--jsonl] [--table] [--raw]
+                 [--json] [--jsonl] [--text] [--raw]
 ```
 
 ### Arguments
