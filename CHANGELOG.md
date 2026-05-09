@@ -35,6 +35,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
+* Polished the CANdid streaming tutorial to clarify replay output modes, source timestamps, optional shell helpers, and save-to-file examples. Closes #281.
 * Documented five security use cases for using CANarchy with coding agents, including a CAN/J1939 capture triage workflow and fixture-backed example. Closes #271.
 * Documented dataset stream and replay bounding semantics for agents, including the difference between frame limits and JSONL chunk metadata. Closes #268.
 * Audited and refreshed operator, agent, design, and test documentation for current dataset replay/fetch behavior, MCP dataset coverage, stdin pipeline semantics, and file-backed command grammar. Closes #259.
