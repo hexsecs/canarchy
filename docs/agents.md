@@ -112,7 +112,7 @@ Current exclusions:
 
 * dataset streaming commands that emit frame records, such as `datasets stream` and non-dry-run `datasets replay`
 * interactive or service commands such as `shell`, `tui`, and `mcp serve`
-* `fuzz` placeholder commands (deferred until active fuzzing safety design is complete)
+* fuzzing workflows (deferred until active fuzzing safety design is complete)
 
 For dataset workflows, agents should prefer MCP dataset tools when available. `datasets_search` and `datasets_inspect` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. `datasets_fetch` distinguishes curated indexes from normal dataset entries with `is_index`, `index_instructions`, and `download_instructions`. Use `datasets_replay_plan` for safe replay preflight; use CLI `datasets replay --list-files --json` to choose a replay file and `--file <id-or-name>` to select it. Use `max_frames` or `max_seconds` to bound replay. Use CLI `datasets stream --max-frames <n>` to bound local downloaded dataset-file streaming. `--chunk-size` controls JSONL provenance chunk metadata only; it is not a frame limit. Actual frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 

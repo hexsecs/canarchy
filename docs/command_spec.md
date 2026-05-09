@@ -26,8 +26,6 @@ Implemented and verified in the current codebase:
 * structured JSON and JSONL output
 * explicit error schema and exit codes
 
-Some other commands are already present in the CLI tree but still return placeholder results until their implementation issues are completed.
-
 Important current behavior:
 
 * live transport-facing commands default to the `python-can` backend; set `backend = "scaffold"` in `~/.canarchy/config.toml` or export `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior
@@ -35,7 +33,6 @@ Important current behavior:
 * the default `python-can` interface is `socketcan`; set `interface` in the config file or `CANARCHY_PYTHON_CAN_INTERFACE` to change it
 * DBC-backed commands accept local paths and provider refs such as `opendbc:<name>` or `comma:<name>`
 * `decode`, `encode`, and `dbc inspect` include `data.dbc_source` in structured output so callers can see the provider, logical DBC name, pinned version, and resolved local path
-* placeholder-only commands, currently limited to the `fuzz` family, still return `status: planned` and `implementation: command surface scaffold`
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
 * specialized text formatting exists for J1939 monitor and decode style output; other `--text` output is generic key/value rendering
 * file-backed analysis commands support standard timestamped candump log files with `.candump` and `.log` suffixes; selected commands also support `--file -` for candump text from stdin
@@ -122,7 +119,7 @@ Notes:
 Filter a capture source by a simple expression.
 
 ```bash
-canarchy filter <expression> (--file <path> | --file - | --stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--compact|--text]
+canarchy filter <expression> (--file <path> | --file - | --stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
 ```
 ```
 
@@ -1129,9 +1126,9 @@ canarchy shell --command "capture can0 --text"
 
 ## Current Gaps
 
-These commands are present in the CLI tree but not yet implemented end to end:
+Planned capabilities that are intentionally not exposed in the CLI yet:
 
-* `fuzz replay|mutate|id`
+* active fuzzing workflows for replay mutation, payload mutation, and arbitration-ID probing
 
 These deeper capabilities are also not implemented yet even where the command surface exists:
 

@@ -455,18 +455,17 @@ class CliTests(unittest.TestCase):
         self.assertIn("dlc", frame)
         self.assertIn("is_extended_id", frame)
 
-    def test_filter_compact_output_returns_one_frame_per_line(self) -> None:
+    def test_filter_rejects_removed_compact_output_mode(self) -> None:
         exit_code, stdout, _ = run_cli(
             "filter", "extended", "--file", str(FIXTURES / "sample.candump"), "--compact"
         )
-        self.assertEqual(exit_code, EXIT_OK)
-        lines = stdout.strip().split("\n")
-        self.assertEqual(len(lines), 3)
-        for line in lines:
-            frame = json.loads(line)
-            self.assertIn("timestamp", frame)
-            self.assertIn("interface", frame)
-            self.assertIn("data", frame)
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertIn("error: INVALID_ARGUMENTS: unrecognized arguments: --compact", stdout)
+
+    def test_fuzz_placeholder_command_is_not_registered(self) -> None:
+        exit_code, stdout, _ = run_cli("fuzz", "id", "can0")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertIn("error: INVALID_ARGUMENTS", stdout)
         exit_code, stdout, _ = run_cli(
             "filter", "dlc>4", "--file", str(FIXTURES / "sample.candump"), "--json"
         )
@@ -3730,10 +3729,10 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_FILTER_EXPRESSION")
 
-    def test_compact_flag_not_leaked_into_stats_json_payload(self) -> None:
+    def test_output_flags_not_leaked_into_stats_json_payload(self) -> None:
         _, stdout, _ = run_cli("stats", "--file", str(FIXTURES / "sample.candump"), "--json")
         payload = json.loads(stdout)
-        self.assertNotIn("compact", payload["data"])
+        self.assertNotIn("text", payload["data"])
 
     def _mock_dbc_registry(self):
         from canarchy.dbc_provider import DbcDescriptor
@@ -3954,6 +3953,7 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("--jsonl", names)
         self.assertIn("--text", names)
         self.assertNotIn("--raw", names)
+        self.assertNotIn("--compact", names)
         self.assertNotIn("--table", names)
 
     def test_generate_flags_include_gap_and_count(self) -> None:

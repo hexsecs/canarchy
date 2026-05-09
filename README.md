@@ -44,9 +44,9 @@ Fully implemented and tested:
 * `shell` — interactive REPL and `--command` scripting mode
 * `tui` — terminal UI front end
 
-Present in the CLI surface but not yet fully implemented:
+Planned but not yet exposed in the CLI:
 
-* `fuzz replay`, `fuzz mutate`, `fuzz id` — active fuzzing (planned)
+* active fuzzing workflows for replay mutation, payload mutation, and arbitration-ID probing
 
 Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
 

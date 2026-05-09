@@ -28,7 +28,6 @@ TOP_LEVEL_COMMANDS: list[str] = [
     "encode",
     "export",
     "filter",
-    "fuzz",
     "gateway",
     "generate",
     "j1939",
@@ -56,7 +55,6 @@ SUBCOMMANDS: dict[str, list[str]] = {
     "skills cache": ["list", "refresh"],
     "uds": ["scan", "services", "trace"],
     "re": ["correlate", "counters", "entropy", "signals"],
-    "fuzz": ["id", "mutate", "replay"],
 }
 
 # Output format flags shared by every command.
@@ -73,7 +71,7 @@ FLAGS: dict[str, list[str]] = {
     "decode": ["--dbc", "--file"] + _OUTPUT,
     "encode": ["--dbc"] + _OUTPUT,
     "export": _OUTPUT,
-    "filter": ["--file", "--compact"] + _OUTPUT,
+    "filter": ["--file"] + _OUTPUT,
     "gateway": [
         "--ack-active",
         "--bidirectional",
@@ -103,9 +101,6 @@ FLAGS: dict[str, list[str]] = {
     "re counters": _OUTPUT,
     "re entropy": _OUTPUT,
     "re signals": _OUTPUT,
-    "fuzz id": _OUTPUT,
-    "fuzz mutate": _OUTPUT,
-    "fuzz replay": _OUTPUT,
     "replay": ["--file", "--rate"] + _OUTPUT,
     "send": ["--ack-active"] + _OUTPUT,
     "session load": _OUTPUT,

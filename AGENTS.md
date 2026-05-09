@@ -472,15 +472,12 @@ canarchy
     counters
     entropy
     correlate
-  fuzz
-    replay
-    mutate
-    id
   shell
   tui
 ```
 
 This tree is a starting point, not a lock.
+Fuzzing workflows are planned but intentionally not exposed until active-transmit safety design is complete.
 
 For dataset automation, agents should prefer MCP dataset tools when available, or explicit CLI JSON output otherwise. `datasets_search` / `datasets search --json` and `datasets_inspect` / `datasets inspect --json` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. `datasets_fetch` distinguishes curated indexes from normal dataset entries with `is_index`, `index_instructions`, and `download_instructions`. Use MCP `datasets_replay_plan` or CLI `datasets replay --dry-run --json` for safe replay preflight; use `datasets replay --list-files --json` to choose a replay file and `--file <id-or-name>` to select it. Use `--max-frames` or `--max-seconds` to bound replay. Use `datasets stream --max-frames <n>` to bound local downloaded dataset-file streaming; `--chunk-size` controls JSONL provenance chunk metadata and is not a frame limit. Actual dataset frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 

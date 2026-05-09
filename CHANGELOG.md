@@ -12,6 +12,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Renamed the canonical human-readable output flag from `--table` to `--text`; `--table` remains accepted as a compatibility alias. Closes #286.
 * Removed the generic `--raw` output mode from the shared command surface; use `--text`, `--json`, `--jsonl`, or command-specific frame-line options such as `--candump` instead. Closes #288.
 
+### Removed
+
+* Removed the `--compact` output mode and the placeholder `fuzz` command tree; fuzzing remains planned but is no longer exposed before active-transmit safety design is complete. Closes #292.
+
 ### Documentation
 
 * Cleaned up stale homepage, overview, command spec, and design wording after the output-mode updates. Closes #290.
