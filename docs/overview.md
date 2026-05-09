@@ -30,7 +30,7 @@ Implemented and exercised in the current codebase:
 * shell command reuse through `canarchy shell --command ...`
 * initial text-mode `tui` shell over the shared command layer
 * `config show` for effective transport configuration inspection
-* structured `--json`, `--jsonl`, `--text`, output modes
+* structured `--json`, `--jsonl`, and `--text` output modes
 
 Some protocol-oriented commands still use explicit sample/reference providers rather than true transport-backed execution. See [Architecture](architecture.md) and [Command Spec](command_spec.md) for the current boundary.
 
@@ -38,7 +38,6 @@ Some protocol-oriented commands still use explicit sample/reference providers ra
 
 Present in the CLI tree but not yet implemented end to end:
 
-* `re correlate`
 * `fuzz replay`, `fuzz mutate`, and `fuzz id`
 
 ## Recommended Reading
