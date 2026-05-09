@@ -55,6 +55,14 @@ canarchy datasets replay catalog:candid --list-files --json \
   | column -t
 ```
 
+The `jq` and `column` tools are optional shell conveniences. If they are not
+available, keep the machine-readable CANarchy output and inspect `data.files`
+directly:
+
+```bash
+canarchy datasets replay catalog:candid --list-files --json
+```
+
 ```
 1  brakes     1_brakes_CAN.log     8359774
 1  indicator  1_indicator_CAN.log  15185132
@@ -114,11 +122,14 @@ canarchy datasets replay catalog:candid
 ```
 
 ```
-(0.000000) can0 316#0000000000000000
-(0.004123) can0 1A0#0200000000000000
-(0.008211) can0 0C8#000000000000
+(1731916598.782538) can0 420#3F0000334200F257
+(1731916598.762559) can0 42B#00007E0810000000
+(1731916598.762802) can0 4D1#FDE80A72FDE80000
 ...
 ```
+
+CANdid preserves the source capture timestamps, so output timestamps are
+epoch-like capture times rather than values starting at zero.
 
 Press `Ctrl+C` to stop at any time.
 
@@ -161,8 +172,7 @@ into analysis scripts or agents:
 canarchy datasets replay catalog:candid \
   --file 1_brakes_CAN.log \
   --format jsonl \
-  --max-frames 10 \
-  --jsonl
+  --max-frames 10
 ```
 
 ```json
@@ -171,8 +181,10 @@ canarchy datasets replay catalog:candid \
 ...
 ```
 
-Use `--jsonl` (streaming output) rather than `--json` (batched) when processing large
-files to avoid buffering the entire stream in memory.
+Use `--format jsonl` when you want one JSON object per replayed frame. Use
+`--json` only when you want a single summary envelope with replay metadata and
+no frame records. The standard `--jsonl` output-mode flag is not required for
+dataset replay frame streaming; `--format jsonl` is the format switch.
 
 ## 8. Pipe into other CANarchy commands
 
@@ -184,7 +196,7 @@ stdin — or use CANarchy's own analysis commands on a saved capture:
 canarchy datasets replay catalog:candid \
   --file 5_driving_CAN.log \
   --max-seconds 60 \
-  --raw > /tmp/driving.log
+  > /tmp/driving.log
 
 canarchy capture-info --file /tmp/driving.log
 canarchy stats --file /tmp/driving.log
