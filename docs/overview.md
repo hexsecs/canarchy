@@ -36,9 +36,9 @@ Some protocol-oriented commands still use explicit sample/reference providers ra
 
 ## Current Gaps
 
-Present in the CLI tree but not yet implemented end to end:
+Planned but not yet exposed in the CLI:
 
-* `fuzz replay`, `fuzz mutate`, and `fuzz id`
+* active fuzzing workflows for replay mutation, payload mutation, and arbitration-ID probing
 
 ## Recommended Reading
 

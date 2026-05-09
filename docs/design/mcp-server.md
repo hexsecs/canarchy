@@ -119,7 +119,7 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | J1939 analysis including `j1939 compare`, `j1939 faults`, and TP compare | Exposed | File-backed analysis commands are safe, bounded, and deterministic. |
 | Reverse-engineering helpers including `re signals` | Exposed | File-backed analysis commands are safe and deterministic. |
 | `shell`, `tui`, `mcp serve` | Excluded | Interactive or service commands have no direct one-shot MCP tool equivalent. |
-| `fuzz` placeholder commands | Deferred | Active fuzzing workflows are command-surface scaffolds and need separate safety design before MCP exposure. |
+| Fuzzing workflows | Deferred | Active fuzzing needs separate safety design before CLI or MCP exposure. |
 
 ## Response Envelope
 

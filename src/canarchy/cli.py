@@ -154,7 +154,6 @@ def add_output_arguments(parser: argparse.ArgumentParser) -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--json", action="store_true", help="emit JSON output")
     group.add_argument("--jsonl", action="store_true", help="emit JSONL output")
-    group.add_argument("--compact", action="store_true", help="emit compact JSON with frame data only")
     group.add_argument("--text", action="store_true", help="emit human-readable text output")
     group.add_argument("--table", action="store_true", help=argparse.SUPPRESS)
 
@@ -647,24 +646,6 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(re_shortlist_dbc)
     re_shortlist_dbc.set_defaults(command="re shortlist-dbc")
 
-    fuzz = subparsers.add_parser("fuzz", help="active fuzzing workflows")
-    fuzz_subparsers = fuzz.add_subparsers(dest="fuzz_action", required=True)
-
-    fuzz_replay = fuzz_subparsers.add_parser("replay", help="fuzz replay traffic")
-    fuzz_replay.add_argument("file")
-    add_output_arguments(fuzz_replay)
-    fuzz_replay.set_defaults(command="fuzz replay")
-
-    fuzz_mutate = fuzz_subparsers.add_parser("mutate", help="mutate captured traffic")
-    fuzz_mutate.add_argument("file")
-    add_output_arguments(fuzz_mutate)
-    fuzz_mutate.set_defaults(command="fuzz mutate")
-
-    fuzz_id = fuzz_subparsers.add_parser("id", help="fuzz arbitration IDs")
-    fuzz_id.add_argument("interface")
-    add_output_arguments(fuzz_id)
-    fuzz_id.set_defaults(command="fuzz id")
-
     config = subparsers.add_parser("config", help="inspect CANarchy configuration")
     config_subparsers = config.add_subparsers(dest="config_action", required=True)
     config_show = config_subparsers.add_parser("show", help="show effective transport configuration")
@@ -690,7 +671,7 @@ def build_parser() -> CanarchyArgumentParser:
 
 
 def format_name(args: argparse.Namespace) -> str:
-    for name in ("json", "jsonl", "compact", "text"):
+    for name in ("json", "jsonl", "text"):
         if getattr(args, name, False):
             return name
     if getattr(args, "table", False):
@@ -702,7 +683,7 @@ def requested_output_format(argv: Sequence[str] | None) -> str:
     if argv is None:
         return "text"
 
-    for name in ("json", "jsonl", "compact", "text"):
+    for name in ("json", "jsonl", "text"):
         if f"--{name}" in argv:
             return name
     if "--table" in argv:
@@ -3564,7 +3545,6 @@ def build_result(args: argparse.Namespace) -> CommandResult:
             "command_name",
             "json",
             "jsonl",
-            "compact",
             "text",
             "table",
             "ack_active",
@@ -4717,30 +4697,6 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             data["frames"] = flat
         elif result.command in _J1939_SESSION_COMMANDS and "events" in data and not data["events"]:
             del data["events"]
-        print(json.dumps(payload, sort_keys=True))
-        return
-
-    if output_format == "compact":
-        if result.command == "filter":
-            if not result.ok:
-                print(json.dumps(payload, sort_keys=True))
-                return
-            events = payload.get("data", {}).get("events", [])
-            flat = [_flatten_frame_event(e) for e in events if e.get("event_type") == "frame"]
-            for frame in flat:
-                print(json.dumps(frame, sort_keys=True))
-            for warning in payload["warnings"]:
-                print(
-                    json.dumps(
-                        AlertEvent(
-                            level="warning",
-                            message=warning,
-                            source=f"cli.{result.command}",
-                        ).to_event().to_payload(),
-                        sort_keys=True,
-                    )
-                )
-            return
         print(json.dumps(payload, sort_keys=True))
         return
 

@@ -177,9 +177,9 @@ class DbcTests(unittest.TestCase):
         self.assertEqual(payload["command"], "dbc inspect")
         self.assertEqual(payload["data"]["database"]["message_count"], 2)
         self.assertEqual(payload["data"]["messages"][0]["name"], "EngineSpeed1")
-        self.assertNotIn("compact", payload["data"])
+        self.assertNotIn("text", payload["data"])
 
-    def test_compact_flag_not_leaked_into_json_payload(self) -> None:
+    def test_output_flags_not_leaked_into_json_payload(self) -> None:
         for argv in [
             ("dbc", "inspect", str(FIXTURES / "sample.dbc"), "--json"),
             ("encode", "--dbc", str(FIXTURES / "sample.dbc"), "EngineStatus1", "CoolantTemp=55", "--json"),
@@ -187,7 +187,7 @@ class DbcTests(unittest.TestCase):
             with self.subTest(argv=argv):
                 _, stdout, _ = run_cli(*argv)
                 payload = json.loads(stdout)
-                self.assertNotIn("compact", payload["data"])
+                self.assertNotIn("text", payload["data"])
 
     def test_dbc_inspect_unknown_message_returns_error(self) -> None:
         exit_code, stdout, stderr = run_cli(
