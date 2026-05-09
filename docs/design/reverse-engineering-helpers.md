@@ -36,12 +36,12 @@ Operators analysing unknown traffic need repeatable helpers that summarise likel
 ## Command Surface
 
 ```text
-canarchy re signals <file> [--json] [--jsonl] [--text] [--raw]
-canarchy re counters <file> [--json] [--jsonl] [--text] [--raw]
-canarchy re entropy <file> [--json] [--jsonl] [--text] [--raw]
-canarchy re correlate <file> --reference <file> [--json] [--jsonl] [--text] [--raw]
-canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text] [--raw]
-canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text] [--raw]
+canarchy re signals <file> [--json] [--jsonl] [--text]
+canarchy re counters <file> [--json] [--jsonl] [--text]
+canarchy re entropy <file> [--json] [--jsonl] [--text]
+canarchy re correlate <file> --reference <file> [--json] [--jsonl] [--text]
+canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text]
+canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text]
 ```
 
 ### Scope assumptions

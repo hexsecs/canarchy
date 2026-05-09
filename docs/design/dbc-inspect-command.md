@@ -33,7 +33,7 @@ Operators often need to answer questions such as which messages exist in a datab
 ## Command Surface
 
 ```text
-canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--text] [--raw]
+canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--text]
 ```
 
 ### Arguments
@@ -186,10 +186,6 @@ nodes: 1
 ```
 
 When `--message EngineStatus1` is specified, the table includes the message summary plus one line per signal.
-
-### Raw
-
-Emits the inspected file path on success or the first error message on failure.
 
 ## Error Contracts
 

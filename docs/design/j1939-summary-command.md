@@ -32,7 +32,7 @@ Operators often start with the question "what is in this capture and what looks 
 ## Command Surface
 
 ```text
-canarchy j1939 summary --file <capture> [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--text] [--raw]
+canarchy j1939 summary --file <capture> [--max-frames <n>] [--seconds <n>] [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries

@@ -30,8 +30,8 @@ Operators already have structured UDS scan and trace workflows, but deeper diagn
 ## Command Surface
 
 ```text
-canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--text] [--raw]
-canarchy uds trace <interface> [--json] [--jsonl] [--text] [--raw]
+canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--text]
+canarchy uds trace <interface> [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries

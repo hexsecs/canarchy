@@ -10,6 +10,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 
 * Renamed the canonical human-readable output flag from `--table` to `--text`; `--table` remains accepted as a compatibility alias. Closes #286.
+* Removed the generic `--raw` output mode from the shared command surface; use `--text`, `--json`, `--jsonl`, or command-specific frame-line options such as `--candump` instead. Closes #288.
 
 ## [0.7.0] - 2026-05-09
 

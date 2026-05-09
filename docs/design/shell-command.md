@@ -28,7 +28,7 @@ Operators sometimes want to run several CANarchy commands from a persistent prom
 ## Command Surface
 
 ```text
-canarchy shell [--command "<existing canarchy command>"] [--json] [--jsonl] [--text] [--raw]
+canarchy shell [--command "<existing canarchy command>"] [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries

@@ -39,11 +39,11 @@ Operators and future agents need a local, inspectable skill catalog with reprodu
 ## Command Surface
 
 ```text
-canarchy skills provider list [--json] [--jsonl] [--text] [--raw]
-canarchy skills search <query> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text] [--raw]
-canarchy skills fetch <ref> [--json] [--jsonl] [--text] [--raw]
-canarchy skills cache list [--json] [--jsonl] [--text] [--raw]
-canarchy skills cache refresh [--provider <name>] [--json] [--jsonl] [--text] [--raw]
+canarchy skills provider list [--json] [--jsonl] [--text]
+canarchy skills search <query> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text]
+canarchy skills fetch <ref> [--json] [--jsonl] [--text]
+canarchy skills cache list [--json] [--jsonl] [--text]
+canarchy skills cache refresh [--provider <name>] [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries
@@ -113,10 +113,6 @@ Provider and cache commands emit a single result object line because they do not
 ### Table
 
 `skills provider list`, `skills search`, `skills fetch`, `skills cache list`, and `skills cache refresh` use compact provider-specific summaries.
-
-### Raw
-
-Skills provider and cache workflows emit the command name on success or the first error message on failure.
 
 ## Error Contracts
 

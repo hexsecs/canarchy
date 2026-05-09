@@ -33,14 +33,14 @@ Operators and automation need active workflows to remain scriptable, but active 
 ## Command Surface
 
 ```text
-canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--text] [--raw]
+canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--text]
 canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>]
                            [--count <n>] [--gap <ms>] [--extended] [--ack-active]
-                           [--json] [--jsonl] [--text] [--raw]
+                           [--json] [--jsonl] [--text]
 canarchy gateway <src> <dst> [--src-backend <name>] [--dst-backend <name>]
                             [--bidirectional] [--count <n>] [--ack-active]
-                            [--json] [--jsonl] [--text] [--raw]
-canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--text] [--raw]
+                            [--json] [--jsonl] [--text]
+canarchy uds scan <interface> [--ack-active] [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries
@@ -83,7 +83,7 @@ When `--ack-active` is supplied, the command emits a confirmation prompt to `std
 
 Structured `stdout` output remains machine-readable and shall not rely on duplicated top-level warning strings for active-command safety prompts.
 
-### Table and raw
+### Text
 
 Human-readable `stdout` remains reserved for the requested output mode; the preflight warning still appears on `stderr`.
 

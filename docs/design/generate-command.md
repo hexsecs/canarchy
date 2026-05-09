@@ -37,7 +37,7 @@ Operators need a quick active-traffic workflow for lab validation, replay suppor
 ```text
 canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>]
                                [--count <n>] [--gap <ms>] [--extended] [--ack-active]
-                               [--json] [--jsonl] [--text] [--raw]
+                               [--json] [--jsonl] [--text]
 ```
 
 ### Arguments
@@ -104,10 +104,6 @@ frames: 3
 (0.200000) can0 3B2#00112233
 (0.400000) can0 1FF#FF
 ```
-
-### Raw
-
-Emits the command name on success or the first error message on failure.
 
 ## Error Contracts
 

@@ -31,9 +31,9 @@ Validate the one-shot shared-parser behavior of `shell` and document the current
 
 ```gherkin
 Given  the scaffold transport backend is active
-When   the operator runs `canarchy shell --command "capture can0 --raw"`
+When   the operator runs `canarchy shell --command "capture can0 --text"`
 Then   the delegated command shall execute through the shared CLI path
-And    the output shall match the expected raw output for the delegated command
+And    the output shall match the expected text output for the delegated command
 ```
 
 **Fixture:** scaffold backend (no file required).

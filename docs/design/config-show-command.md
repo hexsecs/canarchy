@@ -28,12 +28,12 @@ Operators need an inspectable way to answer basic configuration questions such a
 | `REQ-CONFIG-05` | Optional feature | Where a value is set in the config file and not overridden by the environment, the system shall use the config-file value and mark its source as `file`. |
 | `REQ-CONFIG-06` | State-driven | While no environment or config-file override exists for a supported setting, the system shall use the built-in default and mark its source as `default`. |
 | `REQ-CONFIG-07` | Ubiquitous | The `config show` result shall report the resolved config-file path and whether that file currently exists. |
-| `REQ-CONFIG-08` | Ubiquitous | `config show` shall preserve the standard output modes (`--json`, `--jsonl`, `--text`, `--raw`) with command-specific formatting over the same configuration payload. |
+| `REQ-CONFIG-08` | Ubiquitous | `config show` shall preserve the standard output modes (`--json`, `--jsonl`, `--text`) with command-specific formatting over the same configuration payload. |
 
 ## Command Surface
 
 ```text
-canarchy config show [--json] [--jsonl] [--text] [--raw]
+canarchy config show [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries
@@ -79,10 +79,6 @@ The `sources` object includes one source entry for each effective configuration 
 ### Table
 
 `--text` renders a human-readable configuration summary that shows each effective value together with its source annotation and ends with the config-file path plus its found/not-found status.
-
-### Raw
-
-`--raw` prints `config show` on success.
 
 ## Error Contracts
 

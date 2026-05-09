@@ -28,7 +28,7 @@ UDS workflows are easier to script and reason about when the command surface inc
 ## Command Surface
 
 ```text
-canarchy uds services [--json] [--jsonl] [--text] [--raw]
+canarchy uds services [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries
@@ -64,10 +64,6 @@ Because `uds services` is reference-only and does not emit an event stream, both
 ### Table
 
 Text output presents a compact service catalogue with service identifier, positive-response identifier, category, and subfunction requirement.
-
-### Raw
-
-Raw output emits the command name on success.
 
 ## Error Contracts
 

@@ -30,9 +30,9 @@ Operators often reuse the same interface, DBC, and capture context across comman
 ## Command Surface
 
 ```text
-canarchy session save <name> [--interface <name>] [--dbc <file>] [--capture <file>] [--json] [--jsonl] [--text] [--raw]
-canarchy session load <name> [--json] [--jsonl] [--text] [--raw]
-canarchy session show [--json] [--jsonl] [--text] [--raw]
+canarchy session save <name> [--interface <name>] [--dbc <file>] [--capture <file>] [--json] [--jsonl] [--text]
+canarchy session load <name> [--json] [--jsonl] [--text]
+canarchy session show [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries

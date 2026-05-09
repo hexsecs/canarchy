@@ -38,11 +38,11 @@ Operators need a stable base command set that supports passive live observation,
 ## Command Surface
 
 ```text
-canarchy capture <interface> [--candump] [--json] [--jsonl] [--text] [--raw]
-canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--text] [--raw]
-canarchy filter <expression> (--file <path>|--file -|--stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--text] [--raw]
-canarchy stats --file <path|-> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--text] [--raw]
-canarchy capture-info --file <path|-> [--json] [--jsonl] [--text] [--raw]
+canarchy capture <interface> [--candump] [--json] [--jsonl] [--text]
+canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--text]
+canarchy filter <expression> (--file <path>|--file -|--stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--text]
+canarchy stats --file <path|-> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--text]
+canarchy capture-info --file <path|-> [--json] [--jsonl] [--text]
 ```
 
 ## Responsibilities And Boundaries
@@ -103,7 +103,7 @@ Live `capture` emits one serialised event per line, matching JSONL semantics. Ot
 
 Event-producing commands emit one event per line. Event-less success and error paths emit a single result object line.
 
-### Table and raw
+### Table
 
 `capture` uses candump-style rendering for text, raw, and `--candump`. Other commands use the standard text or raw command-result paths, while active-command preflight warnings are emitted on `stderr`.
 
