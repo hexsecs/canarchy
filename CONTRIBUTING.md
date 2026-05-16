@@ -36,6 +36,13 @@ uv run python -m unittest discover -s tests -v
 `uv.lock` is checked in for reproducible resolution. Do not modify it by
 hand — let `uv` do that.
 
+## Continuous integration
+
+Every push to `main` and every pull request runs the test suite under
+[`.github/workflows/test.yml`](.github/workflows/test.yml) on Python 3.12
+and 3.13. Match that locally before opening a PR by running
+`uv run python -m unittest discover -s tests -v`.
+
 ## Issues come first
 
 CANarchy uses GitHub Issues as the source of truth for planned work.

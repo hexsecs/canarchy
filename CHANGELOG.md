@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+* Added `.github/workflows/test.yml` running `unittest` on Python 3.12 and 3.13 for every push to `main` and every pull request, so PR validation no longer depends on manual local runs. Closes #306.
+
 ### Changed
 
 * Renamed the canonical human-readable output flag from `--table` to `--text`; `--table` remains accepted as a compatibility alias. Closes #286.
