@@ -19,6 +19,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Documentation
 
 * Cleaned up stale homepage, overview, command spec, and design wording after the output-mode updates. Closes #290.
+* Added `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md` at the repository root and linked them from the README under a Community section. Closes #296.
+* Added GitHub issue templates (bug report, feature request, contact-link config) and a pull request template under `.github/` so submissions follow the project's existing `## Summary` / `## Acceptance Criteria` shape. Closes #297.
+* Added `docs/troubleshooting.md` with a structured catalog of CLI error codes (`DBC_LOAD_FAILED`, `DBC_CACHE_MISS`, `DATASET_INDEX_NOT_REPLAYABLE`, `INVALID_MAX_FRAMES`, `ANALYSIS_WINDOW_REQUIRES_FILE`, and many more) including remediation snippets, and wired it into the User Guide nav. Closes #298.
+* Added a `docs/cookbook/` section with task-oriented recipes covering filtering by ID/PGN, decoding SPN 110, finding counter signals, matching captures against opendbc, streaming CANdid into stats, MCP integration with Claude Desktop and Claude Code, building a virtual CAN loop, and comparing DM1 faults across captures; new top-level Cookbook nav entry. Closes #299.
+* Added `docs/examples/config.toml` as a fully commented sample for `~/.canarchy/config.toml` and referenced it from the Getting Started guide. Closes #301.
 
 ## [0.7.0] - 2026-05-09
 

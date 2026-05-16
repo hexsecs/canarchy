@@ -1,0 +1,84 @@
+name: Bug report
+description: Report unexpected behaviour in a CANarchy command, output, or workflow.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report.
+        Please complete the fields below so the issue can be triaged quickly.
+        For security-sensitive reports, follow SECURITY.md instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing what went wrong.
+      placeholder: "`canarchy filter` returned an empty result against a fixture that should match."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: The exact commands that show the problem. Use code fences.
+      placeholder: |
+        ```bash
+        canarchy filter 'id==0x123' --file tests/fixtures/sample.candump --json
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      placeholder: "Expected at least one matching frame in the response payload."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the canonical envelope or text output you observed.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: CANarchy version
+      description: Output of `canarchy --version`.
+      placeholder: "0.7.1.dev0"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.12.4"
+
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Transport backend
+      options:
+        - python-can (socketcan)
+        - python-can (virtual)
+        - python-can (udp_multicast)
+        - python-can (other)
+        - scaffold
+        - not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Logs, captures (with sensitive data removed), or links.

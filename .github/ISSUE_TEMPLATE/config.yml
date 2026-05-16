@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://hexsecs.github.io/canarchy/docs/
+    about: User guide, command spec, event schema, and tutorials.
+  - name: Security report
+    url: https://github.com/hexsecs/canarchy/security/advisories/new
+    about: Private security advisory for sensitive reports. See SECURITY.md.
+  - name: Discussion or question
+    url: https://github.com/hexsecs/canarchy/discussions
+    about: Open-ended questions, ideas, or usage help.
