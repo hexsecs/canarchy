@@ -73,12 +73,23 @@ nav:
       - Event Schema: event-schema.md
       - CAN Tool Feature Matrix: feature-matrix.md
       - Security Use Cases With Agents: security-use-cases.md
+      - Troubleshooting: troubleshooting.md
   - Tutorials:
       - Overview: tutorials/index.md
       - Stream CAN Data from CANdid: tutorials/stream_candid_dataset.md
       - Discover and Use Provider-Backed DBC Files: tutorials/dbc_provider_workflow.md
       - J1939 Heavy Vehicle Analysis: tutorials/j1939_heavy_vehicle.md
       - Generate and Capture: tutorials/generate_and_capture.md
+  - Cookbook:
+      - Overview: cookbook/index.md
+      - Filter for a single arbitration ID or PGN: cookbook/filter-pgn.md
+      - Decode SPN 110 (engine coolant temperature): cookbook/decode-spn-110.md
+      - Find counter signals in a capture: cookbook/find-counter-signals.md
+      - Match an unknown capture against opendbc: cookbook/match-dbc-against-capture.md
+      - Stream the CANdid dataset into stats: cookbook/stream-candid-into-stats.md
+      - Wire CANarchy into Claude Desktop or Claude Code: cookbook/mcp-claude-integration.md
+      - Build a virtual CAN loop for offline testing: cookbook/virtual-can-loop.md
+      - Compare two captures for DM1 fault diffs: cookbook/compare-dm1-faults.md
   - Developers:
       - Architecture: architecture.md
       - Docs Workflow: docs_site.md

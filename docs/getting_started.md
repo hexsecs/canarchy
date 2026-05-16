@@ -70,6 +70,8 @@ canarchy config show
 
 This prints each setting along with whether it came from a config file, an environment variable, or the built-in default.
 
+A fully commented sample configuration file is available at [`docs/examples/config.toml`](examples/config.toml). Copy it to `~/.canarchy/config.toml` and uncomment the keys you want to set.
+
 ---
 
 ## Software Loopback (No Hardware)

@@ -1,0 +1,74 @@
+# Example CANarchy configuration file.
+#
+# Copy this file to ~/.canarchy/config.toml and uncomment the keys you
+# want to set. Every value below is the documented default; CANarchy
+# behaves identically with this file present or absent.
+#
+# Verify the effective configuration at any time with:
+#
+#   canarchy config show
+#
+# Configuration sources are merged in the following order (later wins):
+#   1. Built-in defaults
+#   2. ~/.canarchy/config.toml
+#   3. Environment variables (CANARCHY_*)
+#   4. CLI flags
+
+# ---------------------------------------------------------------------------
+# Transport backend
+# ---------------------------------------------------------------------------
+#
+# `python-can` is the default. Set `scaffold` for deterministic offline
+# behaviour during development, CI, or demos without hardware.
+#
+# Environment override: CANARCHY_TRANSPORT_BACKEND
+
+[transport]
+# backend = "python-can"
+# backend = "scaffold"
+
+# Default python-can interface type. Common values: socketcan, virtual,
+# udp_multicast, pcan, vector, kvaser, ixxat. Each backend may need its
+# own additional configuration; see docs/backends.md.
+#
+# Environment override: CANARCHY_PYTHON_CAN_INTERFACE
+
+# interface = "socketcan"
+
+# ---------------------------------------------------------------------------
+# DBC providers
+# ---------------------------------------------------------------------------
+#
+# The opendbc provider exposes the community catalogue at
+# https://github.com/commaai/opendbc through `dbc search`, `dbc fetch`,
+# and provider refs such as `opendbc:toyota_tnga_k_pt_generated`.
+
+[dbc.providers.opendbc]
+# When true, a cold cache triggers an automatic `dbc cache refresh` the
+# first time a provider ref is resolved. Defaults to false so offline
+# environments remain offline.
+# auto_refresh = false
+
+# ---------------------------------------------------------------------------
+# J1939 defaults
+# ---------------------------------------------------------------------------
+#
+# A default J1939 DBC is used by `j1939 decode`, `j1939 pgn`,
+# `j1939 spn`, and `j1939 dm1` when no `--dbc` flag is supplied. Provider
+# refs (`opendbc:<name>`) and absolute paths are both accepted.
+#
+# Environment override: CANARCHY_J1939_DBC
+
+[j1939]
+# dbc = "opendbc:j1939"
+
+# ---------------------------------------------------------------------------
+# Plugins (planned)
+# ---------------------------------------------------------------------------
+#
+# Plugin discovery and toggle live under the [plugins] table once the
+# CLI surface lands. Plugins are Python entry points and remain disabled
+# until explicitly enabled here.
+
+# [plugins]
+# enabled = ["sqlite_sink"]
