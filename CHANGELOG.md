@@ -10,6 +10,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 
 * Added `.github/workflows/test.yml` running `pytest` on Python 3.12 and 3.13 for every push to `main` and every pull request, so PR validation no longer depends on manual local runs. The workflow uses `pytest` (not `unittest discover`) so module-level function-style tests in `tests/test_mcp.py` and `tests/test_dbc_runtime.py` are collected; 667 tests run vs. 599 under `unittest discover`. Closes #306.
+* Added `.github/workflows/lint.yml` running `uv run ruff check` and `uv run ruff format --check` on every push to `main` and every pull request, so style and format drift is caught before review. Closes #307.
 
 ### Fixed
 

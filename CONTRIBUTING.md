@@ -38,10 +38,14 @@ hand — let `uv` do that.
 
 ## Continuous integration
 
-Every push to `main` and every pull request runs the test suite under
-[`.github/workflows/test.yml`](.github/workflows/test.yml) on Python 3.12
-and 3.13. Match that locally before opening a PR by running
-`uv run pytest tests/ -q`.
+Every push to `main` and every pull request runs two workflows:
+
+* [`.github/workflows/test.yml`](.github/workflows/test.yml) — `pytest`
+  matrix on Python 3.12 and 3.13. Match locally with
+  `uv run pytest tests/ -q`.
+* [`.github/workflows/lint.yml`](.github/workflows/lint.yml) — `ruff check`
+  and `ruff format --check`. Match locally with `uv run ruff check`
+  and `uv run ruff format --check`.
 
 ## Issues come first
 
