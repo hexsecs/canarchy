@@ -15,6 +15,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 * Added `canarchy doctor`, a fast offline health-check command returning the canonical envelope with eight structured checks: Python version, `python-can` import, configured transport backend, `~/.canarchy/config.toml` parseability, DBC / dataset / skills cache writability, opendbc cache population, MCP stdio server constructability, and package/source version consistency. Mirrored as the `doctor` MCP tool. Closes #303.
 * Added `canarchy completion {bash,zsh,fish}` emitting a shell completion script to stdout. Scripts complete the top-level subcommands and the common flags (`--json`, `--jsonl`, `--text`, `--file`, `--dbc`, `--max-frames`, `--seconds`, `--offset`, `--ack-active`, `--log-level`, `--quiet`). Source the output directly or save it to the shell's completion directory; install snippets are documented in `docs/getting_started.md`. Unsupported shells return the standard `INVALID_ARGUMENTS` structured error. Closes #304.
 
+### Documentation
+
+* Added `docs/mcp_install.md` as the canonical install reference for wiring `canarchy mcp serve` into MCP-capable agent clients (Claude Desktop, Claude Code, and any generic stdio client). Covers OS-specific config paths, a verification recipe, configuration tips, and a troubleshooting table. Cookbook recipe `mcp-claude-integration.md` updated to point at the new canonical page. Closes #308.
+
 ### Fixed
 
 * Declared `requests>=2.31` under `[project] dependencies` in `pyproject.toml`. The package is imported by `src/canarchy/dataset_convert.py` and `tests/test_dataset_provider.py`, but was only present transitively via the `docs` group. Clean environments would fail `canarchy datasets convert` and could not load the 119 tests in `test_dataset_provider`. Closes #337.

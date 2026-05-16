@@ -3,7 +3,9 @@
 ## Goal
 
 Run `canarchy` as an MCP server so an agent can call CANarchy commands
-directly.
+directly. This is the quick-start; see [MCP Install](../mcp_install.md)
+for the canonical reference with OS-specific paths, generic-client
+configuration, and troubleshooting.
 
 ## Prerequisites
 
@@ -69,5 +71,6 @@ The agent should invoke the MCP tool and return the canonical envelope.
 
 ## Where to go next
 
+* [MCP Install](../mcp_install.md) — full install reference (other clients, troubleshooting)
 * [Agent Guide](../agents.md)
 * [Command Spec — mcp serve](../command_spec.md)

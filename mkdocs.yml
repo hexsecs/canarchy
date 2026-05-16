@@ -149,5 +149,6 @@ nav:
           - Composition: tests/composition.md
   - Agents:
       - Agent Guide: agents.md
+      - MCP Install: mcp_install.md
 
 strict: true
