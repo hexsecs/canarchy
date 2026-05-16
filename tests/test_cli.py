@@ -4605,5 +4605,209 @@ class ConfigShowTests(unittest.TestCase):
         self.assertEqual(payload["data"]["sources"]["j1939_dbc"], "file")
 
 
+class GlobalLoggingFlagTests(unittest.TestCase):
+    """Tests for the global --log-level and --quiet flags."""
+
+    def test_log_level_debug_does_not_contaminate_stdout(self) -> None:
+        exit_code, stdout, _stderr = run_cli("--log-level", "debug", "config", "show", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["command"], "config show")
+
+    def test_quiet_does_not_contaminate_stdout(self) -> None:
+        exit_code, stdout, _stderr = run_cli("--quiet", "config", "show", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+
+    def test_log_level_accepts_each_documented_choice(self) -> None:
+        for level in ("debug", "info", "warn", "error"):
+            with self.subTest(level=level):
+                exit_code, stdout, _stderr = run_cli(
+                    "--log-level", level, "config", "show", "--json"
+                )
+                self.assertEqual(exit_code, 0)
+                payload = json.loads(stdout)
+                self.assertTrue(payload["ok"])
+
+    def test_log_level_rejects_unknown_choice(self) -> None:
+        exit_code, stdout, _stderr = run_cli("--log-level", "trace", "config", "show", "--json")
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_ARGUMENTS")
+
+    def test_quiet_suppresses_warn_level_log_records(self) -> None:
+        import logging as _logging
+
+        from canarchy.cli import configure_logging
+
+        configure_logging(log_level="warn", quiet=True)
+        logger = _logging.getLogger("canarchy.tests.global_flags")
+        with self.assertLogs(logger, level="ERROR") as captured:
+            logger.warning("should be suppressed")
+            logger.error("should appear")
+        self.assertEqual(len(captured.records), 1)
+        self.assertEqual(captured.records[0].levelname, "ERROR")
+
+    def test_log_level_debug_emits_to_stderr_only(self) -> None:
+        import logging as _logging
+
+        from canarchy.cli import configure_logging
+
+        configure_logging(log_level="debug", quiet=False)
+        logger = _logging.getLogger("canarchy.tests.global_flags_debug")
+        with self.assertLogs(logger, level="DEBUG") as captured:
+            logger.debug("hello debug")
+        self.assertEqual(captured.records[0].levelname, "DEBUG")
+
+
+class DoctorCommandTests(unittest.TestCase):
+    """Tests for `canarchy doctor`."""
+
+    EXPECTED_CHECK_NAMES = {
+        "python_version",
+        "python_can",
+        "transport_backend",
+        "config_file",
+        "cache_dirs",
+        "opendbc_cache",
+        "mcp_server",
+        "version_consistency",
+    }
+
+    def test_doctor_json_returns_canonical_envelope(self) -> None:
+        exit_code, stdout, _stderr = run_cli("doctor", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["command"], "doctor")
+        data = payload["data"]
+        self.assertIn("checks", data)
+        self.assertIn("summary", data)
+        self.assertIsInstance(data["ok_count"], int)
+        self.assertIsInstance(data["warn_count"], int)
+        self.assertIsInstance(data["fail_count"], int)
+
+    def test_doctor_covers_documented_checks(self) -> None:
+        exit_code, stdout, _stderr = run_cli("doctor", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        names = {check["name"] for check in payload["data"]["checks"]}
+        self.assertEqual(names, self.EXPECTED_CHECK_NAMES)
+
+    def test_doctor_each_check_has_required_fields(self) -> None:
+        exit_code, stdout, _stderr = run_cli("doctor", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        for check in payload["data"]["checks"]:
+            with self.subTest(name=check["name"]):
+                self.assertIn(check["status"], {"ok", "warn", "fail"})
+                self.assertTrue(check["detail"])
+                if check["status"] == "ok":
+                    self.assertIsNone(check["hint"])
+                else:
+                    self.assertTrue(check["hint"], "non-ok checks must include a hint")
+
+    def test_doctor_text_output_summary_and_lines(self) -> None:
+        exit_code, stdout, _stderr = run_cli("doctor", "--text")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("command: doctor", stdout)
+        self.assertIn("summary:", stdout)
+        self.assertIn("python_version", stdout)
+
+    def test_doctor_returns_fail_when_python_too_old(self) -> None:
+        from canarchy import doctor as doctor_module
+
+        with patch.object(doctor_module.sys, "version_info", (3, 11, 0, "final", 0)):
+            check = doctor_module._check_python_version()
+        self.assertEqual(check["status"], "fail")
+        self.assertIn("3.11.0", check["detail"])
+        self.assertIsNotNone(check["hint"])
+
+    def test_doctor_returns_fail_when_python_can_missing(self) -> None:
+        import builtins as _builtins
+        from canarchy import doctor as doctor_module
+
+        original_import = _builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "can":
+                raise ImportError("simulated")
+            return original_import(name, *args, **kwargs)
+
+        with patch.object(_builtins, "__import__", side_effect=fake_import):
+            check = doctor_module._check_python_can()
+        self.assertEqual(check["status"], "fail")
+        self.assertIn("simulated", check["detail"])
+
+    def test_doctor_warns_when_opendbc_cache_absent(self) -> None:
+        from canarchy import dbc_cache, doctor as doctor_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(dbc_cache, "cache_root", return_value=Path(tmp)):
+                check = doctor_module._check_opendbc_cache()
+        self.assertEqual(check["status"], "warn")
+        self.assertIn("opendbc", check["detail"])
+
+
+class CompletionCommandTests(unittest.TestCase):
+    """Tests for `canarchy completion {bash,zsh,fish}`."""
+
+    def test_bash_script_renders_non_empty(self) -> None:
+        exit_code, stdout, _stderr = run_cli("completion", "bash")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("complete -F", stdout)
+        self.assertIn("_canarchy_completions", stdout)
+        self.assertIn("--log-level", stdout)
+        self.assertIn("canarchy", stdout)
+
+    def test_zsh_script_renders_non_empty(self) -> None:
+        exit_code, stdout, _stderr = run_cli("completion", "zsh")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("#compdef canarchy", stdout)
+        self.assertIn("_canarchy", stdout)
+        self.assertIn("--log-level", stdout)
+
+    def test_fish_script_renders_non_empty(self) -> None:
+        exit_code, stdout, _stderr = run_cli("completion", "fish")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("complete -c canarchy", stdout)
+        self.assertIn("-l log-level", stdout)
+        self.assertIn("__fish_canarchy_needs_subcommand", stdout)
+
+    def test_each_shell_lists_top_level_subcommands(self) -> None:
+        from canarchy.shell_completion import SUBCOMMANDS
+
+        names = [name for name, _ in SUBCOMMANDS]
+        for shell in ("bash", "zsh", "fish"):
+            with self.subTest(shell=shell):
+                _exit_code, stdout, _stderr = run_cli("completion", shell)
+                for name in names:
+                    self.assertIn(name, stdout, f"{shell} script missing '{name}'")
+
+    def test_unsupported_shell_returns_structured_error(self) -> None:
+        exit_code, stdout, _stderr = run_cli("completion", "ksh", "--json")
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_ARGUMENTS")
+        self.assertIn("ksh", payload["errors"][0]["message"])
+
+    def test_bash_script_is_sourceable(self) -> None:
+        import shutil
+        import subprocess
+
+        bash = shutil.which("bash")
+        if not bash:  # pragma: no cover — CI runners always have bash
+            self.skipTest("bash not available")
+        _exit_code, stdout, _stderr = run_cli("completion", "bash")
+        result = subprocess.run(
+            [bash, "-n"], input=stdout, capture_output=True, text=True, check=False
+        )
+        self.assertEqual(result.returncode, 0, msg=f"bash -n failed: {result.stderr!r}")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -619,6 +619,19 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="doctor",
+        description=(
+            "Run local environment health checks (Python version, python-can, "
+            "transport backend, config file, cache directories, opendbc cache, "
+            "MCP server, package/source version drift) and return the canonical "
+            "envelope. No network or live bus access."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
         name="datasets_provider_list",
         description="List registered dataset providers.",
         inputSchema={
@@ -1221,6 +1234,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return ["uds", "services", "--json"]
         case "config_show":
             return ["config", "show", "--json"]
+        case "doctor":
+            return ["doctor", "--json"]
         case "datasets_provider_list":
             return ["datasets", "provider", "list", "--json"]
         case "datasets_search":

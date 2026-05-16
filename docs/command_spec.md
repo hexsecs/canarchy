@@ -892,6 +892,65 @@ Inspect the effective transport configuration and the source of each setting.
 canarchy config show [--json|--jsonl|--text]
 ```
 
+### doctor
+
+Run local environment health checks and return the canonical envelope.
+Each check has a `name`, `status` (`ok`, `warn`, or `fail`), `detail`, and
+an optional `hint` for non-ok results.
+
+```bash
+canarchy doctor [--json|--jsonl|--text]
+```
+
+Covered checks:
+
+* `python_version` — Python is at least 3.12.
+* `python_can` — `python-can` is importable in the active environment.
+* `transport_backend` — `CANARCHY_TRANSPORT_BACKEND` resolves to a known backend.
+* `config_file` — `~/.canarchy/config.toml` parses cleanly when present.
+* `cache_dirs` — DBC, dataset, and skills caches are writable.
+* `opendbc_cache` — opendbc DBC cache is populated; warns if it needs `dbc cache refresh`.
+* `mcp_server` — the MCP stdio server is constructable.
+* `version_consistency` — the installed package version matches `src/canarchy/__init__.py`.
+
+The command also runs against the MCP server as the `doctor` tool. No
+network or live bus access is required.
+
+### completion
+
+Emit a shell completion script for the given shell. The script is
+written to stdout — not wrapped in the canonical envelope, because the
+output is meant to be sourced.
+
+```bash
+canarchy completion {bash,zsh,fish}
+```
+
+Install snippets:
+
+* bash — `eval "$(canarchy completion bash)"` in `~/.bashrc`, or copy the
+  output into `~/.bash_completion.d/canarchy`.
+* zsh — `eval "$(canarchy completion zsh)"` in `~/.zshrc`, or save the
+  output to a directory on `$fpath` such as `~/.zsh/completions/_canarchy`
+  and run `compinit`.
+* fish — `canarchy completion fish | source` from
+  `~/.config/fish/config.fish`, or save to
+  `~/.config/fish/completions/canarchy.fish`.
+
+Supplying an unsupported shell name returns the standard
+`INVALID_ARGUMENTS` structured error.
+
+### Global flags
+
+The following flags are accepted before any subcommand (place them
+between `canarchy` and the subcommand name):
+
+* `--log-level {debug,info,warn,error}` — stderr log verbosity; defaults
+  to `warn`. Log records never contaminate machine-readable stdout
+  (`--json`, `--jsonl`, `--text`).
+* `--quiet` — suppress every level below `ERROR`. Useful in pipelines
+  where only structured errors should reach stderr.
+
 ### mcp serve
 
 Start the MCP server over stdio.

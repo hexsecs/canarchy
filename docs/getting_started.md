@@ -72,6 +72,36 @@ This prints each setting along with whether it came from a config file, an envir
 
 A fully commented sample configuration file is available at [`docs/examples/config.toml`](examples/config.toml). Copy it to `~/.canarchy/config.toml` and uncomment the keys you want to set.
 
+### Check the local environment
+
+`canarchy doctor` runs a battery of fast, offline health checks (Python version, `python-can` import, transport backend, cache writability, opendbc cache, MCP server, config file). Run it before reporting bugs:
+
+```bash
+canarchy doctor --text
+```
+
+Each check shows `[OK]`, `[WARN]`, or `[FAIL]` and includes a copy-pasteable remediation hint for non-ok results.
+
+### Install shell completion
+
+Tab-completion scripts for `bash`, `zsh`, and `fish` are emitted by the `completion` subcommand. Pick the snippet for your shell:
+
+```bash
+# bash
+eval "$(canarchy completion bash)"            # one-off in current shell
+canarchy completion bash > ~/.bash_completion.d/canarchy   # persistent
+
+# zsh
+eval "$(canarchy completion zsh)"             # one-off in current shell
+canarchy completion zsh > ~/.zsh/completions/_canarchy && compinit
+
+# fish
+canarchy completion fish | source             # one-off in current shell
+canarchy completion fish > ~/.config/fish/completions/canarchy.fish
+```
+
+The scripts complete the top-level subcommands and the most common flags (`--json`, `--jsonl`, `--text`, `--file`, `--dbc`, `--max-frames`, `--seconds`, `--offset`, `--ack-active`, `--log-level`, `--quiet`).
+
 ---
 
 ## Software Loopback (No Hardware)

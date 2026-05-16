@@ -49,6 +49,7 @@ _EXPECTED_TOOLS = {
     "uds_trace",
     "uds_services",
     "config_show",
+    "doctor",
     "datasets_provider_list",
     "datasets_search",
     "datasets_inspect",
@@ -114,6 +115,20 @@ def test_call_tool_config_show():
     assert payload["ok"] is True
     assert payload["command"] == "config show"
     assert "backend" in payload["data"]
+
+
+def test_call_tool_doctor_returns_checks():
+    results = asyncio.run(handle_call_tool("doctor", {}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "doctor"
+    assert "checks" in payload["data"]
+    assert "summary" in payload["data"]
+    assert {check["name"] for check in payload["data"]["checks"]} >= {
+        "python_version",
+        "python_can",
+    }
 
 
 # --- TEST-MCP-06: uds_services returns catalogue ---------------------------

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import shlex
 import sys
 from collections import Counter, defaultdict
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from canarchy.doctor import doctor_payload
 from canarchy.dbc import (
     DbcError,
     dbc_supports_spn,
@@ -41,6 +43,7 @@ from canarchy.reverse_engineering import (
     score_dbc_candidates,
 )
 from canarchy.session import SessionError, SessionStore, build_session_context
+from canarchy.shell_completion import SUPPORTED_SHELLS, render_completion
 from canarchy.skills import SkillError
 from canarchy.transport import (
     LocalTransport,
@@ -102,6 +105,7 @@ J1939_COMMANDS = {
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
+DOCTOR_COMMANDS = {"doctor"}
 RE_COMMANDS = {
     "re signals",
     "re counters",
@@ -121,6 +125,7 @@ IMPLEMENTED_COMMANDS = (
     | SESSION_COMMANDS
     | UDS_COMMANDS
     | CONFIG_COMMANDS
+    | DOCTOR_COMMANDS
     | RE_COMMANDS
     | {"mcp serve", "replay", "gateway", "shell", "export"}
 )
@@ -262,11 +267,51 @@ def _add_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+LOG_LEVEL_CHOICES = ("debug", "info", "warn", "error")
+
+
+def configure_logging(*, log_level: str | None, quiet: bool) -> None:
+    """Configure the root logger from the top-level CLI flags.
+
+    Log records always go to stderr so that machine-readable stdout
+    (``--json``, ``--jsonl``, ``--text``) is never contaminated. ``--quiet``
+    suppresses every level except ``ERROR``.
+    """
+
+    if quiet:
+        level = logging.ERROR
+    else:
+        level_name = (log_level or "warn").lower()
+        if level_name == "warn":
+            level_name = "warning"
+        level = getattr(logging, level_name.upper(), logging.WARNING)
+
+    # ``force=True`` lets the CLI reconfigure logging on every invocation,
+    # which matters for repeated in-process calls from tests.
+    logging.basicConfig(
+        stream=sys.stderr,
+        level=level,
+        format="%(levelname)s %(name)s: %(message)s",
+        force=True,
+    )
+
+
 def build_parser() -> CanarchyArgumentParser:
     parser = CanarchyArgumentParser(
         prog="canarchy", description="CLI-first CAN security research toolkit"
     )
     parser.add_argument("--version", action="version", version=f"canarchy {__version__}")
+    parser.add_argument(
+        "--log-level",
+        choices=LOG_LEVEL_CHOICES,
+        default="warn",
+        help="set the stderr log level (default: warn); place before the subcommand",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="suppress stderr logging below ERROR; place before the subcommand",
+    )
 
     subparsers = parser.add_subparsers(dest="command_name", required=True)
 
@@ -837,6 +882,24 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_output_arguments(config_show)
     config_show.set_defaults(command="config show")
+
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="run environment health checks (Python, python-can, caches, MCP, config)",
+    )
+    add_output_arguments(doctor)
+    doctor.set_defaults(command="doctor")
+
+    completion = subparsers.add_parser(
+        "completion",
+        help="emit a shell completion script (bash, zsh, or fish)",
+    )
+    completion.add_argument(
+        "shell",
+        choices=SUPPORTED_SHELLS,
+        help="target shell flavour for the completion script",
+    )
+    completion.set_defaults(command="completion")
 
     mcp = subparsers.add_parser("mcp", help="MCP server workflows")
     mcp_subparsers = mcp.add_subparsers(dest="mcp_action", required=True)
@@ -3905,6 +3968,8 @@ def build_result(args: argparse.Namespace) -> CommandResult:
             "text",
             "table",
             "ack_active",
+            "log_level",
+            "quiet",
         }
         and value is not None
     }
@@ -3970,6 +4035,8 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         warnings.extend(protocol_warnings)
     elif args.command in CONFIG_COMMANDS:
         data.update(config_show_payload())
+    elif args.command in DOCTOR_COMMANDS:
+        data.update(doctor_payload())
     else:
         data["events"] = build_events(args)
     if args.command not in IMPLEMENTED_COMMANDS:
@@ -5085,6 +5152,21 @@ def _flatten_frame_event(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def emit_completion_script(args: argparse.Namespace, output_format: str) -> int:
+    """Render the shell completion script for ``args.shell`` to stdout.
+
+    Completion output is the script itself — raw, suitable for
+    ``eval "$(canarchy completion bash)"`` — and intentionally not wrapped
+    in the canonical envelope. Unsupported shells are rejected upstream
+    by argparse's ``choices``; this helper assumes the value is valid.
+    """
+
+    del output_format  # completion has no output-format flag
+    script = render_completion(args.shell)
+    print(script, end="")
+    return EXIT_OK
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     _J1939_SESSION_COMMANDS = {
@@ -5263,6 +5345,23 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"warning: {warning}")
         return
 
+    if output_format == "text" and result.ok and result.command == "doctor":
+        print(f"command: {result.command}")
+        print(f"summary: {result.data.get('summary', '')}")
+        print("checks:")
+        for check in result.data.get("checks", []):
+            status = str(check.get("status", "")).upper()
+            label = f"[{status}]".ljust(7)
+            name = check.get("name", "")
+            detail = check.get("detail", "")
+            print(f"- {label} {name}: {detail}")
+            hint = check.get("hint")
+            if hint:
+                print(f"           hint: {hint}")
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
     stream = None
     if result.ok:
         print(f"command: {result.command}", file=stream)
@@ -5417,7 +5516,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         emit_result(result, output_format)
         return EXIT_USER_ERROR
+    configure_logging(
+        log_level=getattr(args, "log_level", None),
+        quiet=bool(getattr(args, "quiet", False)),
+    )
     output_format = format_name(args)
+    if args.command == "completion":
+        return emit_completion_script(args, output_format)
     if args.command == "mcp serve":
         from canarchy.mcp_server import run_server
 
