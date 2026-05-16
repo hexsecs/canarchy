@@ -32,6 +32,7 @@ dependencies = [
     "pretty-j1939>=0.0.6",
     "pyyaml>=6.0",
     "python-can>=4.4",
+    "requests>=2.31",
 ]
 
 [project.optional-dependencies]
