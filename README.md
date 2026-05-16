@@ -43,6 +43,9 @@ Fully implemented and tested:
 * `export` — structured artifact export
 * `shell` — interactive REPL and `--command` scripting mode
 * `tui` — terminal UI front end
+* `doctor` — local environment health checks (Python, `python-can`, caches, MCP, config)
+* `completion {bash,zsh,fish}` — emit a shell completion script
+* `--log-level` and `--quiet` — global stderr logging controls (place before the subcommand)
 
 Planned but not yet exposed in the CLI:
 
