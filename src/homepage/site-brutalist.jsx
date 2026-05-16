@@ -2,6 +2,15 @@
 // Raw edges, oversized type, caution yellow + bone white + black, rotated stamps,
 // punk-zine photocopy energy that leans into the "anarchy" name.
 
+// Update these two lines on each release.
+const RELEASE_VERSION = '0.7.0';
+const RELEASE_MONTH   = 'MAY 2026';
+
+// "0.7.0" → "07.0"  (drop leading "0.", zero-pad major)
+const RELEASE_ISSUE = RELEASE_VERSION.replace(/^0\.(\d+)\.(.+)$/, (_, maj, rest) =>
+  maj.padStart(2, '0') + '.' + rest
+);
+
 const bColors = {
   bg:     '#f3efe4',   // bone / newsprint
   ink:    '#0b0b0b',
@@ -176,8 +185,8 @@ function BrutHero({ viewport }) {
       <div style={{
         display: 'flex', gap: 0, marginBottom: 30, fontFamily: bMono, fontSize: 11, flexWrap: 'wrap',
       }}>
-        <span style={{ background: bColors.ink, color: bColors.yellow, padding: '4px 10px', letterSpacing: 2, fontWeight: 700 }}>ISSUE 04.1</span>
-        <span style={{ background: bColors.yellow, color: bColors.ink, padding: '4px 10px', letterSpacing: 2, fontWeight: 700 }}>APR 2026</span>
+        <span style={{ background: bColors.ink, color: bColors.yellow, padding: '4px 10px', letterSpacing: 2, fontWeight: 700 }}>ISSUE {RELEASE_ISSUE}</span>
+        <span style={{ background: bColors.yellow, color: bColors.ink, padding: '4px 10px', letterSpacing: 2, fontWeight: 700 }}>{RELEASE_MONTH}</span>
         <span style={{ background: bColors.paper, color: bColors.ink, padding: '4px 10px', letterSpacing: 2, fontWeight: 700, border: `2px solid ${bColors.ink}` }}>FREE · TAKE ONE</span>
       </div>
 
