@@ -275,7 +275,9 @@ def configure_logging(*, log_level: str | None, quiet: bool) -> None:
 
     Log records always go to stderr so that machine-readable stdout
     (``--json``, ``--jsonl``, ``--text``) is never contaminated. ``--quiet``
-    suppresses every level except ``ERROR``.
+    suppresses every level except ``ERROR``. When the root logger already
+    has handlers (for example pytest's caplog plugin), only the level is
+    adjusted so test capture machinery is not torn down.
     """
 
     if quiet:
@@ -286,14 +288,15 @@ def configure_logging(*, log_level: str | None, quiet: bool) -> None:
             level_name = "warning"
         level = getattr(logging, level_name.upper(), logging.WARNING)
 
-    # ``force=True`` lets the CLI reconfigure logging on every invocation,
-    # which matters for repeated in-process calls from tests.
-    logging.basicConfig(
-        stream=sys.stderr,
-        level=level,
-        format="%(levelname)s %(name)s: %(message)s",
-        force=True,
-    )
+    root = logging.getLogger()
+    if root.handlers:
+        root.setLevel(level)
+    else:
+        logging.basicConfig(
+            stream=sys.stderr,
+            level=level,
+            format="%(levelname)s %(name)s: %(message)s",
+        )
 
 
 def build_parser() -> CanarchyArgumentParser:

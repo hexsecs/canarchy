@@ -173,22 +173,35 @@ def _check_opendbc_cache() -> CheckPayload:
             "Reinstall canarchy.",
         )
 
-    cache_root = Path(dbc_cache.cache_root()) / "opendbc"
-    if not cache_root.exists():
+    provider_dir = Path(dbc_cache.provider_cache_dir("opendbc"))
+    if not provider_dir.exists():
         return _warn(
             "opendbc_cache",
-            f"{cache_root} not present",
+            f"{provider_dir} not present",
             "Run `canarchy dbc cache refresh --provider opendbc` to populate it.",
         )
 
-    files = list(cache_root.rglob("*.dbc"))
+    manifest = dbc_cache.load_manifest("opendbc")
+    if manifest is None:
+        return _warn(
+            "opendbc_cache",
+            f"{provider_dir} exists but no manifest.json was found",
+            "Run `canarchy dbc cache refresh --provider opendbc` to rebuild the cache.",
+        )
+
+    files = (
+        list((provider_dir / "files").rglob("*.dbc")) if (provider_dir / "files").exists() else []
+    )
     if not files:
         return _warn(
             "opendbc_cache",
-            f"{cache_root} exists but contains no .dbc files",
+            f"{provider_dir} has a manifest but no cached .dbc files",
             "Run `canarchy dbc cache refresh --provider opendbc` to rebuild the cache.",
         )
-    return _ok("opendbc_cache", f"{len(files)} cached DBC files at {cache_root}")
+    commit = manifest.get("commit", "unknown")[:12]
+    return _ok(
+        "opendbc_cache", f"{len(files)} cached DBC files at {provider_dir} (commit {commit})"
+    )
 
 
 def _check_mcp_server() -> CheckPayload:

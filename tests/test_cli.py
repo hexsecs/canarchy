@@ -4746,10 +4746,35 @@ class DoctorCommandTests(unittest.TestCase):
         from canarchy import dbc_cache, doctor as doctor_module
 
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(dbc_cache, "cache_root", return_value=Path(tmp)):
+            absent_provider = Path(tmp) / "providers" / "opendbc"
+            with patch.object(dbc_cache, "provider_cache_dir", return_value=absent_provider):
                 check = doctor_module._check_opendbc_cache()
         self.assertEqual(check["status"], "warn")
         self.assertIn("opendbc", check["detail"])
+        self.assertIn("not present", check["detail"])
+
+    def test_doctor_opendbc_cache_ok_with_provider_layout(self) -> None:
+        from canarchy import dbc_cache, doctor as doctor_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            provider_dir = Path(tmp) / "providers" / "opendbc"
+            commit_dir = provider_dir / "files" / "abc123def456"
+            commit_dir.mkdir(parents=True)
+            (commit_dir / "vehicle.dbc").write_text("")
+            (provider_dir / "manifest.json").write_text('{"commit": "abc123def456"}')
+
+            with (
+                patch.object(dbc_cache, "provider_cache_dir", return_value=provider_dir),
+                patch.object(
+                    dbc_cache,
+                    "load_manifest",
+                    return_value={"commit": "abc123def456"},
+                ),
+            ):
+                check = doctor_module._check_opendbc_cache()
+        self.assertEqual(check["status"], "ok")
+        self.assertIn("1 cached DBC", check["detail"])
+        self.assertIn("abc123def456", check["detail"])
 
 
 class CompletionCommandTests(unittest.TestCase):
