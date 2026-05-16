@@ -35,7 +35,9 @@ def test_inspect_database_runtime_returns_normalized_metadata() -> None:
 
 
 def test_inspect_database_runtime_filters_to_message() -> None:
-    inspection = inspect_database_runtime(str(FIXTURES / "sample.dbc"), message_name="EngineStatus1")
+    inspection = inspect_database_runtime(
+        str(FIXTURES / "sample.dbc"), message_name="EngineStatus1"
+    )
 
     payload = inspection.to_payload()
     assert payload["message"] == "EngineStatus1"
@@ -53,7 +55,9 @@ def test_inspect_database_runtime_matches_current_inspection_shape() -> None:
 def test_encode_message_runtime_parity_with_primary_encode() -> None:
     signals = {"CoolantTemp": 55, "OilTemp": 65, "Load": 40, "LampState": 1}
 
-    current_frame, current_events = encode_message(str(FIXTURES / "sample.dbc"), "EngineStatus1", signals)
+    current_frame, current_events = encode_message(
+        str(FIXTURES / "sample.dbc"), "EngineStatus1", signals
+    )
     runtime_frame, runtime_events = encode_message_runtime(
         str(FIXTURES / "sample.dbc"),
         "EngineStatus1",
@@ -66,7 +70,10 @@ def test_encode_message_runtime_parity_with_primary_encode() -> None:
     assert runtime_frame.is_extended_id == current_frame.is_extended_id
     assert runtime_frame.dlc == current_frame.dlc
     assert runtime_frame.data.hex() == current_frame.data.hex()
-    assert runtime_events[0]["payload"]["frame"]["arbitration_id"] == current_events[0]["payload"]["frame"]["arbitration_id"]
+    assert (
+        runtime_events[0]["payload"]["frame"]["arbitration_id"]
+        == current_events[0]["payload"]["frame"]["arbitration_id"]
+    )
 
 
 def test_decode_frames_runtime_parity_with_primary_decode() -> None:
@@ -86,7 +93,11 @@ def test_complex_dbc_fixture_loads_both_backends() -> None:
     current_payload, _ = inspect_database(str(FIXTURES / "complex.dbc"))
     runtime_payload = inspect_database_runtime(str(FIXTURES / "complex.dbc")).to_payload()
 
-    assert current_payload["database"]["message_count"] == runtime_payload["database"]["message_count"] == 15
+    assert (
+        current_payload["database"]["message_count"]
+        == runtime_payload["database"]["message_count"]
+        == 15
+    )
 
 
 def test_complex_dbc_fixture_decode_parity() -> None:

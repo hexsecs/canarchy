@@ -159,7 +159,9 @@ def counter_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
         max_payload_bits = min(len(frame.data) for frame in group) * 8
         for bit_length in (4, 8):
             for start_bit in range(0, max_payload_bits - bit_length + 1, 4):
-                candidate = _counter_candidate_for_field(group, arbitration_id, start_bit, bit_length)
+                candidate = _counter_candidate_for_field(
+                    group, arbitration_id, start_bit, bit_length
+                )
                 if candidate is not None:
                     candidates.append(candidate)
 
@@ -253,7 +255,9 @@ def signal_analysis(frames: list[CanFrame]) -> dict[str, object]:
         for bit_length in (4, 8, 16):
             for start_bit in range(0, payload_bits - bit_length + 1, bit_length):
                 evaluated_fields += 1
-                candidate = _signal_candidate_for_field(group, arbitration_id, start_bit, bit_length)
+                candidate = _signal_candidate_for_field(
+                    group, arbitration_id, start_bit, bit_length
+                )
                 if candidate is None:
                     continue
                 accepted_fields += 1
@@ -373,7 +377,10 @@ def _signal_candidate_for_field(
     score = round(
         min(
             1.0,
-            (midrange_change_score * 0.55) + (span_ratio * 0.25) + (unique_ratio * 0.2) + bit_length_bonus,
+            (midrange_change_score * 0.55)
+            + (span_ratio * 0.25)
+            + (unique_ratio * 0.2)
+            + bit_length_bonus,
         ),
         3,
     )
@@ -592,8 +599,13 @@ def correlate_candidates(frames: list[CanFrame], ref: ReferenceData) -> dict[str
         for bit_length in (4, 8, 16):
             for start_bit in range(0, max_payload_bits - bit_length + 1, bit_length):
                 candidate = _correlation_candidate_for_field(
-                    group, arbitration_id, start_bit, bit_length,
-                    ref_ts, ref_vs, lag_candidates_ms,
+                    group,
+                    arbitration_id,
+                    start_bit,
+                    bit_length,
+                    ref_ts,
+                    ref_vs,
+                    lag_candidates_ms,
                 )
                 if candidate is not None:
                     candidates.append(candidate)
@@ -675,7 +687,9 @@ def _correlation_candidate_for_field(
     )
 
 
-def _interpolate_reference(ref_ts: list[float], ref_vs: list[float], query_t: float) -> float | None:
+def _interpolate_reference(
+    ref_ts: list[float], ref_vs: list[float], query_t: float
+) -> float | None:
     """Linear interpolation of reference at query_t; returns None if outside reference range."""
     if query_t < ref_ts[0] or query_t > ref_ts[-1]:
         return None

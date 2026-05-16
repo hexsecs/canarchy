@@ -12,12 +12,9 @@ from typing import Any, Iterator
 from canarchy.models import CanFrame
 from canarchy.plugins import (
     CANARCHY_API_VERSION,
-    InputAdapterPlugin,
     PluginError,
     PluginRegistry,
-    ProcessorPlugin,
     ProcessorResult,
-    SinkPlugin,
     get_registry,
     reset_registry,
 )
@@ -44,6 +41,7 @@ def tearDownModule() -> None:
 # ---------------------------------------------------------------------------
 # Minimal stubs used across multiple tests
 # ---------------------------------------------------------------------------
+
 
 class _MinimalProcessor:
     name = "test-proc"
@@ -76,6 +74,7 @@ class _MinimalAdapter:
 # ---------------------------------------------------------------------------
 # TEST-PLUGIN-01  Default registry has all three built-in RE processors
 # ---------------------------------------------------------------------------
+
 
 class DefaultRegistryTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -130,6 +129,7 @@ class DefaultRegistryTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TEST-PLUGIN-04/05/06  Registration validation
 # ---------------------------------------------------------------------------
+
 
 class RegistrationValidationTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -229,6 +229,7 @@ class RegistrationValidationTests(unittest.TestCase):
 # TEST-PLUGIN-12/13/14  Built-in processor output shapes
 # ---------------------------------------------------------------------------
 
+
 class BuiltinProcessorOutputTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_registry()
@@ -304,6 +305,7 @@ class BuiltinProcessorOutputTests(unittest.TestCase):
 # TEST-PLUGIN-18  Custom third-party processor round-trip
 # ---------------------------------------------------------------------------
 
+
 class ThirdPartyProcessorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.registry = PluginRegistry()
@@ -356,9 +358,11 @@ class ThirdPartyProcessorTests(unittest.TestCase):
 
         with patch.object(importlib.metadata, "entry_points", return_value=[bad_ep]):
             import warnings as _warnings
+
             with _warnings.catch_warnings(record=True) as caught:
                 _warnings.simplefilter("always")
                 from canarchy.plugins import _load_entry_point_plugins
+
                 _load_entry_point_plugins(self.registry)
 
         self.assertEqual(len(self.registry.list_processors()), 0)
@@ -369,6 +373,7 @@ class ThirdPartyProcessorTests(unittest.TestCase):
 # TEST-PLUGIN-15/16/17  CLI integration: RE commands route through registry
 # ---------------------------------------------------------------------------
 
+
 class CliIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_registry()
@@ -377,7 +382,9 @@ class CliIntegrationTests(unittest.TestCase):
         reset_registry()
 
     def test_re_signals_returns_ok_json(self) -> None:
-        code, out, _ = run_cli("re", "signals", str(FIXTURES / "re_signals_mixed.candump"), "--json")
+        code, out, _ = run_cli(
+            "re", "signals", str(FIXTURES / "re_signals_mixed.candump"), "--json"
+        )
         self.assertEqual(code, 0)
         data = json.loads(out)
         self.assertTrue(data["ok"])
@@ -385,14 +392,18 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertIn("analysis_by_id", data["data"])
 
     def test_re_counters_returns_ok_json(self) -> None:
-        code, out, _ = run_cli("re", "counters", str(FIXTURES / "re_counter_nibble.candump"), "--json")
+        code, out, _ = run_cli(
+            "re", "counters", str(FIXTURES / "re_counter_nibble.candump"), "--json"
+        )
         self.assertEqual(code, 0)
         data = json.loads(out)
         self.assertTrue(data["ok"])
         self.assertGreater(len(data["data"]["candidates"]), 0)
 
     def test_re_entropy_returns_ok_json(self) -> None:
-        code, out, _ = run_cli("re", "entropy", str(FIXTURES / "re_entropy_mixed.candump"), "--json")
+        code, out, _ = run_cli(
+            "re", "entropy", str(FIXTURES / "re_entropy_mixed.candump"), "--json"
+        )
         self.assertEqual(code, 0)
         data = json.loads(out)
         self.assertTrue(data["ok"])

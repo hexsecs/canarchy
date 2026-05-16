@@ -182,7 +182,14 @@ class DbcTests(unittest.TestCase):
     def test_output_flags_not_leaked_into_json_payload(self) -> None:
         for argv in [
             ("dbc", "inspect", str(FIXTURES / "sample.dbc"), "--json"),
-            ("encode", "--dbc", str(FIXTURES / "sample.dbc"), "EngineStatus1", "CoolantTemp=55", "--json"),
+            (
+                "encode",
+                "--dbc",
+                str(FIXTURES / "sample.dbc"),
+                "EngineStatus1",
+                "CoolantTemp=55",
+                "--json",
+            ),
         ]:
             with self.subTest(argv=argv):
                 _, stdout, _ = run_cli(*argv)

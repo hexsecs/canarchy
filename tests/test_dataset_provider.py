@@ -68,6 +68,7 @@ def tearDownModule() -> None:
 # parse_dataset_ref
 # ---------------------------------------------------------------------------
 
+
 class ParseDatasetRefTests(unittest.TestCase):
     def test_prefixed_ref_splits_provider_and_name(self) -> None:
         provider, name = parse_dataset_ref("catalog:road")
@@ -88,6 +89,7 @@ class ParseDatasetRefTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # PublicDatasetProvider
 # ---------------------------------------------------------------------------
+
 
 class PublicDatasetProviderTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -203,6 +205,7 @@ class PublicDatasetProviderTests(unittest.TestCase):
 # DatasetProviderRegistry
 # ---------------------------------------------------------------------------
 
+
 class DatasetProviderRegistryTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_registry()
@@ -276,12 +279,15 @@ class DatasetProviderRegistryTests(unittest.TestCase):
 # dataset_convert
 # ---------------------------------------------------------------------------
 
+
 class DatasetConvertTests(unittest.TestCase):
     def test_hcrl_csv_to_candump(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         with tempfile.TemporaryDirectory() as tmp:
             dest = str(Path(tmp) / "out.log")
-            result = convert_file(src, source_format="hcrl-csv", output_format="candump", destination=dest)
+            result = convert_file(
+                src, source_format="hcrl-csv", output_format="candump", destination=dest
+            )
             self.assertEqual(result["frame_count"], 6)
             self.assertEqual(result["output_format"], "candump")
             lines = Path(dest).read_text().splitlines()
@@ -294,7 +300,9 @@ class DatasetConvertTests(unittest.TestCase):
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         with tempfile.TemporaryDirectory() as tmp:
             dest = str(Path(tmp) / "out.jsonl")
-            result = convert_file(src, source_format="hcrl-csv", output_format="jsonl", destination=dest)
+            result = convert_file(
+                src, source_format="hcrl-csv", output_format="jsonl", destination=dest
+            )
             self.assertEqual(result["frame_count"], 6)
             lines = Path(dest).read_text().splitlines()
             self.assertEqual(len(lines), 6)
@@ -309,7 +317,11 @@ class DatasetConvertTests(unittest.TestCase):
             dest = str(Path(tmp) / "out.jsonl")
             convert_file(src, source_format="hcrl-csv", output_format="jsonl", destination=dest)
             lines = Path(dest).read_text().splitlines()
-            attack_events = [json.loads(l) for l in lines if json.loads(l)["payload"].get("label") == "Attack"]
+            attack_events = [
+                json.loads(line)
+                for line in lines
+                if json.loads(line)["payload"].get("label") == "Attack"
+            ]
             self.assertEqual(len(attack_events), 2)
 
     def test_unsupported_source_format_raises_conversion_error(self) -> None:
@@ -317,7 +329,9 @@ class DatasetConvertTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dest = str(Path(tmp) / "out.log")
             with self.assertRaises(ConversionError) as ctx:
-                convert_file(src, source_format="unknown-fmt", output_format="candump", destination=dest)
+                convert_file(
+                    src, source_format="unknown-fmt", output_format="candump", destination=dest
+                )
             self.assertEqual(ctx.exception.code, "UNSUPPORTED_SOURCE_FORMAT")
 
     def test_unsupported_output_format_raises_conversion_error(self) -> None:
@@ -332,7 +346,12 @@ class DatasetConvertTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dest = str(Path(tmp) / "out.log")
             with self.assertRaises(ConversionError) as ctx:
-                convert_file("/nonexistent/path.csv", source_format="hcrl-csv", output_format="candump", destination=dest)
+                convert_file(
+                    "/nonexistent/path.csv",
+                    source_format="hcrl-csv",
+                    output_format="candump",
+                    destination=dest,
+                )
             self.assertEqual(ctx.exception.code, "SOURCE_NOT_FOUND")
 
     def test_default_destination_suffix_for_candump(self) -> None:
@@ -369,13 +388,17 @@ class DatasetConvertTests(unittest.TestCase):
             self.assertEqual(events[0]["payload"]["dataset"]["frame_offset"], 0)
             self.assertEqual(events[2]["payload"]["dataset"]["chunk_index"], 1)
             self.assertEqual(events[2]["payload"]["dataset"]["chunk_position"], 0)
-            self.assertEqual(events[0]["payload"]["dataset"]["provider_ref"], "catalog:hcrl-car-hacking")
+            self.assertEqual(
+                events[0]["payload"]["dataset"]["provider_ref"], "catalog:hcrl-car-hacking"
+            )
 
     def test_stream_hcrl_csv_to_candump_writes_incrementally(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         with tempfile.TemporaryDirectory() as tmp:
             dest = str(Path(tmp) / "stream.log")
-            result = stream_file(src, source_format="hcrl-csv", output_format="candump", destination=dest)
+            result = stream_file(
+                src, source_format="hcrl-csv", output_format="candump", destination=dest
+            )
             lines = Path(dest).read_text().splitlines()
             self.assertEqual(result["frame_count"], 6)
             self.assertEqual(len(lines), 6)
@@ -437,10 +460,12 @@ class DatasetConvertTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "SOURCE_NOT_FOUND")
 
     def test_stream_replay_reads_remote_candump_without_local_file(self) -> None:
-        response = FakeStreamingResponse([
-            "(0.000000) can0 316#0000000000000000",
-            "(0.001000) can0 18F#0000000000600000",
-        ])
+        response = FakeStreamingResponse(
+            [
+                "(0.000000) can0 316#0000000000000000",
+                "(0.001000) can0 18F#0000000000600000",
+            ]
+        )
         with patch("canarchy.dataset_convert.requests.get", return_value=response) as get:
             with patch("sys.stdout", new_callable=io.StringIO) as stdout:
                 result = stream_replay("https://example.test/candid.log", rate=1000.0)
@@ -458,16 +483,20 @@ class DatasetConvertTests(unittest.TestCase):
         self.assertEqual(stdout.getvalue(), "")
 
     def test_stream_replay_http_failure_raises_conversion_error(self) -> None:
-        with patch("canarchy.dataset_convert.requests.get", side_effect=requests.ConnectionError("offline")):
+        with patch(
+            "canarchy.dataset_convert.requests.get", side_effect=requests.ConnectionError("offline")
+        ):
             with self.assertRaises(ConversionError) as ctx:
                 stream_replay("https://example.test/candid.log")
         self.assertEqual(ctx.exception.code, "DATASET_REPLAY_FETCH_FAILED")
 
     def test_stream_replay_broken_pipe_stops_cleanly(self) -> None:
-        response = FakeStreamingResponse([
-            "(0.000000) can0 316#0000000000000000",
-            "(0.001000) can0 18F#0000000000600000",
-        ])
+        response = FakeStreamingResponse(
+            [
+                "(0.000000) can0 316#0000000000000000",
+                "(0.001000) can0 18F#0000000000600000",
+            ]
+        )
         with patch("canarchy.dataset_convert.requests.get", return_value=response):
             result = stream_replay(
                 "https://example.test/candid.log",
@@ -478,14 +507,18 @@ class DatasetConvertTests(unittest.TestCase):
         self.assertEqual(result["stop_reason"], "broken_pipe")
 
     def test_stream_replay_max_seconds_stops_by_capture_time(self) -> None:
-        response = FakeStreamingResponse([
-            "(10.000000) can0 316#0000000000000000",
-            "(10.500000) can0 18F#0000000000600000",
-            "(11.100000) can0 123#AA",
-        ])
+        response = FakeStreamingResponse(
+            [
+                "(10.000000) can0 316#0000000000000000",
+                "(10.500000) can0 18F#0000000000600000",
+                "(11.100000) can0 123#AA",
+            ]
+        )
         with patch("canarchy.dataset_convert.requests.get", return_value=response):
             with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                result = stream_replay("https://example.test/candid.log", rate=1000.0, max_seconds=1.0)
+                result = stream_replay(
+                    "https://example.test/candid.log", rate=1000.0, max_seconds=1.0
+                )
         self.assertEqual(result["frame_count"], 2)
         self.assertEqual(result["stop_reason"], "max_seconds")
         self.assertNotIn("123#AA", stdout.getvalue())
@@ -521,6 +554,7 @@ class DatasetConvertTests(unittest.TestCase):
 # CLI integration
 # ---------------------------------------------------------------------------
 
+
 class CliIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_registry()
@@ -551,8 +585,17 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertGreater(data["data"]["count"], 0)
         result = data["data"]["results"][0]
         for key in (
-            "ref", "name", "protocol_family", "license", "source_url", "conversion_targets",
-            "is_replayable", "is_index", "default_replay_file", "download_url_available", "source_type",
+            "ref",
+            "name",
+            "protocol_family",
+            "license",
+            "source_url",
+            "conversion_targets",
+            "is_replayable",
+            "is_index",
+            "default_replay_file",
+            "download_url_available",
+            "source_type",
         ):
             self.assertIn(key, result)
 
@@ -661,10 +704,15 @@ class CliIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dest = str(Path(tmp) / "out.log")
             code, out, _ = run_cli(
-                "datasets", "convert", src,
-                "--source-format", "hcrl-csv",
-                "--format", "candump",
-                "--output", dest,
+                "datasets",
+                "convert",
+                src,
+                "--source-format",
+                "hcrl-csv",
+                "--format",
+                "candump",
+                "--output",
+                dest,
                 "--json",
             )
         self.assertEqual(code, 0)
@@ -677,10 +725,15 @@ class CliIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dest = str(Path(tmp) / "out.jsonl")
             code, out, _ = run_cli(
-                "datasets", "convert", src,
-                "--source-format", "hcrl-csv",
-                "--format", "jsonl",
-                "--output", dest,
+                "datasets",
+                "convert",
+                src,
+                "--source-format",
+                "hcrl-csv",
+                "--format",
+                "jsonl",
+                "--output",
+                dest,
                 "--json",
             )
         self.assertEqual(code, 0)
@@ -691,11 +744,17 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_stream_hcrl_to_stdout_jsonl(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(
-            "datasets", "stream", src,
-            "--source-format", "hcrl-csv",
-            "--format", "jsonl",
-            "--chunk-size", "2",
-            "--provider-ref", "catalog:hcrl-car-hacking",
+            "datasets",
+            "stream",
+            src,
+            "--source-format",
+            "hcrl-csv",
+            "--format",
+            "jsonl",
+            "--chunk-size",
+            "2",
+            "--provider-ref",
+            "catalog:hcrl-car-hacking",
         )
         self.assertEqual(code, 0)
         events = [json.loads(line) for line in out.splitlines()]
@@ -705,11 +764,17 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_stream_hcrl_to_stdout_jsonl_respects_max_frames(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(
-            "datasets", "stream", src,
-            "--source-format", "hcrl-csv",
-            "--format", "jsonl",
-            "--chunk-size", "2",
-            "--max-frames", "3",
+            "datasets",
+            "stream",
+            src,
+            "--source-format",
+            "hcrl-csv",
+            "--format",
+            "jsonl",
+            "--chunk-size",
+            "2",
+            "--max-frames",
+            "3",
         )
         self.assertEqual(code, 0)
         events = [json.loads(line) for line in out.splitlines()]
@@ -719,10 +784,15 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_stream_candump_stdout_respects_max_frames(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(
-            "datasets", "stream", src,
-            "--source-format", "hcrl-csv",
-            "--format", "candump",
-            "--max-frames", "2",
+            "datasets",
+            "stream",
+            src,
+            "--source-format",
+            "hcrl-csv",
+            "--format",
+            "candump",
+            "--max-frames",
+            "2",
         )
         self.assertEqual(code, 0)
         lines = out.splitlines()
@@ -732,10 +802,15 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_stream_candump_to_stdout_jsonl(self) -> None:
         src = str(FIXTURES / "sample.candump")
         code, out, _ = run_cli(
-            "datasets", "stream", src,
-            "--source-format", "candump",
-            "--format", "jsonl",
-            "--provider-ref", "catalog:candid",
+            "datasets",
+            "stream",
+            src,
+            "--source-format",
+            "candump",
+            "--format",
+            "jsonl",
+            "--provider-ref",
+            "catalog:candid",
         )
         self.assertEqual(code, 0)
         events = [json.loads(line) for line in out.splitlines()]
@@ -756,10 +831,15 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_stream_json_summary_does_not_emit_frames(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(
-            "datasets", "stream", src,
-            "--source-format", "hcrl-csv",
-            "--format", "jsonl",
-            "--chunk-size", "2",
+            "datasets",
+            "stream",
+            src,
+            "--source-format",
+            "hcrl-csv",
+            "--format",
+            "jsonl",
+            "--chunk-size",
+            "2",
             "--json",
         )
         self.assertEqual(code, 0)
@@ -771,11 +851,17 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_stream_json_summary_reports_max_frames(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(
-            "datasets", "stream", src,
-            "--source-format", "hcrl-csv",
-            "--format", "jsonl",
-            "--chunk-size", "2",
-            "--max-frames", "3",
+            "datasets",
+            "stream",
+            src,
+            "--source-format",
+            "hcrl-csv",
+            "--format",
+            "jsonl",
+            "--chunk-size",
+            "2",
+            "--max-frames",
+            "3",
             "--json",
         )
         self.assertEqual(code, 0)
@@ -788,10 +874,15 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_stream_invalid_chunk_size_returns_structured_error(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(
-            "datasets", "stream", src,
-            "--source-format", "hcrl-csv",
-            "--format", "jsonl",
-            "--chunk-size", "0",
+            "datasets",
+            "stream",
+            src,
+            "--source-format",
+            "hcrl-csv",
+            "--format",
+            "jsonl",
+            "--chunk-size",
+            "0",
         )
         self.assertEqual(code, 1)
         data = json.loads(out)
@@ -801,10 +892,15 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_stream_invalid_max_frames_returns_structured_error(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
         code, out, _ = run_cli(
-            "datasets", "stream", src,
-            "--source-format", "hcrl-csv",
-            "--format", "jsonl",
-            "--max-frames", "0",
+            "datasets",
+            "stream",
+            src,
+            "--source-format",
+            "hcrl-csv",
+            "--format",
+            "jsonl",
+            "--max-frames",
+            "0",
         )
         self.assertEqual(code, 1)
         data = json.loads(out)
@@ -813,9 +909,13 @@ class CliIntegrationTests(unittest.TestCase):
 
     def test_datasets_stream_missing_source_returns_structured_error(self) -> None:
         code, out, _ = run_cli(
-            "datasets", "stream", "/nonexistent/path.csv",
-            "--source-format", "hcrl-csv",
-            "--format", "jsonl",
+            "datasets",
+            "stream",
+            "/nonexistent/path.csv",
+            "--source-format",
+            "hcrl-csv",
+            "--format",
+            "jsonl",
         )
         self.assertEqual(code, 1)
         data = json.loads(out)
@@ -826,9 +926,13 @@ class CliIntegrationTests(unittest.TestCase):
         response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
         with patch("canarchy.dataset_convert.requests.get", return_value=response):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--rate", "1000",
-                "--max-frames", "1",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--rate",
+                "1000",
+                "--max-frames",
+                "1",
                 "--json",
             )
         self.assertEqual(code, 0)
@@ -842,7 +946,9 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_replay_list_files_returns_manifest_without_streaming(self) -> None:
         with patch("canarchy.dataset_convert.requests.get") as get:
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
+                "datasets",
+                "replay",
+                "catalog:candid",
                 "--list-files",
                 "--json",
             )
@@ -860,10 +966,15 @@ class CliIntegrationTests(unittest.TestCase):
         response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
         with patch("canarchy.dataset_convert.requests.get", return_value=response) as get:
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--file", "2_indicator_CAN.log",
-                "--rate", "1000",
-                "--max-frames", "1",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--file",
+                "2_indicator_CAN.log",
+                "--rate",
+                "1000",
+                "--max-frames",
+                "1",
                 "--json",
             )
         self.assertEqual(code, 0)
@@ -871,13 +982,18 @@ class CliIntegrationTests(unittest.TestCase):
         data = json.loads(out)
         self.assertEqual(data["data"]["replay_file"], "2_indicator_CAN.log")
         self.assertEqual(data["data"]["replay_file_id"], "2_indicator_CAN.log")
-        self.assertEqual(data["data"]["download_url"], "https://ndownloader.figshare.com/files/54551552")
+        self.assertEqual(
+            data["data"]["download_url"], "https://ndownloader.figshare.com/files/54551552"
+        )
 
     def test_datasets_replay_unknown_file_returns_structured_error(self) -> None:
         with patch("canarchy.dataset_convert.requests.get") as get:
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--file", "missing_CAN.log",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--file",
+                "missing_CAN.log",
                 "--json",
             )
         self.assertEqual(code, 1)
@@ -886,16 +1002,22 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(data["errors"][0]["code"], "DATASET_REPLAY_FILE_NOT_FOUND")
 
     def test_datasets_replay_max_seconds_json_summary(self) -> None:
-        response = FakeStreamingResponse([
-            "(0.000000) can0 316#0000000000000000",
-            "(0.500000) can0 18F#0000000000600000",
-            "(1.100000) can0 123#AA",
-        ])
+        response = FakeStreamingResponse(
+            [
+                "(0.000000) can0 316#0000000000000000",
+                "(0.500000) can0 18F#0000000000600000",
+                "(1.100000) can0 123#AA",
+            ]
+        )
         with patch("canarchy.dataset_convert.requests.get", return_value=response):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--rate", "1000",
-                "--max-seconds", "1.0",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--rate",
+                "1000",
+                "--max-seconds",
+                "1.0",
                 "--json",
             )
         self.assertEqual(code, 0)
@@ -908,10 +1030,14 @@ class CliIntegrationTests(unittest.TestCase):
         response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
         with patch("canarchy.dataset_convert.requests.get", return_value=response):
             code, out, _ = run_cli(
-                "datasets", "replay", "https://example.test/candid.log",
-                "--rate", "1000",
-                "--max-frames", "1",
-        )
+                "datasets",
+                "replay",
+                "https://example.test/candid.log",
+                "--rate",
+                "1000",
+                "--max-frames",
+                "1",
+            )
         self.assertEqual(code, 0)
         self.assertEqual(out.strip(), "(0.000000) can0 316#0000000000000000")
 
@@ -919,10 +1045,15 @@ class CliIntegrationTests(unittest.TestCase):
         response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])
         with patch("canarchy.dataset_convert.requests.get", return_value=response):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl",
-                "--rate", "1000",
-                "--max-frames", "1",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "1000",
+                "--max-frames",
+                "1",
             )
         self.assertEqual(code, 0)
         event = json.loads(out)
@@ -935,9 +1066,13 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(dataset["source_format"], "candump")
 
     def test_datasets_replay_http_failure_returns_structured_error(self) -> None:
-        with patch("canarchy.dataset_convert.requests.get", side_effect=requests.ConnectionError("offline")):
+        with patch(
+            "canarchy.dataset_convert.requests.get", side_effect=requests.ConnectionError("offline")
+        ):
             code, out, _ = run_cli(
-                "datasets", "replay", "https://example.test/candid.log",
+                "datasets",
+                "replay",
+                "https://example.test/candid.log",
                 "--json",
             )
         self.assertEqual(code, 1)
@@ -948,11 +1083,17 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_replay_catalog_ref_dry_run_does_not_open_stream(self) -> None:
         with patch("canarchy.dataset_convert.requests.get") as get:
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl",
-                "--rate", "10",
-                "--max-frames", "5",
-                "--max-seconds", "2.5",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
+                "--max-frames",
+                "5",
+                "--max-seconds",
+                "2.5",
                 "--dry-run",
                 "--json",
             )
@@ -975,7 +1116,9 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_replay_direct_url_dry_run_does_not_open_stream(self) -> None:
         with patch("canarchy.dataset_convert.requests.get") as get:
             code, out, _ = run_cli(
-                "datasets", "replay", "https://example.test/candid.log",
+                "datasets",
+                "replay",
+                "https://example.test/candid.log",
                 "--dry-run",
                 "--json",
             )
@@ -989,8 +1132,11 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_replay_dry_run_validates_rate_before_plan(self) -> None:
         with patch("canarchy.dataset_convert.requests.get") as get:
             code, out, _ = run_cli(
-                "datasets", "replay", "https://example.test/candid.log",
-                "--rate", "0",
+                "datasets",
+                "replay",
+                "https://example.test/candid.log",
+                "--rate",
+                "0",
                 "--dry-run",
                 "--json",
             )
@@ -1003,7 +1149,9 @@ class CliIntegrationTests(unittest.TestCase):
     def test_datasets_replay_index_dry_run_returns_structured_error(self) -> None:
         with patch("canarchy.dataset_convert.requests.get") as get:
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:pivot-auto-datasets",
+                "datasets",
+                "replay",
+                "catalog:pivot-auto-datasets",
                 "--dry-run",
                 "--json",
             )
@@ -1214,9 +1362,17 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     def test_dry_run_catalog_ref_shows_replay_plan_header(self) -> None:
         with patch("canarchy.dataset_convert.requests.get"):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl", "--rate", "10",
-                "--max-frames", "5", "--max-seconds", "2.5",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
+                "--max-frames",
+                "5",
+                "--max-seconds",
+                "2.5",
                 "--dry-run",
             )
         self.assertEqual(code, 0)
@@ -1225,8 +1381,13 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     def test_dry_run_shows_source_section(self) -> None:
         with patch("canarchy.dataset_convert.requests.get"):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl", "--rate", "10",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
                 "--dry-run",
             )
         self.assertEqual(code, 0)
@@ -1237,8 +1398,13 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     def test_dry_run_shows_selected_replay_file(self) -> None:
         with patch("canarchy.dataset_convert.requests.get"):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl", "--rate", "10",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
                 "--dry-run",
             )
         self.assertEqual(code, 0)
@@ -1249,9 +1415,17 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     def test_dry_run_shows_limits_section(self) -> None:
         with patch("canarchy.dataset_convert.requests.get"):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl", "--rate", "10",
-                "--max-frames", "5", "--max-seconds", "2.5",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
+                "--max-frames",
+                "5",
+                "--max-seconds",
+                "2.5",
                 "--dry-run",
             )
         self.assertEqual(code, 0)
@@ -1263,8 +1437,13 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     def test_dry_run_shows_replay_plan_section(self) -> None:
         with patch("canarchy.dataset_convert.requests.get"):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl", "--rate", "10",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
                 "--dry-run",
             )
         self.assertEqual(code, 0)
@@ -1275,8 +1454,13 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     def test_dry_run_no_raw_key_value_dump(self) -> None:
         with patch("canarchy.dataset_convert.requests.get"):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl", "--rate", "10",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
                 "--dry-run",
             )
         self.assertEqual(code, 0)
@@ -1288,8 +1472,13 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     def test_dry_run_no_limits_shows_none_labels(self) -> None:
         with patch("canarchy.dataset_convert.requests.get"):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl", "--rate", "10",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
                 "--dry-run",
             )
         self.assertEqual(code, 0)
@@ -1299,10 +1488,17 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
     def test_dry_run_json_output_unchanged(self) -> None:
         with patch("canarchy.dataset_convert.requests.get"):
             code, out, _ = run_cli(
-                "datasets", "replay", "catalog:candid",
-                "--format", "jsonl", "--rate", "10",
-                "--max-frames", "5",
-                "--dry-run", "--json",
+                "datasets",
+                "replay",
+                "catalog:candid",
+                "--format",
+                "jsonl",
+                "--rate",
+                "10",
+                "--max-frames",
+                "5",
+                "--dry-run",
+                "--json",
             )
         self.assertEqual(code, 0)
         data = json.loads(out)

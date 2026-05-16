@@ -78,9 +78,15 @@ class ReverseEngineeringTests(unittest.TestCase):
 
         candidates = entropy_candidates(frames)
 
-        constant = next(candidate for candidate in candidates if candidate["arbitration_id"] == 0x100)
-        alternating = next(candidate for candidate in candidates if candidate["arbitration_id"] == 0x101)
-        high_entropy = next(candidate for candidate in candidates if candidate["arbitration_id"] == 0x102)
+        constant = next(
+            candidate for candidate in candidates if candidate["arbitration_id"] == 0x100
+        )
+        alternating = next(
+            candidate for candidate in candidates if candidate["arbitration_id"] == 0x101
+        )
+        high_entropy = next(
+            candidate for candidate in candidates if candidate["arbitration_id"] == 0x102
+        )
 
         self.assertEqual(constant["mean_byte_entropy"], 0.0)
         self.assertEqual(constant["max_byte_entropy"], 0.0)
@@ -95,7 +101,9 @@ class ReverseEngineeringTests(unittest.TestCase):
 
         candidates = entropy_candidates(frames)
 
-        low_sample = next(candidate for candidate in candidates if candidate["arbitration_id"] == 0x103)
+        low_sample = next(
+            candidate for candidate in candidates if candidate["arbitration_id"] == 0x103
+        )
         self.assertTrue(low_sample["low_sample"])
         self.assertEqual(low_sample["frame_count"], 5)
 
@@ -119,7 +127,9 @@ class ReverseEngineeringTests(unittest.TestCase):
         analysis = signal_analysis(frames)
 
         self.assertEqual(analysis["low_sample_ids"], [0x301])
-        low_sample = next(item for item in analysis["analysis_by_id"] if item["arbitration_id"] == 0x301)
+        low_sample = next(
+            item for item in analysis["analysis_by_id"] if item["arbitration_id"] == 0x301
+        )
         self.assertTrue(low_sample["low_sample"])
         self.assertEqual(low_sample["frame_count"], 4)
         self.assertEqual(low_sample["candidate_count"], 0)
@@ -258,7 +268,14 @@ class MatchDbcCliTests(unittest.TestCase):
 
         with patch("canarchy.cli._build_match_catalog", return_value=self._MOCK_CATALOG):
             exit_code, result = execute_command(
-                ["re", "shortlist-dbc", str(FIXTURES / "sample.candump"), "--make", "toyota", "--json"]
+                [
+                    "re",
+                    "shortlist-dbc",
+                    str(FIXTURES / "sample.candump"),
+                    "--make",
+                    "toyota",
+                    "--json",
+                ]
             )
 
         self.assertEqual(exit_code, 0)
@@ -367,8 +384,11 @@ class CorrelateCandidatesTests(unittest.TestCase):
         self.assertGreater(result["candidate_count"], 0)
         # start_bit=8, bit_length=8 encodes the linear field
         byte1 = next(
-            (c for c in result["candidates"]
-             if c["arbitration_id"] == 0x400 and c["start_bit"] == 8 and c["bit_length"] == 8),
+            (
+                c
+                for c in result["candidates"]
+                if c["arbitration_id"] == 0x400 and c["start_bit"] == 8 and c["bit_length"] == 8
+            ),
             None,
         )
         self.assertIsNotNone(byte1)
@@ -386,7 +406,15 @@ class CorrelateCandidatesTests(unittest.TestCase):
         self.assertIn("candidate_count", result)
         self.assertIn("candidates", result)
         top = result["candidates"][0]
-        for key in ("arbitration_id", "start_bit", "bit_length", "pearson_r", "spearman_r", "sample_count", "lag_ms"):
+        for key in (
+            "arbitration_id",
+            "start_bit",
+            "bit_length",
+            "pearson_r",
+            "spearman_r",
+            "sample_count",
+            "lag_ms",
+        ):
             self.assertIn(key, top)
 
     def test_correlate_sorted_by_absolute_pearson_r(self) -> None:
@@ -396,11 +424,14 @@ class CorrelateCandidatesTests(unittest.TestCase):
 
         candidates = result["candidates"]
         for i in range(len(candidates) - 1):
-            self.assertGreaterEqual(abs(candidates[i]["pearson_r"]), abs(candidates[i + 1]["pearson_r"]))
+            self.assertGreaterEqual(
+                abs(candidates[i]["pearson_r"]), abs(candidates[i + 1]["pearson_r"])
+            )
 
     def test_correlate_insufficient_overlap_raises_error(self) -> None:
         frames = LocalTransport().frames_from_file(str(FIXTURES / "re_correlate_linear.candump"))
         from canarchy.reverse_engineering import ReferenceData
+
         # Reference range [10.0, 20.0] does not overlap with capture timestamps [0.0, 1.9]
         ref = ReferenceData(
             name=None,

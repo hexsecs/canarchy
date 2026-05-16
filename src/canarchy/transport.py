@@ -454,8 +454,7 @@ def _compile_filter_atom(expr: str) -> Callable[[CanFrame], bool]:
         try:
             wanted = int(n[5:], 0)
             return lambda frame, w=wanted: (
-                frame.is_extended_id
-                and decompose_arbitration_id(frame.arbitration_id).pgn == w
+                frame.is_extended_id and decompose_arbitration_id(frame.arbitration_id).pgn == w
             )
         except ValueError:
             pass
@@ -580,14 +579,25 @@ class LocalTransport:
             metadata["capture_timeout"] = self.live_backend.capture_timeout
         return metadata
 
-    def filter(self, file_name: str, expression: str, frames: list[CanFrame] | None = None) -> list[CanFrame]:
+    def filter(
+        self, file_name: str, expression: str, frames: list[CanFrame] | None = None
+    ) -> list[CanFrame]:
         if frames is None:
             frames = self._frames_for_file(file_name)
         predicate = _compile_filter(expression)
         return [frame for frame in frames if predicate(frame)]
 
-    def stats(self, file_name: str, *, offset: int = 0, max_frames: int | None = None, seconds: float | None = None) -> TransportStats:
-        frames = self.frames_from_file(file_name, offset=offset, max_frames=max_frames, seconds=seconds)
+    def stats(
+        self,
+        file_name: str,
+        *,
+        offset: int = 0,
+        max_frames: int | None = None,
+        seconds: float | None = None,
+    ) -> TransportStats:
+        frames = self.frames_from_file(
+            file_name, offset=offset, max_frames=max_frames, seconds=seconds
+        )
         return TransportStats(
             total_frames=len(frames),
             unique_arbitration_ids=len({frame.arbitration_id for frame in frames}),
@@ -606,7 +616,11 @@ class LocalTransport:
         max_frames: int | None = None,
         seconds: float | None = None,
     ) -> list[CanFrame]:
-        return list(self.iter_frames_from_file(file_name, offset=offset, max_frames=max_frames, seconds=seconds))
+        return list(
+            self.iter_frames_from_file(
+                file_name, offset=offset, max_frames=max_frames, seconds=seconds
+            )
+        )
 
     def iter_frames_from_file(
         self,
@@ -618,7 +632,9 @@ class LocalTransport:
     ) -> Iterator[CanFrame]:
         path = self._capture_file_path(file_name)
         try:
-            yield from iter_candump_file(path, offset=offset, max_frames=max_frames, seconds=seconds)
+            yield from iter_candump_file(
+                path, offset=offset, max_frames=max_frames, seconds=seconds
+            )
         except OSError as exc:
             raise TransportError(
                 "CAPTURE_SOURCE_UNAVAILABLE",
@@ -651,7 +667,9 @@ class LocalTransport:
         ]
         return serialize_events(events)
 
-    def filter_events(self, file_name: str, expression: str, frames: list[CanFrame] | None = None) -> list[dict[str, object]]:
+    def filter_events(
+        self, file_name: str, expression: str, frames: list[CanFrame] | None = None
+    ) -> list[dict[str, object]]:
         if frames is None:
             frames = self.filter(file_name, expression)
         else:
@@ -844,7 +862,10 @@ class LocalTransport:
                     pass
                 if stop_event.is_set() and forwarded_events.empty():
                     break
-                if all(not worker_thread.is_alive() for worker_thread in workers) and forwarded_events.empty():
+                if (
+                    all(not worker_thread.is_alive() for worker_thread in workers)
+                    and forwarded_events.empty()
+                ):
                     break
         finally:
             stop_event.set()
@@ -871,7 +892,9 @@ class LocalTransport:
             ) from exc
 
     def _gateway_event(self, frame: CanFrame, *, direction: str) -> dict[str, object]:
-        return serialize_events([FrameEvent(frame=frame, source=f"gateway.{direction}").to_event()])[0]
+        return serialize_events(
+            [FrameEvent(frame=frame, source=f"gateway.{direction}").to_event()]
+        )[0]
 
     def _require_interface(self, interface: str) -> None:
         ScaffoldCanBackend()._require_interface(interface)
@@ -942,16 +965,17 @@ def iter_candump_file(
     yielded = 0
     parsed_count = 0
     start_timestamp: float | None = None
-    
+
     if path is None:
         # Read from stdin
         import sys
+
         handle = sys.stdin
         path_for_parse = Path("-")  # For error messages
     else:
         handle = path.open(encoding="utf-8")
         path_for_parse = path
-    
+
     try:
         for line_number, raw_line in enumerate(handle, start=1):
             stripped = raw_line.strip()
@@ -966,7 +990,11 @@ def iter_candump_file(
                 continue
             if start_timestamp is None:
                 start_timestamp = frame.timestamp
-            if seconds is not None and start_timestamp is not None and frame.timestamp - start_timestamp > seconds:
+            if (
+                seconds is not None
+                and start_timestamp is not None
+                and frame.timestamp - start_timestamp > seconds
+            ):
                 break
             yield frame
             yielded += 1
@@ -1006,8 +1034,16 @@ def _fast_capture_metadata(path: Path) -> CaptureMetadata:
         fh.seek(tail_offset)
         tail_bytes = fh.read()
 
-    head_lines = [line.strip() for line in head_bytes.decode("utf-8", errors="replace").splitlines() if line.strip()]
-    tail_lines = [line.strip() for line in tail_bytes.decode("utf-8", errors="replace").splitlines() if line.strip()]
+    head_lines = [
+        line.strip()
+        for line in head_bytes.decode("utf-8", errors="replace").splitlines()
+        if line.strip()
+    ]
+    tail_lines = [
+        line.strip()
+        for line in tail_bytes.decode("utf-8", errors="replace").splitlines()
+        if line.strip()
+    ]
 
     first_timestamp: float | None = None
     interfaces: set[str] = set()
@@ -1048,7 +1084,9 @@ def _fast_capture_metadata(path: Path) -> CaptureMetadata:
         last_timestamp = first_timestamp
 
     duration_seconds = max(0.0, last_timestamp - first_timestamp)
-    suggested_max_frames, suggested_seconds = _capture_info_suggestions(estimated_frame_count, duration_seconds)
+    suggested_max_frames, suggested_seconds = _capture_info_suggestions(
+        estimated_frame_count, duration_seconds
+    )
 
     return CaptureMetadata(
         frame_count=estimated_frame_count,
@@ -1096,7 +1134,9 @@ def _full_capture_metadata(path: Path) -> CaptureMetadata:
         )
 
     duration_seconds = max(0.0, last_timestamp - first_timestamp)
-    suggested_max_frames, suggested_seconds = _capture_info_suggestions(frame_count, duration_seconds)
+    suggested_max_frames, suggested_seconds = _capture_info_suggestions(
+        frame_count, duration_seconds
+    )
 
     return CaptureMetadata(
         frame_count=frame_count,

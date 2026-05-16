@@ -18,7 +18,9 @@ _RAW_BASE = "https://raw.githubusercontent.com"
 
 
 def _github_get(url: str) -> Any:
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    )
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())
 
@@ -79,7 +81,9 @@ def _skill_entry_from_manifest(manifest: dict[str, Any], *, manifest_path: str) 
         "entry": entry,
     }
     for section, keys in required_nested.items():
-        if not isinstance(containers[section], dict) or any(key not in containers[section] for key in keys):
+        if not isinstance(containers[section], dict) or any(
+            key not in containers[section] for key in keys
+        ):
             raise SkillError(
                 code="SKILL_MANIFEST_INVALID",
                 message=f"Skill manifest '{manifest_path}' is missing required fields under '{section}'.",
@@ -104,7 +108,9 @@ def _skill_entry_from_manifest(manifest: dict[str, Any], *, manifest_path: str) 
     }
 
 
-def _make_descriptor(entry: dict[str, Any], commit: str, cache_path: Path | None) -> SkillDescriptor:
+def _make_descriptor(
+    entry: dict[str, Any], commit: str, cache_path: Path | None
+) -> SkillDescriptor:
     return SkillDescriptor(
         provider="github",
         name=entry["name"],
@@ -204,7 +210,9 @@ class GitHubSkillProvider:
         catalog = manifest.get("skills", [])
         entry = next((item for item in catalog if item["name"] == ref), None)
         if entry is None:
-            candidates = [item["name"] for item in catalog if ref.lower() in item["name"].lower()][:5]
+            candidates = [item["name"] for item in catalog if ref.lower() in item["name"].lower()][
+                :5
+            ]
             raise SkillError(
                 code="SKILL_NOT_FOUND",
                 message=f"Skill '{ref}' not found in GitHub skills catalog.",
@@ -229,7 +237,9 @@ class GitHubSkillProvider:
         already_cached = local_manifest_path.exists() and local_entry_path.exists()
         if not local_manifest_path.exists():
             try:
-                _download_file(f"{_RAW_BASE}/{self._repo}/{commit}/{manifest_path}", local_manifest_path)
+                _download_file(
+                    f"{_RAW_BASE}/{self._repo}/{commit}/{manifest_path}", local_manifest_path
+                )
             except Exception as exc:
                 raise SkillError(
                     code="SKILL_FETCH_FAILED",

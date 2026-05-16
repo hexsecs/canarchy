@@ -6,33 +6,81 @@ from pathlib import Path
 
 import pytest
 
-from canarchy.mcp_server import _TOOL_NAMES, _TOOLS, _build_argv, handle_call_tool, handle_list_tools, run_server
+from canarchy.mcp_server import (
+    _TOOL_NAMES,
+    _TOOLS,
+    _build_argv,
+    handle_call_tool,
+    handle_list_tools,
+    run_server,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 _EXPECTED_TOOLS = {
-    "capture", "send", "generate", "gateway", "replay", "filter", "stats", "capture_info",
-    "decode", "encode", "dbc_inspect", "export",
-    "session_save", "session_load", "session_show",
-    "j1939_monitor", "j1939_decode", "j1939_pgn", "j1939_spn", "j1939_tp", "j1939_tp_compare",
-    "j1939_dm1", "j1939_faults", "j1939_summary", "j1939_inventory", "j1939_compare",
-    "uds_scan", "uds_trace", "uds_services",
+    "capture",
+    "send",
+    "generate",
+    "gateway",
+    "replay",
+    "filter",
+    "stats",
+    "capture_info",
+    "decode",
+    "encode",
+    "dbc_inspect",
+    "export",
+    "session_save",
+    "session_load",
+    "session_show",
+    "j1939_monitor",
+    "j1939_decode",
+    "j1939_pgn",
+    "j1939_spn",
+    "j1939_tp",
+    "j1939_tp_compare",
+    "j1939_dm1",
+    "j1939_faults",
+    "j1939_summary",
+    "j1939_inventory",
+    "j1939_compare",
+    "uds_scan",
+    "uds_trace",
+    "uds_services",
     "config_show",
-    "datasets_provider_list", "datasets_search", "datasets_inspect", "datasets_fetch", "datasets_cache_list",
-    "datasets_cache_refresh", "datasets_convert", "datasets_replay_plan", "datasets_replay_files",
-    "skills_provider_list", "skills_search", "skills_fetch", "skills_cache_list", "skills_cache_refresh",
-    "re_signals", "re_correlate", "re_counters", "re_entropy", "re_match_dbc", "re_shortlist_dbc",
+    "datasets_provider_list",
+    "datasets_search",
+    "datasets_inspect",
+    "datasets_fetch",
+    "datasets_cache_list",
+    "datasets_cache_refresh",
+    "datasets_convert",
+    "datasets_replay_plan",
+    "datasets_replay_files",
+    "skills_provider_list",
+    "skills_search",
+    "skills_fetch",
+    "skills_cache_list",
+    "skills_cache_refresh",
+    "re_signals",
+    "re_correlate",
+    "re_counters",
+    "re_entropy",
+    "re_match_dbc",
+    "re_shortlist_dbc",
 }
 
 
 # --- TEST-MCP-01: server entry point is callable ---------------------------
+
 
 def test_run_server_is_callable():
     assert callable(run_server)
 
 
 # --- TEST-MCP-02 / TEST-MCP-03: tool discovery -----------------------------
+
 
 def test_list_tools_returns_expected_names():
     tools = asyncio.run(handle_list_tools())
@@ -47,6 +95,7 @@ def test_list_tools_count():
 
 # --- TEST-MCP-04: tool metadata validity -----------------------------------
 
+
 def test_each_tool_has_description_and_schema():
     tools = asyncio.run(handle_list_tools())
     for tool in tools:
@@ -56,6 +105,7 @@ def test_each_tool_has_description_and_schema():
 
 
 # --- TEST-MCP-05: config_show returns structured result --------------------
+
 
 def test_call_tool_config_show():
     results = asyncio.run(handle_call_tool("config_show", {}))
@@ -67,6 +117,7 @@ def test_call_tool_config_show():
 
 
 # --- TEST-MCP-06: uds_services returns catalogue ---------------------------
+
 
 def test_call_tool_uds_services():
     results = asyncio.run(handle_call_tool("uds_services", {}))
@@ -89,9 +140,7 @@ def test_call_tool_capture_info():
 
 
 def test_call_tool_stats_uses_file_flag():
-    results = asyncio.run(
-        handle_call_tool("stats", {"file": str(FIXTURES / "sample.candump")})
-    )
+    results = asyncio.run(handle_call_tool("stats", {"file": str(FIXTURES / "sample.candump")}))
     assert len(results) == 1
     payload = json.loads(results[0].text)
     assert payload["ok"] is True
@@ -130,7 +179,9 @@ def test_call_tool_datasets_search_returns_machine_fields():
 
 
 def test_call_tool_datasets_inspect_index_returns_machine_fields():
-    results = asyncio.run(handle_call_tool("datasets_inspect", {"ref": "catalog:pivot-auto-datasets"}))
+    results = asyncio.run(
+        handle_call_tool("datasets_inspect", {"ref": "catalog:pivot-auto-datasets"})
+    )
     assert len(results) == 1
     payload = json.loads(results[0].text)
     assert payload["ok"] is True
@@ -144,7 +195,14 @@ def test_call_tool_datasets_replay_plan_does_not_stream():
     results = asyncio.run(
         handle_call_tool(
             "datasets_replay_plan",
-            {"source": "catalog:candid", "format": "jsonl", "file": "2_indicator_CAN.log", "rate": 10.0, "max_frames": 5, "max_seconds": 2.5},
+            {
+                "source": "catalog:candid",
+                "format": "jsonl",
+                "file": "2_indicator_CAN.log",
+                "rate": 10.0,
+                "max_frames": 5,
+                "max_seconds": 2.5,
+            },
         )
     )
     assert len(results) == 1
@@ -161,7 +219,9 @@ def test_call_tool_datasets_replay_plan_does_not_stream():
 
 
 def test_call_tool_datasets_replay_plan_index_error():
-    results = asyncio.run(handle_call_tool("datasets_replay_plan", {"source": "catalog:pivot-auto-datasets"}))
+    results = asyncio.run(
+        handle_call_tool("datasets_replay_plan", {"source": "catalog:pivot-auto-datasets"})
+    )
     payload = json.loads(results[0].text)
     assert payload["ok"] is False
     assert payload["command"] == "datasets replay"
@@ -187,6 +247,7 @@ def test_call_tool_skills_provider_list():
 
 # --- TEST-MCP-07: invalid frame_id returns structured error ----------------
 
+
 def test_call_tool_send_invalid_frame_id():
     results = asyncio.run(
         handle_call_tool("send", {"interface": "can0", "frame_id": "not_hex", "data": "1122"})
@@ -198,16 +259,16 @@ def test_call_tool_send_invalid_frame_id():
 
 # --- TEST-MCP-08: invalid rate returns structured error --------------------
 
+
 def test_call_tool_replay_invalid_rate():
-    results = asyncio.run(
-        handle_call_tool("replay", {"file": "any.candump", "rate": 0.0})
-    )
+    results = asyncio.run(handle_call_tool("replay", {"file": "any.candump", "rate": 0.0}))
     payload = json.loads(results[0].text)
     assert payload["ok"] is False
     assert any(e["code"] == "INVALID_RATE" for e in payload["errors"])
 
 
 # --- TEST-MCP-09: unknown tool name raises ValueError ----------------------
+
 
 def test_call_tool_unknown_raises():
     with pytest.raises(ValueError, match="Unknown tool"):
@@ -216,12 +277,14 @@ def test_call_tool_unknown_raises():
 
 # --- TEST-MCP-10: mcp dependency in pyproject.toml ------------------------
 
+
 def test_mcp_dependency_declared():
     pyproject = (Path(__file__).parent.parent / "pyproject.toml").read_text()
     assert "mcp>=" in pyproject or 'mcp"' in pyproject or "mcp =" in pyproject
 
 
 # --- TEST-MCP-11: shell and tui are not MCP tools -------------------------
+
 
 def test_shell_and_tui_not_exposed():
     names = {tool.name for tool in asyncio.run(handle_list_tools())}
@@ -230,6 +293,7 @@ def test_shell_and_tui_not_exposed():
 
 
 # --- TEST-MCP-12: _build_argv produces correct argv -----------------------
+
 
 def test_build_argv_capture():
     argv = _build_argv("capture", {"interface": "can0"})
@@ -273,7 +337,9 @@ def test_build_argv_j1939_monitor_with_pgn():
 
 
 def test_build_argv_encode_with_signals():
-    argv = _build_argv("encode", {"dbc": "test.dbc", "message": "EngineData", "signals": ["RPM=1000"]})
+    argv = _build_argv(
+        "encode", {"dbc": "test.dbc", "message": "EngineData", "signals": ["RPM=1000"]}
+    )
     assert "--dbc" in argv
     assert "test.dbc" in argv
     assert "EngineData" in argv
@@ -295,7 +361,16 @@ def test_build_argv_dbc_inspect_with_options():
 
 def test_build_argv_decode_uses_file_flag():
     argv = _build_argv("decode", {"file": "trace.candump", "dbc": "db.dbc", "max_frames": 10})
-    assert argv == ["decode", "--file", "trace.candump", "--dbc", "db.dbc", "--max-frames", "10", "--json"]
+    assert argv == [
+        "decode",
+        "--file",
+        "trace.candump",
+        "--dbc",
+        "db.dbc",
+        "--max-frames",
+        "10",
+        "--json",
+    ]
 
 
 def test_build_argv_j1939_pgn():
@@ -313,13 +388,35 @@ def test_build_argv_j1939_decode_uses_file_flag():
 
 
 def test_build_argv_j1939_faults():
-    argv = _build_argv("j1939_faults", {"file": "trace.candump", "dbc": "truck.dbc", "seconds": 3.5})
-    assert argv == ["j1939", "faults", "--file", "trace.candump", "--dbc", "truck.dbc", "--seconds", "3.5", "--json"]
+    argv = _build_argv(
+        "j1939_faults", {"file": "trace.candump", "dbc": "truck.dbc", "seconds": 3.5}
+    )
+    assert argv == [
+        "j1939",
+        "faults",
+        "--file",
+        "trace.candump",
+        "--dbc",
+        "truck.dbc",
+        "--seconds",
+        "3.5",
+        "--json",
+    ]
 
 
 def test_build_argv_j1939_compare_multiple_files():
-    argv = _build_argv("j1939_compare", {"files": ["before.candump", "after.candump"], "max_frames": 500})
-    assert argv == ["j1939", "compare", "before.candump", "after.candump", "--max-frames", "500", "--json"]
+    argv = _build_argv(
+        "j1939_compare", {"files": ["before.candump", "after.candump"], "max_frames": 500}
+    )
+    assert argv == [
+        "j1939",
+        "compare",
+        "before.candump",
+        "after.candump",
+        "--max-frames",
+        "500",
+        "--json",
+    ]
 
 
 def test_build_argv_session_save_with_options():
@@ -344,27 +441,70 @@ def test_build_argv_generate_with_options():
 
 def test_build_argv_datasets_search_with_options():
     argv = _build_argv("datasets_search", {"query": "j1939", "provider": "catalog", "limit": 5})
-    assert argv == ["datasets", "search", "j1939", "--provider", "catalog", "--limit", "5", "--json"]
+    assert argv == [
+        "datasets",
+        "search",
+        "j1939",
+        "--provider",
+        "catalog",
+        "--limit",
+        "5",
+        "--json",
+    ]
 
 
 def test_build_argv_datasets_replay_plan_forces_dry_run():
     argv = _build_argv(
         "datasets_replay_plan",
-        {"source": "catalog:candid", "format": "jsonl", "file": "2_indicator_CAN.log", "rate": 10.0, "max_frames": 100, "max_seconds": 2.5},
+        {
+            "source": "catalog:candid",
+            "format": "jsonl",
+            "file": "2_indicator_CAN.log",
+            "rate": 10.0,
+            "max_frames": 100,
+            "max_seconds": 2.5,
+        },
     )
     assert argv == [
-        "datasets", "replay", "catalog:candid", "--format", "jsonl", "--file", "2_indicator_CAN.log", "--rate", "10.0",
-        "--max-frames", "100", "--max-seconds", "2.5", "--dry-run", "--json",
+        "datasets",
+        "replay",
+        "catalog:candid",
+        "--format",
+        "jsonl",
+        "--file",
+        "2_indicator_CAN.log",
+        "--rate",
+        "10.0",
+        "--max-frames",
+        "100",
+        "--max-seconds",
+        "2.5",
+        "--dry-run",
+        "--json",
     ]
 
 
 def test_build_argv_datasets_convert():
     argv = _build_argv(
         "datasets_convert",
-        {"file": "sample.csv", "source_format": "hcrl-csv", "format": "jsonl", "output": "sample.jsonl"},
+        {
+            "file": "sample.csv",
+            "source_format": "hcrl-csv",
+            "format": "jsonl",
+            "output": "sample.jsonl",
+        },
     )
     assert argv == [
-        "datasets", "convert", "sample.csv", "--source-format", "hcrl-csv", "--format", "jsonl", "--output", "sample.jsonl", "--json"
+        "datasets",
+        "convert",
+        "sample.csv",
+        "--source-format",
+        "hcrl-csv",
+        "--format",
+        "jsonl",
+        "--output",
+        "sample.jsonl",
+        "--json",
     ]
 
 
@@ -376,14 +516,29 @@ def test_build_argv_datasets_replay_files():
 def test_build_argv_skills_tools():
     assert _build_argv("skills_provider_list", {}) == ["skills", "provider", "list", "--json"]
     assert _build_argv("skills_search", {"query": "j1939", "provider": "github", "limit": 3}) == [
-        "skills", "search", "j1939", "--provider", "github", "--limit", "3", "--json"
+        "skills",
+        "search",
+        "j1939",
+        "--provider",
+        "github",
+        "--limit",
+        "3",
+        "--json",
     ]
     assert _build_argv("skills_fetch", {"ref": "github:j1939_compare_triage"}) == [
-        "skills", "fetch", "github:j1939_compare_triage", "--json"
+        "skills",
+        "fetch",
+        "github:j1939_compare_triage",
+        "--json",
     ]
     assert _build_argv("skills_cache_list", {}) == ["skills", "cache", "list", "--json"]
     assert _build_argv("skills_cache_refresh", {"provider": "github"}) == [
-        "skills", "cache", "refresh", "--provider", "github", "--json"
+        "skills",
+        "cache",
+        "refresh",
+        "--provider",
+        "github",
+        "--json",
     ]
 
 
@@ -394,12 +549,14 @@ def test_build_argv_re_signals():
 
 # --- TEST-MCP-13: _build_argv raises for unknown tool ---------------------
 
+
 def test_build_argv_unknown_raises():
     with pytest.raises(ValueError, match="Unknown tool"):
         _build_argv("bad_tool", {})
 
 
 # --- end-to-end: j1939_monitor returns structured events ------------------
+
 
 def test_call_tool_j1939_monitor_returns_events():
     results = asyncio.run(handle_call_tool("j1939_monitor", {}))
@@ -410,11 +567,13 @@ def test_call_tool_j1939_monitor_returns_events():
 
 # --- end-to-end: tool names in _TOOL_NAMES set match _TOOLS list ----------
 
+
 def test_tool_names_set_matches_tools_list():
     assert _TOOL_NAMES == {tool.name for tool in _TOOLS}
 
 
 # --- TEST-MCP-15: handle_call_tool does not block the event loop -----------
+
 
 def test_handle_call_tool_is_nonblocking():
     """execute_command must run in a thread so the event loop stays alive."""
@@ -436,6 +595,7 @@ def test_handle_call_tool_is_nonblocking():
 
 
 # --- TEST-MCP-16: _build_argv threads max_frames and seconds through -------
+
 
 def test_build_argv_j1939_summary_max_frames():
     argv = _build_argv("j1939_summary", {"file": "big.log", "max_frames": 5000})
@@ -484,18 +644,45 @@ def test_build_argv_j1939_tp_max_frames():
 
 
 def test_build_argv_j1939_tp_seconds_and_offset():
-    argv = _build_argv("j1939_tp", {"file": "big.log", "pgn": 65226, "sa": "0x80,129", "offset": 12, "seconds": 10.0})
+    argv = _build_argv(
+        "j1939_tp",
+        {"file": "big.log", "pgn": 65226, "sa": "0x80,129", "offset": 12, "seconds": 10.0},
+    )
     assert argv == [
-        "j1939", "tp", "sessions", "--file", "big.log", "--pgn", "65226", "--sa", "0x80,129",
-        "--offset", "12", "--seconds", "10.0", "--json",
+        "j1939",
+        "tp",
+        "sessions",
+        "--file",
+        "big.log",
+        "--pgn",
+        "65226",
+        "--sa",
+        "0x80,129",
+        "--offset",
+        "12",
+        "--seconds",
+        "10.0",
+        "--json",
     ]
 
 
 def test_build_argv_j1939_tp_compare():
-    argv = _build_argv("j1939_tp_compare", {"file": "big.log", "sa": "0x80,0x81", "pgn": 65226, "max_frames": 1000})
+    argv = _build_argv(
+        "j1939_tp_compare", {"file": "big.log", "sa": "0x80,0x81", "pgn": 65226, "max_frames": 1000}
+    )
     assert argv == [
-        "j1939", "tp", "compare", "--file", "big.log", "--sa", "0x80,0x81", "--pgn", "65226",
-        "--max-frames", "1000", "--json",
+        "j1939",
+        "tp",
+        "compare",
+        "--file",
+        "big.log",
+        "--sa",
+        "0x80,0x81",
+        "--pgn",
+        "65226",
+        "--max-frames",
+        "1000",
+        "--json",
     ]
 
 
@@ -514,11 +701,20 @@ def test_build_argv_j1939_summary_no_limits():
 
 # --- TEST-MCP-17: file-based J1939 tool schemas expose max_frames/seconds --
 
+
 def test_j1939_tool_schemas_have_frame_limit_params():
     tools_by_name = {t.name: t for t in asyncio.run(handle_list_tools())}
     file_tools = [
-        "j1939_decode", "j1939_pgn", "j1939_spn", "j1939_tp", "j1939_tp_compare",
-        "j1939_dm1", "j1939_faults", "j1939_summary", "j1939_inventory", "j1939_compare",
+        "j1939_decode",
+        "j1939_pgn",
+        "j1939_spn",
+        "j1939_tp",
+        "j1939_tp_compare",
+        "j1939_dm1",
+        "j1939_faults",
+        "j1939_summary",
+        "j1939_inventory",
+        "j1939_compare",
     ]
     for tool_name in file_tools:
         schema = tools_by_name[tool_name].inputSchema
@@ -528,6 +724,7 @@ def test_j1939_tool_schemas_have_frame_limit_params():
 
 
 # --- TEST-MCP-18: run_server handles signals without traceback --------------
+
 
 def test_run_server_handles_sigint():
     """run_server should exit cleanly on SIGINT without traceback."""

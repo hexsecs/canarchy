@@ -17,7 +17,6 @@ from unittest.mock import patch
 
 from canarchy.models import CanFrame, UdsTransactionEvent
 from canarchy.transport import (
-    FAST_SCAN_THRESHOLD_BYTES,
     LocalTransport,
     PythonCanBackend,
     ScaffoldCanBackend,
@@ -36,10 +35,15 @@ from canarchy.transport import (
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _capture_one_frame_subprocess(channel: str, interface_type: str, out: multiprocessing.Queue) -> None:
+def _capture_one_frame_subprocess(
+    channel: str, interface_type: str, out: multiprocessing.Queue
+) -> None:
     """Receive one frame in a subprocess and report whether it arrived."""
     import can  # type: ignore[import-untyped]
-    bus = can.Bus(channel=channel, interface=interface_type, receive_own_messages=interface_type == "virtual")
+
+    bus = can.Bus(
+        channel=channel, interface=interface_type, receive_own_messages=interface_type == "virtual"
+    )
     try:
         msg = bus.recv(timeout=1.0)
         out.put(msg is not None)
@@ -101,7 +105,9 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(frames[2].interface, "can1")
 
     def test_load_candump_file_streams_without_read_text(self) -> None:
-        with patch.object(Path, "read_text", side_effect=AssertionError("read_text should not be used")):
+        with patch.object(
+            Path, "read_text", side_effect=AssertionError("read_text should not be used")
+        ):
             frames = load_candump_file(FIXTURES / "sample.candump")
 
         self.assertEqual(len(frames), 3)
@@ -143,7 +149,9 @@ class TransportBackendTests(unittest.TestCase):
                 Path(f.name).unlink()
 
     def test_iter_candump_file_respects_offset_and_max_frames(self) -> None:
-        frames = list(iter_candump_file(FIXTURES / "j1939_heavy_vehicle.candump", offset=2, max_frames=2))
+        frames = list(
+            iter_candump_file(FIXTURES / "j1939_heavy_vehicle.candump", offset=2, max_frames=2)
+        )
 
         self.assertEqual(len(frames), 2)
         self.assertEqual(frames[0].timestamp, 0.2)
@@ -266,7 +274,9 @@ class TransportBackendTests(unittest.TestCase):
             config_dir.mkdir()
             (config_dir / "config.toml").write_text('[transport]\nbackend = "python-can"\n')
             with patch("pathlib.Path.home", return_value=Path(tmp)):
-                with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "scaffold"}, clear=False):
+                with patch.dict(
+                    os.environ, {"CANARCHY_TRANSPORT_BACKEND": "scaffold"}, clear=False
+                ):
                     config = transport_backend_config()
 
         self.assertEqual(config.backend, "scaffold")
@@ -281,8 +291,11 @@ class TransportBackendTests(unittest.TestCase):
             (config_dir / "config.toml").write_text(
                 '[transport]\nbackend = "python-can"\ninterface = "udp_multicast"\n'
             )
-            env = {k: v for k, v in os.environ.items()
-                   if k not in {"CANARCHY_TRANSPORT_BACKEND", "CANARCHY_PYTHON_CAN_INTERFACE"}}
+            env = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in {"CANARCHY_TRANSPORT_BACKEND", "CANARCHY_PYTHON_CAN_INTERFACE"}
+            }
             with patch("pathlib.Path.home", return_value=Path(tmp)):
                 with patch.dict(os.environ, env, clear=True):
                     config = transport_backend_config()
@@ -417,33 +430,38 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(events[0]["payload"]["service"], 0x10)
         self.assertTrue(events[0]["payload"]["complete"])
 
-    def test_uds_scan_events_with_python_can_backend_send_request_and_capture_responses(self) -> None:
+    def test_uds_scan_events_with_python_can_backend_send_request_and_capture_responses(
+        self,
+    ) -> None:
         transport = LocalTransport(live_backend=PythonCanBackend(bus_interface="virtual"))
 
-        with patch.object(transport, "send") as send_mock, patch.object(
-            transport,
-            "capture",
-            return_value=[
-                CanFrame(
-                    arbitration_id=0x7E8,
-                    data=bytes.fromhex("100A5001003201F4"),
-                    interface="can0",
-                    timestamp=0.1,
-                ),
-                CanFrame(
-                    arbitration_id=0x7DF,
-                    data=bytes.fromhex("3000000000000000"),
-                    interface="can0",
-                    timestamp=0.11,
-                ),
-                CanFrame(
-                    arbitration_id=0x7E8,
-                    data=bytes.fromhex("2100000000000000"),
-                    interface="can0",
-                    timestamp=0.12,
-                ),
-            ],
-        ) as capture_mock:
+        with (
+            patch.object(transport, "send") as send_mock,
+            patch.object(
+                transport,
+                "capture",
+                return_value=[
+                    CanFrame(
+                        arbitration_id=0x7E8,
+                        data=bytes.fromhex("100A5001003201F4"),
+                        interface="can0",
+                        timestamp=0.1,
+                    ),
+                    CanFrame(
+                        arbitration_id=0x7DF,
+                        data=bytes.fromhex("3000000000000000"),
+                        interface="can0",
+                        timestamp=0.11,
+                    ),
+                    CanFrame(
+                        arbitration_id=0x7E8,
+                        data=bytes.fromhex("2100000000000000"),
+                        interface="can0",
+                        timestamp=0.12,
+                    ),
+                ],
+            ) as capture_mock,
+        ):
             events = transport.uds_scan_events("can0")
 
         send_mock.assert_called_once()
@@ -552,11 +570,14 @@ class TransportBackendTests(unittest.TestCase):
         channel = f"canarchy-test-{uuid.uuid4().hex}"
         result: multiprocessing.Queue = multiprocessing.Queue()
 
-        p = multiprocessing.Process(target=_capture_one_frame_subprocess, args=(channel, "virtual", result))
+        p = multiprocessing.Process(
+            target=_capture_one_frame_subprocess, args=(channel, "virtual", result)
+        )
         p.start()
         time.sleep(0.1)
 
         import can  # type: ignore[import-untyped]
+
         send_bus = can.Bus(channel=channel, interface="virtual", receive_own_messages=True)
         send_bus.send(can.Message(arbitration_id=0x123, data=b"\x11\x22", is_extended_id=False))
         send_bus.shutdown()
@@ -581,18 +602,23 @@ class TransportBackendTests(unittest.TestCase):
         Skipped automatically when multicast routing is unavailable (e.g. no network interface
         with a multicast route — common on macOS without `sudo route add -net 239.0.0.0/8 lo0`).
         """
-        import socket
         channel = "239.0.0.1"
 
         # Probe multicast round-trip capability before spawning processes.
         # Simply opening a socket succeeds even without a multicast route, so we do
         # an actual send+recv loop-back probe with a short timeout instead.
         import can as _can
+
         _multicast_ok = False
         try:
-            _probe_rx = _can.Bus(channel=channel, interface="udp_multicast", receive_own_messages=True)
-            _probe_tx = _can.Bus(channel=channel, interface="udp_multicast", receive_own_messages=True)
+            _probe_rx = _can.Bus(
+                channel=channel, interface="udp_multicast", receive_own_messages=True
+            )
+            _probe_tx = _can.Bus(
+                channel=channel, interface="udp_multicast", receive_own_messages=True
+            )
             import can as _can2
+
             _probe_tx.send(_can2.Message(arbitration_id=0x7FF, data=b"\x00", is_extended_id=False))
             _got = _probe_rx.recv(timeout=0.25)
             _probe_rx.shutdown()
@@ -601,10 +627,14 @@ class TransportBackendTests(unittest.TestCase):
         except Exception:
             pass
         if not _multicast_ok:
-            self.skipTest("multicast round-trip unavailable on this host — add a route to 239.0.0.0/8 lo0 to enable")
+            self.skipTest(
+                "multicast round-trip unavailable on this host — add a route to 239.0.0.0/8 lo0 to enable"
+            )
 
         result: multiprocessing.Queue = multiprocessing.Queue()
-        p = multiprocessing.Process(target=_capture_one_frame_subprocess, args=(channel, "udp_multicast", result))
+        p = multiprocessing.Process(
+            target=_capture_one_frame_subprocess, args=(channel, "udp_multicast", result)
+        )
         p.start()
         time.sleep(0.15)
 
@@ -696,10 +726,8 @@ class StdinSupportTests(unittest.TestCase):
     """Tests for stdin pipeline support (issue #238)."""
 
     def test_iter_candump_file_reads_from_stdin(self) -> None:
-        import io
-        import sys
         from canarchy.transport import iter_candump_file
-        
+
         # Simulate stdin with sample candump lines
         test_input = "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n"
         old_stdin = sys.stdin
@@ -708,48 +736,46 @@ class StdinSupportTests(unittest.TestCase):
             frames = list(iter_candump_file(None))
         finally:
             sys.stdin = old_stdin
-        
+
         self.assertEqual(len(frames), 2)
         self.assertEqual(frames[0].arbitration_id, 0x123)
         self.assertEqual(frames[1].arbitration_id, 0x456)
 
     def test_iter_candump_file_stdin_respects_offset(self) -> None:
-        import io
-        import sys
         from canarchy.transport import iter_candump_file
-        
-        test_input = "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.200000) can0 789#DDEEFF\n"
+
+        test_input = (
+            "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.200000) can0 789#DDEEFF\n"
+        )
         old_stdin = sys.stdin
         sys.stdin = io.StringIO(test_input)
         try:
             frames = list(iter_candump_file(None, offset=1))
         finally:
             sys.stdin = old_stdin
-        
+
         self.assertEqual(len(frames), 2)
         self.assertEqual(frames[0].arbitration_id, 0x456)
 
     def test_iter_candump_file_stdin_respects_max_frames(self) -> None:
-        import io
-        import sys
         from canarchy.transport import iter_candump_file
-        
-        test_input = "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.200000) can0 789#DDEEFF\n"
+
+        test_input = (
+            "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.200000) can0 789#DDEEFF\n"
+        )
         old_stdin = sys.stdin
         sys.stdin = io.StringIO(test_input)
         try:
             frames = list(iter_candump_file(None, max_frames=1))
         finally:
             sys.stdin = old_stdin
-        
+
         self.assertEqual(len(frames), 1)
 
     def test_capture_info_stdin_returns_metadata(self) -> None:
-        import io
-        import json
         import sys
         from canarchy.cli import main
-        
+
         test_input = "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n"
         old_stdin = sys.stdin
         sys.stdin = io.StringIO(test_input)
@@ -760,7 +786,7 @@ class StdinSupportTests(unittest.TestCase):
                 code = main(["capture-info", "--file", "-", "--json"])
         finally:
             sys.stdin = old_stdin
-        
+
         self.assertEqual(code, 0)
         data = json.loads(stdout.getvalue())
         self.assertTrue(data["ok"])

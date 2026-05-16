@@ -18,39 +18,47 @@ def _frame(arbitration_id: int, data_hex: str, timestamp: float) -> CanFrame:
 
 class UdsIsoTpTests(unittest.TestCase):
     def test_reassemble_uds_pdus_keeps_single_frame_behavior(self) -> None:
-        pdus = reassemble_uds_pdus([
-            _frame(0x7E8, "0450030032000000", 0.1),
-        ])
+        pdus = reassemble_uds_pdus(
+            [
+                _frame(0x7E8, "0450030032000000", 0.1),
+            ]
+        )
 
         self.assertEqual(len(pdus), 1)
         self.assertTrue(pdus[0].complete)
         self.assertEqual(pdus[0].payload, bytes.fromhex("50030032"))
 
     def test_reassemble_uds_pdus_reassembles_first_and_consecutive_frames(self) -> None:
-        pdus = reassemble_uds_pdus([
-            _frame(0x7E8, "100A670112345678", 0.1),
-            _frame(0x7E0, "3000000000000000", 0.11),
-            _frame(0x7E8, "219ABCDEF0000000", 0.12),
-        ])
+        pdus = reassemble_uds_pdus(
+            [
+                _frame(0x7E8, "100A670112345678", 0.1),
+                _frame(0x7E0, "3000000000000000", 0.11),
+                _frame(0x7E8, "219ABCDEF0000000", 0.12),
+            ]
+        )
 
         self.assertEqual(len(pdus), 1)
         self.assertTrue(pdus[0].complete)
         self.assertEqual(pdus[0].payload, bytes.fromhex("6701123456789ABCDEF0"))
 
     def test_reassemble_uds_pdus_marks_missing_consecutive_frame_incomplete(self) -> None:
-        pdus = reassemble_uds_pdus([
-            _frame(0x7E8, "100A62F19056494E", 0.1),
-        ])
+        pdus = reassemble_uds_pdus(
+            [
+                _frame(0x7E8, "100A62F19056494E", 0.1),
+            ]
+        )
 
         self.assertEqual(len(pdus), 1)
         self.assertFalse(pdus[0].complete)
         self.assertEqual(pdus[0].payload, bytes.fromhex("62F19056494E"))
 
     def test_reassemble_uds_pdus_marks_out_of_order_consecutive_frame_incomplete(self) -> None:
-        pdus = reassemble_uds_pdus([
-            _frame(0x7E8, "100A62F19056494E", 0.1),
-            _frame(0x7E8, "229ABCDEF0000000", 0.12),
-        ])
+        pdus = reassemble_uds_pdus(
+            [
+                _frame(0x7E8, "100A62F19056494E", 0.1),
+                _frame(0x7E8, "229ABCDEF0000000", 0.12),
+            ]
+        )
 
         self.assertEqual(len(pdus), 1)
         self.assertFalse(pdus[0].complete)
@@ -93,7 +101,9 @@ class UdsIsoTpTests(unittest.TestCase):
             {"summary": "UDS / PositiveResponse DiagnosticSessionControl"},
         ],
     )
-    def test_uds_trace_transactions_include_optional_scapy_summaries(self, _inspect_mock, _decoder_mock) -> None:
+    def test_uds_trace_transactions_include_optional_scapy_summaries(
+        self, _inspect_mock, _decoder_mock
+    ) -> None:
         events = uds_trace_transactions(
             [
                 _frame(0x7E0, "0210030000000000", 0.0),
@@ -105,7 +115,9 @@ class UdsIsoTpTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].decoder, "scapy")
         self.assertEqual(events[0].request_summary, "UDS / DiagnosticSessionControl")
-        self.assertEqual(events[0].response_summary, "UDS / PositiveResponse DiagnosticSessionControl")
+        self.assertEqual(
+            events[0].response_summary, "UDS / PositiveResponse DiagnosticSessionControl"
+        )
 
     def test_uds_trace_transactions_name_negative_response_codes(self) -> None:
         events = uds_trace_transactions(

@@ -17,6 +17,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+* Cleared the `ruff check` and `ruff format` backlog: applied the auto-fixable rules (24 unused imports, 4 redundant f-string prefixes, plus 5 trivial others), renamed 13 ambiguous `l` loop variables to `line` in test files, removed two dead local variables in `src/canarchy/cli.py` (`tp_sessions` in `_j1939_compare_capture` and `command_label` in the RE match-DBC handler), removed a dead earlier definition of `format_dbc_table` shadowed by the richer redefinition, fixed a buggy `test_j1939_dm1_returns_rts_cts_transport_message` whose body asserted TP session structure instead of DM1 messages and was already silently overridden by a correct later redefinition, dropped three other accidentally-duplicated test methods, and reformatted the 34 files that were out of `ruff format` compliance. Closes #335.
 * Renamed the canonical human-readable output flag from `--table` to `--text`; `--table` remains accepted as a compatibility alias. Closes #286.
 * Removed the generic `--raw` output mode from the shared command surface; use `--text`, `--json`, `--jsonl`, or command-specific frame-line options such as `--candump` instead. Closes #288.
 

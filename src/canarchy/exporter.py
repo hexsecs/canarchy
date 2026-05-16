@@ -36,7 +36,9 @@ def export_artifact(source: str, destination: str) -> dict[str, Any]:
     try:
         destination_path.parent.mkdir(parents=True, exist_ok=True)
         if export_format == ".json":
-            destination_path.write_text(json.dumps(artifact, sort_keys=True) + "\n", encoding="utf-8")
+            destination_path.write_text(
+                json.dumps(artifact, sort_keys=True) + "\n", encoding="utf-8"
+            )
         else:
             events = artifact["data"].get("events")
             if events is None:
@@ -46,7 +48,9 @@ def export_artifact(source: str, destination: str) -> dict[str, Any]:
                     hint="Export this source to a .json artifact instead of .jsonl.",
                 )
             lines = [json.dumps(event, sort_keys=True) for event in events]
-            destination_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+            destination_path.write_text(
+                "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"
+            )
     except ExportError:
         raise
     except OSError as exc:
