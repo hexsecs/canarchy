@@ -25,11 +25,11 @@ class DatasetDescriptor:
     version: str | None
     source_url: str
     license: str
-    protocol_family: str            # "can", "can_fd", "j1939", "j1708"
-    formats: tuple[str, ...]        # source file formats: "csv", "pcap", "msgpack", etc.
-    size_description: str           # human-readable: "3.5 GB", "unknown"
+    protocol_family: str  # "can", "can_fd", "j1939", "j1708"
+    formats: tuple[str, ...]  # source file formats: "csv", "pcap", "msgpack", etc.
+    size_description: str  # human-readable: "3.5 GB", "unknown"
     description: str
-    access_notes: str | None        # registration/form requirements, if any
+    access_notes: str | None  # registration/form requirements, if any
     conversion_targets: tuple[str, ...]  # "candump", "jsonl"
     metadata: dict = field(default_factory=dict)
 
@@ -41,7 +41,7 @@ class DatasetResolution:
     descriptor: DatasetDescriptor
     cache_path: Path
     is_cached: bool
-    provenance: dict                # sha, fetched_at, source_url, provider
+    provenance: dict  # sha, fetched_at, source_url, provider
 
 
 @runtime_checkable

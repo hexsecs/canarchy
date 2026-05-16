@@ -12,7 +12,9 @@ import sys
 from pathlib import Path
 
 
-def generate_j1939_frame(timestamp: float, interface: str, pgn: int, sa: int, da: int, data: bytes) -> str:
+def generate_j1939_frame(
+    timestamp: float, interface: str, pgn: int, sa: int, da: int, data: bytes
+) -> str:
     priority = random.choice([0, 3, 6, 7])
     pgn_data = pgn << 8
     id_val = (priority << 26) | (pgn_data) | (da << 8) | sa
@@ -22,7 +24,9 @@ def generate_j1939_frame(timestamp: float, interface: str, pgn: int, sa: int, da
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate synthetic J1939 candump benchmark fixture")
+    parser = argparse.ArgumentParser(
+        description="Generate synthetic J1939 candump benchmark fixture"
+    )
     parser.add_argument("--count", type=int, default=10000, help="Number of frames to generate")
     parser.add_argument("--output", type=str, required=True, help="Output file path")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")

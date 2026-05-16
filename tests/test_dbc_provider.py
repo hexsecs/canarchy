@@ -226,13 +226,16 @@ class CacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
             with patch("canarchy.dbc_cache._CACHE_ROOT", cache_root):
-                save_manifest("opendbc", {
-                    "provider": "opendbc",
-                    "repo": "commaai/opendbc",
-                    "commit": "abc123def456",
-                    "generated_at": "2026-04-19T00:00:00Z",
-                    "dbcs": [{"name": "foo", "path": "opendbc/dbc/foo.dbc", "sha256": ""}],
-                })
+                save_manifest(
+                    "opendbc",
+                    {
+                        "provider": "opendbc",
+                        "repo": "commaai/opendbc",
+                        "commit": "abc123def456",
+                        "generated_at": "2026-04-19T00:00:00Z",
+                        "dbcs": [{"name": "foo", "path": "opendbc/dbc/foo.dbc", "sha256": ""}],
+                    },
+                )
                 entries = cache_list()
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["provider"], "opendbc")
@@ -244,13 +247,16 @@ class CacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
             with patch("canarchy.dbc_cache._CACHE_ROOT", cache_root):
-                save_manifest("opendbc", {
-                    "provider": "opendbc",
-                    "repo": "commaai/opendbc",
-                    "commit": "new123",
-                    "generated_at": "2026-04-19T00:00:00Z",
-                    "dbcs": [],
-                })
+                save_manifest(
+                    "opendbc",
+                    {
+                        "provider": "opendbc",
+                        "repo": "commaai/opendbc",
+                        "commit": "new123",
+                        "generated_at": "2026-04-19T00:00:00Z",
+                        "dbcs": [],
+                    },
+                )
                 stale_dir = cache_root / "providers" / "opendbc" / "files" / "old456"
                 stale_dir.mkdir(parents=True)
                 (stale_dir / "foo.dbc").write_text("")
@@ -274,8 +280,16 @@ class OpenDbcProviderTests(unittest.TestCase):
             "commit": commit,
             "generated_at": "2026-04-19T00:00:00Z",
             "dbcs": [
-                {"name": "toyota_tnga_k_pt_generated", "path": "opendbc/dbc/toyota_tnga_k_pt_generated.dbc", "sha": "sha1"},
-                {"name": "honda_civic_ex_2022", "path": "opendbc/dbc/honda_civic_ex_2022.dbc", "sha": "sha2"},
+                {
+                    "name": "toyota_tnga_k_pt_generated",
+                    "path": "opendbc/dbc/toyota_tnga_k_pt_generated.dbc",
+                    "sha": "sha1",
+                },
+                {
+                    "name": "honda_civic_ex_2022",
+                    "path": "opendbc/dbc/honda_civic_ex_2022.dbc",
+                    "sha": "sha2",
+                },
             ],
         }
 
@@ -283,9 +297,19 @@ class OpenDbcProviderTests(unittest.TestCase):
         from canarchy.dbc_opendbc import OpenDbcProvider
 
         with patch("canarchy.dbc_cache.load_manifest", return_value=self._make_manifest()):
-            with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": False}}
-            }):
+            with patch(
+                "canarchy.dbc_cache.load_dbc_config",
+                return_value={
+                    "providers": {
+                        "opendbc": {
+                            "enabled": True,
+                            "repo": "commaai/opendbc",
+                            "ref": "master",
+                            "auto_refresh": False,
+                        }
+                    }
+                },
+            ):
                 provider = OpenDbcProvider()
                 results = provider.search("toyota")
 
@@ -297,9 +321,19 @@ class OpenDbcProviderTests(unittest.TestCase):
         from canarchy.dbc_opendbc import OpenDbcProvider
 
         with patch("canarchy.dbc_cache.load_manifest", return_value=None):
-            with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": False}}
-            }):
+            with patch(
+                "canarchy.dbc_cache.load_dbc_config",
+                return_value={
+                    "providers": {
+                        "opendbc": {
+                            "enabled": True,
+                            "repo": "commaai/opendbc",
+                            "ref": "master",
+                            "auto_refresh": False,
+                        }
+                    }
+                },
+            ):
                 provider = OpenDbcProvider()
                 results = provider.search("toyota")
 
@@ -311,14 +345,33 @@ class OpenDbcProviderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
             commit = "abc123def456"
-            cached = cache_root / "providers" / "opendbc" / "files" / commit / "toyota_tnga_k_pt_generated.dbc"
+            cached = (
+                cache_root
+                / "providers"
+                / "opendbc"
+                / "files"
+                / commit
+                / "toyota_tnga_k_pt_generated.dbc"
+            )
             cached.parent.mkdir(parents=True)
             cached.write_text("")
 
-            with patch("canarchy.dbc_cache.load_manifest", return_value=self._make_manifest(commit)):
-            	with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                    "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": False}}
-                }):
+            with patch(
+                "canarchy.dbc_cache.load_manifest", return_value=self._make_manifest(commit)
+            ):
+                with patch(
+                    "canarchy.dbc_cache.load_dbc_config",
+                    return_value={
+                        "providers": {
+                            "opendbc": {
+                                "enabled": True,
+                                "repo": "commaai/opendbc",
+                                "ref": "master",
+                                "auto_refresh": False,
+                            }
+                        }
+                    },
+                ):
                     with patch("canarchy.dbc_cache.cached_file_path", return_value=cached):
                         provider = OpenDbcProvider()
                         resolution = provider.resolve("toyota_tnga_k_pt_generated")
@@ -331,9 +384,19 @@ class OpenDbcProviderTests(unittest.TestCase):
         from canarchy.dbc_opendbc import OpenDbcProvider
 
         with patch("canarchy.dbc_cache.load_manifest", return_value=self._make_manifest()):
-            with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": False}}
-            }):
+            with patch(
+                "canarchy.dbc_cache.load_dbc_config",
+                return_value={
+                    "providers": {
+                        "opendbc": {
+                            "enabled": True,
+                            "repo": "commaai/opendbc",
+                            "ref": "master",
+                            "auto_refresh": False,
+                        }
+                    }
+                },
+            ):
                 provider = OpenDbcProvider()
                 with self.assertRaises(DbcError) as ctx:
                     provider.resolve("does_not_exist")
@@ -344,9 +407,19 @@ class OpenDbcProviderTests(unittest.TestCase):
         from canarchy.dbc_opendbc import OpenDbcProvider
 
         with patch("canarchy.dbc_cache.load_manifest", return_value=None):
-            with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": False}}
-            }):
+            with patch(
+                "canarchy.dbc_cache.load_dbc_config",
+                return_value={
+                    "providers": {
+                        "opendbc": {
+                            "enabled": True,
+                            "repo": "commaai/opendbc",
+                            "ref": "master",
+                            "auto_refresh": False,
+                        }
+                    }
+                },
+            ):
                 provider = OpenDbcProvider()
                 with self.assertRaises(DbcError) as ctx:
                     provider.resolve("toyota_tnga_k_pt_generated")
@@ -354,11 +427,11 @@ class OpenDbcProviderTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "DBC_CACHE_MISS")
 
     def test_refresh_saves_manifest(self) -> None:
-        from canarchy.dbc_opendbc import OpenDbcProvider, _github_get
+        from canarchy.dbc_opendbc import OpenDbcProvider
 
         commit = "freshcommit123"
         api_responses = {
-            f"https://api.github.com/repos/commaai/opendbc/commits/master": {"sha": commit},
+            "https://api.github.com/repos/commaai/opendbc/commits/master": {"sha": commit},
             f"https://api.github.com/repos/commaai/opendbc/git/trees/{commit}?recursive=1": {
                 "tree": [
                     {"path": "opendbc/dbc/toyota_tnga_k_pt_generated.dbc", "sha": "s1"},
@@ -378,9 +451,19 @@ class OpenDbcProviderTests(unittest.TestCase):
 
         with patch("canarchy.dbc_opendbc._github_get", side_effect=mock_github_get):
             with patch("canarchy.dbc_cache.save_manifest", side_effect=mock_save_manifest):
-                with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                    "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": False}}
-                }):
+                with patch(
+                    "canarchy.dbc_cache.load_dbc_config",
+                    return_value={
+                        "providers": {
+                            "opendbc": {
+                                "enabled": True,
+                                "repo": "commaai/opendbc",
+                                "ref": "master",
+                                "auto_refresh": False,
+                            }
+                        }
+                    },
+                ):
                     provider = OpenDbcProvider()
                     descriptors = provider.refresh()
 
@@ -396,9 +479,19 @@ class OpenDbcProviderTests(unittest.TestCase):
         from canarchy.dbc_opendbc import OpenDbcProvider
 
         with patch("canarchy.dbc_cache.load_manifest", return_value=None):
-            with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": False}}
-            }):
+            with patch(
+                "canarchy.dbc_cache.load_dbc_config",
+                return_value={
+                    "providers": {
+                        "opendbc": {
+                            "enabled": True,
+                            "repo": "commaai/opendbc",
+                            "ref": "master",
+                            "auto_refresh": False,
+                        }
+                    }
+                },
+            ):
                 provider = OpenDbcProvider()
                 with self.assertRaises(DbcError) as ctx:
                     provider.resolve("toyota_tnga_k_pt_generated")
@@ -427,14 +520,31 @@ class OpenDbcProviderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
-            cached = cache_root / "providers" / "opendbc" / "files" / commit / "toyota_tnga_k_pt_generated.dbc"
+            cached = (
+                cache_root
+                / "providers"
+                / "opendbc"
+                / "files"
+                / commit
+                / "toyota_tnga_k_pt_generated.dbc"
+            )
             cached.parent.mkdir(parents=True)
             cached.write_text("")
 
             with patch("canarchy.dbc_cache.load_manifest", side_effect=load_manifest_side_effect):
-                with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                    "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": True}}
-                }):
+                with patch(
+                    "canarchy.dbc_cache.load_dbc_config",
+                    return_value={
+                        "providers": {
+                            "opendbc": {
+                                "enabled": True,
+                                "repo": "commaai/opendbc",
+                                "ref": "master",
+                                "auto_refresh": True,
+                            }
+                        }
+                    },
+                ):
                     with patch("canarchy.dbc_cache.cached_file_path", return_value=cached):
                         with patch.object(OpenDbcProvider, "refresh") as mock_refresh:
                             mock_refresh.return_value = []
@@ -450,14 +560,28 @@ class OpenDbcProviderTests(unittest.TestCase):
         from canarchy.dbc_opendbc import OpenDbcProvider
 
         with patch("canarchy.dbc_cache.load_manifest", return_value=None):
-            with patch("canarchy.dbc_cache.load_dbc_config", return_value={
-                "providers": {"opendbc": {"enabled": True, "repo": "commaai/opendbc", "ref": "master", "auto_refresh": True}}
-            }):
-                with patch.object(OpenDbcProvider, "refresh", side_effect=DbcError(
-                    code="DBC_PROVIDER_NOT_FOUND",
-                    message="Failed to resolve opendbc ref 'master'.",
-                    hint="Check your network connection.",
-                )):
+            with patch(
+                "canarchy.dbc_cache.load_dbc_config",
+                return_value={
+                    "providers": {
+                        "opendbc": {
+                            "enabled": True,
+                            "repo": "commaai/opendbc",
+                            "ref": "master",
+                            "auto_refresh": True,
+                        }
+                    }
+                },
+            ):
+                with patch.object(
+                    OpenDbcProvider,
+                    "refresh",
+                    side_effect=DbcError(
+                        code="DBC_PROVIDER_NOT_FOUND",
+                        message="Failed to resolve opendbc ref 'master'.",
+                        hint="Check your network connection.",
+                    ),
+                ):
                     provider = OpenDbcProvider()
                     with self.assertRaises(DbcError) as ctx:
                         provider.resolve("toyota_tnga_k_pt_generated")
@@ -535,7 +659,9 @@ class CliProviderCommandTests(unittest.TestCase):
             mock_build.return_value = registry
 
             reset_registry()
-            exit_code, stdout, _ = run_cli("dbc", "search", "toyota", "--provider", "opendbc", "--json")
+            exit_code, stdout, _ = run_cli(
+                "dbc", "search", "toyota", "--provider", "opendbc", "--json"
+            )
 
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -551,7 +677,9 @@ class CliProviderCommandTests(unittest.TestCase):
             mock_build.return_value = registry
 
             reset_registry()
-            exit_code, stdout, _ = run_cli("dbc", "fetch", "opendbc:toyota_tnga_k_pt_generated", "--json")
+            exit_code, stdout, _ = run_cli(
+                "dbc", "fetch", "opendbc:toyota_tnga_k_pt_generated", "--json"
+            )
 
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -559,9 +687,19 @@ class CliProviderCommandTests(unittest.TestCase):
         self.assertTrue(payload["data"]["is_cached"])
 
     def test_dbc_cache_list_returns_entries(self) -> None:
-        with patch("canarchy.dbc_cache.cache_list", return_value=[
-            {"provider": "opendbc", "commit": "abc123", "dbc_count": 42, "repo": "commaai/opendbc", "generated_at": "2026-04-19", "cache_dir": "/tmp/foo"}
-        ]):
+        with patch(
+            "canarchy.dbc_cache.cache_list",
+            return_value=[
+                {
+                    "provider": "opendbc",
+                    "commit": "abc123",
+                    "dbc_count": 42,
+                    "repo": "commaai/opendbc",
+                    "generated_at": "2026-04-19",
+                    "cache_dir": "/tmp/foo",
+                }
+            ],
+        ):
             exit_code, stdout, _ = run_cli("dbc", "cache", "list", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -583,7 +721,9 @@ class CliProviderCommandTests(unittest.TestCase):
             mock_build.return_value = registry
 
             reset_registry()
-            exit_code, stdout, _ = run_cli("dbc", "cache", "refresh", "--provider", "opendbc", "--json")
+            exit_code, stdout, _ = run_cli(
+                "dbc", "cache", "refresh", "--provider", "opendbc", "--json"
+            )
 
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -591,7 +731,9 @@ class CliProviderCommandTests(unittest.TestCase):
         self.assertEqual(payload["data"]["dbc_count"], 1)
 
     def test_dbc_cache_refresh_unknown_provider_returns_error(self) -> None:
-        exit_code, stdout, _ = run_cli("dbc", "cache", "refresh", "--provider", "unknown_provider", "--json")
+        exit_code, stdout, _ = run_cli(
+            "dbc", "cache", "refresh", "--provider", "unknown_provider", "--json"
+        )
         self.assertEqual(exit_code, EXIT_DECODE_ERROR)
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "DBC_PROVIDER_NOT_FOUND")

@@ -9,7 +9,12 @@ from unittest.mock import MagicMock, patch
 
 from canarchy.cli import EXIT_DECODE_ERROR, EXIT_OK, main
 from canarchy.skills import SkillError
-from canarchy.skills_provider import ProviderRegistry, SkillDescriptor, SkillResolution, parse_provider_ref, reset_registry
+from canarchy.skills_provider import (
+    SkillDescriptor,
+    SkillResolution,
+    parse_provider_ref,
+    reset_registry,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "skills"
@@ -54,13 +59,16 @@ class SkillsCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
             with patch("canarchy.skills_cache._CACHE_ROOT", cache_root):
-                save_manifest("github", {
-                    "provider": "github",
-                    "repo": "hexsecs/canarchy-skills",
-                    "commit": "abc123def456",
-                    "generated_at": "2026-04-26T00:00:00Z",
-                    "skills": [{"name": "j1939_compare_triage"}],
-                })
+                save_manifest(
+                    "github",
+                    {
+                        "provider": "github",
+                        "repo": "hexsecs/canarchy-skills",
+                        "commit": "abc123def456",
+                        "generated_at": "2026-04-26T00:00:00Z",
+                        "skills": [{"name": "j1939_compare_triage"}],
+                    },
+                )
                 entries = cache_list()
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["provider"], "github")
@@ -77,23 +85,35 @@ class GitHubSkillProviderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
-            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
-                "canarchy.skills_github._resolve_commit", return_value="abc123def4567890"
-            ), patch(
-                "canarchy.skills_github._list_skill_manifests",
-                return_value=[
-                    "skills/j1939_compare_triage.skill.yaml",
-                    "skills/uds_trace_minimal.skill.yaml",
-                ],
-            ), patch(
-                "canarchy.skills_github._download_text",
-                side_effect=[
-                    self._manifest_text("j1939_compare_triage"),
-                    self._manifest_text("uds_trace_minimal"),
-                ],
-            ), patch(
-                "canarchy.skills_cache.load_skills_config",
-                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
+            with (
+                patch("canarchy.skills_cache._CACHE_ROOT", cache_root),
+                patch("canarchy.skills_github._resolve_commit", return_value="abc123def4567890"),
+                patch(
+                    "canarchy.skills_github._list_skill_manifests",
+                    return_value=[
+                        "skills/j1939_compare_triage.skill.yaml",
+                        "skills/uds_trace_minimal.skill.yaml",
+                    ],
+                ),
+                patch(
+                    "canarchy.skills_github._download_text",
+                    side_effect=[
+                        self._manifest_text("j1939_compare_triage"),
+                        self._manifest_text("uds_trace_minimal"),
+                    ],
+                ),
+                patch(
+                    "canarchy.skills_cache.load_skills_config",
+                    return_value={
+                        "providers": {
+                            "github": {
+                                "repo": "hexsecs/canarchy-skills",
+                                "ref": "main",
+                                "auto_refresh": False,
+                            }
+                        }
+                    },
+                ),
             ):
                 provider = GitHubSkillProvider()
                 descriptors = provider.refresh()
@@ -107,33 +127,49 @@ class GitHubSkillProviderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
-            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
-                "canarchy.skills_cache.load_skills_config",
-                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
+            with (
+                patch("canarchy.skills_cache._CACHE_ROOT", cache_root),
+                patch(
+                    "canarchy.skills_cache.load_skills_config",
+                    return_value={
+                        "providers": {
+                            "github": {
+                                "repo": "hexsecs/canarchy-skills",
+                                "ref": "main",
+                                "auto_refresh": False,
+                            }
+                        }
+                    },
+                ),
             ):
-                save_manifest("github", {
-                    "provider": "github",
-                    "repo": "hexsecs/canarchy-skills",
-                    "commit": "abc123def4567890",
-                    "generated_at": "2026-04-26T00:00:00Z",
-                    "skills": [{
-                        "name": "uds_trace_summary",
-                        "summary": "Summarize traced UDS request and response exchanges.",
-                        "description": "desc",
-                        "tags": ["uds"],
-                        "domains": [],
-                        "capabilities": [],
-                        "publisher": "canarchy-labs",
-                        "provider_kind": "repository",
-                        "source_ref": "github:hexsecs/canarchy-skills",
-                        "revision": "aa83d11",
-                        "manifest_path": "skills/uds_trace_summary/skill.yaml",
-                        "version": None,
-                        "entry_path": "skills/uds_trace_summary/SKILL.md",
-                        "entry_format": "markdown",
-                        "compatibility": {"canarchy": ">=0.5.0"},
-                    }],
-                })
+                save_manifest(
+                    "github",
+                    {
+                        "provider": "github",
+                        "repo": "hexsecs/canarchy-skills",
+                        "commit": "abc123def4567890",
+                        "generated_at": "2026-04-26T00:00:00Z",
+                        "skills": [
+                            {
+                                "name": "uds_trace_summary",
+                                "summary": "Summarize traced UDS request and response exchanges.",
+                                "description": "desc",
+                                "tags": ["uds"],
+                                "domains": [],
+                                "capabilities": [],
+                                "publisher": "canarchy-labs",
+                                "provider_kind": "repository",
+                                "source_ref": "github:hexsecs/canarchy-skills",
+                                "revision": "aa83d11",
+                                "manifest_path": "skills/uds_trace_summary/skill.yaml",
+                                "version": None,
+                                "entry_path": "skills/uds_trace_summary/SKILL.md",
+                                "entry_format": "markdown",
+                                "compatibility": {"canarchy": ">=0.5.0"},
+                            }
+                        ],
+                    },
+                )
 
                 def fake_download(url: str, dest: Path) -> None:
                     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -151,14 +187,29 @@ class GitHubSkillProviderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
-            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
-                "canarchy.skills_cache.load_skills_config",
-                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
-            ), patch("canarchy.skills_github._resolve_commit", return_value="abc123def4567890"), patch(
-                "canarchy.skills_github._list_skill_manifests", return_value=["skills/invalid_missing_entry.skill.yaml"]
-            ), patch(
-                "canarchy.skills_github._download_text",
-                return_value=self._manifest_text("invalid_missing_entry"),
+            with (
+                patch("canarchy.skills_cache._CACHE_ROOT", cache_root),
+                patch(
+                    "canarchy.skills_cache.load_skills_config",
+                    return_value={
+                        "providers": {
+                            "github": {
+                                "repo": "hexsecs/canarchy-skills",
+                                "ref": "main",
+                                "auto_refresh": False,
+                            }
+                        }
+                    },
+                ),
+                patch("canarchy.skills_github._resolve_commit", return_value="abc123def4567890"),
+                patch(
+                    "canarchy.skills_github._list_skill_manifests",
+                    return_value=["skills/invalid_missing_entry.skill.yaml"],
+                ),
+                patch(
+                    "canarchy.skills_github._download_text",
+                    return_value=self._manifest_text("invalid_missing_entry"),
+                ),
             ):
                 provider = GitHubSkillProvider()
                 with self.assertRaises(SkillError) as ctx:
@@ -172,35 +223,53 @@ class GitHubSkillProviderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
-            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
-                "canarchy.skills_cache.load_skills_config",
-                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
+            with (
+                patch("canarchy.skills_cache._CACHE_ROOT", cache_root),
+                patch(
+                    "canarchy.skills_cache.load_skills_config",
+                    return_value={
+                        "providers": {
+                            "github": {
+                                "repo": "hexsecs/canarchy-skills",
+                                "ref": "main",
+                                "auto_refresh": False,
+                            }
+                        }
+                    },
+                ),
             ):
-                save_manifest("github", {
-                    "provider": "github",
-                    "repo": "hexsecs/canarchy-skills",
-                    "commit": "abc123def4567890",
-                    "generated_at": "2026-04-26T00:00:00Z",
-                    "skills": [{
-                        "name": "uds_trace_summary",
-                        "summary": "Summarize traced UDS request and response exchanges.",
-                        "description": "desc",
-                        "tags": ["uds"],
-                        "domains": [],
-                        "capabilities": [],
-                        "publisher": "canarchy-labs",
-                        "provider_kind": "repository",
-                        "source_ref": "github:hexsecs/canarchy-skills",
-                        "revision": "aa83d11",
-                        "manifest_path": "skills/uds_trace_summary/skill.yaml",
-                        "version": None,
-                        "entry_path": "skills/uds_trace_summary/SKILL.md",
-                        "entry_format": "markdown",
-                        "compatibility": {"canarchy": ">=0.5.0"},
-                    }],
-                })
+                save_manifest(
+                    "github",
+                    {
+                        "provider": "github",
+                        "repo": "hexsecs/canarchy-skills",
+                        "commit": "abc123def4567890",
+                        "generated_at": "2026-04-26T00:00:00Z",
+                        "skills": [
+                            {
+                                "name": "uds_trace_summary",
+                                "summary": "Summarize traced UDS request and response exchanges.",
+                                "description": "desc",
+                                "tags": ["uds"],
+                                "domains": [],
+                                "capabilities": [],
+                                "publisher": "canarchy-labs",
+                                "provider_kind": "repository",
+                                "source_ref": "github:hexsecs/canarchy-skills",
+                                "revision": "aa83d11",
+                                "manifest_path": "skills/uds_trace_summary/skill.yaml",
+                                "version": None,
+                                "entry_path": "skills/uds_trace_summary/SKILL.md",
+                                "entry_format": "markdown",
+                                "compatibility": {"canarchy": ">=0.5.0"},
+                            }
+                        ],
+                    },
+                )
 
-                with patch("canarchy.skills_github._download_file", side_effect=RuntimeError("boom")):
+                with patch(
+                    "canarchy.skills_github._download_file", side_effect=RuntimeError("boom")
+                ):
                     provider = GitHubSkillProvider()
                     with self.assertRaises(SkillError) as ctx:
                         provider.resolve("uds_trace_summary")
@@ -212,12 +281,27 @@ class GitHubSkillProviderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
-            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
-                "canarchy.skills_cache.load_skills_config",
-                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
-            ), patch("canarchy.skills_github._resolve_commit", return_value="abc123def4567890"), patch(
-                "canarchy.skills_github._list_skill_manifests", return_value=["skills/uds_trace_minimal.skill.yaml"]
-            ), patch("canarchy.skills_github._download_text", side_effect=RuntimeError("boom")):
+            with (
+                patch("canarchy.skills_cache._CACHE_ROOT", cache_root),
+                patch(
+                    "canarchy.skills_cache.load_skills_config",
+                    return_value={
+                        "providers": {
+                            "github": {
+                                "repo": "hexsecs/canarchy-skills",
+                                "ref": "main",
+                                "auto_refresh": False,
+                            }
+                        }
+                    },
+                ),
+                patch("canarchy.skills_github._resolve_commit", return_value="abc123def4567890"),
+                patch(
+                    "canarchy.skills_github._list_skill_manifests",
+                    return_value=["skills/uds_trace_minimal.skill.yaml"],
+                ),
+                patch("canarchy.skills_github._download_text", side_effect=RuntimeError("boom")),
+            ):
                 provider = GitHubSkillProvider()
                 with self.assertRaises(SkillError) as ctx:
                     provider.refresh()
@@ -230,33 +314,49 @@ class GitHubSkillProviderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_root = Path(tmpdir)
-            with patch("canarchy.skills_cache._CACHE_ROOT", cache_root), patch(
-                "canarchy.skills_cache.load_skills_config",
-                return_value={"providers": {"github": {"repo": "hexsecs/canarchy-skills", "ref": "main", "auto_refresh": False}}},
+            with (
+                patch("canarchy.skills_cache._CACHE_ROOT", cache_root),
+                patch(
+                    "canarchy.skills_cache.load_skills_config",
+                    return_value={
+                        "providers": {
+                            "github": {
+                                "repo": "hexsecs/canarchy-skills",
+                                "ref": "main",
+                                "auto_refresh": False,
+                            }
+                        }
+                    },
+                ),
             ):
-                save_manifest("github", {
-                    "provider": "github",
-                    "repo": "hexsecs/canarchy-skills",
-                    "commit": "abc123def4567890",
-                    "generated_at": "2026-04-26T00:00:00Z",
-                    "skills": [{
-                        "name": "escape_attempt",
-                        "summary": "desc",
-                        "description": "desc",
-                        "tags": ["invalid"],
-                        "domains": [],
-                        "capabilities": [],
-                        "publisher": "canarchy-labs",
-                        "provider_kind": "repository",
-                        "source_ref": "github:hexsecs/canarchy-skills",
-                        "revision": "aa83d11",
-                        "manifest_path": "../outside.skill.yaml",
-                        "version": None,
-                        "entry_path": "../SKILL.md",
-                        "entry_format": "markdown",
-                        "compatibility": {"canarchy": ">=0.5.0"},
-                    }],
-                })
+                save_manifest(
+                    "github",
+                    {
+                        "provider": "github",
+                        "repo": "hexsecs/canarchy-skills",
+                        "commit": "abc123def4567890",
+                        "generated_at": "2026-04-26T00:00:00Z",
+                        "skills": [
+                            {
+                                "name": "escape_attempt",
+                                "summary": "desc",
+                                "description": "desc",
+                                "tags": ["invalid"],
+                                "domains": [],
+                                "capabilities": [],
+                                "publisher": "canarchy-labs",
+                                "provider_kind": "repository",
+                                "source_ref": "github:hexsecs/canarchy-skills",
+                                "revision": "aa83d11",
+                                "manifest_path": "../outside.skill.yaml",
+                                "version": None,
+                                "entry_path": "../SKILL.md",
+                                "entry_format": "markdown",
+                                "compatibility": {"canarchy": ">=0.5.0"},
+                            }
+                        ],
+                    },
+                )
 
                 provider = GitHubSkillProvider()
                 with self.assertRaises(SkillError) as ctx:
@@ -321,7 +421,9 @@ class SkillsCliTests(unittest.TestCase):
         registry = MagicMock()
         registry.resolve.return_value = resolution
         with patch("canarchy.skills_provider.get_registry", return_value=registry):
-            exit_code, stdout, stderr = run_cli("skills", "fetch", "github:uds_trace_summary", "--json")
+            exit_code, stdout, stderr = run_cli(
+                "skills", "fetch", "github:uds_trace_summary", "--json"
+            )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
         self.assertIn('"local_manifest_path": "/tmp/skill.yaml"', stdout)
@@ -332,7 +434,9 @@ class SkillsCliTests(unittest.TestCase):
         registry.get_provider.return_value = None
         registry.list_providers.return_value = [{"name": "github"}]
         with patch("canarchy.skills_provider.get_registry", return_value=registry):
-            exit_code, stdout, stderr = run_cli("skills", "cache", "refresh", "--provider", "missing", "--json")
+            exit_code, stdout, stderr = run_cli(
+                "skills", "cache", "refresh", "--provider", "missing", "--json"
+            )
         self.assertEqual(exit_code, EXIT_DECODE_ERROR)
         self.assertEqual(stderr, "")
         self.assertIn('"code": "SKILL_PROVIDER_NOT_FOUND"', stdout)

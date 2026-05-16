@@ -88,11 +88,7 @@ def cache_prune(provider_name: str | None = None) -> list[str]:
     if not providers_dir.exists():
         return removed
 
-    targets = (
-        [providers_dir / provider_name]
-        if provider_name
-        else list(providers_dir.iterdir())
-    )
+    targets = [providers_dir / provider_name] if provider_name else list(providers_dir.iterdir())
     for provider_dir in targets:
         if not provider_dir.is_dir():
             continue
@@ -108,6 +104,7 @@ def cache_prune(provider_name: str | None = None) -> list[str]:
         for commit_dir in files_dir.iterdir():
             if commit_dir.name != pinned_commit:
                 import shutil
+
                 shutil.rmtree(commit_dir)
                 removed.append(str(commit_dir))
     return removed

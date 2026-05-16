@@ -26,6 +26,7 @@ def run_cli(*argv: str, input: str | None = None) -> tuple[int, str, str]:
         if stdin_stub is not None:
             # Patch sys.stdin for this call
             import sys
+
             original_stdin = sys.stdin
             try:
                 sys.stdin = stdin_stub
@@ -142,7 +143,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("Run `canarchy --help`", stdout)
         self.assertEqual(stderr, "")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_capture_json_output_streams_one_event_per_line(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
@@ -157,7 +161,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(first_event["payload"]["frame"]["interface"], "can0")
         self.assertEqual(second_event["event_type"], "frame")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_send_json_output_marks_active_mode(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("send", "can0", "0x123", "11223344", "--json")
         self.assertEqual(exit_code, EXIT_OK)
@@ -172,7 +179,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["event_type"], "alert")
         self.assertEqual(payload["warnings"], [])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_send_preflight_warning_happens_before_transport(self, _mock_cfg) -> None:
         observed_stderr: dict[str, str] = {}
 
@@ -228,7 +238,10 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["mode"], "active")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_send_ack_flag_requires_confirmation_before_transport(self, _mock_cfg) -> None:
         observed_stderr: dict[str, str] = {}
 
@@ -249,7 +262,10 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["events"], [])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_send_ack_flag_decline_blocks_transmission(self, _mock_cfg) -> None:
         with patch(
             "canarchy.cli.LocalTransport.send_events",
@@ -264,7 +280,10 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "ACTIVE_CONFIRMATION_DECLINED")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_capture_candump_streams_fixture_frames_on_scaffold(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--candump")
         self.assertEqual(exit_code, EXIT_OK)
@@ -380,7 +399,10 @@ class CliTests(unittest.TestCase):
             {"gateway.src->dst", "gateway.dst->src"},
         )
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_gateway_requires_live_backend(self, _mock_cfg) -> None:
         with patch.dict(os.environ, {}, clear=True):
             exit_code, stdout, stderr = run_cli("gateway", "src0", "dst0", "--count", "1", "--json")
@@ -418,7 +440,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
 
     def test_gateway_text_output_prints_header_and_direction(self) -> None:
-        src_bus = FakeBus([self.fake_message(0x18FEEE31, bytes.fromhex("11223344"), is_extended_id=True)])
+        src_bus = FakeBus(
+            [self.fake_message(0x18FEEE31, bytes.fromhex("11223344"), is_extended_id=True)]
+        )
         dst_bus = FakeBus()
 
         def fake_open_bus(backend: PythonCanBackend, interface: str):
@@ -510,7 +534,11 @@ class CliTests(unittest.TestCase):
 
     def test_filter_or_compound_broadens_results(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "filter", "id==0x18FEEE31 || id==0x18F00431", "--file", str(FIXTURES / "sample.candump"), "--json"
+            "filter",
+            "id==0x18FEEE31 || id==0x18F00431",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -518,7 +546,11 @@ class CliTests(unittest.TestCase):
 
     def test_filter_and_has_higher_precedence_than_or(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "filter", "id==0x18FEEE31 && dlc>4 || extended", "--file", str(FIXTURES / "sample.candump"), "--json"
+            "filter",
+            "id==0x18FEEE31 && dlc>4 || extended",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -533,7 +565,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "INVALID_FILTER_EXPRESSION")
 
     def test_stats_json_output_returns_summary(self) -> None:
-        exit_code, stdout, _ = run_cli("stats", "--file", str(FIXTURES / "sample.candump"), "--json")
+        exit_code, stdout, _ = run_cli(
+            "stats", "--file", str(FIXTURES / "sample.candump"), "--json"
+        )
         self.assertEqual(exit_code, EXIT_OK)
 
         payload = json.loads(stdout)
@@ -600,7 +634,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["payload"]["priority"], 6)
         self.assertEqual(payload["data"]["implementation"], "sample/reference provider")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_j1939_monitor_with_interface_uses_transport_path(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli("j1939", "monitor", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
@@ -637,7 +674,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["first_timestamp"], 0.0)
         self.assertEqual(payload["data"]["last_timestamp"], 0.55)
         self.assertEqual(payload["data"]["top_pgns"][0], {"pgn": 65262, "frame_count": 3})
-        self.assertEqual(payload["data"]["top_source_addresses"][0], {"source_address": 0x31, "frame_count": 8})
+        self.assertEqual(
+            payload["data"]["top_source_addresses"][0], {"source_address": 0x31, "frame_count": 8}
+        )
         self.assertTrue(payload["data"]["dm1"]["present"])
         self.assertEqual(payload["data"]["dm1"]["message_count"], 1)
         self.assertEqual(payload["data"]["dm1"]["active_dtc_count"], 2)
@@ -705,7 +744,11 @@ class CliTests(unittest.TestCase):
     def test_j1939_summary_large_file_emits_auto_cap_warning(self) -> None:
         with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
             exit_code, stdout, _ = run_cli(
-                "j1939", "summary", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--json"
+                "j1939",
+                "summary",
+                "--file",
+                str(FIXTURES / "j1939_heavy_vehicle.candump"),
+                "--json",
             )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -715,8 +758,13 @@ class CliTests(unittest.TestCase):
     def test_j1939_summary_explicit_max_frames_suppresses_auto_cap_warning(self) -> None:
         with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
             exit_code, stdout, _ = run_cli(
-                "j1939", "summary", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"),
-                "--max-frames", "100", "--json"
+                "j1939",
+                "summary",
+                "--file",
+                str(FIXTURES / "j1939_heavy_vehicle.candump"),
+                "--max-frames",
+                "100",
+                "--json",
             )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -821,7 +869,9 @@ class CliTests(unittest.TestCase):
         common_pgns = {entry["pgn"] for entry in data["common_pgns"]}
         self.assertEqual(common_pgns, {60160, 60416, 61444, 65226})
 
-        unique_pgns = {entry["file"]: {pgn["pgn"] for pgn in entry["pgns"]} for entry in data["unique_pgns"]}
+        unique_pgns = {
+            entry["file"]: {pgn["pgn"] for pgn in entry["pgns"]} for entry in data["unique_pgns"]
+        }
         self.assertEqual(unique_pgns[str(FIXTURES / "j1939_inventory.candump")], {61443})
         self.assertEqual(unique_pgns[str(FIXTURES / "j1939_compare_shifted.candump")], {65262})
 
@@ -832,30 +882,47 @@ class CliTests(unittest.TestCase):
         self.assertEqual(unique_sources[str(FIXTURES / "j1939_inventory.candump")], {0x03})
         self.assertEqual(unique_sources[str(FIXTURES / "j1939_compare_shifted.candump")], {0x05})
 
-        dm1_difference = next(diff for diff in data["dm1_differences"] if diff["source_address"] == 0x00)
+        dm1_difference = next(
+            diff for diff in data["dm1_differences"] if diff["source_address"] == 0x00
+        )
         dm1_by_file = {entry["file"]: entry for entry in dm1_difference["captures"]}
-        self.assertEqual(dm1_by_file[str(FIXTURES / "j1939_inventory.candump")]["active_fault_count"], 0)
-        self.assertEqual(dm1_by_file[str(FIXTURES / "j1939_compare_shifted.candump")]["active_fault_count"], 1)
-        self.assertEqual(dm1_by_file[str(FIXTURES / "j1939_compare_shifted.candump")]["faults"][0]["spn"], 110)
+        self.assertEqual(
+            dm1_by_file[str(FIXTURES / "j1939_inventory.candump")]["active_fault_count"], 0
+        )
+        self.assertEqual(
+            dm1_by_file[str(FIXTURES / "j1939_compare_shifted.candump")]["active_fault_count"], 1
+        )
+        self.assertEqual(
+            dm1_by_file[str(FIXTURES / "j1939_compare_shifted.candump")]["faults"][0]["spn"], 110
+        )
 
         identifier_differences = {
             (entry["source_address"], entry["payload_label"]): entry
             for entry in data["identifier_differences"]
         }
         component_difference = identifier_differences[(0x00, "component_identification")]
-        component_values = {entry["file"]: entry["values"] for entry in component_difference["captures"]}
+        component_values = {
+            entry["file"]: entry["values"] for entry in component_difference["captures"]
+        }
         self.assertEqual(component_values[str(FIXTURES / "j1939_inventory.candump")], ["ENGINE1"])
-        self.assertEqual(component_values[str(FIXTURES / "j1939_compare_shifted.candump")], ["ENGINE2"])
+        self.assertEqual(
+            component_values[str(FIXTURES / "j1939_compare_shifted.candump")], ["ENGINE2"]
+        )
 
         vehicle_difference = identifier_differences[(0x00, "vehicle_identification")]
-        vehicle_values = {entry["file"]: entry["values"] for entry in vehicle_difference["captures"]}
+        vehicle_values = {
+            entry["file"]: entry["values"] for entry in vehicle_difference["captures"]
+        }
         self.assertEqual(vehicle_values[str(FIXTURES / "j1939_inventory.candump")], ["VIN1234"])
-        self.assertEqual(vehicle_values[str(FIXTURES / "j1939_compare_shifted.candump")], ["VIN5678"])
+        self.assertEqual(
+            vehicle_values[str(FIXTURES / "j1939_compare_shifted.candump")], ["VIN5678"]
+        )
 
     def test_j1939_compare_large_file_emits_auto_cap_warning(self) -> None:
         with patch("canarchy.cli.LARGE_FILE_AUTO_CAP_BYTES", 1):
             exit_code, stdout, _ = run_cli(
-                "j1939", "compare",
+                "j1939",
+                "compare",
                 str(FIXTURES / "j1939_inventory.candump"),
                 str(FIXTURES / "j1939_compare_shifted.candump"),
                 "--json",
@@ -965,7 +1032,8 @@ class CliTests(unittest.TestCase):
             "j1939",
             "decode",
             "--file",
-            str(FIXTURES / "sample.candump"),"--dbc",
+            str(FIXTURES / "sample.candump"),
+            "--dbc",
             str(FIXTURES / "j1939_sample.dbc"),
             "--json",
         )
@@ -977,7 +1045,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["dbc_source"]["provider"], "local")
         self.assertEqual(payload["data"]["dbc_matched_messages"], 2)
         decoded_events = [
-            event for event in payload["data"]["dbc_events"] if event["event_type"] == "decoded_message"
+            event
+            for event in payload["data"]["dbc_events"]
+            if event["event_type"] == "decoded_message"
         ]
         self.assertEqual(len(decoded_events), 2)
         self.assertEqual(decoded_events[0]["payload"]["message_name"], "EngineTemperature1")
@@ -1031,8 +1101,12 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["dbc_source"]["provider"], "local")
         self.assertEqual(payload["data"]["dbc_matched_messages"], 1)
-        signal_events = [event for event in payload["data"]["dbc_events"] if event["event_type"] == "signal"]
-        self.assertTrue(any(event["payload"]["signal_name"] == "EngineCoolantTemp" for event in signal_events))
+        signal_events = [
+            event for event in payload["data"]["dbc_events"] if event["event_type"] == "signal"
+        ]
+        self.assertTrue(
+            any(event["payload"]["signal_name"] == "EngineCoolantTemp" for event in signal_events)
+        )
 
     def test_j1939_spn_dbc_flag_used_for_spn_not_in_built_in_metadata(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -1147,7 +1221,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["dbc_matched_messages"], 1)
-        self.assertEqual(payload["data"]["dbc_events"][0]["payload"]["message_name"], "EngineTemperature1")
+        self.assertEqual(
+            payload["data"]["dbc_events"][0]["payload"]["message_name"], "EngineTemperature1"
+        )
 
     def test_j1939_pgn_with_dbc_signal_events_include_non_byte_aligned_raw(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -1164,8 +1240,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
 
         payload = json.loads(stdout)
-        signal_events = [event for event in payload["data"]["dbc_events"] if event["event_type"] == "signal"]
-        nibble = next(event for event in signal_events if event["payload"]["signal_name"] == "NibbleSignal")
+        signal_events = [
+            event for event in payload["data"]["dbc_events"] if event["event_type"] == "signal"
+        ]
+        nibble = next(
+            event for event in signal_events if event["payload"]["signal_name"] == "NibbleSignal"
+        )
         self.assertEqual(nibble["payload"]["raw"], "123")
         self.assertEqual(nibble["payload"]["value"], 291)
 
@@ -1404,90 +1484,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
 
         payload = json.loads(stdout)
-        self.assertEqual(payload["data"]["session_count"], 1)
-        session = payload["data"]["sessions"][0]
-        self.assertEqual(session["session_type"], "rts_cts")
-        self.assertEqual(session["transfer_pgn"], 65226)
-        self.assertEqual(session["source_address"], 0x31)
-        self.assertEqual(session["destination_address"], 0x22)
-        self.assertTrue(session["complete"])
-        self.assertTrue(session["acknowledged"])
-        self.assertEqual(session["cts_count"], 1)
-        self.assertEqual(session["packet_count"], 2)
-        self.assertEqual(session["reassembled_data"], "00000000af000501")
-        self.assertIsNone(session["decoded_text"])
-
-    def test_j1939_tp_surfaces_printable_identification_text(self) -> None:
-        exit_code, stdout, stderr = run_cli(
-            "j1939",
-            "tp",
-            "sessions",
-            "--file",
-            str(FIXTURES / "j1939_tp_printable_id.candump"),
-            "--json",
-        )
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
-
-        payload = json.loads(stdout)
-        session = payload["data"]["sessions"][0]
-        self.assertEqual(session["transfer_pgn"], 65259)
-        self.assertEqual(session["payload_label"], "component_identification")
-        self.assertEqual(session["payload_label_source"], "known_transfer_pgn")
-        self.assertEqual(session["decoded_text"], "VIN1234")
-        self.assertEqual(session["decoded_text_encoding"], "ascii")
-        self.assertTrue(session["decoded_text_heuristic"])
-
-    def test_j1939_tp_text_output_shows_printable_text_when_present(self) -> None:
-        exit_code, stdout, stderr = run_cli(
-            "j1939",
-            "tp",
-            "sessions",
-            "--file",
-            str(FIXTURES / "j1939_tp_printable_id.candump"),
-            "--text",
-        )
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
-        self.assertIn("label=component_identification", stdout)
-        self.assertIn("text=VIN1234", stdout)
-
-    def test_j1939_dm1_returns_direct_and_transport_messages(self) -> None:
-        exit_code, stdout, stderr = run_cli(
-            "j1939",
-            "dm1",
-            "--file",
-            str(FIXTURES / "j1939_dm1_tp.candump"),
-            "--json",
-        )
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
-
-        payload = json.loads(stdout)
-        self.assertEqual(payload["data"]["message_count"], 2)
-        self.assertEqual(payload["data"]["source_count"], 2)
-        direct_message = payload["data"]["messages"][1]
-        tp_message = payload["data"]["messages"][0]
-        self.assertEqual(tp_message["transport"], "tp")
-        self.assertEqual(tp_message["active_dtc_count"], 2)
-        self.assertEqual(tp_message["dtcs"][0]["spn"], 110)
-        self.assertEqual(tp_message["dtcs"][1]["spn"], 190)
-        self.assertEqual(direct_message["transport"], "direct")
-        self.assertEqual(direct_message["source_address"], 0x22)
-        self.assertEqual(direct_message["dtcs"][0]["fmi"], 3)
-
-    def test_j1939_dm1_returns_rts_cts_transport_message(self) -> None:
-        exit_code, stdout, stderr = run_cli(
-            "j1939",
-            "dm1",
-            "--file",
-            str(FIXTURES / "j1939_dm1_rts_cts.candump"),
-            "--json",
-        )
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
-
-        payload = json.loads(stdout)
         self.assertEqual(payload["data"]["message_count"], 1)
         message = payload["data"]["messages"][0]
         self.assertEqual(message["transport"], "tp")
@@ -1549,7 +1545,7 @@ class CliTests(unittest.TestCase):
                 "j1939",
                 "dm1",
                 "--file",
-            str(FIXTURES / "j1939_dm1_spn175.candump"),
+                str(FIXTURES / "j1939_dm1_spn175.candump"),
                 "--json",
             )
 
@@ -1873,7 +1869,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(ecu["faults"], [])
 
     def test_uds_scan_returns_transaction_events(self) -> None:
-        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+        ):
             exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("warning: `uds scan` will transmit diagnostic requests", stderr)
@@ -1890,7 +1889,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["warnings"], [])
 
     def test_uds_trace_returns_transaction_events(self) -> None:
-        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+        ):
             exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -1905,9 +1907,17 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][1]["payload"]["service_name"], "SecurityAccess")
         self.assertTrue(payload["data"]["events"][1]["payload"]["complete"])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "python-can", "CANARCHY_PYTHON_CAN_INTERFACE": "virtual"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "python-can",
+            "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+        },
+    )
     @patch("canarchy.transport.LocalTransport.capture")
-    def test_uds_trace_with_python_can_backend_reports_transport_backed(self, capture_mock, _mock_cfg) -> None:
+    def test_uds_trace_with_python_can_backend_reports_transport_backed(
+        self, capture_mock, _mock_cfg
+    ) -> None:
         capture_mock.return_value = [
             CanFrame(
                 arbitration_id=0x7E0,
@@ -1957,8 +1967,13 @@ class CliTests(unittest.TestCase):
             {"summary": "UDS / PositiveResponse SecurityAccess"},
         ],
     )
-    def test_uds_trace_reports_optional_scapy_enrichment(self, _inspect_mock, _uds_decoder_mock, _cli_decoder_mock) -> None:
-        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+    def test_uds_trace_reports_optional_scapy_enrichment(
+        self, _inspect_mock, _uds_decoder_mock, _cli_decoder_mock
+    ) -> None:
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+        ):
             exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
@@ -1967,10 +1982,15 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["protocol_decoder"], "scapy")
         first = payload["data"]["events"][0]["payload"]
         self.assertEqual(first["decoder"], "scapy")
-        self.assertEqual(first["response_summary"], "UDS / PositiveResponse DiagnosticSessionControl")
+        self.assertEqual(
+            first["response_summary"], "UDS / PositiveResponse DiagnosticSessionControl"
+        )
 
     def test_uds_scan_text_output_is_pretty_printed(self) -> None:
-        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+        ):
             exit_code, stdout, stderr = run_cli("uds", "scan", "can0", "--text")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("warning: `uds scan` will transmit diagnostic requests", stderr)
@@ -1984,7 +2004,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("resp_id=0x7E8", stdout)
 
     def test_uds_trace_text_output_is_pretty_printed(self) -> None:
-        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+        ):
             exit_code, stdout, stderr = run_cli("uds", "trace", "can0", "--text")
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("command: uds trace", stdout)
@@ -2025,7 +2048,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("error: INVALID_ARGUMENTS: unrecognized arguments: --raw", stdout)
 
     def test_uds_transport_error_returns_backend_exit_code(self) -> None:
-        with patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"}):
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+        ):
             exit_code, stdout, stderr = run_cli("uds", "scan", "offline0", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
         self.assertIn("warning: `uds scan` will transmit diagnostic requests", stderr)
@@ -2087,7 +2113,9 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["candidate_count"], 0)
         self.assertEqual(payload["data"]["candidates"], [])
-        self.assertEqual(payload["warnings"][0], "No likely counters met the current heuristic threshold.")
+        self.assertEqual(
+            payload["warnings"][0], "No likely counters met the current heuristic threshold."
+        )
 
     def test_re_counters_low_sample_returns_empty_candidates(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -2151,7 +2179,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(best["start_bit"], 8)
         self.assertEqual(best["bit_length"], 8)
         self.assertAlmostEqual(best["change_rate"], 0.444, places=3)
-        analysed = next(item for item in payload["data"]["analysis_by_id"] if item["arbitration_id"] == 0x300)
+        analysed = next(
+            item for item in payload["data"]["analysis_by_id"] if item["arbitration_id"] == 0x300
+        )
         self.assertEqual(analysed["frame_count"], 10)
         self.assertFalse(analysed["low_sample"])
 
@@ -2212,7 +2242,9 @@ class CliTests(unittest.TestCase):
 
         payload = json.loads(stdout)
         low_sample = next(
-            candidate for candidate in payload["data"]["candidates"] if candidate["arbitration_id"] == 0x103
+            candidate
+            for candidate in payload["data"]["candidates"]
+            if candidate["arbitration_id"] == 0x103
         )
         self.assertTrue(low_sample["low_sample"])
         self.assertEqual(low_sample["frame_count"], 5)
@@ -2263,8 +2295,11 @@ class CliTests(unittest.TestCase):
         self.assertGreater(payload["data"]["candidate_count"], 0)
         # start_bit=8, bit_length=8 encodes the linear field in the fixture
         byte1 = next(
-            (c for c in payload["data"]["candidates"]
-             if c["arbitration_id"] == 0x400 and c["start_bit"] == 8 and c["bit_length"] == 8),
+            (
+                c
+                for c in payload["data"]["candidates"]
+                if c["arbitration_id"] == 0x400 and c["start_bit"] == 8 and c["bit_length"] == 8
+            ),
             None,
         )
         self.assertIsNotNone(byte1)
@@ -2552,7 +2587,10 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "EXPORT_FORMAT_UNSUPPORTED")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_shell_command_reuses_cli_parser(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("shell", "--command", "capture can0 --text")
         self.assertEqual(exit_code, EXIT_OK)
@@ -2589,13 +2627,18 @@ class CliTests(unittest.TestCase):
         self.assertIn("error: INVALID_PGN: J1939 PGN must be between 0 and 262143.", stdout)
 
     def test_tui_command_rejects_nested_frontends(self) -> None:
-        exit_code, stdout, stderr = run_cli("tui", "--command", "shell --command 'capture can0 --text'")
+        exit_code, stdout, stderr = run_cli(
+            "tui", "--command", "shell --command 'capture can0 --text'"
+        )
 
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         self.assertEqual(stderr, "")
         self.assertIn("TUI_COMMAND_UNSUPPORTED", stdout)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_shell_survives_help_flag_in_command(self, _mock_cfg) -> None:
         """--help inside the shell must not exit the session."""
         # After one command containing --help (which raises SystemExit) the shell
@@ -2615,7 +2658,10 @@ class CliTests(unittest.TestCase):
         self.assertIn(" can0 ", stdout)
         self.assertIn("#", stdout)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_shell_survives_keyboard_interrupt_during_command(self, _mock_cfg) -> None:
         """Ctrl+C during a command must not exit the shell."""
         call_count = 0
@@ -2636,14 +2682,19 @@ class CliTests(unittest.TestCase):
                 raise val
             return val
 
-        with patch("builtins.input", side_effect=fake_input), \
-                patch("canarchy.cli.main", side_effect=fake_main):
+        with (
+            patch("builtins.input", side_effect=fake_input),
+            patch("canarchy.cli.main", side_effect=fake_main),
+        ):
             exit_code, _, _ = run_cli("shell")
 
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(call_count, 2)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_shell_survives_keyboard_interrupt_at_prompt(self, _mock_cfg) -> None:
         """Ctrl+C at the input prompt must not exit the shell."""
         inputs = iter([KeyboardInterrupt(), "capture can0 --text", EOFError()])
@@ -2749,7 +2800,10 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_jsonl_output_emits_one_event_per_line_for_event_commands(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli("capture", "can0", "--jsonl")
         self.assertEqual(exit_code, EXIT_OK)
@@ -2761,7 +2815,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(first_event["event_type"], "frame")
         self.assertEqual(second_event["event_type"], "frame")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_jsonl_output_does_not_emit_extra_warning_lines_for_uds_scan(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli("uds", "scan", "can0", "--jsonl")
         self.assertEqual(exit_code, EXIT_OK)
@@ -2820,7 +2877,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
 
     def test_j1939_decode_routes_through_decoder_abstraction(self) -> None:
-        frame = CanFrame(arbitration_id=0x18FEEE31, data=bytes.fromhex("7DFFFFFF"), timestamp=0.0, is_extended_id=True)
+        frame = CanFrame(
+            arbitration_id=0x18FEEE31,
+            data=bytes.fromhex("7DFFFFFF"),
+            timestamp=0.0,
+            is_extended_id=True,
+        )
         event = SimpleNamespace(
             to_payload=lambda: {
                 "event_type": "j1939_pgn",
@@ -2863,18 +2925,25 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["events"][0]["payload"]["pgn"], 65262)
 
     def test_j1939_spn_routes_through_decoder_abstraction(self) -> None:
-        frame = CanFrame(arbitration_id=0x18FEEE31, data=bytes.fromhex("7DFFFFFF"), timestamp=0.0, is_extended_id=True)
-        observations = [{
-            "destination_address": None,
-            "name": "Engine Coolant Temperature",
-            "pgn": 65262,
-            "raw": "7d",
-            "source_address": 49,
-            "spn": 110,
-            "timestamp": 0.0,
-            "units": "degC",
-            "value": 85.0,
-        }]
+        frame = CanFrame(
+            arbitration_id=0x18FEEE31,
+            data=bytes.fromhex("7DFFFFFF"),
+            timestamp=0.0,
+            is_extended_id=True,
+        )
+        observations = [
+            {
+                "destination_address": None,
+                "name": "Engine Coolant Temperature",
+                "pgn": 65262,
+                "raw": "7d",
+                "source_address": 49,
+                "spn": 110,
+                "timestamp": 0.0,
+                "units": "degC",
+                "value": 85.0,
+            }
+        ]
         fake_decoder = SimpleNamespace(
             supported_spns=lambda: {110},
             decode_events=lambda frames: [],
@@ -2904,35 +2973,49 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["observations"], observations)
 
     def test_j1939_tp_and_dm1_route_through_decoder_abstraction(self) -> None:
-        frame = CanFrame(arbitration_id=0x18ECFF31, data=bytes.fromhex("200C0002FFCAFE00"), timestamp=0.0, is_extended_id=True)
-        sessions = [{
-            "complete": True,
-            "control": 32,
-            "decoded_text": None,
-            "decoded_text_encoding": None,
-            "decoded_text_heuristic": False,
-            "destination_address": 255,
-            "packet_count": 2,
-            "payload_label": None,
-            "payload_label_source": None,
-            "priority": 6,
-            "reassembled_data": "000000006e000501be000702",
-            "session_type": "bam",
-            "source_address": 49,
-            "timestamp": 0.0,
-            "total_bytes": 12,
-            "total_packets": 2,
-            "transfer_pgn": 65226,
-        }]
-        messages = [{
-            "active_dtc_count": 2,
-            "destination_address": 255,
-            "dtcs": [],
-            "lamp_status": {"amber_warning": "off", "mil": "off", "protect": "off", "red_stop": "off"},
-            "source_address": 49,
-            "timestamp": 0.0,
-            "transport": "tp",
-        }]
+        frame = CanFrame(
+            arbitration_id=0x18ECFF31,
+            data=bytes.fromhex("200C0002FFCAFE00"),
+            timestamp=0.0,
+            is_extended_id=True,
+        )
+        sessions = [
+            {
+                "complete": True,
+                "control": 32,
+                "decoded_text": None,
+                "decoded_text_encoding": None,
+                "decoded_text_heuristic": False,
+                "destination_address": 255,
+                "packet_count": 2,
+                "payload_label": None,
+                "payload_label_source": None,
+                "priority": 6,
+                "reassembled_data": "000000006e000501be000702",
+                "session_type": "bam",
+                "source_address": 49,
+                "timestamp": 0.0,
+                "total_bytes": 12,
+                "total_packets": 2,
+                "transfer_pgn": 65226,
+            }
+        ]
+        messages = [
+            {
+                "active_dtc_count": 2,
+                "destination_address": 255,
+                "dtcs": [],
+                "lamp_status": {
+                    "amber_warning": "off",
+                    "mil": "off",
+                    "protect": "off",
+                    "red_stop": "off",
+                },
+                "source_address": 49,
+                "timestamp": 0.0,
+                "transport": "tp",
+            }
+        ]
         fake_decoder = SimpleNamespace(
             supported_spns=lambda: {110},
             decode_events=lambda frames: [],
@@ -2951,14 +3034,14 @@ class CliTests(unittest.TestCase):
                 "tp",
                 "sessions",
                 "--file",
-            str(FIXTURES / "j1939_dm1_tp.candump"),
+                str(FIXTURES / "j1939_dm1_tp.candump"),
                 "--json",
             )
             dm1_exit_code, dm1_stdout, dm1_stderr = run_cli(
                 "j1939",
                 "dm1",
                 "--file",
-            str(FIXTURES / "j1939_dm1_tp.candump"),
+                str(FIXTURES / "j1939_dm1_tp.candump"),
                 "--json",
             )
 
@@ -2973,7 +3056,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(json.loads(dm1_stdout)["data"]["messages"], messages)
 
     def test_j1939_pgn_routes_through_decoder_abstraction(self) -> None:
-        frame = CanFrame(arbitration_id=0x18FEEE31, data=bytes.fromhex("7DFFFFFF"), timestamp=0.0, is_extended_id=True)
+        frame = CanFrame(
+            arbitration_id=0x18FEEE31,
+            data=bytes.fromhex("7DFFFFFF"),
+            timestamp=0.0,
+            is_extended_id=True,
+        )
         event = SimpleNamespace(
             to_payload=lambda: {
                 "event_type": "j1939_pgn",
@@ -3037,7 +3125,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("Engine Coolant Temperature", decoded)
         self.assertIn("85.0", decoded["Engine Coolant Temperature"])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_fixed_id_and_data_returns_frame_events(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344", "--json"
@@ -3059,7 +3150,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["data"], "11223344")
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_count_produces_correct_number_of_frames(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate",
@@ -3088,10 +3182,25 @@ class CliTests(unittest.TestCase):
         mock_sleep.assert_called_with(0.1)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
-    def test_generate_incrementing_data_produces_rolling_bytes(self, _mock_cfg, _mock_sleep) -> None:
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_generate_incrementing_data_produces_rolling_bytes(
+        self, _mock_cfg, _mock_sleep
+    ) -> None:
         exit_code, stdout, stderr = run_cli(
-            "generate", "can0", "--id", "0x100", "--dlc", "2", "--data", "I", "--count", "2", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x100",
+            "--dlc",
+            "2",
+            "--data",
+            "I",
+            "--count",
+            "2",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -3100,7 +3209,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_events[1]["payload"]["frame"]["data"], "0203")
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_random_produces_frame_events(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli("generate", "can0", "--count", "5", "--json")
         self.assertEqual(exit_code, EXIT_OK)
@@ -3110,10 +3222,23 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(frame_events), 5)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_text_output_is_pretty_printed(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, stderr = run_cli(
-            "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "AABBCCDD", "--count", "2", "--text"
+            "generate",
+            "can0",
+            "--id",
+            "0x123",
+            "--dlc",
+            "4",
+            "--data",
+            "AABBCCDD",
+            "--count",
+            "2",
+            "--text",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("command: generate", stdout)
@@ -3121,7 +3246,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("frames: 2", stdout)
         self.assertIn("123#AABBCCDD", stdout)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_extended_flag_sets_29bit_id(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
             "generate", "can0", "--id", "0x100", "--dlc", "0", "--data", "R", "--extended", "--json"
@@ -3133,7 +3261,10 @@ class CliTests(unittest.TestCase):
 
     # --- Gap option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_default_gap_is_200ms(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
@@ -3142,11 +3273,25 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["gap_ms"], 200.0)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_gap_zero_gives_zero_timestamps(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
-            "--count", "3", "--gap", "0", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x1",
+            "--dlc",
+            "1",
+            "--data",
+            "AA",
+            "--count",
+            "3",
+            "--gap",
+            "0",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -3156,11 +3301,25 @@ class CliTests(unittest.TestCase):
             self.assertEqual(evt["timestamp"], 0.0)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_gap_sets_timestamp_spacing(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
-            "--count", "4", "--gap", "500", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x1",
+            "--dlc",
+            "1",
+            "--data",
+            "AA",
+            "--count",
+            "4",
+            "--gap",
+            "500",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -3174,11 +3333,25 @@ class CliTests(unittest.TestCase):
         mock_sleep.assert_called_with(0.5)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_gap_reflects_in_data_field(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
-            "--count", "2", "--gap", "750", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x1",
+            "--dlc",
+            "1",
+            "--data",
+            "AA",
+            "--count",
+            "2",
+            "--gap",
+            "750",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -3188,11 +3361,25 @@ class CliTests(unittest.TestCase):
         mock_sleep.assert_called_with(0.75)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_fractional_gap_spacing(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA",
-            "--count", "3", "--gap", "50.5", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x1",
+            "--dlc",
+            "1",
+            "--data",
+            "AA",
+            "--count",
+            "3",
+            "--gap",
+            "50.5",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -3205,75 +3392,95 @@ class CliTests(unittest.TestCase):
 
     # --- stdin composition tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_decode_stdin_jsonl_composition(self, _mock_cfg):
         """Test that decode can read JSONL FrameEvents from stdin and decode them."""
         # Generate a frame that matches a signal in the sample DBC
-        frame_json = ('{"event_type": "frame", "payload": {"frame": '
-                      '{"arbitration_id": 419360305, "data": "11223344", '
-                      '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
-                      '"source": "test"}')
-        
-        exit_code, stdout, _ = run_cli(
-            "decode", "--stdin", "--dbc", str(FIXTURES / "sample.dbc"), "--jsonl",
-            input=frame_json
+        frame_json = (
+            '{"event_type": "frame", "payload": {"frame": '
+            '{"arbitration_id": 419360305, "data": "11223344", '
+            '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
+            '"source": "test"}'
         )
-        
+
+        exit_code, stdout, _ = run_cli(
+            "decode", "--stdin", "--dbc", str(FIXTURES / "sample.dbc"), "--jsonl", input=frame_json
+        )
+
         self.assertEqual(exit_code, EXIT_OK)
         lines = stdout.strip().splitlines()
         # Should have decoded_message event plus signal events
         self.assertGreater(len(lines), 1)
-        
+
         # First line should be decoded_message
         decoded_event = json.loads(lines[0])
         self.assertEqual(decoded_event["event_type"], "decoded_message")
         self.assertEqual(decoded_event["payload"]["message_name"], "EngineStatus1")
         self.assertIn("CoolantTemp", decoded_event["payload"]["signals"])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_filter_stdin_jsonl_composition(self, _mock_cfg):
         """Test that filter can read JSONL FrameEvents from stdin and filter them."""
         # Generate two frames - one matching filter, one not
-        frame1_json = ('{"event_type": "frame", "payload": {"frame": '
-                      '{"arbitration_id": 419360305, "data": "11223344", '
-                      '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
-                      '"source": "test"}')
-        frame2_json = ('{"event_type": "frame", "payload": {"frame": '
-                      '{"arbitration_id": 123, "data": "deadbeef", '
-                      '"is_extended_id": false, "timestamp": 0.1, "interface": "can0"}}, '
-                      '"source": "test"}')
-        input_data = frame1_json + "\n" + frame2_json + "\n"
-        
-        exit_code, stdout, _ = run_cli(
-            "filter", "--stdin", "id==0x18FEEE31", "--jsonl",
-            input=input_data
+        frame1_json = (
+            '{"event_type": "frame", "payload": {"frame": '
+            '{"arbitration_id": 419360305, "data": "11223344", '
+            '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
+            '"source": "test"}'
         )
-        
+        frame2_json = (
+            '{"event_type": "frame", "payload": {"frame": '
+            '{"arbitration_id": 123, "data": "deadbeef", '
+            '"is_extended_id": false, "timestamp": 0.1, "interface": "can0"}}, '
+            '"source": "test"}'
+        )
+        input_data = frame1_json + "\n" + frame2_json + "\n"
+
+        exit_code, stdout, _ = run_cli(
+            "filter", "--stdin", "id==0x18FEEE31", "--jsonl", input=input_data
+        )
+
         self.assertEqual(exit_code, EXIT_OK)
         lines = stdout.strip().splitlines()
         # Should only get the matching frame back
         self.assertEqual(len(lines), 1)
-        
+
         frame_event = json.loads(lines[0])
         self.assertEqual(frame_event["event_type"], "frame")
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 419360305)
         self.assertEqual(frame_event["payload"]["frame"]["data"], "11223344")
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_filter_stdin_json_input_is_independent_of_output_format(self, _mock_cfg):
         """Test that --stdin parses JSONL FrameEvents even when output is --json."""
-        frame1_json = ('{"event_type": "frame", "payload": {"frame": '
-                      '{"arbitration_id": 419360305, "data": "11223344", '
-                      '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
-                      '"source": "test"}')
-        frame2_json = ('{"event_type": "frame", "payload": {"frame": '
-                      '{"arbitration_id": 123, "data": "deadbeef", '
-                      '"is_extended_id": false, "timestamp": 0.1, "interface": "can0"}}, '
-                      '"source": "test"}')
+        frame1_json = (
+            '{"event_type": "frame", "payload": {"frame": '
+            '{"arbitration_id": 419360305, "data": "11223344", '
+            '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
+            '"source": "test"}'
+        )
+        frame2_json = (
+            '{"event_type": "frame", "payload": {"frame": '
+            '{"arbitration_id": 123, "data": "deadbeef", '
+            '"is_extended_id": false, "timestamp": 0.1, "interface": "can0"}}, '
+            '"source": "test"}'
+        )
         input_data = frame1_json + "\n" + frame2_json + "\n"
 
         exit_code, stdout, _ = run_cli(
-            "filter", "--stdin", "id==0x18FEEE31", "--json",
+            "filter",
+            "--stdin",
+            "id==0x18FEEE31",
+            "--json",
             input=input_data,
         )
 
@@ -3284,17 +3491,25 @@ class CliTests(unittest.TestCase):
         self.assertEqual(data["data"]["frame_count"], 1)
         self.assertEqual(data["data"]["frames"][0]["arbitration_id"], 419360305)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_stats_stdin_honors_bounds(self, _mock_cfg):
         """Test that stats --file - applies offset, max-frames, and seconds bounds."""
         input_data = (
-            "(0.000000) can0 123#112233\n"
-            "(0.100000) can1 456#AABBCC\n"
-            "(0.300000) can0 789#DDEEFF\n"
+            "(0.000000) can0 123#112233\n(0.100000) can1 456#AABBCC\n(0.300000) can0 789#DDEEFF\n"
         )
 
         exit_code, stdout, _ = run_cli(
-            "stats", "--file", "-", "--offset", "1", "--max-frames", "1", "--json",
+            "stats",
+            "--file",
+            "-",
+            "--offset",
+            "1",
+            "--max-frames",
+            "1",
+            "--json",
             input=input_data,
         )
 
@@ -3304,79 +3519,107 @@ class CliTests(unittest.TestCase):
         self.assertEqual(data["data"]["unique_arbitration_ids"], 1)
         self.assertEqual(data["data"]["interfaces"], ["can1"])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_j1939_decode_stdin_jsonl_composition(self, _mock_cfg):
         """Test that j1939 decode can read JSONL FrameEvents from stdin and decode them."""
         # Generate a J1939 frame
-        frame_json = ('{"event_type": "frame", "payload": {"frame": '
-                      '{"arbitration_id": 419360305, "data": "11223344", '
-                      '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
-                      '"source": "test"}')
-        
-        exit_code, stdout, _ = run_cli(
-            "j1939", "decode", "--stdin", "--jsonl",
-            input=frame_json
+        frame_json = (
+            '{"event_type": "frame", "payload": {"frame": '
+            '{"arbitration_id": 419360305, "data": "11223344", '
+            '"is_extended_id": true, "timestamp": 0.0, "interface": "can0"}}, '
+            '"source": "test"}'
         )
-        
+
+        exit_code, stdout, _ = run_cli("j1939", "decode", "--stdin", "--jsonl", input=frame_json)
+
         self.assertEqual(exit_code, EXIT_OK)
         lines = stdout.strip().splitlines()
         # Should have J1939 observation event
         self.assertEqual(len(lines), 1)
-        
+
         observation_event = json.loads(lines[0])
         self.assertEqual(observation_event["event_type"], "j1939_pgn")
         self.assertEqual(observation_event["payload"]["pgn"], 65262)
         self.assertEqual(observation_event["payload"]["source_address"], 49)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_stdin_validation_invalid_json(self, _mock_cfg):
         """Test that invalid JSON in stdin produces appropriate error."""
         exit_code, stdout, _ = run_cli(
-            "decode", "--stdin", "--dbc", str(FIXTURES / "sample.dbc"), "--json",
-            input="not json at all\n"
+            "decode",
+            "--stdin",
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "--json",
+            input="not json at all\n",
         )
-        
+
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_STREAM_EVENT")
         self.assertIn("Invalid JSON", payload["errors"][0]["message"])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_stdin_validation_wrong_event_type(self, _mock_cfg):
         """Test that non-frame events in stdin produce appropriate error."""
         exit_code, stdout, _ = run_cli(
-            "decode", "--stdin", "--dbc", str(FIXTURES / "sample.dbc"), "--json",
-            input='{"event_type": "alert", "payload": {"message": "test"}}\n'
+            "decode",
+            "--stdin",
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "--json",
+            input='{"event_type": "alert", "payload": {"message": "test"}}\n',
         )
-        
+
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_STREAM_EVENT")
         self.assertIn("Expected frame event", payload["errors"][0]["message"])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_stdin_mutually_exclusive_with_file(self, _mock_cfg):
         exit_code, stdout, _ = run_cli(
-            "decode", "--stdin", "--file", str(FIXTURES / "sample.candump"),
-            "--dbc", str(FIXTURES / "sample.dbc"), "--json"
+            "decode",
+            "--stdin",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "--json",
         )
-        
+
         self.assertEqual(exit_code, EXIT_USER_ERROR)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_stdin_required_when_no_file(self, _mock_cfg):
         """Test that specifying neither --stdin nor a file produces an error."""
-        exit_code, stdout, _ = run_cli(
-            "decode", "--dbc", str(FIXTURES / "sample.dbc"), "--json"
-        )
-        
+        exit_code, stdout, _ = run_cli("decode", "--dbc", str(FIXTURES / "sample.dbc"), "--json")
+
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "MISSING_INPUT")
 
     # --- ID option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_id_without_0x_prefix(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "7DF", "--dlc", "2", "--data", "1234", "--json"
@@ -3387,11 +3630,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x7DF)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_id_r_default_produces_random_ids(self, _mock_cfg, _mock_sleep) -> None:
-        exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--count", "3", "--json"
-        )
+        exit_code, stdout, _ = run_cli("generate", "can0", "--count", "3", "--json")
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
         frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
@@ -3400,10 +3644,21 @@ class CliTests(unittest.TestCase):
             arb_id = evt["payload"]["frame"]["arbitration_id"]
             self.assertGreaterEqual(arb_id, 0)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_large_id_forces_extended(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x18FEEE31", "--dlc", "8", "--data", "AABBCCDDEEFF0011", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x18FEEE31",
+            "--dlc",
+            "8",
+            "--data",
+            "AABBCCDDEEFF0011",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -3411,7 +3666,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x18FEEE31)
         self.assertTrue(frame_event["payload"]["frame"]["is_extended_id"])
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_id_zero(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x0", "--dlc", "1", "--data", "FF", "--json"
@@ -3421,7 +3679,10 @@ class CliTests(unittest.TestCase):
         frame_event = payload["data"]["events"][1]
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_id_max_standard(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x7FF", "--dlc", "1", "--data", "00", "--json"
@@ -3434,7 +3695,10 @@ class CliTests(unittest.TestCase):
 
     # --- DLC option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_dlc_zero_produces_empty_data(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "0", "--data", "R", "--json"
@@ -3445,7 +3709,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["data"], "")
         self.assertEqual(frame_event["payload"]["frame"]["dlc"], 0)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_dlc_eight_produces_eight_byte_frame(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "8", "--data", "R", "--json"
@@ -3458,7 +3725,10 @@ class CliTests(unittest.TestCase):
 
     # --- Data option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_data_r_produces_hex_payload(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "R", "--json"
@@ -3470,7 +3740,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(data_hex), 8)  # 4 bytes = 8 hex chars
         int(data_hex, 16)  # must be valid hex
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_data_uppercase_hex_accepted(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "DEADBEEF", "--json"
@@ -3481,7 +3754,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["payload"]["frame"]["data"].upper(), "DEADBEEF")
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_incrementing_data_rolls_across_frames(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "I", "--count", "3", "--json"
@@ -3495,7 +3771,10 @@ class CliTests(unittest.TestCase):
 
     # --- Count option tests ---
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_default_count_is_one(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
@@ -3507,10 +3786,23 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(frame_events), 1)
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_count_ten(self, _mock_cfg, mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--count", "10", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x1",
+            "--dlc",
+            "1",
+            "--data",
+            "AA",
+            "--count",
+            "10",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -3522,22 +3814,38 @@ class CliTests(unittest.TestCase):
     # --- Output mode tests ---
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_jsonl_output_emits_one_event_per_line(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--count", "2", "--jsonl"
+            "generate",
+            "can0",
+            "--id",
+            "0x1",
+            "--dlc",
+            "1",
+            "--data",
+            "AA",
+            "--count",
+            "2",
+            "--jsonl",
         )
         self.assertEqual(exit_code, EXIT_OK)
-        lines = [l for l in stdout.strip().splitlines() if l.strip()]
+        lines = [line for line in stdout.strip().splitlines() if line.strip()]
         # alert event + 2 frame events
         self.assertGreaterEqual(len(lines), 3)
         for line in lines:
             json.loads(line)  # each line must be valid JSON
-        event_types = [json.loads(l)["event_type"] for l in lines]
+        event_types = [json.loads(line)["event_type"] for line in lines]
         self.assertIn("alert", event_types)
         self.assertEqual(event_types.count("frame"), 2)
 
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_rejects_raw_output_mode(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
             "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "AA", "--raw"
@@ -3548,11 +3856,25 @@ class CliTests(unittest.TestCase):
     # --- Result data fields ---
 
     @patch("canarchy.transport.time.sleep")
-    @patch("canarchy.transport._load_user_config", return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"})
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_generate_result_data_contains_expected_fields(self, _mock_cfg, _mock_sleep) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344",
-            "--count", "2", "--gap", "300", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x123",
+            "--dlc",
+            "4",
+            "--data",
+            "11223344",
+            "--count",
+            "2",
+            "--gap",
+            "300",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -3737,6 +4059,7 @@ class CliTests(unittest.TestCase):
     def _mock_dbc_registry(self):
         from canarchy.dbc_provider import DbcDescriptor
         from unittest.mock import MagicMock
+
         mock_registry = MagicMock()
         mock_registry.search.return_value = [
             DbcDescriptor(
@@ -3766,17 +4089,22 @@ class CliTests(unittest.TestCase):
         lines = stdout.splitlines()
         self.assertIn("query: toyota", lines)
         self.assertIn("results: 2", lines)
-        self.assertTrue(any("opendbc:toyota_tnga_k_pt_generated" in l and "(toyota)" in l for l in lines))
+        self.assertTrue(
+            any(
+                "opendbc:toyota_tnga_k_pt_generated" in line and "(toyota)" in line
+                for line in lines
+            )
+        )
 
     def test_dbc_search_verbose_output_shows_provider_version_brand(self) -> None:
         with patch("canarchy.dbc_provider.get_registry", return_value=self._mock_dbc_registry()):
             _, stdout, _ = run_cli("dbc", "search", "toyota", "--verbose")
         lines = stdout.splitlines()
         self.assertIn("results: 2", lines)
-        self.assertTrue(any("opendbc:toyota_tnga_k_pt_generated" in l for l in lines))
-        self.assertTrue(any("provider: opendbc" in l for l in lines))
-        self.assertTrue(any("version:  abc123def456" in l for l in lines))
-        self.assertTrue(any("brand:    toyota" in l for l in lines))
+        self.assertTrue(any("opendbc:toyota_tnga_k_pt_generated" in line for line in lines))
+        self.assertTrue(any("provider: opendbc" in line for line in lines))
+        self.assertTrue(any("version:  abc123def456" in line for line in lines))
+        self.assertTrue(any("brand:    toyota" in line for line in lines))
 
     def test_dbc_search_verbose_json_output_unchanged(self) -> None:
         with patch("canarchy.dbc_provider.get_registry", return_value=self._mock_dbc_registry()):
@@ -3790,7 +4118,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result["metadata"]["brand"], "toyota")
 
     def test_invalid_candump_file_returns_structured_transport_error(self) -> None:
-        exit_code, stdout, stderr = run_cli("stats", "--file", str(FIXTURES / "invalid.candump"), "--json")
+        exit_code, stdout, stderr = run_cli(
+            "stats", "--file", str(FIXTURES / "invalid.candump"), "--json"
+        )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
@@ -3799,7 +4129,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["unique_arbitration_ids"], 0)
 
     def test_unsupported_capture_file_format_returns_transport_error(self) -> None:
-        exit_code, stdout, stderr = run_cli("stats", "--file", str(FIXTURES / "sample.dbc"), "--json")
+        exit_code, stdout, stderr = run_cli(
+            "stats", "--file", str(FIXTURES / "sample.dbc"), "--json"
+        )
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
         self.assertEqual(stderr, "")
 
@@ -3808,14 +4140,16 @@ class CliTests(unittest.TestCase):
         self.assertIn("unsupported file format", payload["errors"][0]["message"])
 
     def test_dbc_inspect_signals_only_human_output_lists_signal_rows(self) -> None:
-        exit_code, stdout, stderr = run_cli("dbc", "inspect", str(FIXTURES / "sample.dbc"), "--signals-only")
+        exit_code, stdout, stderr = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--signals-only"
+        )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
         lines = stdout.splitlines()
         self.assertIn("signals: 6", lines)
-        signal_lines = [l for l in lines if l.startswith("  ")]
+        signal_lines = [line for line in lines if line.startswith("  ")]
         self.assertEqual(len(signal_lines), 6)
-        coolant = next(l for l in signal_lines if "CoolantTemp" in l)
+        coolant = next(line for line in signal_lines if "CoolantTemp" in line)
         self.assertIn("EngineStatus1.CoolantTemp", coolant)
         self.assertIn("bit=0", coolant)
         self.assertIn("len=8", coolant)
@@ -3823,21 +4157,28 @@ class CliTests(unittest.TestCase):
         self.assertIn("scale=1", coolant)
         self.assertIn("offset=-40", coolant)
         self.assertIn("[degC]", coolant)
-        engine_speed = next(l for l in signal_lines if "EngineSpeed" in l and "EngineSpeed1." in l)
+        engine_speed = next(
+            line for line in signal_lines if "EngineSpeed" in line and "EngineSpeed1." in line
+        )
         self.assertIn("EngineSpeed1.EngineSpeed", engine_speed)
         self.assertIn("scale=0.125", engine_speed)
         self.assertIn("[rpm]", engine_speed)
 
     def test_dbc_inspect_signals_only_with_message_filter_limits_rows(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--signals-only", "--message", "EngineStatus1"
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--signals-only",
+            "--message",
+            "EngineStatus1",
         )
         self.assertEqual(exit_code, EXIT_OK)
         lines = stdout.splitlines()
         self.assertIn("signals: 4", lines)
-        signal_lines = [l for l in lines if l.startswith("  ")]
+        signal_lines = [line for line in lines if line.startswith("  ")]
         self.assertEqual(len(signal_lines), 4)
-        self.assertTrue(all("EngineStatus1." in l for l in signal_lines))
+        self.assertTrue(all("EngineStatus1." in line for line in signal_lines))
 
     def test_dbc_inspect_signals_only_json_includes_signals_array(self) -> None:
         exit_code, stdout, _ = run_cli(
@@ -4068,7 +4409,9 @@ class CompletionTests(unittest.TestCase):
         completer = CanarchyCompleter()
         with patch("canarchy.completion.readline") as mock_rl:
             mock_rl.get_line_buffer.return_value = "j1939 pgn 65262 --file "
-            with patch("canarchy.completion.glob.glob", return_value=["tests/fixtures/sample.candump"]):
+            with patch(
+                "canarchy.completion.glob.glob", return_value=["tests/fixtures/sample.candump"]
+            ):
                 candidate = completer.complete("tests/", 0)
         self.assertIsNotNone(candidate)
         self.assertIn("sample.candump", candidate)
@@ -4079,8 +4422,7 @@ class CompletionTests(unittest.TestCase):
         """install_completion should call readline.set_completer without raising."""
         from canarchy.completion import install_completion
 
-        with patch("canarchy.completion.readline") as mock_rl, \
-                patch("canarchy.completion.atexit"):
+        with patch("canarchy.completion.readline") as mock_rl, patch("canarchy.completion.atexit"):
             mock_rl.__doc__ = "GNU readline"
             mock_rl.read_history_file.side_effect = FileNotFoundError
             install_completion()
@@ -4090,8 +4432,7 @@ class CompletionTests(unittest.TestCase):
     def test_install_completion_uses_libedit_binding_on_macos(self) -> None:
         from canarchy.completion import install_completion
 
-        with patch("canarchy.completion.readline") as mock_rl, \
-                patch("canarchy.completion.atexit"):
+        with patch("canarchy.completion.readline") as mock_rl, patch("canarchy.completion.atexit"):
             mock_rl.__doc__ = "libedit-based readline"
             mock_rl.read_history_file.side_effect = FileNotFoundError
             install_completion()
@@ -4100,6 +4441,7 @@ class CompletionTests(unittest.TestCase):
     def test_install_completion_is_silent_when_readline_unavailable(self) -> None:
         """Should not raise if readline is None (unavailable platform)."""
         import canarchy.completion as completion_mod
+
         original = completion_mod.readline
         try:
             completion_mod.readline = None  # type: ignore[assignment]

@@ -3,19 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from decimal import Decimal
 from typing import Any
 
 
-
-from canarchy.dbc_types import DatabaseInfo, DatabaseInspection, MessageInfo, SignalInfo
+from canarchy.dbc_types import MessageInfo, SignalInfo
 from canarchy.models import (
     CanFrame,
-    DecodedMessageEvent,
-    FrameEvent,
-    SignalValueEvent,
-    serialize_events,
 )
 
 
@@ -118,6 +112,8 @@ def inspect_database(
 
     inspection = inspect_database_runtime(dbc_path, message_name=message_name)
     return inspection.to_payload(signals_only=signals_only), inspection.to_events()
+
+
 def encode_message(
     dbc_path: str,
     message_name: str,

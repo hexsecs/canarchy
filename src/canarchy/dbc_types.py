@@ -93,7 +93,9 @@ class DatabaseInspection:
 
     def to_payload(self, *, signals_only: bool = False) -> dict[str, Any]:
         if signals_only:
-            signals = [signal.to_payload() for message in self.messages for signal in message.signals]
+            signals = [
+                signal.to_payload() for message in self.messages for signal in message.signals
+            ]
             return {
                 "database": self.database.to_payload(),
                 "message": self.selected_message,
@@ -121,7 +123,9 @@ class DatabaseInspection:
             events.append(
                 {
                     "event_type": "dbc_message",
-                    "payload": {key: value for key, value in message_payload.items() if key != "signals"},
+                    "payload": {
+                        key: value for key, value in message_payload.items() if key != "signals"
+                    },
                     "source": "dbc.inspect",
                     "timestamp": None,
                 }

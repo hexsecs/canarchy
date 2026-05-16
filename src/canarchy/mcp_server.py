@@ -40,7 +40,10 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "interface": {"type": "string", "description": "CAN interface name"},
-                "frame_id": {"type": "string", "description": "Frame ID as hex (e.g. 0x123 or 291)"},
+                "frame_id": {
+                    "type": "string",
+                    "description": "Frame ID as hex (e.g. 0x123 or 291)",
+                },
                 "data": {"type": "string", "description": "Payload as hex bytes (e.g. 11223344)"},
             },
             "required": ["interface", "frame_id", "data"],
@@ -53,12 +56,36 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "interface": {"type": "string", "description": "CAN interface name"},
-                "id": {"type": "string", "description": "Frame ID as hex or R for random", "default": "R"},
-                "dlc": {"type": "string", "description": "Data length 0-8 or R for random", "default": "R"},
-                "data": {"type": "string", "description": "Payload hex, R for random, I for incrementing", "default": "R"},
-                "count": {"type": "integer", "description": "Number of frames to generate", "default": 1},
-                "gap": {"type": "number", "description": "Inter-frame gap in milliseconds", "default": 200.0},
-                "extended": {"type": "boolean", "description": "Force 29-bit extended IDs", "default": False},
+                "id": {
+                    "type": "string",
+                    "description": "Frame ID as hex or R for random",
+                    "default": "R",
+                },
+                "dlc": {
+                    "type": "string",
+                    "description": "Data length 0-8 or R for random",
+                    "default": "R",
+                },
+                "data": {
+                    "type": "string",
+                    "description": "Payload hex, R for random, I for incrementing",
+                    "default": "R",
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "Number of frames to generate",
+                    "default": 1,
+                },
+                "gap": {
+                    "type": "number",
+                    "description": "Inter-frame gap in milliseconds",
+                    "default": 200.0,
+                },
+                "extended": {
+                    "type": "boolean",
+                    "description": "Force 29-bit extended IDs",
+                    "default": False,
+                },
             },
             "required": ["interface"],
         },
@@ -71,9 +98,19 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "src": {"type": "string", "description": "Source CAN interface"},
                 "dst": {"type": "string", "description": "Destination CAN interface"},
-                "src_backend": {"type": "string", "description": "python-can interface type for source"},
-                "dst_backend": {"type": "string", "description": "python-can interface type for destination"},
-                "bidirectional": {"type": "boolean", "description": "Also forward frames from dst to src", "default": False},
+                "src_backend": {
+                    "type": "string",
+                    "description": "python-can interface type for source",
+                },
+                "dst_backend": {
+                    "type": "string",
+                    "description": "python-can interface type for destination",
+                },
+                "bidirectional": {
+                    "type": "boolean",
+                    "description": "Also forward frames from dst to src",
+                    "default": False,
+                },
                 "count": {"type": "integer", "description": "Stop after forwarding N frames"},
             },
             "required": ["src", "dst"],
@@ -86,7 +123,11 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "rate": {"type": "number", "description": "Playback rate multiplier", "default": 1.0},
+                "rate": {
+                    "type": "number",
+                    "description": "Playback rate multiplier",
+                    "default": 1.0,
+                },
             },
             "required": ["file"],
         },
@@ -98,10 +139,22 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "expression": {"type": "string", "description": "Filter expression (e.g. id==0x123 or dlc>4)"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
+                "expression": {
+                    "type": "string",
+                    "description": "Filter expression (e.g. id==0x123 or dlc>4)",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first N seconds from capture start",
+                },
             },
             "required": ["file", "expression"],
         },
@@ -114,10 +167,22 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "pgn": {"type": "integer", "description": "Filter by transfer PGN"},
-                "sa": {"type": "string", "description": "Filter by source address (comma-separated hex or decimal)"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
+                "sa": {
+                    "type": "string",
+                    "description": "Filter by source address (comma-separated hex or decimal)",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first N seconds from capture start",
+                },
             },
             "required": ["file"],
         },
@@ -141,9 +206,18 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
                 "dbc": {"type": "string", "description": "Path to DBC file"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first N seconds from capture start"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first N seconds from capture start",
+                },
             },
             "required": ["file", "dbc"],
         },
@@ -173,7 +247,10 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "dbc": {"type": "string", "description": "Path to DBC file"},
-                "message": {"type": "string", "description": "Restrict results to a single message name"},
+                "message": {
+                    "type": "string",
+                    "description": "Restrict results to a single message name",
+                },
                 "signals_only": {
                     "type": "boolean",
                     "description": "Return signal-centric metadata without full message definitions",
@@ -234,7 +311,10 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "interface": {"type": "string", "description": "CAN interface name (omit for sample data)"},
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name (omit for sample data)",
+                },
                 "pgn": {"type": "integer", "description": "Filter to a specific PGN (0–262143)"},
             },
         },
@@ -246,10 +326,22 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref (e.g. opendbc:toyota_tnga_k_pt_generated)"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "dbc": {
+                    "type": "string",
+                    "description": "Enrich results with a local DBC path or provider ref (e.g. opendbc:toyota_tnga_k_pt_generated)",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["file"],
         },
@@ -262,10 +354,22 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "pgn": {"type": "integer", "description": "J1939 PGN value (0–262143)"},
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "dbc": {
+                    "type": "string",
+                    "description": "Enrich results with a local DBC path or provider ref",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["pgn", "file"],
         },
@@ -278,10 +382,22 @@ _TOOLS: list[types.Tool] = [
             "properties": {
                 "spn": {"type": "integer", "description": "J1939 SPN value (non-negative integer)"},
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "dbc": {"type": "string", "description": "Enrich results with a local DBC path or provider ref"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "dbc": {
+                    "type": "string",
+                    "description": "Enrich results with a local DBC path or provider ref",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["spn", "file"],
         },
@@ -293,9 +409,18 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["file"],
         },
@@ -307,11 +432,23 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "sa": {"type": "string", "description": "Comma-separated source addresses to compare (hex or decimal)"},
+                "sa": {
+                    "type": "string",
+                    "description": "Comma-separated source addresses to compare (hex or decimal)",
+                },
                 "pgn": {"type": "integer", "description": "Filter by transfer PGN"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["file", "sa"],
         },
@@ -323,10 +460,22 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "dbc": {"type": "string", "description": "Enrich DM1 DTC names with a local DBC path or provider ref"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "dbc": {
+                    "type": "string",
+                    "description": "Enrich DM1 DTC names with a local DBC path or provider ref",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["file"],
         },
@@ -338,10 +487,22 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "dbc": {"type": "string", "description": "Enrich DTC names with a local DBC path or provider ref"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "dbc": {
+                    "type": "string",
+                    "description": "Enrich DTC names with a local DBC path or provider ref",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["file"],
         },
@@ -353,9 +514,18 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["file"],
         },
@@ -367,9 +537,18 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "offset": {"type": "integer", "description": "Skip the first N frames from the capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames (useful for large captures)"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of the capture"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
             },
             "required": ["file"],
         },
@@ -385,9 +564,18 @@ _TOOLS: list[types.Tool] = [
                     "items": {"type": "string"},
                     "description": "Two or more candump capture files to compare",
                 },
-                "offset": {"type": "integer", "description": "Skip the first N frames from each capture file"},
-                "max_frames": {"type": "integer", "description": "Limit analysis to the first N frames per capture"},
-                "seconds": {"type": "number", "description": "Limit analysis to the first T seconds of each capture"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from each capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames per capture",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of each capture",
+                },
             },
             "required": ["files"],
         },
@@ -444,9 +632,20 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search query; omit or use empty string to list datasets", "default": ""},
-                "provider": {"type": "string", "description": "Restrict search to a specific provider"},
-                "limit": {"type": "integer", "description": "Maximum results to return", "default": 20},
+                "query": {
+                    "type": "string",
+                    "description": "Search query; omit or use empty string to list datasets",
+                    "default": "",
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "Restrict search to a specific provider",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return",
+                    "default": 20,
+                },
             },
         },
     ),
@@ -486,7 +685,11 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "provider": {"type": "string", "description": "Provider to refresh", "default": "catalog"},
+                "provider": {
+                    "type": "string",
+                    "description": "Provider to refresh",
+                    "default": "catalog",
+                },
             },
         },
     ),
@@ -497,9 +700,20 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to the downloaded dataset file"},
-                "source_format": {"type": "string", "description": "Source file format", "enum": ["hcrl-csv"]},
-                "format": {"type": "string", "description": "Output format", "enum": ["candump", "jsonl"]},
-                "output": {"type": "string", "description": "Output file path (defaults to source path with new suffix)"},
+                "source_format": {
+                    "type": "string",
+                    "description": "Source file format",
+                    "enum": ["hcrl-csv"],
+                },
+                "format": {
+                    "type": "string",
+                    "description": "Output format",
+                    "enum": ["candump", "jsonl"],
+                },
+                "output": {
+                    "type": "string",
+                    "description": "Output file path (defaults to source path with new suffix)",
+                },
             },
             "required": ["file", "source_format", "format"],
         },
@@ -510,12 +724,30 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "source": {"type": "string", "description": "Dataset ref (e.g. catalog:candid) or remote candump URL"},
-                "format": {"type": "string", "description": "Planned output format", "enum": ["candump", "jsonl"], "default": "candump"},
-                "rate": {"type": "number", "description": "Playback rate multiplier for the planned replay", "default": 1.0},
-                "file": {"type": "string", "description": "Replay file id or name from the dataset manifest"},
+                "source": {
+                    "type": "string",
+                    "description": "Dataset ref (e.g. catalog:candid) or remote candump URL",
+                },
+                "format": {
+                    "type": "string",
+                    "description": "Planned output format",
+                    "enum": ["candump", "jsonl"],
+                    "default": "candump",
+                },
+                "rate": {
+                    "type": "number",
+                    "description": "Playback rate multiplier for the planned replay",
+                    "default": 1.0,
+                },
+                "file": {
+                    "type": "string",
+                    "description": "Replay file id or name from the dataset manifest",
+                },
                 "max_frames": {"type": "integer", "description": "Planned frame limit"},
-                "max_seconds": {"type": "number", "description": "Planned capture-time limit in seconds"},
+                "max_seconds": {
+                    "type": "number",
+                    "description": "Planned capture-time limit in seconds",
+                },
             },
             "required": ["source"],
         },
@@ -526,7 +758,10 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "source": {"type": "string", "description": "Replayable dataset ref (e.g. catalog:candid)"},
+                "source": {
+                    "type": "string",
+                    "description": "Replayable dataset ref (e.g. catalog:candid)",
+                },
             },
             "required": ["source"],
         },
@@ -543,8 +778,15 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query (name, tag, or keyword)"},
-                "provider": {"type": "string", "description": "Restrict search to a specific provider"},
-                "limit": {"type": "integer", "description": "Maximum results to return", "default": 20},
+                "provider": {
+                    "type": "string",
+                    "description": "Restrict search to a specific provider",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return",
+                    "default": 20,
+                },
             },
             "required": ["query"],
         },
@@ -555,7 +797,10 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "ref": {"type": "string", "description": "Skill ref (e.g. github:j1939_compare_triage)"},
+                "ref": {
+                    "type": "string",
+                    "description": "Skill ref (e.g. github:j1939_compare_triage)",
+                },
             },
             "required": ["ref"],
         },
@@ -571,7 +816,11 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "provider": {"type": "string", "description": "Provider to refresh", "default": "github"},
+                "provider": {
+                    "type": "string",
+                    "description": "Provider to refresh",
+                    "default": "github",
+                },
             },
         },
     ),
@@ -590,8 +839,15 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query (name, make, or keyword)"},
-                "provider": {"type": "string", "description": "Restrict search to a specific provider"},
-                "limit": {"type": "integer", "description": "Maximum results to return", "default": 20},
+                "provider": {
+                    "type": "string",
+                    "description": "Restrict search to a specific provider",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return",
+                    "default": 20,
+                },
             },
             "required": ["query"],
         },
@@ -602,7 +858,10 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "ref": {"type": "string", "description": "DBC ref in the form provider:name (e.g. opendbc:toyota_tnga_k_pt_generated)"},
+                "ref": {
+                    "type": "string",
+                    "description": "DBC ref in the form provider:name (e.g. opendbc:toyota_tnga_k_pt_generated)",
+                },
             },
             "required": ["ref"],
         },
@@ -621,7 +880,10 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "provider": {"type": "string", "description": "Restrict pruning to a specific provider"},
+                "provider": {
+                    "type": "string",
+                    "description": "Restrict pruning to a specific provider",
+                },
             },
         },
     ),
@@ -631,7 +893,11 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "provider": {"type": "string", "description": "Provider to refresh", "default": "opendbc"},
+                "provider": {
+                    "type": "string",
+                    "description": "Provider to refresh",
+                    "default": "opendbc",
+                },
             },
         },
     ),
@@ -653,7 +919,10 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
-                "reference": {"type": "string", "description": "Path to reference series file (.json or .jsonl) with timestamp and value fields"},
+                "reference": {
+                    "type": "string",
+                    "description": "Path to reference series file (.json or .jsonl) with timestamp and value fields",
+                },
             },
             "required": ["file", "reference"],
         },
@@ -687,8 +956,16 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "capture": {"type": "string", "description": "Path to candump capture file"},
-                "provider": {"type": "string", "description": "DBC provider catalog to search", "default": "opendbc"},
-                "limit": {"type": "integer", "description": "Maximum candidates to return", "default": 10},
+                "provider": {
+                    "type": "string",
+                    "description": "DBC provider catalog to search",
+                    "default": "opendbc",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum candidates to return",
+                    "default": 10,
+                },
             },
             "required": ["capture"],
         },
@@ -700,9 +977,20 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "capture": {"type": "string", "description": "Path to candump capture file"},
-                "make": {"type": "string", "description": "Vehicle make to pre-filter candidates (e.g. toyota)"},
-                "provider": {"type": "string", "description": "DBC provider catalog to search", "default": "opendbc"},
-                "limit": {"type": "integer", "description": "Maximum candidates to return", "default": 10},
+                "make": {
+                    "type": "string",
+                    "description": "Vehicle make to pre-filter candidates (e.g. toyota)",
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "DBC provider catalog to search",
+                    "default": "opendbc",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum candidates to return",
+                    "default": 10,
+                },
             },
             "required": ["capture", "make"],
         },
@@ -956,7 +1244,15 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--provider", a["provider"]]
             return argv + ["--json"]
         case "datasets_convert":
-            argv = ["datasets", "convert", a["file"], "--source-format", a["source_format"], "--format", a["format"]]
+            argv = [
+                "datasets",
+                "convert",
+                a["file"],
+                "--source-format",
+                a["source_format"],
+                "--format",
+                a["format"],
+            ]
             if a.get("output"):
                 argv += ["--output", a["output"]]
             return argv + ["--json"]
@@ -1048,9 +1344,7 @@ async def handle_list_tools() -> list[types.Tool]:
 
 
 @server.call_tool()
-async def handle_call_tool(
-    name: str, arguments: dict[str, Any] | None
-) -> list[types.TextContent]:
+async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[types.TextContent]:
     if name not in _TOOL_NAMES:
         raise ValueError(f"Unknown tool: {name!r}")
     argv = _build_argv(name, arguments or {})

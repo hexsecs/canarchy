@@ -11,7 +11,13 @@ from cantools.database.utils import create_encode_decode_formats, decode_data
 from canarchy.dbc import DbcError, normalize_value
 from canarchy.dbc_types import DatabaseInfo, DatabaseInspection, MessageInfo, SignalInfo
 from canarchy.j1939 import decompose_arbitration_id
-from canarchy.models import CanFrame, DecodedMessageEvent, FrameEvent, SignalValueEvent, serialize_events
+from canarchy.models import (
+    CanFrame,
+    DecodedMessageEvent,
+    FrameEvent,
+    SignalValueEvent,
+    serialize_events,
+)
 
 
 def load_runtime_database(dbc_path: str) -> cantools.database.Database:
@@ -180,7 +186,9 @@ def lookup_j1939_spn_metadata_runtime(dbc_path: str, spn: int) -> dict[str, Any]
     return None
 
 
-def decode_j1939_spn_runtime(frames: list[CanFrame], dbc_path: str, spn: int) -> list[dict[str, Any]]:
+def decode_j1939_spn_runtime(
+    frames: list[CanFrame], dbc_path: str, spn: int
+) -> list[dict[str, Any]]:
     database = load_runtime_database(dbc_path)
     matching_signals: dict[int, Any] = {}
     for message in database.messages:
@@ -314,14 +322,24 @@ def encode_message_runtime(
                     code="DBC_SIGNAL_INVALID",
                     message=f"Signal '{sig_name}' value {sig_value} is below the minimum of {minimum}.",
                     hint=f"'{sig_name}' must be in the range {minimum}..{maximum}.",
-                    detail={"signal": sig_name, "supplied": sig_value, "minimum": minimum, "maximum": maximum},
+                    detail={
+                        "signal": sig_name,
+                        "supplied": sig_value,
+                        "minimum": minimum,
+                        "maximum": maximum,
+                    },
                 )
             if isinstance(sig_value, (int, float)) and maximum is not None and sig_value > maximum:
                 raise DbcError(
                     code="DBC_SIGNAL_INVALID",
                     message=f"Signal '{sig_name}' value {sig_value} exceeds the maximum of {maximum}.",
                     hint=f"'{sig_name}' must be in the range {minimum}..{maximum}.",
-                    detail={"signal": sig_name, "supplied": sig_value, "minimum": minimum, "maximum": maximum},
+                    detail={
+                        "signal": sig_name,
+                        "supplied": sig_value,
+                        "minimum": minimum,
+                        "maximum": maximum,
+                    },
                 )
 
     try:

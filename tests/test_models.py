@@ -58,7 +58,9 @@ class EventTests(unittest.TestCase):
             frame=frame,
             signals={"rpm": 621.0},
         ).to_event()
-        signal = SignalValueEvent(signal_name="rpm", value=621.0, units="rpm", raw="026d").to_event()
+        signal = SignalValueEvent(
+            signal_name="rpm", value=621.0, units="rpm", raw="026d"
+        ).to_event()
 
         payloads = serialize_events([decoded, signal])
 

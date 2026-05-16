@@ -45,7 +45,9 @@ def cached_file_path(provider_name: str, commit: str, relative_path: str) -> Pat
 def safe_cached_file_path(provider_name: str, commit: str, relative_path: str) -> Path:
     base_dir = provider_cache_dir(provider_name) / "files" / commit
     target = (base_dir / relative_path).resolve(strict=False)
-    if base_dir.resolve(strict=False) not in target.parents and target != base_dir.resolve(strict=False):
+    if base_dir.resolve(strict=False) not in target.parents and target != base_dir.resolve(
+        strict=False
+    ):
         raise ValueError(f"relative path escapes cache root: {relative_path}")
     return target
 
@@ -91,6 +93,7 @@ def load_skills_config() -> dict[str, Any]:
         return defaults
     try:
         import tomllib
+
         with _CONFIG_PATH.open("rb") as f:
             raw = tomllib.load(f)
     except Exception:

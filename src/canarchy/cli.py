@@ -13,7 +13,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from canarchy.dbc import DbcError, dbc_supports_spn, decode_frames, decode_j1939_spn, encode_message, inspect_database, lookup_j1939_spn_metadata
+from canarchy.dbc import (
+    DbcError,
+    dbc_supports_spn,
+    decode_frames,
+    decode_j1939_spn,
+    encode_message,
+    inspect_database,
+    lookup_j1939_spn_metadata,
+)
 from canarchy import __version__
 from canarchy.exporter import ExportError, export_artifact
 from canarchy.j1939 import TP_CM_PGN, TP_DT_PGN, decompose_arbitration_id
@@ -23,19 +31,14 @@ from canarchy import pretty_j1939_support
 from canarchy.models import (
     AlertEvent,
     CanFrame,
-    J1939ObservationEvent,
-    ReplayActionEvent,
     serialize_events,
 )
 from canarchy.replay import build_replay_plan
 from canarchy.reverse_engineering import (
     ReferenceSeriesError,
     correlate_candidates,
-    counter_candidates,
-    entropy_candidates,
     load_reference_series,
     score_dbc_candidates,
-    signal_analysis,
 )
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.skills import SkillError
@@ -57,16 +60,70 @@ EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
-DBC_PROVIDER_COMMANDS = {"dbc provider list", "dbc search", "dbc fetch", "dbc cache list", "dbc cache prune", "dbc cache refresh"}
-SKILLS_COMMANDS = {"skills provider list", "skills search", "skills fetch", "skills cache list", "skills cache refresh"}
-DATASETS_COMMANDS = {"datasets provider list", "datasets search", "datasets inspect", "datasets fetch", "datasets cache list", "datasets cache refresh", "datasets convert", "datasets stream", "datasets replay"}
-J1939_COMMANDS = {"j1939 monitor", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory", "j1939 compare"}
+DBC_PROVIDER_COMMANDS = {
+    "dbc provider list",
+    "dbc search",
+    "dbc fetch",
+    "dbc cache list",
+    "dbc cache prune",
+    "dbc cache refresh",
+}
+SKILLS_COMMANDS = {
+    "skills provider list",
+    "skills search",
+    "skills fetch",
+    "skills cache list",
+    "skills cache refresh",
+}
+DATASETS_COMMANDS = {
+    "datasets provider list",
+    "datasets search",
+    "datasets inspect",
+    "datasets fetch",
+    "datasets cache list",
+    "datasets cache refresh",
+    "datasets convert",
+    "datasets stream",
+    "datasets replay",
+}
+J1939_COMMANDS = {
+    "j1939 monitor",
+    "j1939 decode",
+    "j1939 pgn",
+    "j1939 spn",
+    "j1939 tp sessions",
+    "j1939 tp compare",
+    "j1939 dm1",
+    "j1939 faults",
+    "j1939 summary",
+    "j1939 inventory",
+    "j1939 compare",
+}
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 CONFIG_COMMANDS = {"config show"}
-RE_COMMANDS = {"re signals", "re counters", "re entropy", "re correlate", "re match-dbc", "re shortlist-dbc"}
+RE_COMMANDS = {
+    "re signals",
+    "re counters",
+    "re entropy",
+    "re correlate",
+    "re match-dbc",
+    "re shortlist-dbc",
+}
 ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
-IMPLEMENTED_COMMANDS = TRANSPORT_COMMANDS | DBC_COMMANDS | DBC_PROVIDER_COMMANDS | SKILLS_COMMANDS | DATASETS_COMMANDS | J1939_COMMANDS | SESSION_COMMANDS | UDS_COMMANDS | CONFIG_COMMANDS | RE_COMMANDS | {"mcp serve", "replay", "gateway", "shell", "export"}
+IMPLEMENTED_COMMANDS = (
+    TRANSPORT_COMMANDS
+    | DBC_COMMANDS
+    | DBC_PROVIDER_COMMANDS
+    | SKILLS_COMMANDS
+    | DATASETS_COMMANDS
+    | J1939_COMMANDS
+    | SESSION_COMMANDS
+    | UDS_COMMANDS
+    | CONFIG_COMMANDS
+    | RE_COMMANDS
+    | {"mcp serve", "replay", "gateway", "shell", "export"}
+)
 
 
 class CliUsageError(Exception):
@@ -235,9 +292,13 @@ def build_parser() -> CanarchyArgumentParser:
     generate.add_argument("interface")
     generate.add_argument("--id", default="R", help="frame ID as hex or R for random")
     generate.add_argument("--dlc", default="R", help="data length 0-8 or R for random")
-    generate.add_argument("--data", default="R", help="payload hex, R for random, I for incrementing")
+    generate.add_argument(
+        "--data", default="R", help="payload hex, R for random, I for incrementing"
+    )
     generate.add_argument("--count", type=int, default=1, help="number of frames to generate")
-    generate.add_argument("--gap", type=float, default=200.0, help="inter-frame gap in milliseconds")
+    generate.add_argument(
+        "--gap", type=float, default=200.0, help="inter-frame gap in milliseconds"
+    )
     generate.add_argument("--extended", action="store_true", help="force 29-bit extended IDs")
     add_active_ack_argument(generate)
     add_output_arguments(generate)
@@ -248,14 +309,18 @@ def build_parser() -> CanarchyArgumentParser:
     gateway.add_argument("dst")
     gateway.add_argument("--src-backend", help="python-can interface type for the source bus")
     gateway.add_argument("--dst-backend", help="python-can interface type for the destination bus")
-    gateway.add_argument("--bidirectional", action="store_true", help="also forward frames from dst back to src")
+    gateway.add_argument(
+        "--bidirectional", action="store_true", help="also forward frames from dst back to src"
+    )
     gateway.add_argument("--count", type=int, help="stop after forwarding N frames")
     add_active_ack_argument(gateway)
     add_output_arguments(gateway)
     gateway.set_defaults(command="gateway")
 
     replay = subparsers.add_parser("replay", help="replay recorded traffic")
-    replay.add_argument("--file", required=True, help="path to candump capture file (use - for stdin)")
+    replay.add_argument(
+        "--file", required=True, help="path to candump capture file (use - for stdin)"
+    )
     replay.add_argument("--rate", type=float, default=1.0)
     add_output_arguments(replay)
     replay.set_defaults(command="replay")
@@ -263,19 +328,27 @@ def build_parser() -> CanarchyArgumentParser:
     filter_parser = subparsers.add_parser("filter", help="filter recorded traffic")
     filter_parser.add_argument("expression", help="filter expression")
     filter_parser.add_argument("--file", help="path to candump capture file (use - for stdin)")
-    filter_parser.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
+    filter_parser.add_argument(
+        "--stdin", action="store_true", help="read JSONL FrameEvents from stdin"
+    )
     _add_file_analysis_arguments(filter_parser)
     add_output_arguments(filter_parser)
     filter_parser.set_defaults(command="filter")
 
     stats = subparsers.add_parser("stats", help="summarize traffic statistics")
-    stats.add_argument("--file", required=True, help="path to candump capture file (use - for stdin)")
+    stats.add_argument(
+        "--file", required=True, help="path to candump capture file (use - for stdin)"
+    )
     _add_file_analysis_arguments(stats)
     add_output_arguments(stats)
     stats.set_defaults(command="stats")
 
-    capture_info = subparsers.add_parser("capture-info", help="show capture file metadata without loading frames")
-    capture_info.add_argument("--file", required=True, help="path to candump capture file (use - for stdin)")
+    capture_info = subparsers.add_parser(
+        "capture-info", help="show capture file metadata without loading frames"
+    )
+    capture_info.add_argument(
+        "--file", required=True, help="path to candump capture file (use - for stdin)"
+    )
     add_output_arguments(capture_info)
     capture_info.set_defaults(command="capture-info")
 
@@ -322,7 +395,9 @@ def build_parser() -> CanarchyArgumentParser:
     dbc_search.add_argument("query", help="search query (name, make, or keyword)")
     dbc_search.add_argument("--provider", help="restrict search to a specific provider")
     dbc_search.add_argument("--limit", type=int, default=20, help="maximum results (default: 20)")
-    dbc_search.add_argument("--verbose", action="store_true", help="show provider, version, and path details")
+    dbc_search.add_argument(
+        "--verbose", action="store_true", help="show provider, version, and path details"
+    )
     add_output_arguments(dbc_search)
     dbc_search.set_defaults(command="dbc search")
 
@@ -343,8 +418,12 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(dbc_cache_prune)
     dbc_cache_prune.set_defaults(command="dbc cache prune")
 
-    dbc_cache_refresh = dbc_cache_subparsers.add_parser("refresh", help="refresh catalog from upstream")
-    dbc_cache_refresh.add_argument("--provider", default="opendbc", help="provider to refresh (default: opendbc)")
+    dbc_cache_refresh = dbc_cache_subparsers.add_parser(
+        "refresh", help="refresh catalog from upstream"
+    )
+    dbc_cache_refresh.add_argument(
+        "--provider", default="opendbc", help="provider to refresh (default: opendbc)"
+    )
     add_output_arguments(dbc_cache_refresh)
     dbc_cache_refresh.set_defaults(command="dbc cache refresh")
 
@@ -352,15 +431,21 @@ def build_parser() -> CanarchyArgumentParser:
     skills_subparsers = skills.add_subparsers(dest="skills_action", required=True)
 
     skills_provider = skills_subparsers.add_parser("provider", help="manage skills providers")
-    skills_provider_subparsers = skills_provider.add_subparsers(dest="skills_provider_action", required=True)
-    skills_provider_list = skills_provider_subparsers.add_parser("list", help="list registered skills providers")
+    skills_provider_subparsers = skills_provider.add_subparsers(
+        dest="skills_provider_action", required=True
+    )
+    skills_provider_list = skills_provider_subparsers.add_parser(
+        "list", help="list registered skills providers"
+    )
     add_output_arguments(skills_provider_list)
     skills_provider_list.set_defaults(command="skills provider list")
 
     skills_search = skills_subparsers.add_parser("search", help="search skills across providers")
     skills_search.add_argument("query", help="search query (name, tag, or keyword)")
     skills_search.add_argument("--provider", help="restrict search to a specific provider")
-    skills_search.add_argument("--limit", type=int, default=20, help="maximum results (default: 20)")
+    skills_search.add_argument(
+        "--limit", type=int, default=20, help="maximum results (default: 20)"
+    )
     add_output_arguments(skills_search)
     skills_search.set_defaults(command="skills search")
 
@@ -371,11 +456,17 @@ def build_parser() -> CanarchyArgumentParser:
 
     skills_cache = skills_subparsers.add_parser("cache", help="manage the local skills cache")
     skills_cache_subparsers = skills_cache.add_subparsers(dest="skills_cache_action", required=True)
-    skills_cache_list = skills_cache_subparsers.add_parser("list", help="list cached skills providers")
+    skills_cache_list = skills_cache_subparsers.add_parser(
+        "list", help="list cached skills providers"
+    )
     add_output_arguments(skills_cache_list)
     skills_cache_list.set_defaults(command="skills cache list")
-    skills_cache_refresh = skills_cache_subparsers.add_parser("refresh", help="refresh skills catalog from upstream")
-    skills_cache_refresh.add_argument("--provider", default="github", help="provider to refresh (default: github)")
+    skills_cache_refresh = skills_cache_subparsers.add_parser(
+        "refresh", help="refresh skills catalog from upstream"
+    )
+    skills_cache_refresh.add_argument(
+        "--provider", default="github", help="provider to refresh (default: github)"
+    )
     add_output_arguments(skills_cache_refresh)
     skills_cache_refresh.set_defaults(command="skills cache refresh")
 
@@ -383,20 +474,34 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_subparsers = datasets.add_subparsers(dest="datasets_action", required=True)
 
     datasets_provider = datasets_subparsers.add_parser("provider", help="manage dataset providers")
-    datasets_provider_subparsers = datasets_provider.add_subparsers(dest="datasets_provider_action", required=True)
-    datasets_provider_list = datasets_provider_subparsers.add_parser("list", help="list registered dataset providers")
+    datasets_provider_subparsers = datasets_provider.add_subparsers(
+        dest="datasets_provider_action", required=True
+    )
+    datasets_provider_list = datasets_provider_subparsers.add_parser(
+        "list", help="list registered dataset providers"
+    )
     add_output_arguments(datasets_provider_list)
     datasets_provider_list.set_defaults(command="datasets provider list")
 
-    datasets_search = datasets_subparsers.add_parser("search", help="search datasets across providers")
-    datasets_search.add_argument("query", nargs="?", default="", help="search query (name, protocol, or keyword)")
+    datasets_search = datasets_subparsers.add_parser(
+        "search", help="search datasets across providers"
+    )
+    datasets_search.add_argument(
+        "query", nargs="?", default="", help="search query (name, protocol, or keyword)"
+    )
     datasets_search.add_argument("--provider", help="restrict search to a specific provider")
-    datasets_search.add_argument("--limit", type=int, default=20, help="maximum results (default: 20)")
-    datasets_search.add_argument("--verbose", action="store_true", help="show detailed dataset search results")
+    datasets_search.add_argument(
+        "--limit", type=int, default=20, help="maximum results (default: 20)"
+    )
+    datasets_search.add_argument(
+        "--verbose", action="store_true", help="show detailed dataset search results"
+    )
     add_output_arguments(datasets_search)
     datasets_search.set_defaults(command="datasets search")
 
-    datasets_inspect = datasets_subparsers.add_parser("inspect", help="show full metadata for a dataset")
+    datasets_inspect = datasets_subparsers.add_parser(
+        "inspect", help="show full metadata for a dataset"
+    )
     datasets_inspect.add_argument("ref", help="dataset ref (e.g. catalog:road or just road)")
     add_output_arguments(datasets_inspect)
     datasets_inspect.set_defaults(command="datasets inspect")
@@ -407,12 +512,20 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_fetch.set_defaults(command="datasets fetch")
 
     datasets_cache = datasets_subparsers.add_parser("cache", help="manage the local datasets cache")
-    datasets_cache_subparsers = datasets_cache.add_subparsers(dest="datasets_cache_action", required=True)
-    datasets_cache_list = datasets_cache_subparsers.add_parser("list", help="list cached dataset providers")
+    datasets_cache_subparsers = datasets_cache.add_subparsers(
+        dest="datasets_cache_action", required=True
+    )
+    datasets_cache_list = datasets_cache_subparsers.add_parser(
+        "list", help="list cached dataset providers"
+    )
     add_output_arguments(datasets_cache_list)
     datasets_cache_list.set_defaults(command="datasets cache list")
-    datasets_cache_refresh = datasets_cache_subparsers.add_parser("refresh", help="refresh dataset catalog manifest")
-    datasets_cache_refresh.add_argument("--provider", default="catalog", help="provider to refresh (default: catalog)")
+    datasets_cache_refresh = datasets_cache_subparsers.add_parser(
+        "refresh", help="refresh dataset catalog manifest"
+    )
+    datasets_cache_refresh.add_argument(
+        "--provider", default="catalog", help="provider to refresh (default: catalog)"
+    )
     add_output_arguments(datasets_cache_refresh)
     datasets_cache_refresh.set_defaults(command="datasets cache refresh")
 
@@ -433,7 +546,9 @@ def build_parser() -> CanarchyArgumentParser:
         choices=["candump", "jsonl"],
         help="output format",
     )
-    datasets_convert.add_argument("--output", help="output file path (defaults to source path with new suffix)")
+    datasets_convert.add_argument(
+        "--output", help="output file path (defaults to source path with new suffix)"
+    )
     add_output_arguments(datasets_convert)
     datasets_convert.set_defaults(command="datasets convert")
 
@@ -455,14 +570,22 @@ def build_parser() -> CanarchyArgumentParser:
         help="stream output format",
     )
     datasets_stream.add_argument("--output", help="output file path; omit or use '-' for stdout")
-    datasets_stream.add_argument("--chunk-size", type=int, default=1000, help="frames per metadata chunk (default: 1000)")
+    datasets_stream.add_argument(
+        "--chunk-size", type=int, default=1000, help="frames per metadata chunk (default: 1000)"
+    )
     datasets_stream.add_argument("--max-frames", type=int, default=None, help="stop after N frames")
-    datasets_stream.add_argument("--provider-ref", help="dataset provider ref to preserve in JSONL provenance")
+    datasets_stream.add_argument(
+        "--provider-ref", help="dataset provider ref to preserve in JSONL provenance"
+    )
     add_output_arguments(datasets_stream)
     datasets_stream.set_defaults(command="datasets stream")
 
-    datasets_replay = datasets_subparsers.add_parser("replay", help="Netflix-style streaming replay from a dataset ref or URL")
-    datasets_replay.add_argument("source", help="dataset ref (e.g. catalog:candid) or remote candump URL")
+    datasets_replay = datasets_subparsers.add_parser(
+        "replay", help="Netflix-style streaming replay from a dataset ref or URL"
+    )
+    datasets_replay.add_argument(
+        "source", help="dataset ref (e.g. catalog:candid) or remote candump URL"
+    )
     datasets_replay.add_argument(
         "--format",
         dest="output_format",
@@ -470,12 +593,26 @@ def build_parser() -> CanarchyArgumentParser:
         choices=["candump", "jsonl"],
         help="stream output format (default: candump)",
     )
-    datasets_replay.add_argument("--rate", type=float, default=1.0, help="playback rate multiplier (default: 1.0 real-time)")
-    datasets_replay.add_argument("--file", dest="replay_file", help="replay file id or name from the dataset manifest")
-    datasets_replay.add_argument("--list-files", action="store_true", help="list replayable files without opening a remote stream")
+    datasets_replay.add_argument(
+        "--rate", type=float, default=1.0, help="playback rate multiplier (default: 1.0 real-time)"
+    )
+    datasets_replay.add_argument(
+        "--file", dest="replay_file", help="replay file id or name from the dataset manifest"
+    )
+    datasets_replay.add_argument(
+        "--list-files",
+        action="store_true",
+        help="list replayable files without opening a remote stream",
+    )
     datasets_replay.add_argument("--max-frames", type=int, default=None, help="stop after N frames")
-    datasets_replay.add_argument("--max-seconds", type=float, default=None, help="stop after N seconds of capture time")
-    datasets_replay.add_argument("--dry-run", action="store_true", help="resolve replay source metadata without opening the stream")
+    datasets_replay.add_argument(
+        "--max-seconds", type=float, default=None, help="stop after N seconds of capture time"
+    )
+    datasets_replay.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="resolve replay source metadata without opening the stream",
+    )
     add_output_arguments(datasets_replay)
     datasets_replay.set_defaults(command="datasets replay")
 
@@ -516,8 +653,12 @@ def build_parser() -> CanarchyArgumentParser:
 
     j1939_decode = j1939_subparsers.add_parser("decode", help="decode J1939 traffic")
     j1939_decode.add_argument("--file", help="path to candump capture file")
-    j1939_decode.add_argument("--stdin", action="store_true", help="read JSONL FrameEvents from stdin")
-    j1939_decode.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
+    j1939_decode.add_argument(
+        "--stdin", action="store_true", help="read JSONL FrameEvents from stdin"
+    )
+    j1939_decode.add_argument(
+        "--dbc", help="enrich J1939 results with a local DBC path or provider ref"
+    )
     add_j1939_file_analysis_arguments(j1939_decode)
     add_output_arguments(j1939_decode)
     j1939_decode.set_defaults(command="j1939 decode")
@@ -525,7 +666,9 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_pgn = j1939_subparsers.add_parser("pgn", help="inspect a J1939 PGN")
     j1939_pgn.add_argument("pgn", type=int)
     j1939_pgn.add_argument("--file", help="inspect the PGN within a capture file")
-    j1939_pgn.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
+    j1939_pgn.add_argument(
+        "--dbc", help="enrich J1939 results with a local DBC path or provider ref"
+    )
     add_j1939_file_analysis_arguments(j1939_pgn)
     add_output_arguments(j1939_pgn)
     j1939_pgn.set_defaults(command="j1939 pgn")
@@ -533,7 +676,9 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_spn = j1939_subparsers.add_parser("spn", help="inspect a J1939 SPN")
     j1939_spn.add_argument("spn", type=int)
     j1939_spn.add_argument("--file", help="inspect the SPN within a capture file")
-    j1939_spn.add_argument("--dbc", help="enrich J1939 results with a local DBC path or provider ref")
+    j1939_spn.add_argument(
+        "--dbc", help="enrich J1939 results with a local DBC path or provider ref"
+    )
     add_j1939_file_analysis_arguments(j1939_spn)
     add_output_arguments(j1939_spn)
     j1939_spn.set_defaults(command="j1939 spn")
@@ -541,32 +686,48 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_tp = j1939_subparsers.add_parser("tp", help="inspect J1939 transport protocol sessions")
     j1939_tp_subparsers = j1939_tp.add_subparsers(dest="tp_action", required=True)
 
-    j1939_tp_sessions = j1939_tp_subparsers.add_parser("sessions", help="list reassembled TP sessions")
+    j1939_tp_sessions = j1939_tp_subparsers.add_parser(
+        "sessions", help="list reassembled TP sessions"
+    )
     j1939_tp_sessions.add_argument("--file", required=True, help="path to candump capture file")
-    j1939_tp_sessions.add_argument("--pgn", type=lambda x: int(x, 0), default=None, help="filter by transfer PGN")
-    j1939_tp_sessions.add_argument("--sa", default=None, help="filter by source address (comma-separated hex or decimal)")
+    j1939_tp_sessions.add_argument(
+        "--pgn", type=lambda x: int(x, 0), default=None, help="filter by transfer PGN"
+    )
+    j1939_tp_sessions.add_argument(
+        "--sa", default=None, help="filter by source address (comma-separated hex or decimal)"
+    )
     add_j1939_file_analysis_arguments(j1939_tp_sessions)
     add_output_arguments(j1939_tp_sessions)
     j1939_tp_sessions.set_defaults(command="j1939 tp sessions")
 
-    j1939_tp_compare = j1939_tp_subparsers.add_parser("compare", help="compare TP sessions across source addresses")
+    j1939_tp_compare = j1939_tp_subparsers.add_parser(
+        "compare", help="compare TP sessions across source addresses"
+    )
     j1939_tp_compare.add_argument("--file", required=True, help="path to candump capture file")
-    j1939_tp_compare.add_argument("--sa", required=True, help="comma-separated source addresses to compare (hex or decimal)")
-    j1939_tp_compare.add_argument("--pgn", type=lambda x: int(x, 0), default=None, help="filter by transfer PGN")
+    j1939_tp_compare.add_argument(
+        "--sa", required=True, help="comma-separated source addresses to compare (hex or decimal)"
+    )
+    j1939_tp_compare.add_argument(
+        "--pgn", type=lambda x: int(x, 0), default=None, help="filter by transfer PGN"
+    )
     add_j1939_file_analysis_arguments(j1939_tp_compare)
     add_output_arguments(j1939_tp_compare)
     j1939_tp_compare.set_defaults(command="j1939 tp compare")
 
     j1939_dm1 = j1939_subparsers.add_parser("dm1", help="inspect J1939 DM1 traffic")
     j1939_dm1.add_argument("--file", required=True, help="path to candump capture file")
-    j1939_dm1.add_argument("--dbc", help="enrich DM1 DTC names with a local DBC path or provider ref")
+    j1939_dm1.add_argument(
+        "--dbc", help="enrich DM1 DTC names with a local DBC path or provider ref"
+    )
     add_j1939_file_analysis_arguments(j1939_dm1)
     add_output_arguments(j1939_dm1)
     j1939_dm1.set_defaults(command="j1939 dm1")
 
     j1939_faults = j1939_subparsers.add_parser("faults", help="summarize J1939 DM1 faults by ECU")
     j1939_faults.add_argument("--file", required=True, help="path to candump capture file")
-    j1939_faults.add_argument("--dbc", help="enrich DTC names with a local DBC path or provider ref")
+    j1939_faults.add_argument(
+        "--dbc", help="enrich DTC names with a local DBC path or provider ref"
+    )
     add_j1939_file_analysis_arguments(j1939_faults)
     add_output_arguments(j1939_faults)
     j1939_faults.set_defaults(command="j1939 faults")
@@ -577,13 +738,17 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(j1939_summary)
     j1939_summary.set_defaults(command="j1939 summary")
 
-    j1939_inventory = j1939_subparsers.add_parser("inventory", help="build a J1939 ECU inventory from a capture")
+    j1939_inventory = j1939_subparsers.add_parser(
+        "inventory", help="build a J1939 ECU inventory from a capture"
+    )
     j1939_inventory.add_argument("--file", required=True, help="path to candump capture file")
     add_j1939_file_analysis_arguments(j1939_inventory)
     add_output_arguments(j1939_inventory)
     j1939_inventory.set_defaults(command="j1939 inventory")
 
-    j1939_compare = j1939_subparsers.add_parser("compare", help="compare multiple J1939 capture files")
+    j1939_compare = j1939_subparsers.add_parser(
+        "compare", help="compare multiple J1939 capture files"
+    )
     j1939_compare.add_argument("files", nargs="+", help="paths to candump capture files")
     add_j1939_file_analysis_arguments(j1939_compare)
     add_output_arguments(j1939_compare)
@@ -625,30 +790,51 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(re_entropy)
     re_entropy.set_defaults(command="re entropy")
 
-    re_correlate = re_subparsers.add_parser("correlate", help="correlate signal candidates against a reference series")
+    re_correlate = re_subparsers.add_parser(
+        "correlate", help="correlate signal candidates against a reference series"
+    )
     re_correlate.add_argument("file")
-    re_correlate.add_argument("--reference", help="reference series file (.json or .jsonl) with timestamp and value fields")
+    re_correlate.add_argument(
+        "--reference",
+        help="reference series file (.json or .jsonl) with timestamp and value fields",
+    )
     add_output_arguments(re_correlate)
     re_correlate.set_defaults(command="re correlate")
 
-    re_match_dbc = re_subparsers.add_parser("match-dbc", help="rank candidate DBCs against a capture")
+    re_match_dbc = re_subparsers.add_parser(
+        "match-dbc", help="rank candidate DBCs against a capture"
+    )
     re_match_dbc.add_argument("capture", help="capture file to analyse")
-    re_match_dbc.add_argument("--provider", default="opendbc", help="DBC provider catalog to search (default: opendbc)")
-    re_match_dbc.add_argument("--limit", type=int, default=10, help="maximum candidates to return (default: 10)")
+    re_match_dbc.add_argument(
+        "--provider", default="opendbc", help="DBC provider catalog to search (default: opendbc)"
+    )
+    re_match_dbc.add_argument(
+        "--limit", type=int, default=10, help="maximum candidates to return (default: 10)"
+    )
     add_output_arguments(re_match_dbc)
     re_match_dbc.set_defaults(command="re match-dbc")
 
-    re_shortlist_dbc = re_subparsers.add_parser("shortlist-dbc", help="rank candidate DBCs filtered by vehicle make")
+    re_shortlist_dbc = re_subparsers.add_parser(
+        "shortlist-dbc", help="rank candidate DBCs filtered by vehicle make"
+    )
     re_shortlist_dbc.add_argument("capture", help="capture file to analyse")
-    re_shortlist_dbc.add_argument("--make", required=True, help="vehicle make to pre-filter candidates (e.g. toyota)")
-    re_shortlist_dbc.add_argument("--provider", default="opendbc", help="DBC provider catalog to search (default: opendbc)")
-    re_shortlist_dbc.add_argument("--limit", type=int, default=10, help="maximum candidates to return (default: 10)")
+    re_shortlist_dbc.add_argument(
+        "--make", required=True, help="vehicle make to pre-filter candidates (e.g. toyota)"
+    )
+    re_shortlist_dbc.add_argument(
+        "--provider", default="opendbc", help="DBC provider catalog to search (default: opendbc)"
+    )
+    re_shortlist_dbc.add_argument(
+        "--limit", type=int, default=10, help="maximum candidates to return (default: 10)"
+    )
     add_output_arguments(re_shortlist_dbc)
     re_shortlist_dbc.set_defaults(command="re shortlist-dbc")
 
     config = subparsers.add_parser("config", help="inspect CANarchy configuration")
     config_subparsers = config.add_subparsers(dest="config_action", required=True)
-    config_show = config_subparsers.add_parser("show", help="show effective transport configuration")
+    config_show = config_subparsers.add_parser(
+        "show", help="show effective transport configuration"
+    )
     add_output_arguments(config_show)
     config_show.set_defaults(command="config show")
 
@@ -1026,7 +1212,21 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command in {"filter", "stats", "decode", "j1939 decode", "j1939 pgn", "j1939 spn", "j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults", "j1939 summary", "j1939 inventory", "j1939 compare"}:
+    if args.command in {
+        "filter",
+        "stats",
+        "decode",
+        "j1939 decode",
+        "j1939 pgn",
+        "j1939 spn",
+        "j1939 tp sessions",
+        "j1939 tp compare",
+        "j1939 dm1",
+        "j1939 faults",
+        "j1939 summary",
+        "j1939 inventory",
+        "j1939 compare",
+    }:
         max_frames = getattr(args, "max_frames", None)
         seconds = getattr(args, "seconds", None)
         if max_frames is not None and max_frames < 1:
@@ -1133,7 +1333,7 @@ def validate_args(args: argparse.Namespace) -> None:
                     )
                 ],
                 data={"name": args.name},
-                )
+            )
 
 
 def frame_from_stream_event(event: dict[str, Any], *, command: str, line_num: int) -> CanFrame:
@@ -1146,9 +1346,9 @@ def frame_from_stream_event(event: dict[str, Any], *, command: str, line_num: in
                     code="INVALID_STREAM_EVENT",
                     message=f"Expected frame event, got {event.get('event_type')} at line {line_num}",
                     hint="Input stream must contain JSONL FrameEvents.",
-                            )
-                        ],
-                    )
+                )
+            ],
+        )
 
     try:
         frame_data = event["payload"]["frame"]
@@ -1227,7 +1427,9 @@ def j1939_file_analysis_kwargs(args: argparse.Namespace) -> dict[str, int | floa
     }
 
 
-def _large_file_kwargs(args: argparse.Namespace, file: str, warnings: list[str]) -> dict[str, int | float | None]:
+def _large_file_kwargs(
+    args: argparse.Namespace, file: str, warnings: list[str]
+) -> dict[str, int | float | None]:
     """Apply auto-cap when the file exceeds the large-file threshold and no limit is set."""
     kwargs = j1939_file_analysis_kwargs(args)
     if kwargs["max_frames"] is None and kwargs["seconds"] is None:
@@ -1272,7 +1474,9 @@ def _enrich_tp_session(session: dict[str, Any]) -> dict[str, Any]:
     enriched = dict(session)
     transfer_pgn = int(enriched["transfer_pgn"])
     enriched["payload_label"] = _tp_payload_label(transfer_pgn)
-    enriched["payload_label_source"] = "known_transfer_pgn" if enriched["payload_label"] is not None else None
+    enriched["payload_label_source"] = (
+        "known_transfer_pgn" if enriched["payload_label"] is not None else None
+    )
     enriched["decoded_text"] = None
     enriched["decoded_text_encoding"] = None
     enriched["decoded_text_heuristic"] = False
@@ -1300,7 +1504,9 @@ def _enrich_tp_session(session: dict[str, Any]) -> dict[str, Any]:
     return enriched
 
 
-def _j1939_summary(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[dict[str, Any], list[str]]:
+def _j1939_summary(
+    frames: list[CanFrame], *, file: str, decoder: Any
+) -> tuple[dict[str, Any], list[str]]:
     if not frames:
         return (
             {
@@ -1332,13 +1538,17 @@ def _j1939_summary(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[
             ["No frames were found in the capture."],
         )
 
-    identifiers = [decompose_arbitration_id(frame.arbitration_id) for frame in frames if frame.is_extended_id]
+    identifiers = [
+        decompose_arbitration_id(frame.arbitration_id) for frame in frames if frame.is_extended_id
+    ]
     pgn_counts: Counter[int] = Counter(identifier.pgn for identifier in identifiers)
     source_counts: Counter[int] = Counter(identifier.source_address for identifier in identifiers)
     interfaces = sorted({frame.interface or "unknown" for frame in frames})
     timestamps = [frame.timestamp for frame in frames]
     dm1_messages = decoder.dm1_messages(frames)
-    tp_sessions = [_enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)]
+    tp_sessions = [
+        _enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)
+    ]
     session_types = Counter(str(session["session_type"]) for session in tp_sessions)
     printable_identifiers: list[dict[str, object]] = []
     for session in tp_sessions:
@@ -1382,12 +1592,18 @@ def _j1939_summary(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[
             "dm1": {
                 "present": bool(dm1_messages),
                 "message_count": len(dm1_messages),
-                "active_dtc_count": sum(int(message["active_dtc_count"]) for message in dm1_messages),
-                "source_addresses": sorted({int(message["source_address"]) for message in dm1_messages}),
+                "active_dtc_count": sum(
+                    int(message["active_dtc_count"]) for message in dm1_messages
+                ),
+                "source_addresses": sorted(
+                    {int(message["source_address"]) for message in dm1_messages}
+                ),
             },
             "tp": {
                 "session_count": len(tp_sessions),
-                "complete_session_count": sum(1 for session in tp_sessions if bool(session.get("complete", False))),
+                "complete_session_count": sum(
+                    1 for session in tp_sessions if bool(session.get("complete", False))
+                ),
                 "session_types": dict(sorted(session_types.items())),
                 "printable_identifiers": printable_identifiers,
             },
@@ -1416,7 +1632,9 @@ def _dedupe_inventory_identifiers(entries: list[dict[str, Any]]) -> list[dict[st
     return deduped
 
 
-def _j1939_inventory(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[dict[str, Any], list[str]]:
+def _j1939_inventory(
+    frames: list[CanFrame], *, file: str, decoder: Any
+) -> tuple[dict[str, Any], list[str]]:
     if not frames:
         return (
             {
@@ -1439,7 +1657,9 @@ def _j1939_inventory(frames: list[CanFrame], *, file: str, decoder: Any) -> tupl
 
     interfaces = sorted({frame.interface or "unknown" for frame in frames})
     timestamps = [frame.timestamp for frame in frames]
-    tp_sessions = [_enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)]
+    tp_sessions = [
+        _enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)
+    ]
     dm1_messages = decoder.dm1_messages(frames)
 
     source_pgn_counts: defaultdict[int, Counter[int]] = defaultdict(Counter)
@@ -1536,7 +1756,9 @@ def _j1939_inventory(frames: list[CanFrame], *, file: str, decoder: Any) -> tupl
                 "dm1": {
                     "present": bool(dm1_for_source),
                     "message_count": len(dm1_for_source),
-                    "active_dtc_count": sum(int(message["active_dtc_count"]) for message in dm1_for_source),
+                    "active_dtc_count": sum(
+                        int(message["active_dtc_count"]) for message in dm1_for_source
+                    ),
                 },
             }
         )
@@ -1582,15 +1804,18 @@ def _format_source_address_entry(source_address: int) -> dict[str, Any]:
     }
 
 
-def _j1939_compare_capture(frames: list[CanFrame], *, file: str, decoder: Any) -> tuple[dict[str, Any], list[str]]:
+def _j1939_compare_capture(
+    frames: list[CanFrame], *, file: str, decoder: Any
+) -> tuple[dict[str, Any], list[str]]:
     summary_data, summary_warnings = _j1939_summary(frames, file=file, decoder=decoder)
     inventory_data, inventory_warnings = _j1939_inventory(frames, file=file, decoder=decoder)
     dm1_messages = decoder.dm1_messages(frames)
     faults_data = _j1939_faults(dm1_messages, file=file)
-    tp_sessions = [_enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)]
 
     pgns = {entry["pgn"] for entry in summary_data.get("top_pgns", [])}
-    source_addresses = {entry["source_address"] for entry in summary_data.get("top_source_addresses", [])}
+    source_addresses = {
+        entry["source_address"] for entry in summary_data.get("top_source_addresses", [])
+    }
     for frame in frames:
         if not frame.is_extended_id:
             continue
@@ -1613,7 +1838,9 @@ def _j1939_compare_capture(frames: list[CanFrame], *, file: str, decoder: Any) -
             "message_count": int(ecu["message_count"]),
             "active_fault_count": int(ecu["fault_count"]),
             "lamp_summary": dict(ecu["lamp_summary"]),
-            "faults": sorted(faults, key=lambda item: (item["spn"], item["fmi"], item.get("name") or "")),
+            "faults": sorted(
+                faults, key=lambda item: (item["spn"], item["fmi"], item.get("name") or "")
+            ),
         }
 
     identifier_map: dict[tuple[int, str], list[str]] = {}
@@ -1633,7 +1860,9 @@ def _j1939_compare_capture(frames: list[CanFrame], *, file: str, decoder: Any) -
             "unique_pgn_count": len(pgns),
             "unique_source_count": len(source_addresses),
             "pgns": [_format_pgn_entry(pgn) for pgn in sorted(pgns)],
-            "source_addresses": [_format_source_address_entry(sa) for sa in sorted(source_addresses)],
+            "source_addresses": [
+                _format_source_address_entry(sa) for sa in sorted(source_addresses)
+            ],
             "dm1_by_source": dm1_by_source,
             "identifiers": [
                 {
@@ -1670,10 +1899,7 @@ def _dm1_compare_signature(entry: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _j1939_compare(captures: list[dict[str, Any]]) -> dict[str, Any]:
-    pgn_sets = [
-        {int(entry["pgn"]) for entry in capture.get("pgns", [])}
-        for capture in captures
-    ]
+    pgn_sets = [{int(entry["pgn"]) for entry in capture.get("pgns", [])} for capture in captures]
     source_sets = [
         {int(entry["source_address"]) for entry in capture.get("source_addresses", [])}
         for capture in captures
@@ -1734,7 +1960,10 @@ def _j1939_compare(captures: list[dict[str, Any]]) -> dict[str, Any]:
         for capture in captures:
             values: list[str] = []
             for entry in capture.get("identifiers", []):
-                if int(entry["source_address"]) == source_address and str(entry["payload_label"]) == payload_label:
+                if (
+                    int(entry["source_address"]) == source_address
+                    and str(entry["payload_label"]) == payload_label
+                ):
                     values = list(entry.get("values", []))
                     break
             normalized = tuple(values)
@@ -1759,17 +1988,30 @@ def _j1939_compare(captures: list[dict[str, Any]]) -> dict[str, Any]:
         "unique_pgns": [
             {
                 "file": capture["file"],
-                "pgns": [_format_pgn_entry(pgn) for pgn in sorted({int(entry["pgn"]) for entry in capture.get("pgns", [])} - common_pgns)],
+                "pgns": [
+                    _format_pgn_entry(pgn)
+                    for pgn in sorted(
+                        {int(entry["pgn"]) for entry in capture.get("pgns", [])} - common_pgns
+                    )
+                ],
             }
             for capture in captures
         ],
-        "common_source_addresses": [_format_source_address_entry(sa) for sa in sorted(common_sources)],
+        "common_source_addresses": [
+            _format_source_address_entry(sa) for sa in sorted(common_sources)
+        ],
         "unique_source_addresses": [
             {
                 "file": capture["file"],
                 "source_addresses": [
                     _format_source_address_entry(sa)
-                    for sa in sorted({int(entry["source_address"]) for entry in capture.get("source_addresses", [])} - common_sources)
+                    for sa in sorted(
+                        {
+                            int(entry["source_address"])
+                            for entry in capture.get("source_addresses", [])
+                        }
+                        - common_sources
+                    )
                 ],
             }
             for capture in captures
@@ -1903,7 +2145,7 @@ def _j1939_tp_compare(
                 "payload_hash": s.get("payload_hash"),
                 "reassembled_data": s.get("reassembled_data"),
             }
-            for s in sorted(pgn_sessions, key=lambda s: (s.get("timestamp") or 0.0))
+            for s in sorted(pgn_sessions, key=lambda s: s.get("timestamp") or 0.0)
         ]
         groups.append(
             {
@@ -1911,7 +2153,9 @@ def _j1939_tp_compare(
                 "session_count": len(pgn_sessions),
                 "payloads_identical": len(unique_hashes) == 1 and None not in hashes,
                 "unique_payload_count": len(unique_hashes),
-                "timing_spread_seconds": round(max(timestamps) - min(timestamps), 6) if len(timestamps) >= 2 else 0.0,
+                "timing_spread_seconds": round(max(timestamps) - min(timestamps), 6)
+                if len(timestamps) >= 2
+                else 0.0,
                 "repeated_sources": repeated_sources,
                 "sessions": session_summaries,
             }
@@ -2087,7 +2331,11 @@ def transport_payload(
         if args.file == "-":
             from canarchy.transport import iter_candump_file
 
-            frames = list(iter_candump_file(None, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds))
+            frames = list(
+                iter_candump_file(
+                    None, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
+                )
+            )
             return (
                 {
                     "mode": "passive",
@@ -2100,7 +2348,9 @@ def transport_payload(
                 transport.filter_events("<stdin>", args.expression, frames=frames),
                 [],
             )
-        frames = transport.frames_from_file(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
+        frames = transport.frames_from_file(
+            args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
+        )
         return (
             {
                 "mode": "passive",
@@ -2117,17 +2367,27 @@ def transport_payload(
         if args.file == "-":
             from canarchy.transport import TransportStats, iter_candump_file
 
-            frames = list(iter_candump_file(None, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds))
+            frames = list(
+                iter_candump_file(
+                    None, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
+                )
+            )
             if not frames:
                 raise CommandError(
                     command=args.command,
                     exit_code=EXIT_USER_ERROR,
-                    errors=[ErrorDetail(code="CAPTURE_EMPTY", message="No valid frames read from stdin.")],
+                    errors=[
+                        ErrorDetail(
+                            code="CAPTURE_EMPTY", message="No valid frames read from stdin."
+                        )
+                    ],
                 )
             # Calculate stats
             unique_ids = len(set(f.arbitration_id for f in frames))
             interfaces = list(set(f.interface for f in frames))
-            stats = TransportStats(total_frames=len(frames), unique_arbitration_ids=unique_ids, interfaces=interfaces)
+            stats = TransportStats(
+                total_frames=len(frames), unique_arbitration_ids=unique_ids, interfaces=interfaces
+            )
             return (
                 {
                     "mode": "passive",
@@ -2139,7 +2399,9 @@ def transport_payload(
                 [],
                 [],
             )
-        stats = transport.stats(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
+        stats = transport.stats(
+            args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
+        )
         return (
             {
                 "mode": "passive",
@@ -2156,6 +2418,7 @@ def transport_payload(
             # Handle stdin
             import sys
             from canarchy.transport import parse_candump_line
+
             frames = []
             for line_number, raw_line in enumerate(sys.stdin, start=1):
                 stripped = raw_line.strip()
@@ -2171,7 +2434,11 @@ def transport_payload(
                 raise CommandError(
                     command=args.command,
                     exit_code=EXIT_USER_ERROR,
-                    errors=[ErrorDetail(code="CAPTURE_EMPTY", message="No valid frames read from stdin.")],
+                    errors=[
+                        ErrorDetail(
+                            code="CAPTURE_EMPTY", message="No valid frames read from stdin."
+                        )
+                    ],
                 )
             timestamps = [f.timestamp for f in frames]
             unique_ids = len(set(f.arbitration_id for f in frames))
@@ -2180,7 +2447,9 @@ def transport_payload(
                 "frame_count": len(frames),
                 "unique_ids": unique_ids,
                 "interfaces": interfaces,
-                "duration_seconds": max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0.0,
+                "duration_seconds": max(timestamps) - min(timestamps)
+                if len(timestamps) > 1
+                else 0.0,
                 "start_time": min(timestamps),
                 "end_time": max(timestamps),
                 "scan_mode": "stdin",
@@ -2216,7 +2485,9 @@ def j1939_payload(
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
 
-    def enrich_with_dbc(data: dict[str, Any], frames: list[CanFrame]) -> tuple[dict[str, Any], list[str]]:
+    def enrich_with_dbc(
+        data: dict[str, Any], frames: list[CanFrame]
+    ) -> tuple[dict[str, Any], list[str]]:
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
         if not dbc_ref:
             return data, []
@@ -2227,7 +2498,9 @@ def j1939_payload(
         dbc_events = decode_frames(frames, str(resolution.local_path))
         warnings: list[str] = []
         if not dbc_events:
-            warnings.append("No frames in the J1939 selection matched messages from the selected DBC.")
+            warnings.append(
+                "No frames in the J1939 selection matched messages from the selected DBC."
+            )
         return (
             {
                 **data,
@@ -2241,7 +2514,9 @@ def j1939_payload(
             warnings,
         )
 
-    def enrich_dm1_with_dbc(data: dict[str, Any], messages: list[dict[str, Any]]) -> tuple[dict[str, Any], list[str]]:
+    def enrich_dm1_with_dbc(
+        data: dict[str, Any], messages: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], list[str]]:
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
         if not dbc_ref:
             return data, []
@@ -2313,7 +2588,9 @@ def j1939_payload(
             frames = transport.frames_from_file(args.file, **analysis_kwargs)
             events = decoder.decode_events(frames)
         else:
-            events = decoder.decode_events(transport.iter_frames_from_file(args.file, **analysis_kwargs))
+            events = decoder.decode_events(
+                transport.iter_frames_from_file(args.file, **analysis_kwargs)
+            )
             frames = []
         warnings = []
         if not events:
@@ -2338,7 +2615,11 @@ def j1939_payload(
             transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
             args.pgn,
         )
-        matched_frames = [frame for frame in (getattr(event, "frame", None) for event in event_objects) if frame is not None]
+        matched_frames = [
+            frame
+            for frame in (getattr(event, "frame", None) for event in event_objects)
+            if frame is not None
+        ]
         data, dbc_warnings = enrich_with_dbc(
             {"mode": "passive", "pgn": args.pgn, "file": args.file},
             matched_frames,
@@ -2365,7 +2646,9 @@ def j1939_payload(
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
         analysis_kwargs = j1939_file_analysis_kwargs(args)
         if args.spn in decoder.supported_spns() and not dbc_ref:
-            observations = decoder.spn_observations(transport.iter_frames_from_file(args.file, **analysis_kwargs), args.spn)
+            observations = decoder.spn_observations(
+                transport.iter_frames_from_file(args.file, **analysis_kwargs), args.spn
+            )
             decoder_name = "curated_spn_map"
             matching_frames: list[Any] = []
         else:
@@ -2383,7 +2666,8 @@ def j1939_payload(
             matching_frames = [
                 frame
                 for frame in frames
-                if frame.is_extended_id and decompose_arbitration_id(frame.arbitration_id).pgn in matched_pgns
+                if frame.is_extended_id
+                and decompose_arbitration_id(frame.arbitration_id).pgn in matched_pgns
             ]
         warnings = []
         if not observations:
@@ -2444,7 +2728,12 @@ def j1939_payload(
             and (pgn_filter is None or int(session["transfer_pgn"]) == pgn_filter)
         ]
         return (
-            _j1939_tp_compare(all_sessions, source_addresses=sorted(sa_filter), pgn_filter=pgn_filter, file=args.file),
+            _j1939_tp_compare(
+                all_sessions,
+                source_addresses=sorted(sa_filter),
+                pgn_filter=pgn_filter,
+                file=args.file,
+            ),
             [],
             [],
         )
@@ -2452,7 +2741,9 @@ def j1939_payload(
         auto_warnings: list[str] = []
         decoder = get_j1939_decoder()
         messages = decoder.dm1_messages(
-            transport.iter_frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings))
+            transport.iter_frames_from_file(
+                args.file, **_large_file_kwargs(args, args.file, auto_warnings)
+            )
         )
         warnings = auto_warnings + dm1_warnings(messages)
         data, dbc_warnings = enrich_dm1_with_dbc(
@@ -2475,7 +2766,9 @@ def j1939_payload(
         auto_warnings = []
         decoder = get_j1939_decoder()
         messages = decoder.dm1_messages(
-            transport.iter_frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings))
+            transport.iter_frames_from_file(
+                args.file, **_large_file_kwargs(args, args.file, auto_warnings)
+            )
         )
         warnings = auto_warnings + dm1_warnings(messages)
         enriched_data, dbc_warnings = enrich_dm1_with_dbc(
@@ -2502,7 +2795,9 @@ def j1939_payload(
         auto_warnings = []
         decoder = get_j1939_decoder()
         data, warnings = _j1939_summary(
-            transport.frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings)),
+            transport.frames_from_file(
+                args.file, **_large_file_kwargs(args, args.file, auto_warnings)
+            ),
             file=args.file,
             decoder=decoder,
         )
@@ -2511,7 +2806,9 @@ def j1939_payload(
         auto_warnings = []
         decoder = get_j1939_decoder()
         data, warnings = _j1939_inventory(
-            transport.frames_from_file(args.file, **_large_file_kwargs(args, args.file, auto_warnings)),
+            transport.frames_from_file(
+                args.file, **_large_file_kwargs(args, args.file, auto_warnings)
+            ),
             file=args.file,
             decoder=decoder,
         )
@@ -2552,7 +2849,13 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     dbc_source = _build_dbc_source(resolution)
 
     if args.command == "decode":
-        frames = frames_from_stdin(command=args.command) if args.stdin else transport.frames_from_file(args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds)
+        frames = (
+            frames_from_stdin(command=args.command)
+            if args.stdin
+            else transport.frames_from_file(
+                args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
+            )
+        )
 
         events = decode_frames(frames, dbc_path)
         warnings = []
@@ -2601,7 +2904,9 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
 
-def dbc_provider_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+def dbc_provider_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     from canarchy.dbc_provider import get_registry
     from canarchy.dbc_cache import cache_list, cache_prune
 
@@ -2627,7 +2932,9 @@ def dbc_provider_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list
         ]
         warnings: list[str] = []
         if not items:
-            warnings.append("No DBC files matched the query. Try `canarchy dbc cache refresh --provider opendbc` to populate the catalog.")
+            warnings.append(
+                "No DBC files matched the query. Try `canarchy dbc cache refresh --provider opendbc` to populate the catalog."
+            )
         return ({"query": args.query, "count": len(items), "results": items}, [], warnings)
 
     if args.command == "dbc fetch":
@@ -2661,6 +2968,7 @@ def dbc_provider_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list
         provider = registry.get_provider(provider_name)
         if provider is None:
             from canarchy.dbc import DbcError
+
             raise DbcError(
                 code="DBC_PROVIDER_NOT_FOUND",
                 message=f"Provider '{provider_name}' is not registered.",
@@ -2679,7 +2987,9 @@ def dbc_provider_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list
     raise AssertionError(f"unsupported dbc provider command: {args.command}")
 
 
-def skills_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+def skills_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     from canarchy.skills_cache import cache_list
     from canarchy.skills_provider import get_registry
 
@@ -2705,7 +3015,9 @@ def skills_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[
         ]
         warnings: list[str] = []
         if not items:
-            warnings.append("No skills matched the query. Try `canarchy skills cache refresh --provider github` to populate the catalog.")
+            warnings.append(
+                "No skills matched the query. Try `canarchy skills cache refresh --provider github` to populate the catalog."
+            )
         return ({"query": args.query, "count": len(items), "results": items}, [], warnings)
 
     if args.command == "skills fetch":
@@ -2750,7 +3062,9 @@ def skills_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[
     raise AssertionError(f"unsupported skills command: {args.command}")
 
 
-def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+def datasets_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     from canarchy.dataset_cache import cache_list
     from canarchy.dataset_provider import DatasetError, get_registry
 
@@ -2790,28 +3104,40 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
                 exit_code=EXIT_USER_ERROR,
                 errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
             ) from exc
-        
+
         # Determine if this is a curated index
-        metadata = resolution.descriptor.metadata if isinstance(resolution.descriptor.metadata, dict) else {}
+        metadata = (
+            resolution.descriptor.metadata
+            if isinstance(resolution.descriptor.metadata, dict)
+            else {}
+        )
         source_type = metadata.get("source_type") if isinstance(metadata, dict) else None
         is_index = source_type == "curated-index" or "catalog" in resolution.descriptor.formats
-        
+
         # Build appropriate instructions
         if is_index:
             index_instructions = (
                 f"Curated index entry. Visit the index page to discover datasets: "
                 f"{resolution.descriptor.source_url}"
-                + (f" — Note: {resolution.descriptor.access_notes}" if resolution.descriptor.access_notes else "")
-                + f"\n  Use `canarchy datasets search` to find specific datasets from this index."
+                + (
+                    f" — Note: {resolution.descriptor.access_notes}"
+                    if resolution.descriptor.access_notes
+                    else ""
+                )
+                + "\n  Use `canarchy datasets search` to find specific datasets from this index."
             )
             download_instructions = index_instructions
         else:
             download_instructions = (
                 f"Dataset provenance recorded. Download the data manually from: "
                 f"{resolution.descriptor.source_url}"
-                + (f" — Note: {resolution.descriptor.access_notes}" if resolution.descriptor.access_notes else "")
+                + (
+                    f" — Note: {resolution.descriptor.access_notes}"
+                    if resolution.descriptor.access_notes
+                    else ""
+                )
             )
-        
+
         return (
             {
                 "ref": args.ref,
@@ -2840,11 +3166,13 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
             raise CommandError(
                 command=args.command,
                 exit_code=EXIT_USER_ERROR,
-                errors=[ErrorDetail(
-                    code="DATASET_PROVIDER_NOT_FOUND",
-                    message=f"Provider '{provider_name}' is not registered.",
-                    hint=f"Available providers: {', '.join(p['name'] for p in registry.list_providers())}.",
-                )],
+                errors=[
+                    ErrorDetail(
+                        code="DATASET_PROVIDER_NOT_FOUND",
+                        message=f"Provider '{provider_name}' is not registered.",
+                        hint=f"Available providers: {', '.join(p['name'] for p in registry.list_providers())}.",
+                    )
+                ],
             )
         descriptors = provider.refresh()
         return ({"provider": provider_name, "dataset_count": len(descriptors)}, [], [])
@@ -2899,7 +3227,9 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
         from canarchy.dataset_convert import ConversionError, stream_replay
 
         try:
-            replay_source = resolve_dataset_replay_source(args.source, registry, replay_file=getattr(args, "replay_file", None))
+            replay_source = resolve_dataset_replay_source(
+                args.source, registry, replay_file=getattr(args, "replay_file", None)
+            )
             if getattr(args, "list_files", False):
                 return (dataset_replay_files_payload(replay_source), [], [])
             validate_dataset_replay_options(args, replay_source)
@@ -2932,7 +3262,9 @@ def datasets_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dic
     raise AssertionError(f"unsupported datasets command: {args.command}")
 
 
-def resolve_dataset_replay_source(source: str, registry: Any, *, replay_file: str | None = None) -> dict[str, Any]:
+def resolve_dataset_replay_source(
+    source: str, registry: Any, *, replay_file: str | None = None
+) -> dict[str, Any]:
     """Resolve a replay source from either a direct URL or dataset descriptor metadata."""
     if source.startswith(("http://", "https://")):
         return {
@@ -2995,11 +3327,23 @@ def replay_files(replay: dict[str, Any]) -> list[dict[str, Any]]:
         return [dict(file) for file in files if isinstance(file, dict)]
     default_file = replay.get("default_file") if isinstance(replay, dict) else None
     download_url = replay.get("download_url") if isinstance(replay, dict) else None
-    source_format = replay.get("source_format", "candump") if isinstance(replay, dict) else "candump"
-    return [{"id": default_file, "name": default_file, "format": source_format, "size_bytes": None, "source_url": download_url}]
+    source_format = (
+        replay.get("source_format", "candump") if isinstance(replay, dict) else "candump"
+    )
+    return [
+        {
+            "id": default_file,
+            "name": default_file,
+            "format": source_format,
+            "size_bytes": None,
+            "source_url": download_url,
+        }
+    ]
 
 
-def select_replay_file(files: list[dict[str, Any]], requested: str | None, source: str) -> dict[str, Any]:
+def select_replay_file(
+    files: list[dict[str, Any]], requested: str | None, source: str
+) -> dict[str, Any]:
     """Select a replay file by stable id or name."""
     if not files:
         from canarchy.dataset_provider import DatasetError
@@ -3103,7 +3447,9 @@ def dataset_replay_provenance(replay_source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def validate_dataset_replay_options(args: argparse.Namespace, replay_source: dict[str, Any]) -> None:
+def validate_dataset_replay_options(
+    args: argparse.Namespace, replay_source: dict[str, Any]
+) -> None:
     """Validate replay options that dry-run plans claim would be streamable."""
     from canarchy.dataset_convert import ConversionError
 
@@ -3342,11 +3688,13 @@ def reverse_engineering_payload(
             raise CommandError(
                 command=args.command,
                 exit_code=EXIT_USER_ERROR,
-                errors=[ErrorDetail(
-                    code="PLUGIN_NOT_FOUND",
-                    message="Built-in processor 'signal-analysis' is not registered.",
-                    hint="Ensure the plugin registry has not been modified.",
-                )],
+                errors=[
+                    ErrorDetail(
+                        code="PLUGIN_NOT_FOUND",
+                        message="Built-in processor 'signal-analysis' is not registered.",
+                        hint="Ensure the plugin registry has not been modified.",
+                    )
+                ],
             )
         result = processor.process(frames)
         return (
@@ -3366,11 +3714,13 @@ def reverse_engineering_payload(
             raise CommandError(
                 command=args.command,
                 exit_code=EXIT_USER_ERROR,
-                errors=[ErrorDetail(
-                    code="PLUGIN_NOT_FOUND",
-                    message="Built-in processor 'counter-candidates' is not registered.",
-                    hint="Ensure the plugin registry has not been modified.",
-                )],
+                errors=[
+                    ErrorDetail(
+                        code="PLUGIN_NOT_FOUND",
+                        message="Built-in processor 'counter-candidates' is not registered.",
+                        hint="Ensure the plugin registry has not been modified.",
+                    )
+                ],
             )
         result = processor.process(frames)
         return (
@@ -3390,11 +3740,13 @@ def reverse_engineering_payload(
             raise CommandError(
                 command=args.command,
                 exit_code=EXIT_USER_ERROR,
-                errors=[ErrorDetail(
-                    code="PLUGIN_NOT_FOUND",
-                    message="Built-in processor 'entropy-candidates' is not registered.",
-                    hint="Ensure the plugin registry has not been modified.",
-                )],
+                errors=[
+                    ErrorDetail(
+                        code="PLUGIN_NOT_FOUND",
+                        message="Built-in processor 'entropy-candidates' is not registered.",
+                        hint="Ensure the plugin registry has not been modified.",
+                    )
+                ],
             )
         result = processor.process(frames)
         return (
@@ -3436,7 +3788,6 @@ def reverse_engineering_payload(
                 f"No candidate DBCs{filter_note} scored above zero against this capture."
             )
 
-        command_label = "re match-dbc" if args.command == "re match-dbc" else "re shortlist-dbc"
         data: dict[str, Any] = {
             "capture": capture_file,
             "provider": provider_name,
@@ -3468,7 +3819,9 @@ def reverse_engineering_payload(
             ) from exc
         corr_warnings: list[str] = []
         if analysis["candidate_count"] == 0:
-            corr_warnings.append("No fields met the minimum sample overlap threshold for correlation.")
+            corr_warnings.append(
+                "No fields met the minimum sample overlap threshold for correlation."
+            )
         return (
             {
                 "mode": "passive",
@@ -3534,7 +3887,11 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def build_result(args: argparse.Namespace) -> CommandResult:
-    warnings = [] if args.command in IMPLEMENTED_COMMANDS else ["Command implementation is not complete yet."]
+    warnings = (
+        []
+        if args.command in IMPLEMENTED_COMMANDS
+        else ["Command implementation is not complete yet."]
+    )
     data = {
         key: value
         for key, value in vars(args).items()
@@ -3707,7 +4064,9 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         for group in groups:
             identical_flag = " [identical]" if group["payloads_identical"] else ""
             repeated = group.get("repeated_sources", [])
-            repeated_suffix = " repeated=" + ",".join(f"0x{sa:02X}" for sa in repeated) if repeated else ""
+            repeated_suffix = (
+                " repeated=" + ",".join(f"0x{sa:02X}" for sa in repeated) if repeated else ""
+            )
             lines.append(
                 f"pgn={group['transfer_pgn']} "
                 f"sessions={group['session_count']} "
@@ -3735,9 +4094,9 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             lines.append("- no dm1 messages")
             return lines
         for message in messages:
-            dtc_text = ",".join(
-                f"spn={dtc['spn']}/fmi={dtc['fmi']}" for dtc in message["dtcs"]
-            ) or "none"
+            dtc_text = (
+                ",".join(f"spn={dtc['spn']}/fmi={dtc['fmi']}" for dtc in message["dtcs"]) or "none"
+            )
             sa = message["source_address"]
             sa_name = source_address_lookup(sa)
             sa_label = f" [{sa_name}]" if sa_name else ""
@@ -3754,7 +4113,9 @@ def format_j1939_table(result: CommandResult) -> list[str]:
 
     if result.command == "j1939 faults":
         lines.append(f"file: {result.data['file']}")
-        lines.append(f"sources: {result.data['source_count']}  total_faults: {result.data['total_fault_count']}")
+        lines.append(
+            f"sources: {result.data['source_count']}  total_faults: {result.data['total_fault_count']}"
+        )
         ecus = result.data.get("ecus", [])
         if not ecus:
             lines.append("- no dm1 fault activity")
@@ -3787,7 +4148,9 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         lines.append(f"interfaces: {', '.join(result.data['interfaces']) or 'none'}")
         lines.append(f"unique_arbitration_ids: {result.data['unique_arbitration_ids']}")
         lines.append(f"j1939_frames: {result.data['j1939_frame_count']}")
-        lines.append(f"timestamps: {result.data['first_timestamp']}..{result.data['last_timestamp']}")
+        lines.append(
+            f"timestamps: {result.data['first_timestamp']}..{result.data['last_timestamp']}"
+        )
         lines.append(
             f"dm1: present={result.data['dm1']['present']} messages={result.data['dm1']['message_count']} active_dtcs={result.data['dm1']['active_dtc_count']}"
         )
@@ -3821,7 +4184,9 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         else:
             for entry in printable_identifiers:
                 destination = entry["destination_address"]
-                destination_text = f"0x{destination:02X}" if destination is not None else "broadcast"
+                destination_text = (
+                    f"0x{destination:02X}" if destination is not None else "broadcast"
+                )
                 lines.append(
                     "- "
                     f"text={entry['text']} "
@@ -3851,12 +4216,21 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             source_address = node["source_address"]
             source_name = node.get("source_address_name")
             source_label = f" [{source_name}]" if source_name else ""
-            component_text = ",".join(entry["text"] for entry in node.get("component_identifications", [])) or "none"
-            vehicle_text = ",".join(entry["text"] for entry in node.get("vehicle_identifications", [])) or "none"
-            top_pgns = ",".join(
-                f"{entry['pgn']}" + (f"[{entry['label']}]" if entry.get("label") else "")
-                for entry in node.get("top_pgns", [])
-            ) or "none"
+            component_text = (
+                ",".join(entry["text"] for entry in node.get("component_identifications", []))
+                or "none"
+            )
+            vehicle_text = (
+                ",".join(entry["text"] for entry in node.get("vehicle_identifications", []))
+                or "none"
+            )
+            top_pgns = (
+                ",".join(
+                    f"{entry['pgn']}" + (f"[{entry['label']}]" if entry.get("label") else "")
+                    for entry in node.get("top_pgns", [])
+                )
+                or "none"
+            )
             lines.append(
                 "- "
                 f"sa=0x{source_address:02X}{source_label} "
@@ -3882,10 +4256,13 @@ def format_j1939_table(result: CommandResult) -> list[str]:
                 lines.append(f"- pgn={entry['pgn']}{label}")
         lines.append("unique_pgns:")
         for capture in result.data.get("unique_pgns", []):
-            pgn_text = ", ".join(
-                f"{entry['pgn']}" + (f"[{entry['label']}]" if entry.get("label") else "")
-                for entry in capture.get("pgns", [])
-            ) or "none"
+            pgn_text = (
+                ", ".join(
+                    f"{entry['pgn']}" + (f"[{entry['label']}]" if entry.get("label") else "")
+                    for entry in capture.get("pgns", [])
+                )
+                or "none"
+            )
             lines.append(f"- {capture['file']}: {pgn_text}")
         lines.append("common_source_addresses:")
         common_sources = result.data.get("common_source_addresses", [])
@@ -3893,14 +4270,24 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             lines.append("- none")
         else:
             for entry in common_sources:
-                label = f" [{entry['source_address_name']}]" if entry.get("source_address_name") else ""
+                label = (
+                    f" [{entry['source_address_name']}]" if entry.get("source_address_name") else ""
+                )
                 lines.append(f"- sa=0x{entry['source_address']:02X}{label}")
         lines.append("unique_source_addresses:")
         for capture in result.data.get("unique_source_addresses", []):
-            sa_text = ", ".join(
-                f"0x{entry['source_address']:02X}" + (f"[{entry['source_address_name']}]" if entry.get("source_address_name") else "")
-                for entry in capture.get("source_addresses", [])
-            ) or "none"
+            sa_text = (
+                ", ".join(
+                    f"0x{entry['source_address']:02X}"
+                    + (
+                        f"[{entry['source_address_name']}]"
+                        if entry.get("source_address_name")
+                        else ""
+                    )
+                    for entry in capture.get("source_addresses", [])
+                )
+                or "none"
+            )
             lines.append(f"- {capture['file']}: {sa_text}")
         lines.append("dm1_differences:")
         dm1_differences = result.data.get("dm1_differences", [])
@@ -3909,13 +4296,20 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         else:
             for difference in dm1_differences:
                 sa = difference["source_address"]
-                label = f" [{difference['source_address_name']}]" if difference.get("source_address_name") else ""
+                label = (
+                    f" [{difference['source_address_name']}]"
+                    if difference.get("source_address_name")
+                    else ""
+                )
                 lines.append(f"- sa=0x{sa:02X}{label}")
                 for capture in difference.get("captures", []):
-                    faults = ", ".join(
-                        f"spn={fault['spn']}/fmi={fault['fmi']}"
-                        for fault in capture.get("faults", [])
-                    ) or "none"
+                    faults = (
+                        ", ".join(
+                            f"spn={fault['spn']}/fmi={fault['fmi']}"
+                            for fault in capture.get("faults", [])
+                        )
+                        or "none"
+                    )
                     lines.append(
                         f"  {capture['file']}: present={capture['present']} active_faults={capture['active_fault_count']} faults={faults}"
                     )
@@ -3926,7 +4320,11 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         else:
             for difference in identifier_differences:
                 sa = difference["source_address"]
-                label = f" [{difference['source_address_name']}]" if difference.get("source_address_name") else ""
+                label = (
+                    f" [{difference['source_address_name']}]"
+                    if difference.get("source_address_name")
+                    else ""
+                )
                 lines.append(f"- sa=0x{sa:02X}{label} label={difference['payload_label']}")
                 for capture in difference.get("captures", []):
                     values = ", ".join(capture.get("values", [])) or "none"
@@ -3959,29 +4357,15 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             f"id=0x{frame['arbitration_id']:08X} "
             f"data={frame['data']}"
         )
-        decoded = pretty_j1939_support.describe_frame(describer, frame["arbitration_id"], frame["data"])
+        decoded = pretty_j1939_support.describe_frame(
+            describer, frame["arbitration_id"], frame["data"]
+        )
         if decoded:
             for field_name, field_value in decoded.items():
                 lines.append(f"  {field_name}: {field_value}")
     return lines
-def format_dbc_table(result: CommandResult) -> list[str]:
-    lines = [f"command: {result.command}"]
-    database = result.data.get("database", {})
-    message_count = database.get("message_count", 0)
-    lines.append(f"messages: {message_count}")
-    messages = result.data.get("messages", [])
-    if not messages:
-        lines.append("- no messages")
-        return lines
-    for message in messages:
-        lines.append(
-            "- "
-            f"name={message['name']} "
-            f"id={message['arbitration_id_hex']} "
-            f"signals={message['signal_count']} "
-            f"length={message['length']}"
-        )
-    return lines
+
+
 def format_uds_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
     if result.command == "uds services":
@@ -4226,7 +4610,9 @@ def format_dbc_table(result: CommandResult) -> list[str]:
         )
         for signal in message.get("signals", []):
             unit = f" [{signal['unit']}]" if signal.get("unit") else ""
-            lines.append(f"    {signal['name']}: {signal.get('byte_order', '')} {signal.get('length', '')}bit{unit}")
+            lines.append(
+                f"    {signal['name']}: {signal.get('byte_order', '')} {signal.get('length', '')}bit{unit}"
+            )
     return lines
 
 
@@ -4358,7 +4744,9 @@ def format_dataset_inspect(result: CommandResult) -> list[str]:
                 lines.append(f"    {f_id} ({f_format}): {f_name}")
     if is_index:
         lines.append("  Note: This is a curated index, not directly replayable.")
-        lines.append("  Use `canarchy datasets search <keyword>` to find specific datasets from this index.")
+        lines.append(
+            "  Use `canarchy datasets search <keyword>` to find specific datasets from this index."
+        )
     if data.get("access_notes"):
         lines.append(f"  Access notes: {data['access_notes']}")
     lines.append("")
@@ -4387,7 +4775,9 @@ def format_datasets_fetch(result: CommandResult) -> list[str]:
     lines.append("")
 
     lines.append("Next steps")
-    instruction = data.get("index_instructions") if is_index else data.get("download_instructions", "")
+    instruction = (
+        data.get("index_instructions") if is_index else data.get("download_instructions", "")
+    )
     for part in (instruction or "").split("\n"):
         lines.append(f"  {part}" if part.strip() else "")
     lines.append("")
@@ -4424,9 +4814,13 @@ def format_datasets_replay_dry_run(result: CommandResult) -> list[str]:
     rate = data.get("rate")
     lines.append(f"  Rate: {rate} fps" if rate is not None else "  Rate: (default)")
     max_frames = data.get("max_frames")
-    lines.append(f"  Max frames: {max_frames}" if max_frames is not None else "  Max frames: (none)")
+    lines.append(
+        f"  Max frames: {max_frames}" if max_frames is not None else "  Max frames: (none)"
+    )
     max_seconds = data.get("max_seconds")
-    lines.append(f"  Max seconds: {max_seconds}" if max_seconds is not None else "  Max seconds: (none)")
+    lines.append(
+        f"  Max seconds: {max_seconds}" if max_seconds is not None else "  Max seconds: (none)"
+    )
     lines.append("")
 
     lines.append("Replay plan")
@@ -4452,9 +4846,13 @@ def format_datasets_table(result: CommandResult) -> list[str]:
     count = result.data.get("count", 0)
     results = result.data.get("results", [])
     is_empty_query = not query
-    title_query = "All datasets" if is_empty_query else f"\"{query}\""
-    title = f"All datasets ({count})" if is_empty_query else f"Datasets matching {title_query} ({count})"
-    
+    title_query = "All datasets" if is_empty_query else f'"{query}"'
+    title = (
+        f"All datasets ({count})"
+        if is_empty_query
+        else f"Datasets matching {title_query} ({count})"
+    )
+
     if result.data.get("verbose"):
         lines = [title, ""]
         for item in results:
@@ -4478,7 +4876,7 @@ def format_datasets_table(result: CommandResult) -> list[str]:
             if is_replayable and item.get("default_replay_file"):
                 lines.append(f"  Default replay file: {item['default_replay_file']}")
             if is_index:
-                lines.append(f"  Note: This is a curated index, not directly replayable.")
+                lines.append("  Note: This is a curated index, not directly replayable.")
             if item.get("access_notes"):
                 lines.append(f"  Access: {item['access_notes']}")
             lines.append("")
@@ -4551,9 +4949,7 @@ def emit_live_capture(args: argparse.Namespace, output_format: str) -> int:
                 interface = frame["interface"] or args.interface
                 timestamp = event.get("timestamp")
                 timestamp_text = (
-                    f"({timestamp:0.6f})"
-                    if isinstance(timestamp, (int, float))
-                    else "(0.000000)"
+                    f"({timestamp:0.6f})" if isinstance(timestamp, (int, float)) else "(0.000000)"
                 )
                 print(f"{timestamp_text} {interface} {format_candump_frame(frame)}")
             else:
@@ -4632,7 +5028,9 @@ def emit_dataset_replay(args: argparse.Namespace) -> int:
     from canarchy.dataset_convert import ConversionError, stream_replay
 
     try:
-        replay_source = resolve_dataset_replay_source(args.source, get_registry(), replay_file=getattr(args, "replay_file", None))
+        replay_source = resolve_dataset_replay_source(
+            args.source, get_registry(), replay_file=getattr(args, "replay_file", None)
+        )
         result = stream_replay(
             replay_source["download_url"],
             source_format=replay_source["source_format"],
@@ -4667,7 +5065,9 @@ def _emit_warnings_jsonl(payload: dict[str, Any], result: CommandResult) -> None
                     level="warning",
                     message=warning,
                     source=f"cli.{result.command}",
-                ).to_event().to_payload(),
+                )
+                .to_event()
+                .to_payload(),
                 sort_keys=True,
             )
         )
@@ -4687,7 +5087,14 @@ def _flatten_frame_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
-    _J1939_SESSION_COMMANDS = {"j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 summary", "j1939 inventory", "j1939 compare"}
+    _J1939_SESSION_COMMANDS = {
+        "j1939 tp sessions",
+        "j1939 tp compare",
+        "j1939 dm1",
+        "j1939 summary",
+        "j1939 inventory",
+        "j1939 compare",
+    }
     if output_format == "json":
         data = payload.get("data", {})
         if result.command == "filter":
@@ -4776,7 +5183,11 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"warning: {warning}")
         return
 
-    if output_format == "text" and result.ok and result.command in {"datasets provider list", "datasets search"}:
+    if (
+        output_format == "text"
+        and result.ok
+        and result.command in {"datasets provider list", "datasets search"}
+    ):
         for line in format_datasets_table(result):
             print(line)
         for warning in payload["warnings"]:
@@ -4797,7 +5208,12 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"warning: {warning}")
         return
 
-    if output_format == "text" and result.ok and result.command == "datasets replay" and result.data.get("dry_run"):
+    if (
+        output_format == "text"
+        and result.ok
+        and result.command == "datasets replay"
+        and result.data.get("dry_run")
+    ):
         for line in format_datasets_replay_dry_run(result):
             print(line)
         for warning in payload["warnings"]:
@@ -4838,10 +5254,7 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             "  require_active_ack: "
             f"{result.data.get('require_active_ack')}  [{sources.get('require_active_ack', '?')}]"
         )
-        print(
-            "  j1939_dbc: "
-            f"{result.data.get('j1939_dbc')}  [{sources.get('j1939_dbc', '?')}]"
-        )
+        print(f"  j1939_dbc: {result.data.get('j1939_dbc')}  [{sources.get('j1939_dbc', '?')}]")
         config_file = result.data.get("config_file", "")
         found = result.data.get("config_file_found", False)
         status = "found" if found else "not found"
@@ -4871,6 +5284,7 @@ def run_shell(shell_command: str | None) -> int:
         return main(shlex.split(shell_command))
 
     from canarchy.completion import install_completion
+
     install_completion()
 
     while True:
@@ -4947,7 +5361,11 @@ def execute_command(argv: Sequence[str] | None = None) -> tuple[int, CommandResu
             EXIT_DECODE_ERROR,
             error_result(
                 args.command,
-                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint, detail=exc.detail)],
+                errors=[
+                    ErrorDetail(
+                        code=exc.code, message=exc.message, hint=exc.hint, detail=exc.detail
+                    )
+                ],
             ),
         )
     except SkillError as exc:
@@ -5002,6 +5420,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     output_format = format_name(args)
     if args.command == "mcp serve":
         from canarchy.mcp_server import run_server
+
         run_server()
         return EXIT_OK
     if args.command == "shell":
@@ -5014,7 +5433,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return emit_live_gateway(args)
     if args.command == "datasets stream" and not args.json:
         return emit_dataset_stream(args)
-    if args.command == "datasets replay" and not args.json and not getattr(args, "dry_run", False) and not getattr(args, "list_files", False):
+    if (
+        args.command == "datasets replay"
+        and not args.json
+        and not getattr(args, "dry_run", False)
+        and not getattr(args, "list_files", False)
+    ):
         return emit_dataset_replay(args)
 
     exit_code, result = execute_command(argv)

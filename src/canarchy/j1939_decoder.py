@@ -22,11 +22,15 @@ class J1939Decoder(Protocol):
 
     def decode_events(self, frames: Iterable[CanFrame]) -> list[J1939ObservationEvent]: ...
 
-    def decode_pgn_events(self, frames: Iterable[CanFrame], pgn: int) -> list[J1939ObservationEvent]: ...
+    def decode_pgn_events(
+        self, frames: Iterable[CanFrame], pgn: int
+    ) -> list[J1939ObservationEvent]: ...
 
     def spn_observations(self, frames: Iterable[CanFrame], spn: int) -> list[dict[str, object]]: ...
 
-    def transport_protocol_sessions(self, frames: Iterable[CanFrame]) -> list[dict[str, object]]: ...
+    def transport_protocol_sessions(
+        self, frames: Iterable[CanFrame]
+    ) -> list[dict[str, object]]: ...
 
     def dm1_messages(self, frames: Iterable[CanFrame]) -> list[dict[str, object]]: ...
 
@@ -47,10 +51,14 @@ class CanJ1939Decoder:
     def decode_events(self, frames: Iterable[CanFrame]) -> list[J1939ObservationEvent]:
         return self._decode_events(frames, pgn=None)
 
-    def decode_pgn_events(self, frames: Iterable[CanFrame], pgn: int) -> list[J1939ObservationEvent]:
+    def decode_pgn_events(
+        self, frames: Iterable[CanFrame], pgn: int
+    ) -> list[J1939ObservationEvent]:
         return self._decode_events(frames, pgn=pgn)
 
-    def _decode_events(self, frames: Iterable[CanFrame], pgn: int | None) -> list[J1939ObservationEvent]:
+    def _decode_events(
+        self, frames: Iterable[CanFrame], pgn: int | None
+    ) -> list[J1939ObservationEvent]:
         events: list[J1939ObservationEvent] = []
         for frame in frames:
             if not frame.is_extended_id:
@@ -95,7 +103,7 @@ class CanJ1939Decoder:
             end = definition.start + definition.length
             if len(frame.data) < end:
                 continue
-            raw = frame.data[definition.start:end]
+            raw = frame.data[definition.start : end]
             raw_value = int.from_bytes(raw, byteorder=definition.byteorder)
             if raw_value == (1 << (len(raw) * 8)) - 1:
                 value = None
@@ -147,7 +155,9 @@ class CanJ1939Decoder:
                     }
                     if control == self.TP_CM_RTS:
                         session["max_packets_per_cts"] = frame.data[4]
-                    open_sessions[(identifier.source_address, identifier.destination_address)] = session
+                    open_sessions[(identifier.source_address, identifier.destination_address)] = (
+                        session
+                    )
                     sessions.append(session)
                     continue
 
@@ -186,7 +196,9 @@ class CanJ1939Decoder:
             assert isinstance(packets, dict)
             total_packets = int(session["total_packets"])
             packet_count = len(packets)
-            reassembled = b"".join(packets[index] for index in range(1, total_packets + 1) if index in packets)
+            reassembled = b"".join(
+                packets[index] for index in range(1, total_packets + 1) if index in packets
+            )
             total_bytes = int(session["total_bytes"])
             payload = reassembled[:total_bytes]
             summaries.append(
@@ -235,7 +247,9 @@ class CanJ1939Decoder:
                             "total_packets": frame.data[3],
                             "transfer_pgn": transfer_pgn,
                         }
-                        open_sessions[(identifier.source_address, identifier.destination_address)] = session
+                        open_sessions[
+                            (identifier.source_address, identifier.destination_address)
+                        ] = session
                         tp_sessions.append(session)
                         continue
 
@@ -272,10 +286,16 @@ class CanJ1939Decoder:
             assert isinstance(packets, dict)
             total_packets = int(session["total_packets"])
             packet_count = len(packets)
-            reassembled = b"".join(packets[index] for index in range(1, total_packets + 1) if index in packets)
+            reassembled = b"".join(
+                packets[index] for index in range(1, total_packets + 1) if index in packets
+            )
             total_bytes = int(session["total_bytes"])
             payload = reassembled[:total_bytes]
-            if bool(session.get("aborted", False)) or len(payload) < total_bytes or packet_count < total_packets:
+            if (
+                bool(session.get("aborted", False))
+                or len(payload) < total_bytes
+                or packet_count < total_packets
+            ):
                 continue
             messages.append(
                 self._build_dm1_message(
@@ -287,7 +307,9 @@ class CanJ1939Decoder:
                 )
             )
 
-        return sorted(messages, key=lambda message: (message["timestamp"] or 0.0, message["source_address"]))
+        return sorted(
+            messages, key=lambda message: (message["timestamp"] or 0.0, message["source_address"])
+        )
 
     def _build_dm1_message(
         self,

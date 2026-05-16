@@ -154,7 +154,7 @@ def _require_interface(plugin: Any, protocol: type, required: str) -> str:
     except AttributeError:
         raise PluginError(
             code="PLUGIN_INVALID",
-            message=f"Plugin object is missing a 'name' attribute.",
+            message="Plugin object is missing a 'name' attribute.",
             hint=f"Ensure the class declares 'name', 'api_version', and {required}.",
         )
     if not isinstance(plugin, protocol):

@@ -16,7 +16,9 @@ _RAW_BASE = "https://raw.githubusercontent.com"
 
 
 def _github_get(url: str) -> Any:
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    )
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())
 
@@ -28,9 +30,7 @@ def _resolve_commit(repo: str, ref: str) -> str:
 
 def _list_dbc_files(repo: str, commit: str) -> list[dict[str, str]]:
     """Return list of {name, path, sha} for all .dbc files under opendbc/dbc/."""
-    tree_data = _github_get(
-        f"{_GITHUB_API}/repos/{repo}/git/trees/{commit}?recursive=1"
-    )
+    tree_data = _github_get(f"{_GITHUB_API}/repos/{repo}/git/trees/{commit}?recursive=1")
     results = []
     for item in tree_data.get("tree", []):
         path = item.get("path", "")
@@ -68,10 +68,33 @@ def _make_descriptor(entry: dict[str, str], commit: str, cache_path: Path | None
 
 def _infer_brand(name: str) -> str | None:
     prefixes = [
-        "toyota", "honda", "ford", "gm", "chevrolet", "cadillac", "buick",
-        "chrysler", "dodge", "jeep", "ram", "hyundai", "kia", "genesis",
-        "subaru", "volkswagen", "audi", "bmw", "mercedes", "nissan", "mazda",
-        "volvo", "tesla", "rivian", "acura", "infiniti", "lexus",
+        "toyota",
+        "honda",
+        "ford",
+        "gm",
+        "chevrolet",
+        "cadillac",
+        "buick",
+        "chrysler",
+        "dodge",
+        "jeep",
+        "ram",
+        "hyundai",
+        "kia",
+        "genesis",
+        "subaru",
+        "volkswagen",
+        "audi",
+        "bmw",
+        "mercedes",
+        "nissan",
+        "mazda",
+        "volvo",
+        "tesla",
+        "rivian",
+        "acura",
+        "infiniti",
+        "lexus",
     ]
     lower = name.lower()
     for prefix in prefixes:
@@ -131,19 +154,13 @@ class OpenDbcProvider:
         if not catalog:
             return []
         commit = self._commit() or ""
-        scored = [
-            (entry, _score_match(entry["name"], query))
-            for entry in catalog
-        ]
+        scored = [(entry, _score_match(entry["name"], query)) for entry in catalog]
         scored = [(e, s) for e, s in scored if s > 0]
         scored.sort(key=lambda x: x[1], reverse=True)
-        return [
-            _make_descriptor(entry, commit, None)
-            for entry, _ in scored[:limit]
-        ]
+        return [_make_descriptor(entry, commit, None) for entry, _ in scored[:limit]]
 
     def resolve(self, ref: str) -> DbcResolution:
-        from canarchy.dbc_cache import cached_file_path, provider_cache_dir
+        from canarchy.dbc_cache import cached_file_path
 
         manifest = self._manifest()
         if manifest is None:

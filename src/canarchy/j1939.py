@@ -27,7 +27,6 @@ class SpnDefinition:
     byteorder: str = "little"
 
 
-
 @dataclass(slots=True, frozen=True)
 class J1939Identifier:
     priority: int
@@ -111,7 +110,7 @@ def spn_observations(frames: list[CanFrame], spn: int) -> list[dict[str, object]
         end = definition.start + definition.length
         if len(frame.data) < end:
             continue
-        raw = frame.data[definition.start:end]
+        raw = frame.data[definition.start : end]
         raw_value = int.from_bytes(raw, byteorder=definition.byteorder)
         if raw_value == (1 << (len(raw) * 8)) - 1:
             value = None
@@ -179,7 +178,9 @@ def transport_protocol_sessions(frames: list[CanFrame]) -> list[dict[str, object
         assert isinstance(packets, dict)
         total_packets = int(session["total_packets"])
         packet_count = len(packets)
-        reassembled = b"".join(packets[index] for index in range(1, total_packets + 1) if index in packets)
+        reassembled = b"".join(
+            packets[index] for index in range(1, total_packets + 1) if index in packets
+        )
         total_bytes = int(session["total_bytes"])
         payload = reassembled[:total_bytes]
         summaries.append(
@@ -225,7 +226,9 @@ def dm1_messages(frames: list[CanFrame]) -> list[dict[str, object]]:
             )
         )
 
-    return sorted(messages, key=lambda message: (message["timestamp"] or 0.0, message["source_address"]))
+    return sorted(
+        messages, key=lambda message: (message["timestamp"] or 0.0, message["source_address"])
+    )
 
 
 def _build_dm1_message(

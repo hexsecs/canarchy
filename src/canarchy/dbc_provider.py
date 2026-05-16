@@ -118,10 +118,7 @@ class ProviderRegistry:
         return results
 
     def list_providers(self) -> list[dict]:
-        return [
-            {"name": name, "registered": True}
-            for name in self._search_order
-        ]
+        return [{"name": name, "registered": True} for name in self._search_order]
 
 
 _registry: ProviderRegistry | None = None

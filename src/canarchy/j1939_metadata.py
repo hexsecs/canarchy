@@ -54,9 +54,7 @@ def spn_lookup(spn: int) -> dict[str, Any] | None:
 def decodable_spns() -> frozenset[int]:
     """SPNs with enough built-in metadata for byte-level signal decoding."""
     return frozenset(
-        spn
-        for spn, entry in _spn_data().items()
-        if _REQUIRED_DECODE_FIELDS.issubset(entry)
+        spn for spn, entry in _spn_data().items() if _REQUIRED_DECODE_FIELDS.issubset(entry)
     )
 
 

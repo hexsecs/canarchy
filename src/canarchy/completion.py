@@ -78,7 +78,8 @@ FLAGS: dict[str, list[str]] = {
         "--count",
         "--dst-backend",
         "--src-backend",
-    ] + _OUTPUT,
+    ]
+    + _OUTPUT,
     "generate": [
         "--ack-active",
         "--count",
@@ -87,7 +88,8 @@ FLAGS: dict[str, list[str]] = {
         "--extended",
         "--gap",
         "--id",
-    ] + _OUTPUT,
+    ]
+    + _OUTPUT,
     "j1939 decode": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 compare": _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 dm1": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,

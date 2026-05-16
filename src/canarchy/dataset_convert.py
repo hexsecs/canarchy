@@ -61,7 +61,11 @@ def convert_file(
     else:
         raise AssertionError(f"unhandled source format: {source_format}")
 
-    dest = Path(destination) if destination else src.with_suffix(".log" if output_format == "candump" else ".jsonl")
+    dest = (
+        Path(destination)
+        if destination
+        else src.with_suffix(".log" if output_format == "candump" else ".jsonl")
+    )
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     if output_format == "candump":
@@ -180,7 +184,7 @@ def stream_replay(
     handle: IO[str] | None = None,
 ) -> dict:
     """Netflix-style streaming replay: download and play frames with timing.
-    
+
     Downloads from remote URL incrementally and replays with original timing * rate.
     No local file is required — frames stream directly from HTTP to output.
     """
@@ -197,7 +201,7 @@ def stream_replay(
             message=f"Output format '{output_format}' is not supported.",
             hint=f"Supported output formats: {', '.join(_SUPPORTED_OUTPUT_FORMATS)}.",
         )
-    
+
     if rate <= 0:
         raise ConversionError(
             code="INVALID_RATE",
@@ -281,7 +285,7 @@ def stream_replay(
             message=f"Failed to stream replay source: {source_url}",
             hint="Check the dataset replay URL, network connectivity, and provider availability.",
         ) from exc
-            
+
     elapsed = time.monotonic() - start_time
     return {
         "source_url": source_url,
@@ -322,19 +326,19 @@ def _parse_candump_line(line: str) -> dict | None:
     line = line.strip()
     if not line:
         return None
-    
+
     match = re.match(r"\((\d+\.?\d*)\)\s+(\S+)\s+([0-9A-Fa-fXx]+)#([0-9A-Fa-f]*)", line)
     if not match:
         return None
-    
+
     timestamp = float(match.group(1))
     interface = match.group(2)
     arb_id_str = match.group(3)
     data_hex = match.group(4)
-    
+
     arb_id = int(arb_id_str, 16)
     data_bytes = bytes.fromhex(data_hex) if data_hex else b""
-    
+
     return {
         "timestamp": timestamp,
         "interface": interface,
@@ -378,7 +382,12 @@ def _parse_hcrl_csv(path: Path) -> Iterator[dict]:
                     message=f"Malformed row at line {line_num}: {exc}",
                     hint="Check that Timestamp is a float, ID is hex, and Data is space-separated hex bytes.",
                 ) from exc
-            yield {"timestamp": timestamp, "arbitration_id": arb_id, "data": data_bytes, "label": label}
+            yield {
+                "timestamp": timestamp,
+                "arbitration_id": arb_id,
+                "data": data_bytes,
+                "label": label,
+            }
 
 
 def _frame_to_event(frame: dict, *, source: str) -> dict:
