@@ -39,4 +39,8 @@ jobs:
         run: uv sync
 
       - name: Run test suite
-        run: uv run python -m unittest discover -s tests -v
+        # pytest is used (not `unittest discover`) so module-level
+        # function-style tests in tests/test_mcp.py and
+        # tests/test_dbc_runtime.py are collected. `unittest discover`
+        # silently skips them.
+        run: uv run pytest tests/ -q

@@ -30,7 +30,7 @@ canarchy --version
 canarchy --help
 
 # Run the full test suite.
-uv run python -m unittest discover -s tests -v
+uv run pytest tests/ -q
 ```
 
 `uv.lock` is checked in for reproducible resolution. Do not modify it by
@@ -41,7 +41,7 @@ hand — let `uv` do that.
 Every push to `main` and every pull request runs the test suite under
 [`.github/workflows/test.yml`](.github/workflows/test.yml) on Python 3.12
 and 3.13. Match that locally before opening a PR by running
-`uv run python -m unittest discover -s tests -v`.
+`uv run pytest tests/ -q`.
 
 ## Issues come first
 

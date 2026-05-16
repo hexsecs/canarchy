@@ -9,7 +9,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
-* Added `.github/workflows/test.yml` running `unittest` on Python 3.12 and 3.13 for every push to `main` and every pull request, so PR validation no longer depends on manual local runs. Closes #306.
+* Added `.github/workflows/test.yml` running `pytest` on Python 3.12 and 3.13 for every push to `main` and every pull request, so PR validation no longer depends on manual local runs. The workflow uses `pytest` (not `unittest discover`) so module-level function-style tests in `tests/test_mcp.py` and `tests/test_dbc_runtime.py` are collected; 667 tests run vs. 599 under `unittest discover`. Closes #306.
+
+### Fixed
+
+* Declared `requests>=2.31` under `[project] dependencies` in `pyproject.toml`. The package is imported by `src/canarchy/dataset_convert.py` and `tests/test_dataset_provider.py`, but was only present transitively via the `docs` group. Clean environments would fail `canarchy datasets convert` and could not load the 119 tests in `test_dataset_provider`. Closes #337.
 
 ### Changed
 
