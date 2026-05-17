@@ -169,8 +169,32 @@ def test_mutate_replay_timing_preserves_payload_and_id():
     for original, mutated in zip(frames, out, strict=True):
         assert mutated.data == original.data
         assert mutated.arbitration_id == original.arbitration_id
-        # Timestamp must shift by at most 5ms in either direction.
+        # With 1-second gaps the ±5ms jitter never needs to clamp, so the
+        # mutated timestamp stays within ±5ms of the original.
         assert abs((mutated.timestamp or 0.0) - (original.timestamp or 0.0)) <= 5e-3 + 1e-9
+    # Monotonicity is part of the contract regardless of input spacing.
+    timestamps = [(f.timestamp or 0.0) for f in out]
+    assert timestamps == sorted(timestamps)
+
+
+def test_mutate_replay_timing_preserves_monotonicity_for_close_frames():
+    """Regression for Codex P1 on PR #345.
+
+    When adjacent frames are closer than 10ms apart, independent ±5ms
+    offsets could otherwise reorder them. The mutator must clamp so
+    the output sequence remains non-decreasing.
+    """
+    # Five frames 2ms apart — well under the ±5ms jitter window.
+    frames = [
+        CanFrame(arbitration_id=0x100 + i, data=bytes([i]), timestamp=i * 0.002) for i in range(5)
+    ]
+    # Try a range of seeds so we exercise both signs of the jitter.
+    for seed in range(20):
+        out = list(fuzzing.mutate_replay(frames, strategy="timing", seed=seed))
+        timestamps = [(f.timestamp or 0.0) for f in out]
+        assert timestamps == sorted(timestamps), (
+            f"non-monotonic output with seed={seed}: {timestamps}"
+        )
 
 
 def test_mutate_replay_payload_bitflip_changes_exactly_one_bit():

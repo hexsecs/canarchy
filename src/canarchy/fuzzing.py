@@ -147,23 +147,29 @@ def mutate_replay(
             f"Unknown replay strategy: {strategy!r}. Supported: 'timing', 'payload-bitflip'."
         )
     rng = random.Random(seed)
-    for index, frame in enumerate(frames):
+    prev_mutated_ts: float | None = None
+    for frame in frames:
         if strategy == "timing":
             # Offsets in [-5ms, +5ms] keep the replay roughly recognisable
             # while still exercising downstream timing-sensitive code.
+            # The result is clamped so the mutated stream remains
+            # non-decreasing in time: when the proposed offset would
+            # make this frame's timestamp earlier than the previous
+            # mutated frame's, we float it to that previous timestamp
+            # instead. Downstream replay schedulers depend on
+            # monotonicity.
             offset_ms = rng.uniform(-5.0, 5.0)
-            new_ts = (frame.timestamp or 0.0) + offset_ms / 1000.0
-            yield replace(frame, timestamp=new_ts)
+            proposed = (frame.timestamp or 0.0) + offset_ms / 1000.0
+            if prev_mutated_ts is not None and proposed < prev_mutated_ts:
+                proposed = prev_mutated_ts
+            prev_mutated_ts = proposed
+            yield replace(frame, timestamp=proposed)
         else:  # payload-bitflip
             if not frame.data:
                 yield frame
                 continue
             bit = rng.randrange(len(frame.data) * 8)
             yield replace(frame, data=_flip_bit(frame.data, bit))
-        # `index` only exists to keep the seeded RNG advancing in a
-        # predictable way per frame; suppress linter noise about an
-        # unused name without changing semantics.
-        del index
 
 
 # ---------------------------------------------------------------------------
