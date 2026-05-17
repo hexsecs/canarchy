@@ -16,6 +16,30 @@ Today the repository delivers:
 * live CAN transport via `python-can` with support for socketcan, virtual bus, and UDP multicast
 * UDS scan and trace, DBC decode/encode, capture/filter/replay, and an interactive shell
 
+### Try it in 60 seconds
+
+Once a CANarchy release has been published to PyPI:
+
+```bash
+pipx install canarchy
+canarchy --version
+canarchy doctor --text
+
+# Stream two pre-recorded frame events from the deterministic scaffold
+# backend — no hardware, no fixture files, no network. Shows the
+# canonical JSONL envelope.
+CANARCHY_TRANSPORT_BACKEND=scaffold canarchy capture can0 --jsonl
+```
+
+`canarchy doctor` runs eight offline health checks; everything green
+means the install is good. The scaffold capture demonstrates the
+structured-output contract that every command emits. Replace it with
+`canarchy capture can0 --candump` once you have a real interface, or
+clone the repo to run against the in-tree J1939 fixtures.
+
+For development or for installs from a checkout, see
+[Installation](#installation) below.
+
 ### Why CANarchy?
 
 Most CAN tools force the wrong tradeoff: interactive but hard to automate, scriptable but too raw, protocol-aware but inconsistent across interfaces. CANarchy is built around the opposite constraint: every output is a stream of typed events you can parse, pipe, or forward to an agent.
@@ -73,7 +97,28 @@ Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaff
 
 ### Installation
 
-CANarchy currently targets Python 3.12 or newer and uses `uv` for environment and packaging workflows.
+CANarchy currently targets Python 3.12 or newer.
+
+#### From PyPI (recommended for users)
+
+```bash
+pipx install canarchy        # isolated, on PATH everywhere
+# or
+pip install --user canarchy  # if pipx is not available
+```
+
+After install, confirm the environment is healthy:
+
+```bash
+canarchy --version
+canarchy doctor --text
+```
+
+Shell completions for bash, zsh, and fish are produced by `canarchy completion <shell>`; see [Getting Started](docs/getting_started.md#install-shell-completion) for the install snippet for each shell.
+
+#### From source (development)
+
+CANarchy uses `uv` for environment, dependency, and packaging workflows.
 
 1. Install Python 3.12 or newer.
 2. Install `uv`.
