@@ -43,7 +43,9 @@ active workflow.
 | `REQ-ATS-06` | Unwanted behaviour | If the rate cap would be exceeded by the requested workload, the system shall return a structured error with code `ACTIVE_TRANSMIT_RATE_EXCEEDED` and exit code `1` before any frame is transmitted. |
 | `REQ-ATS-07` | Optional feature | Where `--targets <path>` is supplied (or `[safety].targets_file` is set in `~/.canarchy/config.toml`), the system shall load an allowlist of arbitration IDs and refuse to transmit frames whose ID is not present. |
 | `REQ-ATS-08` | Unwanted behaviour | If a target allowlist is in force and the requested transmission targets an ID outside the allowlist, the system shall return a structured error with code `ACTIVE_TRANSMIT_TARGET_BLOCKED` and exit code `1` before any frame is transmitted. |
-| `REQ-ATS-09` | State-driven | While an active-transmit command is running, the system shall stop transmission cleanly when SIGINT is received or when stdin reaches EOF, emitting a final `alert` event with reason `KILL_SWITCH_TRIGGERED`. |
+| `REQ-ATS-09` | State-driven | While an active-transmit command is running, the system shall stop transmission cleanly when SIGINT is received, emitting a final `alert` event with reason `KILL_SWITCH_TRIGGERED`. |
+| `REQ-ATS-09a` | State-driven | While an active-transmit command is running **and stdin was a live pipe at command start and has not yet reached EOF**, the system shall also stop cleanly when stdin transitions to EOF. |
+| `REQ-ATS-09b` | Unwanted behaviour | If stdin is a TTY, closed, or already at EOF at command start (for example a CI runner that supplies `stdin=/dev/null`, an MCP subprocess, or a cron job), the system shall ignore stdin EOF as a kill condition so non-interactive automation can run to completion. |
 | `REQ-ATS-10` | Optional feature | Where `--dry-run` is supplied, the system shall plan the transmission and emit the would-send frames as JSONL events to stdout without opening a transport, and the response shall carry the structured warning code `ACTIVE_TRANSMIT_DRY_RUN`. |
 | `REQ-ATS-11` | Optional feature | Where the command is invoked via the MCP server, the system shall require an explicit `ack_active=true` argument in the tool call. |
 | `REQ-ATS-12` | Unwanted behaviour | If an MCP active-transmit tool is invoked without `ack_active=true`, the system shall return a structured error with code `ACTIVE_TRANSMIT_REQUIRES_ACK` and exit code `1` without invoking the underlying command. |
@@ -139,11 +141,20 @@ allowlist checks still run.
 
 ### Kill switch
 
-When SIGINT is received or stdin reaches EOF while an active-transmit
-command is running, the system emits a final `alert` event with
+The kill switch fires on SIGINT unconditionally and on stdin EOF only
+when stdin was a live pipe at command start. When triggered, the
+system emits a final `alert` event with
 `payload.reason = "KILL_SWITCH_TRIGGERED"` and `payload.frames_sent =
 <count>`, then exits with `EXIT_PARTIAL_SUCCESS` (4). The canonical
 summary still includes `data.frames_sent` and `data.run_id`.
+
+A pipe is considered "live at command start" when `sys.stdin` is not
+a TTY and `select.select([sys.stdin], [], [], 0)` does not already
+report EOF at startup. In any other case (TTY input, closed pipe,
+`stdin=/dev/null`, MCP subprocess) stdin EOF is silently ignored so
+long-running commands (`gateway`, `replay`) can still run to
+completion in non-interactive contexts. SIGINT remains the universal
+stop signal.
 
 ### Rate-cap violations
 

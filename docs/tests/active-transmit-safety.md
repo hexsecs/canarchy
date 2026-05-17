@@ -20,7 +20,9 @@
 | `REQ-ATS-06` | `ACTIVE_TRANSMIT_RATE_EXCEEDED` returned when violated | `TEST-ATS-06` |
 | `REQ-ATS-07` | target allowlist file loaded and honoured | `TEST-ATS-07`, `TEST-ATS-08` |
 | `REQ-ATS-08` | `ACTIVE_TRANSMIT_TARGET_BLOCKED` returned for off-list IDs | `TEST-ATS-08` |
-| `REQ-ATS-09` | kill switch on SIGINT and stdin EOF | `TEST-ATS-09`, `TEST-ATS-10` |
+| `REQ-ATS-09` | kill switch on SIGINT | `TEST-ATS-09` |
+| `REQ-ATS-09a` | kill switch on stdin EOF when stdin was a live pipe | `TEST-ATS-10` |
+| `REQ-ATS-09b` | EOF ignored when stdin starts at EOF (CI / MCP / cron / TTY) | `TEST-ATS-10a`, `TEST-ATS-10b` |
 | `REQ-ATS-10` | `--dry-run` plans but does not transmit | `TEST-ATS-11` |
 | `REQ-ATS-11` | MCP requires `ack_active=true` | `TEST-ATS-12` |
 | `REQ-ATS-12` | `ACTIVE_TRANSMIT_REQUIRES_ACK` from MCP without ack | `TEST-ATS-12` |
@@ -68,11 +70,17 @@ And    the response shall include `data.run_id`
 
 ### TEST-ATS-04 — `run_id` is stamped on every emitted event
 
+The JSONL output is event-stream oriented and does not emit a
+trailing envelope. The assertion that the same `run_id` shows up in
+the canonical summary `data.run_id` is verified via a parallel
+`--json` invocation with the same arguments.
+
 ```gherkin
 Given  a dry-run invocation of `canarchy generate vcan0 --count 5 --rate 100 --ack-active --jsonl`
 When   the command completes
 Then   the system shall include the same `run_id` on every emitted JSONL event
-And    the value shall match the UUID echoed in the final envelope `data.run_id`
+And    the value shall parse as a UUID
+And    a parallel `--json` invocation of the same arguments shall return `data.run_id` as a UUID with the same envelope shape
 ```
 
 **Fixture:** scaffold backend; `--dry-run` keeps the test offline.
@@ -138,18 +146,44 @@ And    exit with code 4
 
 **Fixture:** scaffold backend; subprocess harness so SIGINT is real.
 
-### TEST-ATS-10 — Kill switch on stdin EOF
+### TEST-ATS-10 — Kill switch on stdin EOF when stdin was a live pipe
 
 ```gherkin
 Given  `canarchy fuzz payload vcan0 --id 0x100 --strategy bitflip --rate 100 --ack-active --jsonl` is running
-And    the command is reading from a piped stdin
+And    stdin is a live pipe at command start (not a TTY, not /dev/null, not at EOF)
 When   the upstream pipe closes (EOF)
 Then   the system shall stop transmission cleanly
 And    emit a final `alert` event with `payload.reason = "KILL_SWITCH_TRIGGERED"`
 And    exit with code 4
 ```
 
-**Fixture:** scaffold backend; subprocess harness.
+**Fixture:** scaffold backend; subprocess harness with a deliberately open pipe that the test then closes.
+
+### TEST-ATS-10a — Stdin already at EOF does not trigger the kill switch
+
+```gherkin
+Given  `canarchy gateway vcan0 vcan1 --count 5 --rate 50 --ack-active --jsonl` is running
+And    stdin was redirected from `/dev/null` (already at EOF at command start)
+When   the command begins transmission
+Then   the system shall not treat the EOF condition as a kill signal
+And    the command shall run to its natural completion (`--count 5` frames forwarded)
+And    exit with code 0
+```
+
+**Fixture:** scaffold backend; subprocess harness with `stdin=/dev/null`. Guards against the regression Codex flagged on the design: CI runners, MCP subprocesses, and cron jobs commonly start with stdin already at EOF.
+
+### TEST-ATS-10b — TTY stdin does not trigger the kill switch
+
+```gherkin
+Given  `canarchy gateway vcan0 vcan1 --count 5 --rate 50 --ack-active --jsonl` is running
+And    stdin is a TTY (isatty() returns True)
+When   the command begins transmission
+Then   the system shall not arm the stdin EOF kill switch
+And    the command shall run to its natural completion (`--count 5` frames forwarded)
+And    exit with code 0
+```
+
+**Fixture:** scaffold backend; subprocess harness with a pseudo-TTY allocated for stdin.
 
 ### TEST-ATS-11 — `--dry-run` plans without opening the transport
 
