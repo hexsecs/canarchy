@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import logging
 import shlex
 import sys
+import time
+import uuid
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from canarchy import fuzzing
 from canarchy.doctor import doctor_payload
 from canarchy.dbc import (
     DbcError,
@@ -114,7 +118,16 @@ RE_COMMANDS = {
     "re match-dbc",
     "re shortlist-dbc",
 }
-ACTIVE_TRANSMIT_COMMANDS = {"send", "generate", "gateway", "uds scan"}
+ACTIVE_TRANSMIT_COMMANDS = {
+    "send",
+    "generate",
+    "gateway",
+    "uds scan",
+    "fuzz payload",
+    "fuzz replay",
+    "fuzz arbitration-id",
+}
+FUZZ_COMMANDS = {"fuzz payload", "fuzz replay", "fuzz arbitration-id"}
 IMPLEMENTED_COMMANDS = (
     TRANSPORT_COMMANDS
     | DBC_COMMANDS
@@ -127,6 +140,7 @@ IMPLEMENTED_COMMANDS = (
     | CONFIG_COMMANDS
     | DOCTOR_COMMANDS
     | RE_COMMANDS
+    | FUZZ_COMMANDS
     | {"mcp serve", "replay", "gateway", "shell", "export"}
 )
 
@@ -878,6 +892,106 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(re_shortlist_dbc)
     re_shortlist_dbc.set_defaults(command="re shortlist-dbc")
 
+    fuzz = subparsers.add_parser(
+        "fuzz",
+        help="active-transmit fuzzing (gated by docs/design/active-transmit-safety.md)",
+    )
+    fuzz_subparsers = fuzz.add_subparsers(dest="fuzz_action", required=True)
+
+    fuzz_payload = fuzz_subparsers.add_parser(
+        "payload", help="mutate a fixed-id payload through a strategy"
+    )
+    fuzz_payload.add_argument("interface")
+    fuzz_payload.add_argument("--id", required=True, help="hex CAN ID (e.g. 0x123)")
+    fuzz_payload.add_argument(
+        "--strategy",
+        required=True,
+        choices=("bitflip", "random", "boundary"),
+        help="mutation strategy",
+    )
+    fuzz_payload.add_argument(
+        "--data",
+        default=None,
+        help="baseline hex payload for bitflip; defaults to 8 zero bytes",
+    )
+    fuzz_payload.add_argument(
+        "--dlc", type=int, default=8, help="payload length for random / boundary (default 8)"
+    )
+    fuzz_payload.add_argument(
+        "--max", dest="max_frames_fuzz", type=int, default=64, help="maximum frames to emit"
+    )
+    fuzz_payload.add_argument("--rate", type=float, default=100.0, help="frames per second")
+    fuzz_payload.add_argument("--seed", type=int, default=0, help="seed for the mutator")
+    fuzz_payload.add_argument(
+        "--extended", action="store_true", help="treat --id as a 29-bit extended CAN ID"
+    )
+    fuzz_payload.add_argument(
+        "--dry-run", action="store_true", help="emit JSONL plan without transmitting"
+    )
+    fuzz_payload.add_argument(
+        "--run-id", default=None, help="explicit run UUID (random if omitted)"
+    )
+    add_active_ack_argument(fuzz_payload)
+    add_output_arguments(fuzz_payload)
+    fuzz_payload.set_defaults(command="fuzz payload")
+
+    fuzz_replay = fuzz_subparsers.add_parser(
+        "replay", help="replay a recorded capture with mutation applied"
+    )
+    fuzz_replay.add_argument("--file", required=True, help="candump capture file to mutate-replay")
+    fuzz_replay.add_argument(
+        "--interface",
+        default=None,
+        help="target interface; required unless --dry-run",
+    )
+    fuzz_replay.add_argument(
+        "--strategy",
+        required=True,
+        choices=("timing", "payload-bitflip"),
+        help="mutation strategy",
+    )
+    fuzz_replay.add_argument(
+        "--max", dest="max_frames_fuzz", type=int, default=None, help="cap on emitted frames"
+    )
+    fuzz_replay.add_argument(
+        "--rate", type=float, default=100.0, help="frames per second (applies to live transmit)"
+    )
+    fuzz_replay.add_argument("--seed", type=int, default=0, help="seed for the mutator")
+    fuzz_replay.add_argument(
+        "--dry-run", action="store_true", help="emit JSONL plan without transmitting"
+    )
+    fuzz_replay.add_argument("--run-id", default=None, help="explicit run UUID (random if omitted)")
+    add_active_ack_argument(fuzz_replay)
+    add_output_arguments(fuzz_replay)
+    fuzz_replay.set_defaults(command="fuzz replay")
+
+    fuzz_arbid = fuzz_subparsers.add_parser(
+        "arbitration-id",
+        help="walk an arbitration-id range emitting one frame per ID",
+    )
+    fuzz_arbid.add_argument("interface")
+    fuzz_arbid.add_argument(
+        "--range",
+        dest="id_range",
+        required=True,
+        help="start:end hex ID range, inclusive (e.g. 0x100:0x110)",
+    )
+    fuzz_arbid.add_argument(
+        "--step", type=int, default=1, help="ID step within the range (default 1)"
+    )
+    fuzz_arbid.add_argument(
+        "--data", default=None, help="payload hex for every frame; defaults to 8 zero bytes"
+    )
+    fuzz_arbid.add_argument("--rate", type=float, default=100.0, help="frames per second")
+    fuzz_arbid.add_argument("--extended", action="store_true", help="emit 29-bit extended CAN IDs")
+    fuzz_arbid.add_argument(
+        "--dry-run", action="store_true", help="emit JSONL plan without transmitting"
+    )
+    fuzz_arbid.add_argument("--run-id", default=None, help="explicit run UUID (random if omitted)")
+    add_active_ack_argument(fuzz_arbid)
+    add_output_arguments(fuzz_arbid)
+    fuzz_arbid.set_defaults(command="fuzz arbitration-id")
+
     config = subparsers.add_parser("config", help="inspect CANarchy configuration")
     config_subparsers = config.add_subparsers(dest="config_action", required=True)
     config_show = config_subparsers.add_parser(
@@ -964,6 +1078,13 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `gateway` will forward traffic from `{args.src}` to `{args.dst}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command in FUZZ_COMMANDS:
+        target = getattr(args, "interface", None) or getattr(args, "file", "<input>")
+        sub = args.command.removeprefix("fuzz ")
+        return (
+            f"warning: `fuzz {sub}` will transmit mutated frames on `{target}`; "
+            "use intentionally on a controlled bus."
+        )
     raise AssertionError(f"unsupported active transmit command: {args.command}")
 
 
@@ -976,6 +1097,10 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return f"confirm: type YES to run UDS scan on `{args.interface}`: "
     if args.command == "gateway":
         return f"confirm: type YES to forward traffic from `{args.src}` to `{args.dst}`: "
+    if args.command in FUZZ_COMMANDS:
+        target = getattr(args, "interface", None) or getattr(args, "file", "<input>")
+        sub = args.command.removeprefix("fuzz ")
+        return f"confirm: type YES to fuzz `{sub}` on `{target}`: "
     raise AssertionError(f"unsupported active transmit command: {args.command}")
 
 
@@ -3651,6 +3776,292 @@ def export_payload(
     )
 
 
+def _parse_fuzz_hex_id(value: str, *, command: str) -> int:
+    """Parse a hex CAN ID flag, raising a structured error on failure."""
+    try:
+        return int(value, 16)
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_FRAME_ID",
+                    message=f"Could not parse `{value}` as a hex CAN ID.",
+                    hint="Use hex form, prefixed or unprefixed (`0x123` or `123`).",
+                )
+            ],
+        ) from exc
+
+
+def _parse_fuzz_payload_data(value: str | None, *, default_dlc: int, command: str) -> bytes:
+    if value is None:
+        return b"\x00" * default_dlc
+    try:
+        return bytes.fromhex(value)
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_FRAME_DATA",
+                    message=f"Could not parse `{value}` as a hex payload.",
+                    hint="Use pairs of hex digits without separators, such as `11223344`.",
+                )
+            ],
+        ) from exc
+
+
+def _parse_fuzz_id_range(value: str, *, command: str) -> tuple[int, int]:
+    if ":" not in value:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_FUZZ_RANGE",
+                    message=f"Could not parse `{value}` as a start:end ID range.",
+                    hint="Use `<start>:<end>` with hex bounds, e.g. `0x100:0x110`.",
+                )
+            ],
+        )
+    start_text, end_text = value.split(":", 1)
+    start = _parse_fuzz_hex_id(start_text, command=command)
+    end = _parse_fuzz_hex_id(end_text, command=command)
+    return start, end
+
+
+def _resolve_fuzz_run_id(args: argparse.Namespace) -> str:
+    explicit = getattr(args, "run_id", None)
+    if explicit is None:
+        return str(uuid.uuid4())
+    try:
+        return str(uuid.UUID(explicit))
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="ACTIVE_TRANSMIT_INVALID_RUN_ID",
+                    message=f"`{explicit}` is not a valid UUID for --run-id.",
+                    hint=(
+                        "Use a UUID4 such as `0193bf6e-1e3e-7a8c-b6b1-d0e7d3a8f4f0`, "
+                        "or omit `--run-id` to have one generated."
+                    ),
+                )
+            ],
+        ) from exc
+
+
+def _validate_fuzz_rate(rate: float, command: str) -> None:
+    if rate is not None and rate <= 0:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_RATE",
+                    message="--rate must be greater than zero.",
+                    hint="Pass a positive value such as 100 or 250.",
+                )
+            ],
+        )
+
+
+def _build_fuzz_payload_frames(args: argparse.Namespace) -> list[CanFrame]:
+    arbitration_id = _parse_fuzz_hex_id(args.id, command=args.command)
+    baseline = _parse_fuzz_payload_data(args.data, default_dlc=8, command=args.command)
+    if args.strategy == "bitflip":
+        payloads = fuzzing.bitflip_payload(
+            baseline, seed=args.seed, max_mutations=args.max_frames_fuzz
+        )
+    elif args.strategy == "random":
+        payloads = fuzzing.random_payload(
+            dlc=len(baseline), seed=args.seed, count=args.max_frames_fuzz
+        )
+    else:  # boundary
+        payloads = fuzzing.boundary_payload(dlc=args.dlc)
+    return [
+        CanFrame(
+            arbitration_id=arbitration_id,
+            data=payload,
+            is_extended_id=args.extended,
+            timestamp=i / args.rate if args.rate else None,
+        )
+        for i, payload in enumerate(itertools.islice(payloads, args.max_frames_fuzz))
+    ]
+
+
+def _build_fuzz_replay_frames(args: argparse.Namespace) -> list[CanFrame]:
+    transport_backend = LocalTransport()
+    try:
+        raw_frames = transport_backend.frames_from_file(args.file)
+    except TransportError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        ) from exc
+    mutated = list(fuzzing.mutate_replay(raw_frames, strategy=args.strategy, seed=args.seed))
+    if args.max_frames_fuzz is not None:
+        mutated = mutated[: args.max_frames_fuzz]
+    return mutated
+
+
+def _build_fuzz_arbid_frames(args: argparse.Namespace) -> list[CanFrame]:
+    start, end = _parse_fuzz_id_range(args.id_range, command=args.command)
+    payload = _parse_fuzz_payload_data(args.data, default_dlc=8, command=args.command)
+    try:
+        ids = list(fuzzing.arbitration_id_range(start, end, extended=args.extended, step=args.step))
+    except ValueError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_FUZZ_RANGE",
+                    message=str(exc),
+                    hint="Use a non-empty range within the 11-bit or 29-bit CAN ID space.",
+                )
+            ],
+        ) from exc
+    return [
+        CanFrame(
+            arbitration_id=arbid,
+            data=payload,
+            is_extended_id=args.extended,
+            timestamp=i / args.rate if args.rate else None,
+        )
+        for i, arbid in enumerate(ids)
+    ]
+
+
+def fuzz_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    """Build the (data, events, warnings) tuple for any `canarchy fuzz *` command."""
+
+    rate = getattr(args, "rate", None)
+    _validate_fuzz_rate(rate, args.command)
+    run_id = _resolve_fuzz_run_id(args)
+    dry_run = bool(getattr(args, "dry_run", False))
+
+    if args.command == "fuzz payload":
+        frames = _build_fuzz_payload_frames(args)
+        target = args.interface
+    elif args.command == "fuzz replay":
+        if not dry_run and not args.interface:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="MISSING_INPUT",
+                        message="`fuzz replay` requires --interface unless --dry-run is set.",
+                        hint="Pass `--interface <iface>` or run with `--dry-run` for planning.",
+                    )
+                ],
+            )
+        frames = _build_fuzz_replay_frames(args)
+        target = args.interface or args.file
+    elif args.command == "fuzz arbitration-id":
+        frames = _build_fuzz_arbid_frames(args)
+        target = args.interface
+    else:  # pragma: no cover — guarded by IMPLEMENTED_COMMANDS
+        raise AssertionError(f"unexpected fuzz command: {args.command}")
+
+    if not dry_run:
+        enforce_active_transmit_safety(args)
+        # Live transmission. Matches the existing `generate` model: build
+        # frames, walk the list and call `LocalTransport.send` for each,
+        # honouring the requested rate as inter-frame spacing. SIGINT is
+        # raised by Python's default handler and converts to a clean
+        # KeyboardInterrupt exit from main(); finer-grained
+        # `KILL_SWITCH_TRIGGERED` provenance is a documented follow-up
+        # (per `docs/design/active-transmit-safety.md` REQ-ATS-09).
+        live_backend = LocalTransport()
+        live_target = target
+        if live_target is None:  # pragma: no cover — guarded above
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="MISSING_INPUT",
+                        message="Live fuzz requires a target interface.",
+                        hint="Pass `--interface <iface>` or run with `--dry-run`.",
+                    )
+                ],
+            )
+        gap_s = 1.0 / rate if rate and rate > 0 else 0.0
+        for i, frame in enumerate(frames):
+            if i > 0 and gap_s > 0:
+                time.sleep(gap_s)
+            try:
+                live_backend.send(live_target, frame)
+            except TransportError as exc:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_TRANSPORT_ERROR,
+                    errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+                ) from exc
+
+    sub = args.command.removeprefix("fuzz ")
+    source = f"fuzz.{sub}"
+    events: list[dict[str, Any]] = [
+        {
+            "event_type": "alert",
+            "source": source,
+            "timestamp": 0.0,
+            "payload": {
+                "level": "warning",
+                "code": "ACTIVE_TRANSMIT",
+                "message": (
+                    "Active fuzz transmission planned"
+                    if not dry_run
+                    else "Dry-run fuzz plan; no transport opened"
+                ),
+                "run_id": run_id,
+                "dry_run": dry_run,
+            },
+        }
+    ]
+    for frame in frames:
+        events.append(
+            {
+                "event_type": "frame",
+                "source": source,
+                "timestamp": frame.timestamp,
+                "payload": {
+                    "frame": {**frame.to_payload(), "dry_run": dry_run},
+                    "run_id": run_id,
+                    "dry_run": dry_run,
+                },
+            }
+        )
+
+    data: dict[str, Any] = {
+        "mode": "dry_run" if dry_run else "active",
+        "run_id": run_id,
+        "frame_count": len(frames),
+        "strategy": getattr(args, "strategy", None),
+        "rate_hz": rate,
+        "seed": getattr(args, "seed", None),
+        "dry_run": dry_run,
+        "target": target,
+        "status": "implemented",
+        "implementation": "fuzzing engine + active-transmit safety gate",
+    }
+    warnings: list[str] = []
+    if dry_run:
+        warnings.append(
+            f"ACTIVE_TRANSMIT_DRY_RUN: {len(frames)} frames planned; no transport opened."
+        )
+    return data, events, warnings
+
+
 def replay_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -4052,6 +4463,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(config_show_payload())
     elif args.command in DOCTOR_COMMANDS:
         data.update(doctor_payload())
+    elif args.command in FUZZ_COMMANDS:
+        fuzz_data, fuzz_events, fuzz_warnings = fuzz_payload(args)
+        data.update(fuzz_data)
+        data["events"] = fuzz_events
+        warnings.extend(fuzz_warnings)
     else:
         data["events"] = build_events(args)
     if args.command not in IMPLEMENTED_COMMANDS:

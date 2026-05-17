@@ -951,6 +951,43 @@ between `canarchy` and the subcommand name):
 * `--quiet` — suppress every level below `ERROR`. Useful in pipelines
   where only structured errors should reach stderr.
 
+### fuzz
+
+Active-transmit fuzzing, gated by the controls in
+[`docs/design/active-transmit-safety.md`](design/active-transmit-safety.md).
+Three subcommands, all built on the pure-function mutation engine in
+`src/canarchy/fuzzing.py`. Every emitted event carries a stable
+`run_id` (UUID) so post-mortem analysis can match output to the
+invocation that produced it.
+
+`--dry-run` is the safe planning path: events are emitted as JSONL
+with `payload.frame.dry_run = true`, no transport is opened, and the
+`--ack-active` confirmation prompt is skipped. Without `--dry-run`,
+the existing active-transmit safety gate (`--ack-active` plus optional
+config-driven prompt) applies before any frame is transmitted via
+`LocalTransport.send`.
+
+```bash
+canarchy fuzz payload <interface> --id <hex> --strategy {bitflip,random,boundary}
+                                  [--data <hex>] [--dlc <n>] [--max <n>]
+                                  [--rate <hz>] [--seed <int>] [--extended]
+                                  [--dry-run] [--run-id <uuid>] [--ack-active]
+canarchy fuzz replay --file <capture> --strategy {timing,payload-bitflip}
+                     [--interface <iface>] [--max <n>] [--rate <hz>] [--seed <int>]
+                     [--dry-run] [--run-id <uuid>] [--ack-active]
+canarchy fuzz arbitration-id <interface> --range <start>:<end> [--step <n>]
+                              [--data <hex>] [--rate <hz>] [--extended]
+                              [--dry-run] [--run-id <uuid>] [--ack-active]
+```
+
+Strategies and the engine they map to are documented in the
+[active-transmit safety design](design/active-transmit-safety.md). The
+following follow-up controls from that spec are tracked separately and
+will land in subsequent PRs: configurable rate-cap ceiling
+(`[safety.rate_cap]` in `~/.canarchy/config.toml`), TOML target
+allowlist (`--targets`), explicit `KILL_SWITCH_TRIGGERED` alert on
+SIGINT, MCP `ack_active=true` enforcement (#312).
+
 ### mcp serve
 
 Start the MCP server over stdio.
