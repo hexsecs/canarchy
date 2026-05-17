@@ -3870,19 +3870,59 @@ def _validate_fuzz_rate(rate: float, command: str) -> None:
         )
 
 
+def _wrap_fuzz_value_error(args: argparse.Namespace, exc: ValueError) -> CommandError:
+    """Translate a `ValueError` from `canarchy.fuzzing` into a `CommandError`.
+
+    The mutators validate their inputs (DLC range, negative count,
+    inverted ID bounds, etc.) and raise `ValueError` for misuse. The CLI
+    must translate those into the canonical structured-error envelope
+    instead of letting a traceback escape `execute_command`.
+    """
+
+    return CommandError(
+        command=args.command,
+        exit_code=EXIT_USER_ERROR,
+        errors=[
+            ErrorDetail(
+                code="INVALID_ARGUMENTS",
+                message=str(exc),
+                hint=(
+                    "Check the fuzz strategy's bounds: --dlc must be in [0, 64], "
+                    "--max must be non-negative, and arbitration-id ranges must fit "
+                    "the 11-/29-bit address space."
+                ),
+            )
+        ],
+    )
+
+
 def _build_fuzz_payload_frames(args: argparse.Namespace) -> list[CanFrame]:
     arbitration_id = _parse_fuzz_hex_id(args.id, command=args.command)
-    baseline = _parse_fuzz_payload_data(args.data, default_dlc=8, command=args.command)
-    if args.strategy == "bitflip":
-        payloads = fuzzing.bitflip_payload(
-            baseline, seed=args.seed, max_mutations=args.max_frames_fuzz
-        )
-    elif args.strategy == "random":
-        payloads = fuzzing.random_payload(
-            dlc=len(baseline), seed=args.seed, count=args.max_frames_fuzz
-        )
-    else:  # boundary
-        payloads = fuzzing.boundary_payload(dlc=args.dlc)
+    # For bitflip we mutate the explicit (or default-8-byte-zero) baseline
+    # in place — DLC is inherited from the baseline payload.
+    # For random / boundary the user's --dlc takes precedence; --data is
+    # ignored because those strategies generate full payloads from
+    # scratch.
+    # The mutators are generators that validate their inputs only on
+    # first iteration, so the iteration itself must run inside the
+    # try/except in order to translate the engine's `ValueError`
+    # signals (negative DLC, negative count, …) into structured
+    # `INVALID_ARGUMENTS` envelopes instead of leaking a traceback.
+    try:
+        if args.strategy == "bitflip":
+            baseline = _parse_fuzz_payload_data(args.data, default_dlc=8, command=args.command)
+            payloads = fuzzing.bitflip_payload(
+                baseline, seed=args.seed, max_mutations=args.max_frames_fuzz
+            )
+        elif args.strategy == "random":
+            payloads = fuzzing.random_payload(
+                dlc=args.dlc, seed=args.seed, count=args.max_frames_fuzz
+            )
+        else:  # boundary
+            payloads = fuzzing.boundary_payload(dlc=args.dlc)
+        materialised = list(itertools.islice(payloads, args.max_frames_fuzz))
+    except ValueError as exc:
+        raise _wrap_fuzz_value_error(args, exc) from exc
     return [
         CanFrame(
             arbitration_id=arbitration_id,
@@ -3890,7 +3930,7 @@ def _build_fuzz_payload_frames(args: argparse.Namespace) -> list[CanFrame]:
             is_extended_id=args.extended,
             timestamp=i / args.rate if args.rate else None,
         )
-        for i, payload in enumerate(itertools.islice(payloads, args.max_frames_fuzz))
+        for i, payload in enumerate(materialised)
     ]
 
 
@@ -3904,7 +3944,10 @@ def _build_fuzz_replay_frames(args: argparse.Namespace) -> list[CanFrame]:
             exit_code=EXIT_USER_ERROR,
             errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
         ) from exc
-    mutated = list(fuzzing.mutate_replay(raw_frames, strategy=args.strategy, seed=args.seed))
+    try:
+        mutated = list(fuzzing.mutate_replay(raw_frames, strategy=args.strategy, seed=args.seed))
+    except ValueError as exc:
+        raise _wrap_fuzz_value_error(args, exc) from exc
     if args.max_frames_fuzz is not None:
         mutated = mutated[: args.max_frames_fuzz]
     return mutated

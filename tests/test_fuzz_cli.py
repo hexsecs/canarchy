@@ -161,6 +161,69 @@ def test_fuzz_payload_invalid_rate_returns_structured_error():
     assert payload["errors"][0]["code"] == "INVALID_RATE"
 
 
+def test_fuzz_payload_random_strategy_honours_dlc_flag():
+    """`--strategy random --dlc 4` produces 4-byte frames even without --data.
+
+    Regression for Codex P2 on PR #351: the random strategy previously
+    inherited the baseline length (8) and silently ignored `--dlc`.
+    """
+
+    _, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x100",
+        "--strategy",
+        "random",
+        "--dlc",
+        "4",
+        "--max",
+        "3",
+        "--seed",
+        "1",
+        "--dry-run",
+        "--jsonl",
+    )
+    frames = [
+        json.loads(line)
+        for line in stdout.splitlines()
+        if line.strip() and json.loads(line)["event_type"] == "frame"
+    ]
+    assert len(frames) == 3
+    for frame in frames:
+        # `data` is hex-encoded; 4 bytes → 8 hex chars.
+        assert len(frame["payload"]["frame"]["data"]) == 8
+        assert frame["payload"]["frame"]["dlc"] == 4
+
+
+def test_fuzz_payload_invalid_dlc_returns_structured_error():
+    """`fuzz payload --strategy boundary --dlc -1` must not crash with a traceback.
+
+    Regression for Codex P1 on PR #351: the engine raises `ValueError`
+    on invalid DLC, and the CLI must translate that into a structured
+    `INVALID_ARGUMENTS` envelope.
+    """
+
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x100",
+        "--strategy",
+        "boundary",
+        "--dlc",
+        "-1",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "INVALID_ARGUMENTS"
+
+
 def test_fuzz_payload_invalid_run_id_returns_structured_error():
     exit_code, stdout, _ = run_cli(
         "fuzz",
