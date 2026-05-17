@@ -70,10 +70,12 @@ Fully implemented and tested:
 * `doctor` — local environment health checks (Python, `python-can`, caches, MCP, config)
 * `completion {bash,zsh,fish}` — emit a shell completion script
 * `--log-level` and `--quiet` — global stderr logging controls (place before the subcommand)
+* `fuzz payload`, `fuzz replay`, `fuzz arbitration-id` — active-transmit fuzzing gated by the [active-transmit safety design](docs/design/active-transmit-safety.md); `--dry-run` is the safe planning path
 
-Planned but not yet exposed in the CLI:
-
-* active fuzzing workflows for replay mutation, payload mutation, and arbitration-ID probing
+Recently reintroduced under the active-transmit safety model; deeper controls
+(configurable rate-cap ceiling, TOML target allowlist, `KILL_SWITCH_TRIGGERED`
+alert on SIGINT, MCP `ack_active=true` enforcement) are tracked as Horizon 2
+follow-ups (#312 and the fuzzing-extensions cluster #346–#350).
 
 Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
 
