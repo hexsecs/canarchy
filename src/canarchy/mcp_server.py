@@ -1008,6 +1008,148 @@ _TOOLS: list[types.Tool] = [
             "required": ["capture", "make"],
         },
     ),
+    types.Tool(
+        name="fuzz_payload",
+        description=(
+            "Active-transmit payload fuzzing gated by docs/design/active-transmit-safety.md. "
+            "Mandatory `ack_active=true`. `dry_run` defaults to true; set to false only after "
+            "explicit human authorisation."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "interface": {"type": "string", "description": "Target CAN interface"},
+                "id": {"type": "string", "description": "Hex CAN ID (e.g. `0x123`)"},
+                "strategy": {
+                    "type": "string",
+                    "enum": ["bitflip", "random", "boundary"],
+                    "description": "Mutation strategy",
+                },
+                "data": {
+                    "type": "string",
+                    "description": "Baseline hex payload for bitflip (defaults to 8 zero bytes)",
+                },
+                "dlc": {
+                    "type": "integer",
+                    "description": "Payload length for random / boundary",
+                    "default": 8,
+                },
+                "max": {
+                    "type": "integer",
+                    "description": "Maximum frames to emit",
+                    "default": 64,
+                },
+                "rate": {"type": "number", "description": "Frames per second", "default": 100.0},
+                "seed": {"type": "integer", "description": "Seed for the mutator", "default": 0},
+                "extended": {
+                    "type": "boolean",
+                    "description": "Treat the ID as 29-bit extended",
+                    "default": False,
+                },
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory explicit human acknowledgement of active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "When true, emit JSONL plan without transmitting",
+                    "default": True,
+                },
+                "run_id": {
+                    "type": "string",
+                    "description": "Explicit run UUID (random if omitted)",
+                },
+            },
+            "required": ["interface", "id", "strategy", "ack_active"],
+        },
+    ),
+    types.Tool(
+        name="fuzz_replay",
+        description=(
+            "Active-transmit replay mutation gated by docs/design/active-transmit-safety.md. "
+            "Mandatory `ack_active=true`. `dry_run` defaults to true."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+                "strategy": {
+                    "type": "string",
+                    "enum": ["timing", "payload-bitflip"],
+                    "description": "Mutation strategy",
+                },
+                "interface": {
+                    "type": "string",
+                    "description": "Target CAN interface (required unless dry_run=true)",
+                },
+                "max": {
+                    "type": "integer",
+                    "description": "Maximum frames to emit",
+                },
+                "rate": {"type": "number", "description": "Frames per second", "default": 100.0},
+                "seed": {"type": "integer", "description": "Seed for the mutator", "default": 0},
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory explicit human acknowledgement of active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "When true, emit JSONL plan without transmitting",
+                    "default": True,
+                },
+                "run_id": {
+                    "type": "string",
+                    "description": "Explicit run UUID (random if omitted)",
+                },
+            },
+            "required": ["file", "strategy", "ack_active"],
+        },
+    ),
+    types.Tool(
+        name="fuzz_arbitration_id",
+        description=(
+            "Active-transmit arbitration-id walk gated by docs/design/active-transmit-safety.md. "
+            "Mandatory `ack_active=true`. `dry_run` defaults to true."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "interface": {"type": "string", "description": "Target CAN interface"},
+                "range": {
+                    "type": "string",
+                    "description": "Inclusive `<start>:<end>` hex range, e.g. `0x100:0x110`",
+                },
+                "step": {"type": "integer", "description": "ID step", "default": 1},
+                "data": {
+                    "type": "string",
+                    "description": "Hex payload to send with each ID (default: 8 zero bytes)",
+                },
+                "rate": {"type": "number", "description": "Frames per second", "default": 100.0},
+                "extended": {
+                    "type": "boolean",
+                    "description": "Walk the 29-bit address space",
+                    "default": False,
+                },
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory explicit human acknowledgement of active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "When true, emit JSONL plan without transmitting",
+                    "default": True,
+                },
+                "run_id": {
+                    "type": "string",
+                    "description": "Explicit run UUID (random if omitted)",
+                },
+            },
+            "required": ["interface", "range", "ack_active"],
+        },
+    ),
 ]
 
 _TOOL_NAMES: frozenset[str] = frozenset(tool.name for tool in _TOOLS)
@@ -1349,6 +1491,67 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if "limit" in a:
                 argv += ["--limit", str(a["limit"])]
             return argv + ["--json"]
+        case "fuzz_payload":
+            argv = ["fuzz", "payload", a["interface"], "--id", a["id"], "--strategy", a["strategy"]]
+            if "data" in a:
+                argv += ["--data", a["data"]]
+            if "dlc" in a:
+                argv += ["--dlc", str(a["dlc"])]
+            if "max" in a:
+                argv += ["--max", str(a["max"])]
+            if "rate" in a:
+                argv += ["--rate", str(a["rate"])]
+            if "seed" in a:
+                argv += ["--seed", str(a["seed"])]
+            if a.get("extended"):
+                argv += ["--extended"]
+            if "run_id" in a:
+                argv += ["--run-id", a["run_id"]]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
+            return argv + ["--jsonl"]
+        case "fuzz_replay":
+            argv = ["fuzz", "replay", "--file", a["file"], "--strategy", a["strategy"]]
+            if "interface" in a:
+                argv += ["--interface", a["interface"]]
+            if "max" in a:
+                argv += ["--max", str(a["max"])]
+            if "rate" in a:
+                argv += ["--rate", str(a["rate"])]
+            if "seed" in a:
+                argv += ["--seed", str(a["seed"])]
+            if "run_id" in a:
+                argv += ["--run-id", a["run_id"]]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
+            return argv + ["--jsonl"]
+        case "fuzz_arbitration_id":
+            argv = [
+                "fuzz",
+                "arbitration-id",
+                a["interface"],
+                "--range",
+                a["range"],
+            ]
+            if "step" in a:
+                argv += ["--step", str(a["step"])]
+            if "data" in a:
+                argv += ["--data", a["data"]]
+            if "rate" in a:
+                argv += ["--rate", str(a["rate"])]
+            if a.get("extended"):
+                argv += ["--extended"]
+            if "run_id" in a:
+                argv += ["--run-id", a["run_id"]]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
+            return argv + ["--jsonl"]
         case _:
             raise ValueError(f"Unknown tool: {tool_name!r}")
 
@@ -1358,14 +1561,59 @@ async def handle_list_tools() -> list[types.Tool]:
     return _TOOLS
 
 
+_ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
+    {
+        "fuzz_payload",
+        "fuzz_replay",
+        "fuzz_arbitration_id",
+    }
+)
+
+
+def _missing_ack_active_payload(name: str) -> dict[str, Any]:
+    """Canonical envelope for an MCP active-transmit call without `ack_active=true`."""
+    return {
+        "ok": False,
+        "command": name,
+        "data": {},
+        "warnings": [],
+        "errors": [
+            {
+                "code": "ACTIVE_TRANSMIT_REQUIRES_ACK",
+                "message": (
+                    "MCP active-transmit tools require an explicit `ack_active=true` argument."
+                ),
+                "hint": (
+                    "Re-call the tool with `ack_active=true` (and `dry_run=true` unless an "
+                    "operator has authorised live transmission)."
+                ),
+            }
+        ],
+    }
+
+
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[types.TextContent]:
     if name not in _TOOL_NAMES:
         raise ValueError(f"Unknown tool: {name!r}")
-    argv = _build_argv(name, arguments or {})
+    args = arguments or {}
+    if name in _ACTIVE_TRANSMIT_TOOLS:
+        # The CLI surface already enforces `--ack-active`; the MCP gate
+        # is the *separate* opt-in token that prevents a confused agent
+        # from invoking an active tool without an explicit YES from its
+        # operator. See `docs/design/active-transmit-safety.md`
+        # `REQ-ATS-11` / `REQ-ATS-12`.
+        if args.get("ack_active") is not True:
+            payload = _missing_ack_active_payload(name)
+            return [types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))]
+        # Default dry_run=true for agent-initiated calls (REQ-ATS-13).
+        # The argv builder respects an explicit `dry_run=false` and
+        # otherwise emits --dry-run.
+        args.setdefault("dry_run", True)
+    argv = _build_argv(name, args)
     _, result = await asyncio.to_thread(execute_command, argv)
     if result is None:
-        payload: dict[str, Any] = {
+        payload = {
             "ok": False,
             "command": name,
             "data": {},
