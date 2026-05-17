@@ -25,13 +25,17 @@ pipx install canarchy
 canarchy --version
 canarchy doctor --text
 
-# Decode the bundled J1939 fixture without any hardware.
-canarchy j1939 dm1 --file tests/fixtures/j1939_heavy_vehicle.candump --text
+# Stream two pre-recorded frame events from the deterministic scaffold
+# backend — no hardware, no fixture files, no network. Shows the
+# canonical JSONL envelope.
+CANARCHY_TRANSPORT_BACKEND=scaffold canarchy capture can0 --jsonl
 ```
 
 `canarchy doctor` runs eight offline health checks; everything green
-means the install is good. Replace the fixture path with a live
-interface (`canarchy capture can0 --candump`) once you have one.
+means the install is good. The scaffold capture demonstrates the
+structured-output contract that every command emits. Replace it with
+`canarchy capture can0 --candump` once you have a real interface, or
+clone the repo to run against the in-tree J1939 fixtures.
 
 For development or for installs from a checkout, see
 [Installation](#installation) below.
