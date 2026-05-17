@@ -88,6 +88,7 @@ Relevant modules:
 * `src/canarchy/dbc_runtime.py`
 * `src/canarchy/dbc_types.py`
 * `src/canarchy/reverse_engineering.py`
+* `src/canarchy/fuzzing.py`
 * `src/canarchy/replay.py`
 * `src/canarchy/session.py`
 * `src/canarchy/uds.py`
