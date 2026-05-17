@@ -24,6 +24,41 @@ All events share the same top-level shape:
 | `timestamp` | float \| null | Seconds since epoch (or relative to capture start). `null` when not available. |
 | `payload` | object | Event-specific fields. Shape varies by `event_type`. |
 
+## Structured Errors
+
+Failures return the canonical envelope with `ok: false` and an `errors`
+array. Each entry has `code`, `message`, and `hint`:
+
+```json
+{
+  "ok": false,
+  "command": "decode",
+  "errors": [
+    {
+      "code": "DBC_CACHE_MISS",
+      "message": "DBC 'opendbc:toyota_tnga_k_pt_generated' is not in the local cache.",
+      "hint": "Run `canarchy dbc cache refresh --provider opendbc` to populate it, or set `auto_refresh = true` under `[dbc.providers.opendbc]` in `~/.canarchy/config.toml`."
+    }
+  ]
+}
+```
+
+### Hint convention
+
+Every structured error carries a non-empty `hint`. Hints follow a
+consistent shape — `DBC_CACHE_MISS` above is the reference template:
+
+* Explain the problem in one sentence.
+* Provide a copy-pasteable remediation command where one exists.
+* Reference the relevant flag, config key, or doc page by name.
+* Avoid restating the `message`; the hint is the **next action**.
+
+A regression test (`tests/test_cli.py::ErrorHintConventionTests`) scans
+every `ErrorDetail(...)` call site in `src/canarchy/` and asserts that
+each construction includes a `hint=`. Drift fails CI. Treat the
+catalogue in [Troubleshooting](troubleshooting.md) as the user-facing
+index of these hints.
+
 ## Streaming
 
 Use `--jsonl` on any command to receive one event per line on stdout, suitable for piping:

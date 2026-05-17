@@ -2444,7 +2444,13 @@ def transport_payload(
                     exit_code=EXIT_USER_ERROR,
                     errors=[
                         ErrorDetail(
-                            code="CAPTURE_EMPTY", message="No valid frames read from stdin."
+                            code="CAPTURE_EMPTY",
+                            message="No valid frames read from stdin.",
+                            hint=(
+                                "Confirm the upstream command emitted candump text "
+                                "(for example `canarchy datasets replay <ref> | canarchy stats --file -`). "
+                                "An empty stdin or zero-frame capture is the most common cause."
+                            ),
                         )
                     ],
                 )
@@ -2502,7 +2508,13 @@ def transport_payload(
                     exit_code=EXIT_USER_ERROR,
                     errors=[
                         ErrorDetail(
-                            code="CAPTURE_EMPTY", message="No valid frames read from stdin."
+                            code="CAPTURE_EMPTY",
+                            message="No valid frames read from stdin.",
+                            hint=(
+                                "Confirm the upstream command emitted candump text "
+                                "(for example `canarchy datasets replay <ref> | canarchy capture-info --file -`). "
+                                "An empty stdin or zero-frame capture is the most common cause."
+                            ),
                         )
                     ],
                 )

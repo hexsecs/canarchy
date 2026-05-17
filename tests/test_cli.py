@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import contextlib
 import io
 import json
@@ -4832,6 +4833,127 @@ class CompletionCommandTests(unittest.TestCase):
             [bash, "-n"], input=stdout, capture_output=True, text=True, check=False
         )
         self.assertEqual(result.returncode, 0, msg=f"bash -n failed: {result.stderr!r}")
+
+
+class ErrorHintConventionTests(unittest.TestCase):
+    """Guard the structured-error hint convention.
+
+    Every `ErrorDetail(...)` construction in `src/canarchy/` must carry a
+    non-empty `hint`. Drift breaks the contract documented in
+    `docs/event-schema.md` and the troubleshooting catalogue.
+    """
+
+    SRC_ROOT = Path(__file__).parent.parent / "src" / "canarchy"
+
+    @staticmethod
+    def _error_detail_calls(text: str, filename: str) -> list[ast.Call]:
+        tree = ast.parse(text, filename=filename)
+        calls: list[ast.Call] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name: str | None = None
+            if isinstance(func, ast.Name):
+                name = func.id
+            elif isinstance(func, ast.Attribute):
+                name = func.attr
+            if name == "ErrorDetail":
+                calls.append(node)
+        return calls
+
+    def test_scanner_flags_missing_hint_keyword(self) -> None:
+        """Meta-check: confirm the scanner itself catches a missing `hint=`.
+
+        Guards against the scanner regressing into a trivial pass.
+        """
+
+        source = (
+            'ErrorDetail(code="X", message="x")\n'
+            'ErrorDetail(code="Y", message="y", hint="y-hint")\n'
+            'ErrorDetail(code="Z", message="hint= literal in string")\n'
+        )
+        calls = self._error_detail_calls(source, "<inline>")
+        self.assertEqual(len(calls), 3)
+        no_hint = [
+            c.lineno
+            for c in calls
+            if "hint" not in {kw.arg for kw in c.keywords if kw.arg is not None}
+        ]
+        # Lines 1 (no hint kw) and 3 (hint= only inside a string literal) must
+        # both be flagged; line 2 must not.
+        self.assertEqual(no_hint, [1, 3])
+
+    def test_every_error_detail_call_specifies_hint(self) -> None:
+        """Structural check: every `ErrorDetail(...)` call has a `hint=` keyword.
+
+        The walk uses the AST rather than a substring match so a literal
+        `"hint="` inside another string can't satisfy the assertion.
+        """
+
+        offenders: list[str] = []
+        for path in sorted(self.SRC_ROOT.rglob("*.py")):
+            text = path.read_text()
+            for call in self._error_detail_calls(text, str(path)):
+                kw_names = {kw.arg for kw in call.keywords if kw.arg is not None}
+                if "hint" not in kw_names:
+                    rel = path.relative_to(self.SRC_ROOT.parent.parent)
+                    offenders.append(f"{rel}:{call.lineno}")
+        self.assertEqual(
+            offenders,
+            [],
+            msg=(
+                "ErrorDetail call sites missing a `hint=` keyword. See "
+                "docs/event-schema.md `Hint convention` for the template.\n" + "\n".join(offenders)
+            ),
+        )
+
+    def test_representative_error_codes_carry_actionable_hints(self) -> None:
+        # Each entry: (argv that triggers the code, expected error code).
+        cases = [
+            (
+                (
+                    "decode",
+                    "--dbc",
+                    "/tmp/does-not-exist.dbc",
+                    "--file",
+                    "/tmp/nope.candump",
+                    "--json",
+                ),
+                "DBC_NOT_FOUND",
+            ),
+            (
+                ("stats", "--file", "/tmp/does-not-exist.candump", "--json"),
+                "CAPTURE_SOURCE_UNAVAILABLE",
+            ),
+            (("session", "save", "bad/name", "--json"), "INVALID_SESSION_NAME"),
+            (
+                ("filter", "id==0x1", "--file", "/tmp/x.candump", "--max-frames", "0", "--json"),
+                "INVALID_MAX_FRAMES",
+            ),
+            (
+                ("filter", "id==0x1", "--file", "/tmp/x.candump", "--seconds", "-1", "--json"),
+                "INVALID_ANALYSIS_SECONDS",
+            ),
+        ]
+        for argv, expected_code in cases:
+            with self.subTest(argv=argv):
+                exit_code, stdout, _stderr = run_cli(*argv)
+                self.assertNotEqual(exit_code, 0, msg=f"expected non-zero exit for {argv!r}")
+                payload = json.loads(stdout)
+                self.assertTrue(
+                    payload["errors"], msg=f"argv {argv!r} produced no structured error"
+                )
+                error = payload["errors"][0]
+                self.assertEqual(
+                    error["code"], expected_code, msg=f"unexpected code for {argv!r}: {error}"
+                )
+                self.assertTrue(error.get("hint"), msg=f"missing hint for {error['code']}: {error}")
+                self.assertGreater(
+                    len(error["hint"]),
+                    20,
+                    msg=f"hint too short for {error['code']}: {error['hint']!r}",
+                )
 
 
 if __name__ == "__main__":
