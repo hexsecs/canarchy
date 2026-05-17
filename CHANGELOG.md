@@ -18,6 +18,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Documentation
 
 * Added `docs/mcp_install.md` as the canonical install reference for wiring `canarchy mcp serve` into MCP-capable agent clients (Claude Desktop, Claude Code, and any generic stdio client). Covers OS-specific config paths, a verification recipe, configuration tips, and a troubleshooting table. Cookbook recipe `mcp-claude-integration.md` updated to point at the new canonical page. Closes #308.
+* Audited every `ErrorDetail(...)` call site in `src/canarchy/` for hint coverage. Backfilled the two remaining missing hints (`CAPTURE_EMPTY` on stdin paths in `stats` and `capture-info`), each now pointing at the most common pipeline misuse. Added a `Hint convention` section to `docs/event-schema.md` documenting the contract with `DBC_CACHE_MISS` as the reference template. Added `tests/test_cli.py::ErrorHintConventionTests` with a structural scan that asserts every `ErrorDetail(...)` construction includes a `hint=` field — drift now fails CI — plus a representative-codes test that asserts hint length and content for `DBC_NOT_FOUND`, `CAPTURE_SOURCE_UNAVAILABLE`, `INVALID_SESSION_NAME`, `INVALID_MAX_FRAMES`, and `INVALID_ANALYSIS_SECONDS`. Closes #305.
 
 ### Fixed
 

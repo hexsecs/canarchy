@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -4832,6 +4833,101 @@ class CompletionCommandTests(unittest.TestCase):
             [bash, "-n"], input=stdout, capture_output=True, text=True, check=False
         )
         self.assertEqual(result.returncode, 0, msg=f"bash -n failed: {result.stderr!r}")
+
+
+class ErrorHintConventionTests(unittest.TestCase):
+    """Guard the structured-error hint convention.
+
+    Every `ErrorDetail(...)` construction in `src/canarchy/` must carry a
+    non-empty `hint`. Drift breaks the contract documented in
+    `docs/event-schema.md` and the troubleshooting catalogue.
+    """
+
+    SRC_ROOT = Path(__file__).parent.parent / "src" / "canarchy"
+
+    @staticmethod
+    def _error_detail_blocks(text: str) -> list[tuple[int, str]]:
+        blocks: list[tuple[int, str]] = []
+        for match in re.finditer(r"ErrorDetail\(", text):
+            start = match.end()
+            depth = 1
+            i = start
+            while i < len(text) and depth > 0:
+                ch = text[i]
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                i += 1
+            line_num = text[: match.start()].count("\n") + 1
+            blocks.append((line_num, text[start : i - 1]))
+        return blocks
+
+    def test_every_error_detail_call_specifies_hint(self) -> None:
+        offenders: list[str] = []
+        for path in sorted(self.SRC_ROOT.rglob("*.py")):
+            text = path.read_text()
+            for line_num, block in self._error_detail_blocks(text):
+                if "hint=" not in block:
+                    snippet = " ".join(block.split())[:80]
+                    offenders.append(
+                        f"{path.relative_to(self.SRC_ROOT.parent.parent)}:{line_num}: {snippet}"
+                    )
+        self.assertEqual(
+            offenders,
+            [],
+            msg=(
+                "ErrorDetail call sites missing a `hint=` field. See "
+                "docs/event-schema.md `Hint convention` for the template.\n" + "\n".join(offenders)
+            ),
+        )
+
+    def test_representative_error_codes_carry_actionable_hints(self) -> None:
+        # Each entry: (argv that triggers the code, expected error code).
+        cases = [
+            (
+                (
+                    "decode",
+                    "--dbc",
+                    "/tmp/does-not-exist.dbc",
+                    "--file",
+                    "/tmp/nope.candump",
+                    "--json",
+                ),
+                "DBC_NOT_FOUND",
+            ),
+            (
+                ("stats", "--file", "/tmp/does-not-exist.candump", "--json"),
+                "CAPTURE_SOURCE_UNAVAILABLE",
+            ),
+            (("session", "save", "bad/name", "--json"), "INVALID_SESSION_NAME"),
+            (
+                ("filter", "id==0x1", "--file", "/tmp/x.candump", "--max-frames", "0", "--json"),
+                "INVALID_MAX_FRAMES",
+            ),
+            (
+                ("filter", "id==0x1", "--file", "/tmp/x.candump", "--seconds", "-1", "--json"),
+                "INVALID_ANALYSIS_SECONDS",
+            ),
+        ]
+        for argv, expected_code in cases:
+            with self.subTest(argv=argv):
+                exit_code, stdout, _stderr = run_cli(*argv)
+                self.assertNotEqual(exit_code, 0, msg=f"expected non-zero exit for {argv!r}")
+                payload = json.loads(stdout)
+                self.assertTrue(
+                    payload["errors"], msg=f"argv {argv!r} produced no structured error"
+                )
+                error = payload["errors"][0]
+                self.assertEqual(
+                    error["code"], expected_code, msg=f"unexpected code for {argv!r}: {error}"
+                )
+                self.assertTrue(error.get("hint"), msg=f"missing hint for {error['code']}: {error}")
+                self.assertGreater(
+                    len(error["hint"]),
+                    20,
+                    msg=f"hint too short for {error['code']}: {error['hint']!r}",
+                )
 
 
 if __name__ == "__main__":
