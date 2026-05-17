@@ -19,7 +19,7 @@ canarchy mcp serve --help
 ```
 
 If either fails, follow the
-[Getting Started](getting_started.md#install-and-sync) install steps
+[Getting Started](getting_started.md#install) install steps
 first. A clean `canarchy doctor --text` run is a fast way to verify the
 local environment before wiring it into a client.
 

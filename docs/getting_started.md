@@ -2,45 +2,52 @@
 
 This guide walks through the fastest way to see CANarchy produce familiar `candump`-style output.
 
-## Install and Sync
+## Install
 
-Install project dependencies:
+CANarchy targets Python 3.12 or newer. Pick the install path that matches your use case.
+
+### From PyPI (recommended for users)
 
 ```bash
-uv sync
+pipx install canarchy            # isolated, on PATH everywhere
+# or
+pip install --user canarchy      # fallback if pipx is unavailable
 ```
 
-## Making `canarchy` Available Directly
-
-By default you invoke the CLI as `canarchy`. Two options let you drop the `uv run` prefix.
-
-### Option A — Install as a global tool (recommended)
-
-Installs `canarchy` on your PATH permanently. Works in any directory, any terminal, no activation step:
+Confirm the install:
 
 ```bash
-uv tool install --editable .
-```
-
-The `--editable` flag means source changes take effect immediately without reinstalling. Verify it worked:
-
-```bash
-which canarchy
 canarchy --version
+canarchy doctor --text
 ```
 
-To uninstall later: `uv tool uninstall canarchy`
+`canarchy doctor` runs eight offline health checks (Python, `python-can`, transport backend, caches, config file, MCP server) — every check green means the environment is ready.
 
-### Option B — Activate the project virtualenv
+### From source (development)
 
-Activates `.venv` for the current shell session. `canarchy` is on PATH until you close the terminal or run `deactivate`:
+CANarchy uses `uv` for environment, dependency, and packaging workflows.
 
 ```bash
-source .venv/bin/activate
-canarchy --version
+uv sync                          # create .venv, install everything
 ```
 
-Useful if you want the venv active for other tools in the same session. Pair with [direnv](https://direnv.net/) to activate automatically on `cd` into the project directory.
+Then pick one of:
+
+* **Install as a global tool** (no `uv run` prefix needed afterwards):
+
+  ```bash
+  uv tool install --editable .
+  ```
+
+  Source edits take effect without reinstalling. Uninstall later with `uv tool uninstall canarchy`.
+
+* **Activate the project virtualenv** for the current shell session:
+
+  ```bash
+  source .venv/bin/activate
+  ```
+
+  Pair with [direnv](https://direnv.net/) to activate automatically on `cd`.
 
 ---
 
