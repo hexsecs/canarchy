@@ -80,15 +80,35 @@ def _decoded_signal_rows(result: CommandResult) -> list[str]:
             )
         elif event_type == "j1939_pgn":
             pgn_label = f"PGN {payload.get('pgn', '?')}"
-            for entry in payload.get("decoded_signals", []) or []:
-                rows.append(
-                    _format_signal_row(
-                        message=pgn_label,
-                        signal=entry.get("name", "(signal)"),
-                        value=entry.get("value"),
-                        units=entry.get("units"),
+            decoded = payload.get("decoded_signals")
+            # `j1939 pgn` populates `decoded_signals` via
+            # `pretty_j1939_support.describe_frame`, which returns a
+            # `dict[str, str]` (signal name → value text). Other callers
+            # may emit a list of `{name, value, units}` dicts. Handle
+            # both shapes — iterating a dict and calling `.get` on the
+            # string keys would otherwise raise AttributeError.
+            if isinstance(decoded, dict):
+                for signal_name, value in decoded.items():
+                    rows.append(
+                        _format_signal_row(
+                            message=pgn_label,
+                            signal=signal_name,
+                            value=value,
+                            units=None,
+                        )
                     )
-                )
+            else:
+                for entry in decoded or []:
+                    if not isinstance(entry, dict):
+                        continue
+                    rows.append(
+                        _format_signal_row(
+                            message=pgn_label,
+                            signal=entry.get("name", "(signal)"),
+                            value=entry.get("value"),
+                            units=entry.get("units"),
+                        )
+                    )
 
     # `canarchy j1939 spn` returns observations rather than wrapped events.
     if result.command == "j1939 spn":

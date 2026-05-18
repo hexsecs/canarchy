@@ -106,7 +106,7 @@ def test_decoded_signals_pane_extracts_from_signal_events_with_units():
     assert row == "EngineStatus1.CoolantTemp = 85.5 [degC]"
 
 
-def test_decoded_signals_pane_extracts_from_j1939_pgn_events():
+def test_decoded_signals_pane_extracts_from_j1939_pgn_events_list_shape():
     result = _fake_result(
         "j1939 pgn",
         {
@@ -125,6 +125,38 @@ def test_decoded_signals_pane_extracts_from_j1939_pgn_events():
     )
     (row,) = _decoded_signal_rows(result)
     assert row == "PGN 65262.Engine Coolant Temperature = 85 [degC]"
+
+
+def test_decoded_signals_pane_extracts_from_j1939_pgn_events_dict_shape():
+    """Regression for Codex P1 on PR #353.
+
+    `j1939 pgn` populates `decoded_signals` from
+    `pretty_j1939_support.describe_frame`, which returns
+    `dict[str, str]` (signal name → value text). Iterating it yields
+    the string keys; the old code called `.get(...)` on the keys and
+    crashed with AttributeError.
+    """
+
+    result = _fake_result(
+        "j1939 pgn",
+        {
+            "events": [
+                {
+                    "event_type": "j1939_pgn",
+                    "payload": {
+                        "pgn": 65262,
+                        "decoded_signals": {
+                            "Engine Coolant Temperature": "85 degC",
+                            "Engine Speed": "1450 rpm",
+                        },
+                    },
+                }
+            ]
+        },
+    )
+    rows = _decoded_signal_rows(result)
+    assert "PGN 65262.Engine Coolant Temperature = 85 degC" in rows
+    assert "PGN 65262.Engine Speed = 1450 rpm" in rows
 
 
 def test_decoded_signals_pane_extracts_from_j1939_spn_observations():
