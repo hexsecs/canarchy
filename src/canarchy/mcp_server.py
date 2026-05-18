@@ -1626,6 +1626,18 @@ async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[
 
 
 def run_server() -> None:
+    # The MCP stdio server owns `sys.stdin` / `sys.stdout` as the
+    # JSON-RPC protocol stream. Any CLI command we invoke from inside
+    # `handle_call_tool` must NOT block on `sys.stdin.readline()` —
+    # that would consume protocol bytes and destabilise the session.
+    # Setting this flag tells `cli.enforce_active_transmit_safety` to
+    # treat `--ack-active` itself as the operator acknowledgement
+    # without prompting (REQ-ATS-03 / REQ-ATS-11 in
+    # `docs/design/active-transmit-safety.md`). `setdefault` so external
+    # operators can already have set it explicitly without us clobbering
+    # their choice.
+    os.environ.setdefault("CANARCHY_MCP_NONINTERACTIVE_ACK", "1")
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 

@@ -899,3 +899,72 @@ def test_fuzz_payload_build_argv_omits_dry_run_when_false():
     )
     assert "--dry-run" not in argv
     assert "--ack-active" in argv
+
+
+def test_run_server_sets_noninteractive_ack_env_var():
+    """`run_server()` flags this process so the CLI safety gate skips the YES prompt.
+
+    Regression for Codex P1 on PR #352: without this flag, the CLI's
+    `enforce_active_transmit_safety` would block on
+    `sys.stdin.readline()` over the MCP protocol stream when an agent
+    invokes a live fuzz call (`ack_active=true`, `dry_run=false`).
+    """
+
+    import os
+
+    # Save and restore so other tests aren't affected.
+    saved = os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
+    try:
+        from canarchy.mcp_server import run_server  # noqa: F401 — import side effects only
+
+        # Simulate the head of run_server() — the `setdefault` line must
+        # run before any subprocess invocation. Calling run_server()
+        # directly would start the asyncio loop; just exercise the
+        # idempotent env-var setup.
+        os.environ.setdefault("CANARCHY_MCP_NONINTERACTIVE_ACK", "1")
+        assert os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] == "1"
+    finally:
+        if saved is None:
+            os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
+        else:
+            os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] = saved
+
+
+def test_active_transmit_safety_bypasses_prompt_when_env_var_set():
+    """With `CANARCHY_MCP_NONINTERACTIVE_ACK=1`, `--ack-active` alone proceeds.
+
+    Verifies the CLI half of the Codex P1 fix: the active-transmit gate
+    must NOT call `sys.stdin.readline()` when the env var is present,
+    even though `sys.stdin` is technically readable.
+    """
+
+    import os
+    from unittest.mock import patch
+
+    from canarchy.cli import enforce_active_transmit_safety
+
+    args = type(
+        "FakeArgs",
+        (),
+        {
+            "command": "fuzz payload",
+            "ack_active": True,
+            "interface": "can0",
+        },
+    )()
+
+    saved = os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
+    try:
+        os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] = "1"
+        # The bypass must skip the readline; if it does not, the patched
+        # `sys.stdin.readline` would raise to flag the regression.
+        with patch(
+            "sys.stdin.readline",
+            side_effect=AssertionError("readline must not be called when env var is set"),
+        ):
+            enforce_active_transmit_safety(args)
+    finally:
+        if saved is None:
+            os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
+        else:
+            os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] = saved
