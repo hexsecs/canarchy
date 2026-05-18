@@ -1,6 +1,6 @@
 # TUI Plan
 
-Current status: `canarchy tui` now starts an initial text-mode shell with bus status, live traffic, **decoded signals**, **J1939 activity**, alerts, and command entry routed through the shared command layer. Sections 3 (Decoded Signals) and 4 (J1939) of this document are implemented; the UDS (5) and richer Alerts (6) panes remain as forward-looking work.
+Current status: `canarchy tui` now starts an initial text-mode shell with bus status, live traffic, **decoded signals**, **J1939 activity**, **UDS transactions**, alerts, and command entry routed through the shared command layer. Sections 3 (Decoded Signals), 4 (J1939), and 5 (UDS) of this document are implemented; the richer Alerts pane (6) plus hotkeys + command palette (7) remain as forward-looking work.
 
 This document remains the forward-looking plan for taking that initial shell toward the richer pane model described below.
 
