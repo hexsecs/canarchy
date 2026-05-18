@@ -70,6 +70,9 @@ _EXPECTED_TOOLS = {
     "re_entropy",
     "re_match_dbc",
     "re_shortlist_dbc",
+    "fuzz_payload",
+    "fuzz_replay",
+    "fuzz_arbitration_id",
 }
 
 
@@ -769,3 +772,199 @@ def test_run_server_handles_sigint():
     assert "AttributeError" not in stderr, f"Got AttributeError in stderr: {stderr}"
     assert "Traceback" not in stderr, f"Got traceback in stderr: {stderr}"
     assert "KeyboardInterrupt" not in stderr, f"Got KeyboardInterrupt in stderr: {stderr}"
+
+
+# --- fuzz MCP gating (REQ-ATS-11, REQ-ATS-12, REQ-ATS-13) ------------------
+
+
+def test_fuzz_payload_without_ack_active_returns_structured_error():
+    """REQ-ATS-12: missing `ack_active` returns `ACTIVE_TRANSMIT_REQUIRES_ACK`."""
+
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_payload",
+            {"interface": "can0", "id": "0x100", "strategy": "bitflip"},
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_fuzz_payload_ack_active_false_returns_structured_error():
+    """`ack_active=false` is rejected just like an omitted field."""
+
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_payload",
+            {
+                "interface": "can0",
+                "id": "0x100",
+                "strategy": "bitflip",
+                "ack_active": False,
+            },
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_fuzz_payload_with_ack_active_defaults_to_dry_run():
+    """REQ-ATS-13: `dry_run` defaults to true for MCP-initiated calls."""
+
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_payload",
+            {
+                "interface": "can0",
+                "id": "0x100",
+                "strategy": "bitflip",
+                "max": 2,
+                "seed": 1,
+                "ack_active": True,
+            },
+        )
+    )
+    payload = json.loads(results[0].text)
+    # Envelope shape — the CLI translates --jsonl into the canonical
+    # event stream; ok=True means dry-run completed without opening a
+    # transport.
+    assert payload["ok"] is True
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["mode"] == "dry_run"
+
+
+def test_fuzz_replay_without_ack_active_returns_structured_error():
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_replay",
+            {
+                "file": "tests/fixtures/j1939_heavy_vehicle.candump",
+                "strategy": "timing",
+            },
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_fuzz_arbitration_id_without_ack_active_returns_structured_error():
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_arbitration_id",
+            {"interface": "can0", "range": "0x100:0x103"},
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_fuzz_payload_build_argv_includes_dry_run_default():
+    """The argv builder must add `--dry-run` when `dry_run` defaults to true."""
+
+    argv = _build_argv(
+        "fuzz_payload",
+        {
+            "interface": "can0",
+            "id": "0x100",
+            "strategy": "random",
+            "max": 4,
+            "dlc": 4,
+            "ack_active": True,
+            "dry_run": True,
+        },
+    )
+    assert "--dry-run" in argv
+    assert "--ack-active" in argv
+    assert argv[0:2] == ["fuzz", "payload"]
+
+
+def test_fuzz_payload_build_argv_omits_dry_run_when_false():
+    """An explicit `dry_run=false` is the operator's authorisation for live mode."""
+
+    argv = _build_argv(
+        "fuzz_payload",
+        {
+            "interface": "can0",
+            "id": "0x100",
+            "strategy": "random",
+            "max": 4,
+            "dlc": 4,
+            "ack_active": True,
+            "dry_run": False,
+        },
+    )
+    assert "--dry-run" not in argv
+    assert "--ack-active" in argv
+
+
+def test_run_server_sets_noninteractive_ack_env_var():
+    """`run_server()` flags this process so the CLI safety gate skips the YES prompt.
+
+    Regression for Codex P1 on PR #352: without this flag, the CLI's
+    `enforce_active_transmit_safety` would block on
+    `sys.stdin.readline()` over the MCP protocol stream when an agent
+    invokes a live fuzz call (`ack_active=true`, `dry_run=false`).
+    """
+
+    import os
+
+    # Save and restore so other tests aren't affected.
+    saved = os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
+    try:
+        from canarchy.mcp_server import run_server  # noqa: F401 — import side effects only
+
+        # Simulate the head of run_server() — the `setdefault` line must
+        # run before any subprocess invocation. Calling run_server()
+        # directly would start the asyncio loop; just exercise the
+        # idempotent env-var setup.
+        os.environ.setdefault("CANARCHY_MCP_NONINTERACTIVE_ACK", "1")
+        assert os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] == "1"
+    finally:
+        if saved is None:
+            os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
+        else:
+            os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] = saved
+
+
+def test_active_transmit_safety_bypasses_prompt_when_env_var_set():
+    """With `CANARCHY_MCP_NONINTERACTIVE_ACK=1`, `--ack-active` alone proceeds.
+
+    Verifies the CLI half of the Codex P1 fix: the active-transmit gate
+    must NOT call `sys.stdin.readline()` when the env var is present,
+    even though `sys.stdin` is technically readable.
+    """
+
+    import os
+    from unittest.mock import patch
+
+    from canarchy.cli import enforce_active_transmit_safety
+
+    args = type(
+        "FakeArgs",
+        (),
+        {
+            "command": "fuzz payload",
+            "ack_active": True,
+            "interface": "can0",
+        },
+    )()
+
+    saved = os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
+    try:
+        os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] = "1"
+        # The bypass must skip the readline; if it does not, the patched
+        # `sys.stdin.readline` would raise to flag the regression.
+        with patch(
+            "sys.stdin.readline",
+            side_effect=AssertionError("readline must not be called when env var is set"),
+        ):
+            enforce_active_transmit_safety(args)
+    finally:
+        if saved is None:
+            os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
+        else:
+            os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] = saved

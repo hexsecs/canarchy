@@ -7,6 +7,7 @@ import hashlib
 import itertools
 import json
 import logging
+import os
 import shlex
 import sys
 import time
@@ -1126,6 +1127,16 @@ def enforce_active_transmit_safety(
             data={"mode": "active"},
         )
     if not ack_active:
+        return
+
+    # Non-interactive callers (the MCP server, programmatic embeds, CI
+    # harnesses that explicitly opt in) cannot answer a `YES` prompt —
+    # and on the MCP path `sys.stdin` is the JSON-RPC protocol stream,
+    # so reading from it would consume bytes we don't own. The env var
+    # is the explicit signal that the surrounding context has already
+    # authorised this invocation. Matches REQ-ATS-03 in
+    # `docs/design/active-transmit-safety.md`.
+    if os.environ.get("CANARCHY_MCP_NONINTERACTIVE_ACK") == "1":
         return
 
     print(active_transmit_confirmation_prompt(args), file=sys.stderr, end="", flush=True)

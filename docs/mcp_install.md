@@ -131,6 +131,14 @@ end-to-end smoke check because it requires no fixture:
   `gateway` already require `--ack-active`. Agents must surface the
   confirmation explicitly. See
   [`SECURITY.md`](https://github.com/hexsecs/canarchy/blob/main/SECURITY.md).
+* **Fuzz tools (`fuzz_payload`, `fuzz_replay`, `fuzz_arbitration_id`).**
+  These mirror the CLI's `fuzz` tree and carry an additional gate: every
+  call must supply `ack_active=true`, otherwise the response is
+  `ACTIVE_TRANSMIT_REQUIRES_ACK` and the underlying command is never
+  invoked. `dry_run` defaults to `true` for agent-initiated calls (per
+  [`docs/design/active-transmit-safety.md`](design/active-transmit-safety.md)
+  `REQ-ATS-13`), so the agent plans the fuzz workflow safely unless the
+  operator explicitly passes `dry_run=false`.
 * **Logging.** The MCP server logs to stderr. The agent client typically
   surfaces stderr in its diagnostics pane; check there first when a
   tool call misbehaves.
