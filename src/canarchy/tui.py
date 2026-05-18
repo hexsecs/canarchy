@@ -18,7 +18,91 @@ class TuiState:
     last_result: CommandResult | None = None
     alerts: list[str] = field(default_factory=list)
     live_traffic: list[str] = field(default_factory=list)
+    decoded_signals: list[str] = field(default_factory=list)
     bus_status: list[str] = field(default_factory=lambda: ["interface: none", "mode: idle"])
+
+
+_MAX_DECODED_SIGNAL_ROWS = 12
+
+
+def _format_signal_row(*, message: str, signal: str, value: object, units: object) -> str:
+    """Format one row for the Decoded Signals pane.
+
+    Columns mirror `docs/tui_plan.md#decoded-signals`: message, signal,
+    value, units. Values that are floats are rounded to three decimal
+    places so the pane stays readable; everything else is stringified
+    as-is.
+    """
+
+    if isinstance(value, float):
+        value_text = f"{value:.3f}".rstrip("0").rstrip(".") or "0"
+    else:
+        value_text = "(none)" if value is None else str(value)
+    units_text = "" if units in (None, "") else f" [{units}]"
+    msg = message or "(message)"
+    return f"{msg}.{signal} = {value_text}{units_text}"
+
+
+def _decoded_signal_rows(result: CommandResult) -> list[str]:
+    """Extract Decoded Signals pane rows from a command result.
+
+    Reuses the existing canonical structures rather than inventing a
+    parallel signal model. Supported sources:
+
+    * `decoded_message` events (emitted by `canarchy decode --dbc ...`):
+      one row per signal in the `payload.signals` dict.
+    * `signal` events (emitted by some downstream tooling): one row per
+      event.
+    * `j1939_pgn` events with `payload.decoded_signals`: one row per
+      decoded signal (used by `j1939 pgn --json` enrichment).
+    * `j1939 spn` observations: one row per observation; the message
+      name is the PGN.
+    """
+
+    rows: list[str] = []
+    for event in result.data.get("events", []) or []:
+        event_type = event.get("event_type")
+        payload = event.get("payload", {}) or {}
+        if event_type == "decoded_message":
+            message = payload.get("message_name", "")
+            for signal_name, value in (payload.get("signals") or {}).items():
+                rows.append(
+                    _format_signal_row(message=message, signal=signal_name, value=value, units=None)
+                )
+        elif event_type == "signal":
+            rows.append(
+                _format_signal_row(
+                    message=payload.get("message_name") or "",
+                    signal=payload.get("signal_name", "(signal)"),
+                    value=payload.get("value"),
+                    units=payload.get("units"),
+                )
+            )
+        elif event_type == "j1939_pgn":
+            pgn_label = f"PGN {payload.get('pgn', '?')}"
+            for entry in payload.get("decoded_signals", []) or []:
+                rows.append(
+                    _format_signal_row(
+                        message=pgn_label,
+                        signal=entry.get("name", "(signal)"),
+                        value=entry.get("value"),
+                        units=entry.get("units"),
+                    )
+                )
+
+    # `canarchy j1939 spn` returns observations rather than wrapped events.
+    if result.command == "j1939 spn":
+        for observation in result.data.get("observations", []) or []:
+            rows.append(
+                _format_signal_row(
+                    message=f"PGN {observation.get('pgn', '?')}",
+                    signal=observation.get("name") or f"SPN {observation.get('spn', '?')}",
+                    value=observation.get("value"),
+                    units=observation.get("units"),
+                )
+            )
+
+    return rows
 
 
 def run_tui(
@@ -89,6 +173,12 @@ def _update_state(state: TuiState, result: CommandResult) -> None:
         state.alerts.append(f"error: {error['code']}: {error['message']}")
 
     state.live_traffic = _traffic_lines(result)
+    new_signal_rows = _decoded_signal_rows(result)
+    if new_signal_rows:
+        # Keep the most recent rows; older entries fall off the bottom of
+        # the pane so the display stays bounded. Newest at the top.
+        merged = new_signal_rows + state.decoded_signals
+        state.decoded_signals = merged[:_MAX_DECODED_SIGNAL_ROWS]
 
 
 def _traffic_lines(result: CommandResult) -> list[str]:
@@ -140,6 +230,9 @@ def _render(state: TuiState) -> None:
         print(line)
     print("[Live Traffic]")
     for line in state.live_traffic or ["(no traffic)"]:
+        print(line)
+    print("[Decoded Signals]")
+    for line in state.decoded_signals or ["(no decoded signals)"]:
         print(line)
     print("[Alerts]")
     for line in state.alerts or ["(no alerts)"]:
