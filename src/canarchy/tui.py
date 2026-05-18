@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shlex
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -19,10 +20,18 @@ class TuiState:
     alerts: list[str] = field(default_factory=list)
     live_traffic: list[str] = field(default_factory=list)
     decoded_signals: list[str] = field(default_factory=list)
+    j1939_pgn_counts: Counter[int] = field(default_factory=Counter)
+    j1939_source_addresses: Counter[int] = field(default_factory=Counter)
+    j1939_recent: list[str] = field(default_factory=list)
+    j1939_dm1_alerts: list[str] = field(default_factory=list)
     bus_status: list[str] = field(default_factory=lambda: ["interface: none", "mode: idle"])
 
 
 _MAX_DECODED_SIGNAL_ROWS = 12
+_MAX_J1939_RECENT_ROWS = 8
+_MAX_J1939_DM1_ALERTS = 4
+_J1939_TOP_PGN_COUNT = 3
+_J1939_TOP_SOURCE_ADDRESS_COUNT = 4
 
 
 def _format_signal_row(*, message: str, signal: str, value: object, units: object) -> str:
@@ -125,6 +134,110 @@ def _decoded_signal_rows(result: CommandResult) -> list[str]:
     return rows
 
 
+def _format_j1939_recent(payload: dict[str, Any]) -> str:
+    """One-row summary of a `j1939_pgn` event for the J1939 pane."""
+
+    pgn = payload.get("pgn", "?")
+    sa = payload.get("source_address")
+    da = payload.get("destination_address")
+    priority = payload.get("priority")
+    data_hex = (payload.get("frame") or {}).get("data", "")
+    sa_text = f"0x{sa:02X}" if isinstance(sa, int) else "?"
+    da_text = "broadcast" if da == 0xFF or da is None else f"0x{da:02X}"
+    prio_text = "" if priority is None else f" prio={priority}"
+    return f"pgn={pgn} sa={sa_text} da={da_text}{prio_text} data={data_hex}"
+
+
+def _format_dm1_alert(message: dict[str, Any]) -> str:
+    """One-row DM1 alert summary; only used when `active_dtc_count > 0`."""
+
+    sa = message.get("source_address")
+    sa_text = f"0x{sa:02X}" if isinstance(sa, int) else "?"
+    transport = message.get("transport", "direct")
+    active = message.get("active_dtc_count", 0)
+    # The DM1 decoder emits `lamp_status` keyed by `mil`,
+    # `amber_warning`, `protect`, and `red_stop` with `"on"`/`"off"`
+    # string values. Fall back to the historical `lamp_summary` name
+    # so a future renaming doesn't silently drop the indicator.
+    lamp = message.get("lamp_status") or message.get("lamp_summary") or {}
+    lit = sorted(
+        name
+        for name, state in lamp.items()
+        if str(state).lower() not in ("off", "", "none", "false")
+    )
+    lamp_field = f" lamps={','.join(lit)}" if lit else ""
+    dtcs = message.get("dtcs", []) or []
+    sample = []
+    for dtc in dtcs[:2]:
+        spn = dtc.get("spn")
+        fmi = dtc.get("fmi")
+        sample.append(f"spn={spn}/fmi={fmi}")
+    sample_text = f" [{', '.join(sample)}]" if sample else ""
+    return f"DM1 sa={sa_text} transport={transport} active={active}{lamp_field}{sample_text}"
+
+
+def _update_j1939_state(state: TuiState, result: CommandResult) -> None:
+    """Fold a command result into the J1939 pane state.
+
+    Reads `j1939_pgn` events for PGN frequency, source-address activity,
+    and recent-activity rows. Reads `j1939 dm1` messages for the alert
+    ribbon when `active_dtc_count > 0`. Other commands leave the pane
+    state untouched.
+    """
+
+    pgn_events: list[dict[str, Any]] = []
+    for event in result.data.get("events", []) or []:
+        if event.get("event_type") == "j1939_pgn":
+            payload = event.get("payload") or {}
+            pgn_events.append(payload)
+            pgn = payload.get("pgn")
+            sa = payload.get("source_address")
+            if isinstance(pgn, int):
+                state.j1939_pgn_counts[pgn] += 1
+            if isinstance(sa, int):
+                state.j1939_source_addresses[sa] += 1
+
+    if pgn_events:
+        # Newest-first within a batch: the last event the command
+        # produced is the most recent observation on the bus, so put
+        # it at the top of the pane.
+        new_rows = [_format_j1939_recent(event) for event in reversed(pgn_events)]
+        merged = new_rows + state.j1939_recent
+        state.j1939_recent = merged[:_MAX_J1939_RECENT_ROWS]
+
+    # DM1 alerts come from the `j1939 dm1` command's structured output
+    # (`data.messages`). `data.active_dtc_count` flags real fault
+    # conditions (SPN>0, FMI != 0 / 31) so a capture full of no-fault
+    # filler rows does not light up the ribbon.
+    if result.command == "j1939 dm1":
+        active_alerts: list[str] = []
+        for message in result.data.get("messages", []) or []:
+            if int(message.get("active_dtc_count", 0) or 0) > 0:
+                active_alerts.append(_format_dm1_alert(message))
+        if active_alerts:
+            merged_alerts = active_alerts + state.j1939_dm1_alerts
+            state.j1939_dm1_alerts = merged_alerts[:_MAX_J1939_DM1_ALERTS]
+
+
+def _j1939_pane_lines(state: TuiState) -> list[str]:
+    """Render the J1939 pane from accumulated state."""
+
+    lines: list[str] = []
+    if state.j1939_pgn_counts:
+        top = state.j1939_pgn_counts.most_common(_J1939_TOP_PGN_COUNT)
+        lines.append("top PGNs: " + ", ".join(f"{pgn}({count})" for pgn, count in top))
+    if state.j1939_source_addresses:
+        top_sa = state.j1939_source_addresses.most_common(_J1939_TOP_SOURCE_ADDRESS_COUNT)
+        lines.append("source addresses: " + ", ".join(f"0x{sa:02X}({n})" for sa, n in top_sa))
+    if state.j1939_dm1_alerts:
+        lines.append("!! DM1 active faults !!")
+        lines.extend(state.j1939_dm1_alerts)
+    if state.j1939_recent:
+        lines.append("recent:")
+        lines.extend(state.j1939_recent)
+    return lines
+
+
 def run_tui(
     execute_command: Any,
     *,
@@ -199,6 +312,7 @@ def _update_state(state: TuiState, result: CommandResult) -> None:
         # the pane so the display stays bounded. Newest at the top.
         merged = new_signal_rows + state.decoded_signals
         state.decoded_signals = merged[:_MAX_DECODED_SIGNAL_ROWS]
+    _update_j1939_state(state, result)
 
 
 def _traffic_lines(result: CommandResult) -> list[str]:
@@ -253,6 +367,9 @@ def _render(state: TuiState) -> None:
         print(line)
     print("[Decoded Signals]")
     for line in state.decoded_signals or ["(no decoded signals)"]:
+        print(line)
+    print("[J1939]")
+    for line in _j1939_pane_lines(state) or ["(no J1939 activity)"]:
         print(line)
     print("[Alerts]")
     for line in state.alerts or ["(no alerts)"]:

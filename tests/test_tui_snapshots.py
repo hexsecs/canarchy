@@ -16,7 +16,9 @@ from canarchy.cli import main
 from canarchy.tui import (
     TuiState,
     _decoded_signal_rows,
+    _j1939_pane_lines,
     _render,
+    _update_j1939_state,
     _update_state,
 )
 
@@ -236,6 +238,172 @@ def test_decoded_signals_pane_unchanged_when_result_has_no_signals():
 # ---------------------------------------------------------------------------
 # End-to-end snapshot: drive the decode command against an in-tree fixture
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# J1939 pane
+# ---------------------------------------------------------------------------
+
+
+def _j1939_pgn_event(
+    *, pgn: int, sa: int, da: int | None = 0xFF, priority: int = 6, data: str = ""
+):
+    return {
+        "event_type": "j1939_pgn",
+        "payload": {
+            "pgn": pgn,
+            "source_address": sa,
+            "destination_address": da,
+            "priority": priority,
+            "frame": {"data": data},
+        },
+    }
+
+
+def test_j1939_pane_starts_empty_with_placeholder():
+    state = TuiState()
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        _render(state)
+    rendered = stdout.getvalue()
+    assert "[J1939]" in rendered
+    assert "(no J1939 activity)" in rendered
+
+
+def test_j1939_pane_tracks_top_pgns_and_source_addresses():
+    state = TuiState()
+    events = [
+        _j1939_pgn_event(pgn=65262, sa=0x31, data="7dffffff"),
+        _j1939_pgn_event(pgn=65262, sa=0x31, data="7effffff"),
+        _j1939_pgn_event(pgn=65262, sa=0x31, data="7fffffff"),
+        _j1939_pgn_event(pgn=61444, sa=0x31, data="ffff00001900"),
+        _j1939_pgn_event(pgn=61444, sa=0x22, data="ffff00001a00"),
+    ]
+    result = _fake_result("j1939 monitor", {"events": events})
+    _update_j1939_state(state, result)
+    assert state.j1939_pgn_counts[65262] == 3
+    assert state.j1939_pgn_counts[61444] == 2
+    assert state.j1939_source_addresses[0x31] == 4
+    assert state.j1939_source_addresses[0x22] == 1
+    lines = _j1939_pane_lines(state)
+    top_pgn_line = next(line for line in lines if line.startswith("top PGNs:"))
+    assert "65262(3)" in top_pgn_line
+    assert "61444(2)" in top_pgn_line
+    sa_line = next(line for line in lines if line.startswith("source addresses:"))
+    assert "0x31(4)" in sa_line
+
+
+def test_j1939_pane_recent_activity_is_bounded_newest_first():
+    state = TuiState()
+    events = [_j1939_pgn_event(pgn=65262 + i, sa=0x31, data="00") for i in range(12)]
+    result = _fake_result("j1939 monitor", {"events": events})
+    _update_j1939_state(state, result)
+    assert len(state.j1939_recent) == 8
+    # The most recent event (highest PGN here) lands at the top.
+    assert "pgn=65273" in state.j1939_recent[0]
+
+
+def test_j1939_pane_dm1_alert_ribbon_lights_only_on_active_faults():
+    """Uses the real `lamp_status` payload shape produced by the DM1 decoder."""
+
+    state = TuiState()
+    result = _fake_result(
+        "j1939 dm1",
+        {
+            "messages": [
+                {
+                    "source_address": 0x31,
+                    "transport": "tp",
+                    "active_dtc_count": 2,
+                    "lamp_status": {
+                        "mil": "on",
+                        "amber_warning": "off",
+                        "protect": "off",
+                        "red_stop": "off",
+                    },
+                    "dtcs": [
+                        {"spn": 110, "fmi": 5},
+                        {"spn": 190, "fmi": 7},
+                    ],
+                },
+                # No-fault filler — must NOT light the ribbon.
+                {
+                    "source_address": 0x22,
+                    "transport": "direct",
+                    "active_dtc_count": 0,
+                    "dtcs": [{"spn": 255, "fmi": 0}],
+                },
+            ]
+        },
+    )
+    _update_j1939_state(state, result)
+    assert len(state.j1939_dm1_alerts) == 1
+    alert = state.j1939_dm1_alerts[0]
+    assert "sa=0x31" in alert
+    assert "active=2" in alert
+    assert "spn=110/fmi=5" in alert
+    assert "lamps=mil" in alert
+    lines = _j1939_pane_lines(state)
+    assert "!! DM1 active faults !!" in lines
+
+
+def test_j1939_pane_dm1_alert_lists_all_lit_lamps_alphabetically():
+    """Regression for Codex P2 on PR #354.
+
+    Reads from `lamp_status` (the actual DM1 decoder field), surfaces
+    every lamp whose state is anything other than `"off"`. Ordering is
+    deterministic so the snapshot is stable.
+    """
+
+    state = TuiState()
+    result = _fake_result(
+        "j1939 dm1",
+        {
+            "messages": [
+                {
+                    "source_address": 0x31,
+                    "transport": "tp",
+                    "active_dtc_count": 3,
+                    "lamp_status": {
+                        "mil": "on",
+                        "amber_warning": "on",
+                        "protect": "off",
+                        "red_stop": "on",
+                    },
+                    "dtcs": [{"spn": 110, "fmi": 5}],
+                }
+            ]
+        },
+    )
+    _update_j1939_state(state, result)
+    (alert,) = state.j1939_dm1_alerts
+    # Sorted alphabetically — amber_warning, mil, red_stop.
+    assert "lamps=amber_warning,mil,red_stop" in alert
+
+
+def test_j1939_pane_untouched_when_result_has_no_j1939_events():
+    state = TuiState()
+    state.j1939_pgn_counts[65262] = 1
+    state.j1939_recent = ["pgn=65262 sa=0x31 da=broadcast prio=6 data=00"]
+    _update_j1939_state(state, _fake_result("capture-info", {"frame_count": 0}))
+    assert state.j1939_pgn_counts[65262] == 1
+    assert len(state.j1939_recent) == 1
+
+
+def test_j1939_pane_end_to_end_against_heavy_vehicle_fixture():
+    """Drive the real `j1939 decode` CLI path against the in-tree fixture."""
+
+    fixture = FIXTURES / "j1939_heavy_vehicle.candump"
+    if not fixture.exists():
+        return
+    payload = _run_cli_capture("j1939", "decode", "--file", str(fixture), "--json")
+    assert payload["ok"] is True
+    state = TuiState()
+    _update_state(state, _fake_result(payload["command"], payload["data"]))
+    # Fixture sends PGNs 65262, 61444 from SA 0x31 (engine controller).
+    assert state.j1939_pgn_counts[65262] > 0
+    assert state.j1939_pgn_counts[61444] > 0
+    assert state.j1939_source_addresses[0x31] > 0
 
 
 def test_decoded_signals_pane_end_to_end_against_sample_dbc():
