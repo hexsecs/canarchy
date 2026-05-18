@@ -304,6 +304,8 @@ def test_j1939_pane_recent_activity_is_bounded_newest_first():
 
 
 def test_j1939_pane_dm1_alert_ribbon_lights_only_on_active_faults():
+    """Uses the real `lamp_status` payload shape produced by the DM1 decoder."""
+
     state = TuiState()
     result = _fake_result(
         "j1939 dm1",
@@ -313,7 +315,12 @@ def test_j1939_pane_dm1_alert_ribbon_lights_only_on_active_faults():
                     "source_address": 0x31,
                     "transport": "tp",
                     "active_dtc_count": 2,
-                    "lamp_summary": {"mil": "on", "amber": "off"},
+                    "lamp_status": {
+                        "mil": "on",
+                        "amber_warning": "off",
+                        "protect": "off",
+                        "red_stop": "off",
+                    },
                     "dtcs": [
                         {"spn": 110, "fmi": 5},
                         {"spn": 190, "fmi": 7},
@@ -338,6 +345,40 @@ def test_j1939_pane_dm1_alert_ribbon_lights_only_on_active_faults():
     assert "lamps=mil" in alert
     lines = _j1939_pane_lines(state)
     assert "!! DM1 active faults !!" in lines
+
+
+def test_j1939_pane_dm1_alert_lists_all_lit_lamps_alphabetically():
+    """Regression for Codex P2 on PR #354.
+
+    Reads from `lamp_status` (the actual DM1 decoder field), surfaces
+    every lamp whose state is anything other than `"off"`. Ordering is
+    deterministic so the snapshot is stable.
+    """
+
+    state = TuiState()
+    result = _fake_result(
+        "j1939 dm1",
+        {
+            "messages": [
+                {
+                    "source_address": 0x31,
+                    "transport": "tp",
+                    "active_dtc_count": 3,
+                    "lamp_status": {
+                        "mil": "on",
+                        "amber_warning": "on",
+                        "protect": "off",
+                        "red_stop": "on",
+                    },
+                    "dtcs": [{"spn": 110, "fmi": 5}],
+                }
+            ]
+        },
+    )
+    _update_j1939_state(state, result)
+    (alert,) = state.j1939_dm1_alerts
+    # Sorted alphabetically — amber_warning, mil, red_stop.
+    assert "lamps=amber_warning,mil,red_stop" in alert
 
 
 def test_j1939_pane_untouched_when_result_has_no_j1939_events():

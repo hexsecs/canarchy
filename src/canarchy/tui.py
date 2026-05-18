@@ -155,9 +155,17 @@ def _format_dm1_alert(message: dict[str, Any]) -> str:
     sa_text = f"0x{sa:02X}" if isinstance(sa, int) else "?"
     transport = message.get("transport", "direct")
     active = message.get("active_dtc_count", 0)
-    lamp = message.get("lamp_summary", {}) or {}
-    lamp_text = ",".join(name for name, state in lamp.items() if state and state != "off")
-    lamp_field = f" lamps={lamp_text}" if lamp_text else ""
+    # The DM1 decoder emits `lamp_status` keyed by `mil`,
+    # `amber_warning`, `protect`, and `red_stop` with `"on"`/`"off"`
+    # string values. Fall back to the historical `lamp_summary` name
+    # so a future renaming doesn't silently drop the indicator.
+    lamp = message.get("lamp_status") or message.get("lamp_summary") or {}
+    lit = sorted(
+        name
+        for name, state in lamp.items()
+        if str(state).lower() not in ("off", "", "none", "false")
+    )
+    lamp_field = f" lamps={','.join(lit)}" if lit else ""
     dtcs = message.get("dtcs", []) or []
     sample = []
     for dtc in dtcs[:2]:
