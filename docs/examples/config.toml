@@ -35,6 +35,15 @@
 
 # interface = "socketcan"
 
+# Default CAN interface/channel for commands that accept one CAN interface.
+# This is separate from the python-can interface type above. For SocketCAN,
+# common values are can0 or vcan0; for udp_multicast, this may be the multicast
+# group such as 239.0.0.1.
+#
+# Environment override: CANARCHY_DEFAULT_INTERFACE
+
+# default_interface = "can0"
+
 # ---------------------------------------------------------------------------
 # DBC providers
 # ---------------------------------------------------------------------------

@@ -31,6 +31,7 @@ Important current behavior:
 * live transport-facing commands default to the `python-can` backend; set `backend = "scaffold"` in `~/.canarchy/config.toml` or export `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior
 * `capture`, `send`, and `gateway` use the selected transport backend, but `gateway` specifically requires `python-can`
 * the default `python-can` interface is `socketcan`; set `interface` in the config file or `CANARCHY_PYTHON_CAN_INTERFACE` to change it
+* the default CAN interface/channel is optional; set `default_interface` in the config file or `CANARCHY_DEFAULT_INTERFACE` to let single-interface commands such as `capture`, `send`, `generate`, `uds scan`, and live fuzz commands omit the interface argument
 * DBC-backed commands accept local paths and provider refs such as `opendbc:<name>` or `comma:<name>`
 * `decode`, `encode`, and `dbc inspect` include `data.dbc_source` in structured output so callers can see the provider, logical DBC name, pinned version, and resolved local path
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
@@ -56,6 +57,7 @@ canarchy <action> <object>
 Examples:
 
 * `canarchy capture can0 --json`
+* `canarchy capture --json` when `[transport].default_interface` is configured
 * `canarchy replay --file tests/fixtures/sample.candump --rate 2.0 --json`
 * `canarchy j1939 monitor --pgn 65262 --json`
 * `canarchy decode --file tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc --json`
@@ -69,7 +71,7 @@ Examples:
 Capture traffic from a local interface. Structured capture uses the selected transport backend. `--candump` is a live-only mode.
 
 ```bash
-canarchy capture <interface> [--candump] [--json|--jsonl|--text]
+canarchy capture [interface] [--candump] [--json|--jsonl|--text]
 ```
 
 Example:
@@ -82,6 +84,7 @@ canarchy capture vcan0 --candump
 Notes:
 
 * `--candump` is a live-only mode that requires the `python-can` backend (set in `~/.canarchy/config.toml` or via `CANARCHY_TRANSPORT_BACKEND=python-can`)
+* if `interface` is omitted, `capture` uses `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE`; without either, it returns `INTERFACE_REQUIRED`
 * `--candump` keeps running and printing frames until interrupted
 * `--candump` changes the human-readable output path to a `candump`-style line format such as `(0.100000) vcan0 18F00431#AABBCCDD`
 * `--candump --json` and `--candump --jsonl` keep structured output for automation, but still require a live backend
@@ -100,7 +103,7 @@ Supported file input today:
 Prepare an active transmit frame.
 
 ```bash
-canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json|--jsonl|--text]
+canarchy send [interface] <frame-id> <hex-data> [--ack-active] [--json|--jsonl|--text]
 ```
 
 Example:
@@ -113,6 +116,7 @@ Notes:
 
 * `--ack-active` requests an interactive `YES` confirmation before the frame is transmitted
 * when active acknowledgement is required by configuration, omitting `--ack-active` returns a structured `ACTIVE_ACK_REQUIRED` error
+* if `interface` is omitted, `send` uses `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE`; explicit command-line interfaces take precedence over the configured default
 
 ### filter
 
@@ -170,7 +174,7 @@ Notes:
 Generate CAN frames from explicit, random, or incrementing inputs.
 
 ```bash
-canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>] [--count <n>] [--gap <ms>] [--extended] [--ack-active] [--json|--jsonl|--text]
+canarchy generate [interface] [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>] [--count <n>] [--gap <ms>] [--extended] [--ack-active] [--json|--jsonl|--text]
 ```
 
 Examples:
@@ -891,6 +895,8 @@ Inspect the effective transport configuration and the source of each setting.
 ```bash
 canarchy config show [--json|--jsonl|--text]
 ```
+
+The payload includes both `interface` (the python-can backend type) and `default_interface` (the optional CAN channel fallback for commands that omit their interface argument).
 
 ### doctor
 

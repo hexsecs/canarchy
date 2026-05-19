@@ -279,6 +279,7 @@ def _load_user_config() -> dict[str, str]:
         [transport]
         backend = "python-can"
         interface = "udp_multicast"
+        default_interface = "can0"
         # capture_limit = 2
         # capture_timeout = 0.05
 
@@ -289,6 +290,7 @@ def _load_user_config() -> dict[str, str]:
 
     * ``backend``        → ``CANARCHY_TRANSPORT_BACKEND``
     * ``interface``      → ``CANARCHY_PYTHON_CAN_INTERFACE``
+    * ``default_interface`` → ``CANARCHY_DEFAULT_INTERFACE``
     * ``capture_limit``  → ``CANARCHY_CAPTURE_LIMIT``
     * ``capture_timeout``→ ``CANARCHY_CAPTURE_TIMEOUT``
 
@@ -317,6 +319,7 @@ def _load_user_config() -> dict[str, str]:
     key_map = {
         "backend": "CANARCHY_TRANSPORT_BACKEND",
         "interface": "CANARCHY_PYTHON_CAN_INTERFACE",
+        "default_interface": "CANARCHY_DEFAULT_INTERFACE",
         "capture_limit": "CANARCHY_CAPTURE_LIMIT",
         "capture_timeout": "CANARCHY_CAPTURE_TIMEOUT",
     }
@@ -335,6 +338,14 @@ def _load_user_config() -> dict[str, str]:
 def default_j1939_dbc() -> str | None:
     file_config = _load_user_config()
     return os.environ.get("CANARCHY_J1939_DBC") or file_config.get("CANARCHY_J1939_DBC")
+
+
+def default_can_interface() -> str | None:
+    file_config = _load_user_config()
+    value = os.environ.get("CANARCHY_DEFAULT_INTERFACE") or file_config.get(
+        "CANARCHY_DEFAULT_INTERFACE"
+    )
+    return value.strip() if value and value.strip() else None
 
 
 def active_ack_required() -> bool:
@@ -377,6 +388,7 @@ def config_show_payload() -> dict[str, object]:
     env_key_map = {
         "backend": ("CANARCHY_TRANSPORT_BACKEND", "scaffold"),
         "interface": ("CANARCHY_PYTHON_CAN_INTERFACE", "virtual"),
+        "default_interface": ("CANARCHY_DEFAULT_INTERFACE", ""),
         "capture_limit": ("CANARCHY_CAPTURE_LIMIT", "2"),
         "capture_timeout": ("CANARCHY_CAPTURE_TIMEOUT", "0.05"),
         "require_active_ack": ("CANARCHY_REQUIRE_ACTIVE_ACK", "false"),
@@ -387,6 +399,7 @@ def config_show_payload() -> dict[str, object]:
     effective = {
         "backend": config.backend,
         "interface": config.python_can_interface,
+        "default_interface": default_can_interface(),
         "capture_limit": config.capture_limit,
         "capture_timeout": config.capture_timeout,
         "require_active_ack": active_ack_required(),

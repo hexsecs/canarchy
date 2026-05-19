@@ -50,13 +50,29 @@ python-can separates **bus type** from **device address**:
 | Concept | python-can term | CANarchy config key | Example value |
 |---|---|---|---|
 | Bus driver / adapter type | `interface` | `interface` in `config.toml` / `CANARCHY_PYTHON_CAN_INTERFACE` | `socketcan`, `kvaser`, `pcan` |
-| Device or port within that type | `channel` | positional CLI argument | `can0`, `PCAN_USBBUS1`, `0` |
+| Device or port within that type | `channel` | positional CLI argument or `[transport].default_interface` / `CANARCHY_DEFAULT_INTERFACE` | `can0`, `PCAN_USBBUS1`, `0` |
 
 Example: SocketCAN on Linux, interface `can0`:
 
 ```bash
 canarchy capture can0   # channel = can0, interface type from config
 ```
+
+To avoid repeating the same channel on every command, configure a default CAN interface:
+
+```toml
+[transport]
+default_interface = "can0"
+```
+
+Then commands that accept one CAN interface can omit it:
+
+```bash
+canarchy capture
+canarchy send 0x123 11223344 --json
+```
+
+An explicit command-line interface still wins over the configured default.
 
 Example: PCAN-USB:
 

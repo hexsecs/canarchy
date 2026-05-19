@@ -49,6 +49,8 @@ With `uv` in a project environment:
 
 The current MCP surface exposes a curated non-interactive subset of the CLI. Spaces in command names become underscores:
 
+For MCP tools that accept a single CAN interface, omit the `interface` argument only when `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE` is configured. Explicit MCP `interface` arguments take precedence over the configured default. `[transport].interface` is the python-can backend type and is not the CAN channel fallback.
+
 | MCP tool | CLI equivalent |
 |----------|---------------|
 | `capture` | `canarchy capture` |

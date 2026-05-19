@@ -22,13 +22,16 @@ Operators need an inspectable way to answer basic configuration questions such a
 | ID | Type | Requirement |
 |----|------|-------------|
 | `REQ-CONFIG-01` | Ubiquitous | The system shall provide a `canarchy config show` command for inspecting the effective transport configuration. |
-| `REQ-CONFIG-02` | Event-driven | When `config show` is invoked, the system shall return the effective values for transport backend, interface, capture limit, capture timeout, active-ack safety, and default J1939 DBC configuration. |
+| `REQ-CONFIG-02` | Event-driven | When `config show` is invoked, the system shall return the effective values for transport backend, python-can interface type, default CAN interface, capture limit, capture timeout, active-ack safety, and default J1939 DBC configuration. |
 | `REQ-CONFIG-03` | Ubiquitous | The `config show` result shall include a `sources` map that records whether each effective value came from the environment, the config file, or the built-in defaults. |
 | `REQ-CONFIG-04` | Optional feature | Where an environment variable overrides a config-file value, the system shall use the environment value and mark its source as `env`. |
 | `REQ-CONFIG-05` | Optional feature | Where a value is set in the config file and not overridden by the environment, the system shall use the config-file value and mark its source as `file`. |
 | `REQ-CONFIG-06` | State-driven | While no environment or config-file override exists for a supported setting, the system shall use the built-in default and mark its source as `default`. |
 | `REQ-CONFIG-07` | Ubiquitous | The `config show` result shall report the resolved config-file path and whether that file currently exists. |
 | `REQ-CONFIG-08` | Ubiquitous | `config show` shall preserve the standard output modes (`--json`, `--jsonl`, `--text`) with command-specific formatting over the same configuration payload. |
+| `REQ-CONFIG-09` | Optional feature | Where `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE` is specified, the system shall use that CAN interface for interface-taking commands when no command-line interface is supplied. |
+| `REQ-CONFIG-10` | Optional feature | Where a command-line interface is supplied for an interface-taking command, the system shall use the command-line value instead of the configured default CAN interface. |
+| `REQ-CONFIG-11` | Unwanted behaviour | If an interface-taking command has no command-line interface and no configured default CAN interface, the system shall return an actionable `INTERFACE_REQUIRED` error unless the command explicitly supports an interface-less sample or dry-run mode. |
 
 ## Command Surface
 
@@ -42,6 +45,7 @@ In scope:
 
 * effective transport/backend configuration reporting
 * source precedence reporting across defaults, file config, and environment variables
+* default CAN interface fallback for commands that accept a single CAN interface
 * config-file path and existence metadata
 
 Out of scope:
@@ -55,7 +59,8 @@ Out of scope:
 The top-level `data` payload includes:
 
 * `backend`
-* `interface`
+* `interface` (the python-can interface type, for example `socketcan` or `udp_multicast`)
+* `default_interface` (the CAN channel/interface used when a command omits one, for example `can0` or `vcan0`)
 * `capture_limit`
 * `capture_timeout`
 * `require_active_ack`
