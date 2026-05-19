@@ -129,6 +129,7 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "fuzz arbitration-id",
 }
 FUZZ_COMMANDS = {"fuzz payload", "fuzz replay", "fuzz arbitration-id"}
+PLUGINS_COMMANDS = {"plugins list", "plugins info", "plugins enable", "plugins disable"}
 IMPLEMENTED_COMMANDS = (
     TRANSPORT_COMMANDS
     | DBC_COMMANDS
@@ -142,6 +143,7 @@ IMPLEMENTED_COMMANDS = (
     | DOCTOR_COMMANDS
     | RE_COMMANDS
     | FUZZ_COMMANDS
+    | PLUGINS_COMMANDS
     | {"mcp serve", "replay", "gateway", "shell", "export"}
 )
 
@@ -1018,6 +1020,24 @@ def build_parser() -> CanarchyArgumentParser:
         help="target shell flavour for the completion script",
     )
     completion.set_defaults(command="completion")
+
+    plugins = subparsers.add_parser("plugins", help="manage CANarchy plugins")
+    plugins_subparsers = plugins.add_subparsers(dest="plugins_action", required=True)
+    plugins_list_p = plugins_subparsers.add_parser("list", help="list all discovered plugins")
+    add_output_arguments(plugins_list_p)
+    plugins_list_p.set_defaults(command="plugins list")
+    plugins_info_p = plugins_subparsers.add_parser("info", help="show plugin details")
+    plugins_info_p.add_argument("name", help="plugin name to inspect")
+    add_output_arguments(plugins_info_p)
+    plugins_info_p.set_defaults(command="plugins info")
+    plugins_enable_p = plugins_subparsers.add_parser("enable", help="enable a plugin")
+    plugins_enable_p.add_argument("name", help="plugin name to enable")
+    add_output_arguments(plugins_enable_p)
+    plugins_enable_p.set_defaults(command="plugins enable")
+    plugins_disable_p = plugins_subparsers.add_parser("disable", help="disable a plugin")
+    plugins_disable_p.add_argument("name", help="plugin name to disable")
+    add_output_arguments(plugins_disable_p)
+    plugins_disable_p.set_defaults(command="plugins disable")
 
     mcp = subparsers.add_parser("mcp", help="MCP server workflows")
     mcp_subparsers = mcp.add_subparsers(dest="mcp_action", required=True)
@@ -4522,6 +4542,14 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(fuzz_data)
         data["events"] = fuzz_events
         warnings.extend(fuzz_warnings)
+    elif args.command == "plugins list":
+        data.update(plugins_list_payload())
+    elif args.command == "plugins info":
+        data.update(plugins_info_payload(args.name))
+    elif args.command == "plugins enable":
+        data.update(plugins_enable_payload(args.name))
+    elif args.command == "plugins disable":
+        data.update(plugins_disable_payload(args.name))
     else:
         data["events"] = build_events(args)
     if args.command not in IMPLEMENTED_COMMANDS:
@@ -5637,6 +5665,150 @@ def _flatten_frame_event(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_PLUGINS_CONFIG_PATH = Path.home() / ".canarchy" / "config.toml"
+
+
+def _load_plugins_disabled() -> list[str]:
+    if not _PLUGINS_CONFIG_PATH.exists():
+        return []
+    try:
+        import tomllib
+
+        with _PLUGINS_CONFIG_PATH.open("rb") as f:
+            raw = tomllib.load(f)
+        return list(raw.get("plugins", {}).get("disabled", []))
+    except Exception:
+        return []
+
+
+def _save_plugins_disabled(disabled: list[str]) -> None:
+    import re
+
+    _PLUGINS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    content = (
+        _PLUGINS_CONFIG_PATH.read_text(encoding="utf-8") if _PLUGINS_CONFIG_PATH.exists() else ""
+    )
+    # Strip any existing [plugins] section (everything from [plugins] to next [ or EOF)
+    content = re.sub(r"\[plugins\][^\[]*", "", content, flags=re.DOTALL).rstrip()
+    quoted = ", ".join(f'"{n}"' for n in sorted(disabled))
+    plugins_block = f"\n\n[plugins]\ndisabled = [{quoted}]\n"
+    _PLUGINS_CONFIG_PATH.write_text(content + plugins_block, encoding="utf-8")
+
+
+def _all_plugin_entries(registry: Any, disabled: list[str]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for p in registry.list_processors():
+        entries.append(
+            {
+                "name": p["name"],
+                "kind": "processor",
+                "api_version": p["api_version"],
+                "enabled": p["name"] not in disabled,
+            }
+        )
+    for s in registry.list_sinks():
+        entries.append(
+            {
+                "name": s["name"],
+                "kind": "sink",
+                "api_version": s["api_version"],
+                "supported_formats": s["supported_formats"],
+                "enabled": s["name"] not in disabled,
+            }
+        )
+    for a in registry.list_input_adapters():
+        entries.append(
+            {
+                "name": a["name"],
+                "kind": "input_adapter",
+                "api_version": a["api_version"],
+                "supported_extensions": a["supported_extensions"],
+                "enabled": a["name"] not in disabled,
+            }
+        )
+    return entries
+
+
+def plugins_list_payload() -> dict[str, Any]:
+    from canarchy.plugins import get_registry
+
+    registry = get_registry()
+    disabled = _load_plugins_disabled()
+    entries = _all_plugin_entries(registry, disabled)
+    return {"plugins": entries, "total": len(entries)}
+
+
+def plugins_info_payload(name: str) -> dict[str, Any]:
+    from canarchy.plugins import get_registry
+
+    registry = get_registry()
+    disabled = _load_plugins_disabled()
+    entries = _all_plugin_entries(registry, disabled)
+    for entry in entries:
+        if entry["name"] == name:
+            return {"plugin": entry}
+    raise CommandError(
+        command="plugins info",
+        exit_code=EXIT_USER_ERROR,
+        errors=[
+            ErrorDetail(
+                code="PLUGIN_NOT_FOUND",
+                message=f"No plugin named '{name}' is registered.",
+                hint="Run `canarchy plugins list` to see all registered plugins.",
+            )
+        ],
+    )
+
+
+def plugins_enable_payload(name: str) -> dict[str, Any]:
+    from canarchy.plugins import get_registry
+
+    registry = get_registry()
+    entries = _all_plugin_entries(registry, [])
+    known = {e["name"] for e in entries}
+    if name not in known:
+        raise CommandError(
+            command="plugins enable",
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="PLUGIN_NOT_FOUND",
+                    message=f"No plugin named '{name}' is registered.",
+                    hint="Run `canarchy plugins list` to see all registered plugins.",
+                )
+            ],
+        )
+    disabled = _load_plugins_disabled()
+    disabled = [n for n in disabled if n != name]
+    _save_plugins_disabled(disabled)
+    return {"plugin": name, "action": "enabled"}
+
+
+def plugins_disable_payload(name: str) -> dict[str, Any]:
+    from canarchy.plugins import get_registry
+
+    registry = get_registry()
+    entries = _all_plugin_entries(registry, [])
+    known = {e["name"] for e in entries}
+    if name not in known:
+        raise CommandError(
+            command="plugins disable",
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="PLUGIN_NOT_FOUND",
+                    message=f"No plugin named '{name}' is registered.",
+                    hint="Run `canarchy plugins list` to see all registered plugins.",
+                )
+            ],
+        )
+    disabled = _load_plugins_disabled()
+    if name not in disabled:
+        disabled.append(name)
+    _save_plugins_disabled(disabled)
+    return {"plugin": name, "action": "disabled"}
+
+
 def emit_completion_script(args: argparse.Namespace, output_format: str) -> int:
     """Render the shell completion script for ``args.shell`` to stdout.
 
@@ -5843,6 +6015,48 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             hint = check.get("hint")
             if hint:
                 print(f"           hint: {hint}")
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "plugins list":
+        plugins = result.data.get("plugins", [])
+        total = result.data.get("total", 0)
+        print(f"plugins: {total} registered")
+        for p in plugins:
+            status = "enabled" if p.get("enabled") else "disabled"
+            extra = ""
+            if "supported_formats" in p:
+                extra = f"  formats={p['supported_formats']}"
+            elif "supported_extensions" in p:
+                extra = f"  extensions={p['supported_extensions']}"
+            print(f"  [{status}]  {p['name']}  ({p['kind']} v{p['api_version']}){extra}")
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "plugins info":
+        p = result.data.get("plugin", {})
+        status = "enabled" if p.get("enabled") else "disabled"
+        print(f"name: {p.get('name')}")
+        print(f"kind: {p.get('kind')}")
+        print(f"api_version: {p.get('api_version')}")
+        print(f"status: {status}")
+        if "supported_formats" in p:
+            print(f"supported_formats: {p['supported_formats']}")
+        if "supported_extensions" in p:
+            print(f"supported_extensions: {p['supported_extensions']}")
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if (
+        output_format == "text"
+        and result.ok
+        and result.command in {"plugins enable", "plugins disable"}
+    ):
+        print(f"plugin: {result.data.get('plugin')}")
+        print(f"action: {result.data.get('action')}")
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return

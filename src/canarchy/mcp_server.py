@@ -1150,6 +1150,22 @@ _TOOLS: list[types.Tool] = [
             "required": ["interface", "range", "ack_active"],
         },
     ),
+    types.Tool(
+        name="plugins_list",
+        description="List all discovered CANarchy plugins with kind, API version, and enabled status.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    types.Tool(
+        name="plugins_info",
+        description="Show detailed metadata for a single registered plugin by name.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Plugin name to inspect"},
+            },
+            "required": ["name"],
+        },
+    ),
 ]
 
 _TOOL_NAMES: frozenset[str] = frozenset(tool.name for tool in _TOOLS)
@@ -1552,6 +1568,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("dry_run", True):
                 argv += ["--dry-run"]
             return argv + ["--jsonl"]
+        case "plugins_list":
+            return ["plugins", "list", "--json"]
+        case "plugins_info":
+            return ["plugins", "info", a["name"], "--json"]
         case _:
             raise ValueError(f"Unknown tool: {tool_name!r}")
 

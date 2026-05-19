@@ -73,6 +73,8 @@ _EXPECTED_TOOLS = {
     "fuzz_payload",
     "fuzz_replay",
     "fuzz_arbitration_id",
+    "plugins_list",
+    "plugins_info",
 }
 
 
@@ -132,6 +134,45 @@ def test_call_tool_doctor_returns_checks():
         "python_version",
         "python_can",
     }
+
+
+# --- TEST-MCP-05b: plugins tools return structured result ------------------
+
+
+def test_call_tool_plugins_list_returns_plugin_list():
+    from canarchy.mcp_server import handle_call_tool
+
+    results = asyncio.run(handle_call_tool("plugins_list", {}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "plugins list"
+    assert "plugins" in payload["data"]
+    assert isinstance(payload["data"]["plugins"], list)
+    assert payload["data"]["total"] >= 3
+
+
+def test_call_tool_plugins_info_returns_plugin_detail():
+    from canarchy.mcp_server import handle_call_tool
+
+    results = asyncio.run(handle_call_tool("plugins_info", {"name": "counter-candidates"}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    plugin = payload["data"]["plugin"]
+    assert plugin["name"] == "counter-candidates"
+    assert plugin["kind"] == "processor"
+    assert plugin["enabled"] is True
+
+
+def test_call_tool_plugins_info_unknown_returns_error():
+    from canarchy.mcp_server import handle_call_tool
+
+    results = asyncio.run(handle_call_tool("plugins_info", {"name": "no-such-plugin"}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "PLUGIN_NOT_FOUND"
 
 
 # --- TEST-MCP-06: uds_services returns catalogue ---------------------------

@@ -4835,6 +4835,126 @@ class CompletionCommandTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=f"bash -n failed: {result.stderr!r}")
 
 
+class PluginsCommandTests(unittest.TestCase):
+    """Tests for `canarchy plugins {list,info,enable,disable}`."""
+
+    def setUp(self) -> None:
+        from canarchy.plugins import reset_registry
+
+        reset_registry()
+
+    def tearDown(self) -> None:
+        from canarchy.plugins import reset_registry
+
+        reset_registry()
+
+    def test_plugins_list_json_canonical_envelope(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "list", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["command"], "plugins list")
+        data = payload["data"]
+        self.assertIn("plugins", data)
+        self.assertIn("total", data)
+        self.assertIsInstance(data["plugins"], list)
+        self.assertEqual(data["total"], len(data["plugins"]))
+
+    def test_plugins_list_includes_builtin_processors(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "list", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        names = {p["name"] for p in payload["data"]["plugins"]}
+        self.assertIn("counter-candidates", names)
+        self.assertIn("entropy-candidates", names)
+        self.assertIn("signal-analysis", names)
+
+    def test_plugins_list_each_entry_has_required_fields(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "list", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        for plugin in payload["data"]["plugins"]:
+            with self.subTest(name=plugin.get("name")):
+                self.assertIn("name", plugin)
+                self.assertIn("kind", plugin)
+                self.assertIn("api_version", plugin)
+                self.assertIn("enabled", plugin)
+                self.assertIn(plugin["kind"], {"processor", "sink", "input_adapter"})
+                self.assertIsInstance(plugin["enabled"], bool)
+
+    def test_plugins_list_text_output(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "list")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("registered", stdout)
+        self.assertIn("counter-candidates", stdout)
+        self.assertIn("[enabled]", stdout)
+
+    def test_plugins_info_json_known_plugin(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "info", "counter-candidates", "--json")
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        plugin = payload["data"]["plugin"]
+        self.assertEqual(plugin["name"], "counter-candidates")
+        self.assertEqual(plugin["kind"], "processor")
+        self.assertTrue(plugin["enabled"])
+
+    def test_plugins_info_text_output(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "info", "signal-analysis")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("signal-analysis", stdout)
+        self.assertIn("processor", stdout)
+        self.assertIn("enabled", stdout)
+
+    def test_plugins_info_unknown_plugin_returns_error(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "info", "no-such-plugin", "--json")
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "PLUGIN_NOT_FOUND")
+        self.assertIn("hint", payload["errors"][0])
+
+    def test_plugins_enable_disable_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".canarchy" / "config.toml"
+            with patch("canarchy.cli._PLUGINS_CONFIG_PATH", config_path):
+                # disable
+                exit_code, stdout, _ = run_cli("plugins", "disable", "counter-candidates", "--json")
+                self.assertEqual(exit_code, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["data"]["action"], "disabled")
+                self.assertTrue(config_path.exists())
+                # list shows disabled
+                exit_code, stdout, _ = run_cli("plugins", "list", "--json")
+                with patch("canarchy.cli._PLUGINS_CONFIG_PATH", config_path):
+                    exit_code, stdout, _ = run_cli("plugins", "list", "--json")
+                self.assertEqual(exit_code, 0)
+                plugins_by_name = {p["name"]: p for p in json.loads(stdout)["data"]["plugins"]}
+                self.assertFalse(plugins_by_name["counter-candidates"]["enabled"])
+                # re-enable
+                with patch("canarchy.cli._PLUGINS_CONFIG_PATH", config_path):
+                    exit_code, stdout, _ = run_cli(
+                        "plugins", "enable", "counter-candidates", "--json"
+                    )
+                self.assertEqual(exit_code, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["data"]["action"], "enabled")
+
+    def test_plugins_disable_unknown_returns_error(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "disable", "no-such-plugin", "--json")
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "PLUGIN_NOT_FOUND")
+
+    def test_plugins_enable_unknown_returns_error(self) -> None:
+        exit_code, stdout, _stderr = run_cli("plugins", "enable", "no-such-plugin", "--json")
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "PLUGIN_NOT_FOUND")
+
+
 class ErrorHintConventionTests(unittest.TestCase):
     """Guard the structured-error hint convention.
 

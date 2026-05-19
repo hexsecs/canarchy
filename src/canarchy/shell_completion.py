@@ -42,6 +42,7 @@ SUBCOMMANDS: list[tuple[str, str]] = [
     ("re", "reverse-engineering helpers"),
     ("config", "inspect CANarchy configuration"),
     ("doctor", "environment health checks"),
+    ("plugins", "manage CANarchy plugins"),
     ("mcp", "MCP server workflows"),
     ("shell", "start the interactive shell"),
     ("tui", "start the terminal UI"),

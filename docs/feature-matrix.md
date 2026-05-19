@@ -50,7 +50,7 @@ The workflow matrix above is useful for operator-facing comparison, but several 
 | Database format breadth beyond DBC | No | No | No | Yes | Partial | No | No | No | Partial | No |
 | Plotting / visualization depth | No | No | No | Yes | Yes | No | No | No | Partial | No |
 | Code generation | No | No | No | Yes | No | No | No | No | No | No |
-| Extensibility via plugins / modules | Planned | No | Yes | Partial | Partial | Yes | Yes | Partial | Partial | Partial |
+| Extensibility via plugins / modules | Yes | No | Yes | Partial | Partial | Yes | Yes | Partial | Partial | Partial |
 | Reverse-engineering workflow depth | Partial | Partial | No | Partial | Yes | Yes | Partial | Yes | Partial | No |
 | Protocol breadth beyond raw CAN | Partial | Yes | Partial | Partial | Partial | Yes | Partial | Yes | Yes | No |
 | Session / bookmark / saved analysis workflow | Partial | No | Partial | No | Partial | Partial | Partial | Yes | Yes | No |
