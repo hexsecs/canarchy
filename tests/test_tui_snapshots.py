@@ -18,8 +18,10 @@ from canarchy.tui import (
     _decoded_signal_rows,
     _j1939_pane_lines,
     _render,
+    _uds_pane_lines,
     _update_j1939_state,
     _update_state,
+    _update_uds_state,
 )
 
 
@@ -433,3 +435,120 @@ def test_decoded_signals_pane_end_to_end_against_sample_dbc():
     # doesn't break the test.
     assert len(state.decoded_signals) > 0, "expected at least one decoded signal from sample.dbc"
     assert all(" = " in row for row in state.decoded_signals)
+
+
+# ---------------------------------------------------------------------------
+# UDS pane
+# ---------------------------------------------------------------------------
+
+
+def _uds_event(
+    *,
+    service: int = 0x10,
+    service_name: str = "DiagnosticSessionControl",
+    request_id: int = 0x7E0,
+    response_id: int = 0x7E8,
+    ecu_address: int | None = 0x10,
+    complete: bool = True,
+    response_data: str = "5001003200c8",
+    negative_response_name: str | None = None,
+    response_summary: str | None = None,
+):
+    return {
+        "event_type": "uds_transaction",
+        "payload": {
+            "service": service,
+            "service_name": service_name,
+            "request_id": request_id,
+            "response_id": response_id,
+            "ecu_address": ecu_address,
+            "complete": complete,
+            "response_data": response_data,
+            "negative_response_code": None,
+            "negative_response_name": negative_response_name,
+            "request_summary": None,
+            "response_summary": response_summary,
+        },
+    }
+
+
+def test_uds_pane_starts_empty_with_placeholder():
+    state = TuiState()
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        _render(state)
+    rendered = stdout.getvalue()
+    assert "[UDS]" in rendered
+    assert "(no UDS transactions)" in rendered
+
+
+def test_uds_pane_extracts_positive_response_with_service_name():
+    state = TuiState()
+    result = _fake_result("uds trace", {"events": [_uds_event()]})
+    _update_uds_state(state, result)
+    (row,) = state.uds_recent
+    assert "service=0x10" in row
+    assert "(DiagnosticSessionControl)" in row
+    assert "req=0x7E0->0x7E8" in row
+    assert "ecu=0x10" in row
+    # Positive responses fall through to a `resp=…` summary.
+    assert "resp=" in row
+
+
+def test_uds_pane_surfaces_negative_response_code_name():
+    state = TuiState()
+    result = _fake_result(
+        "uds scan",
+        {
+            "events": [
+                _uds_event(
+                    service=0x22,
+                    service_name="ReadDataByIdentifier",
+                    response_data="7f227f",
+                    negative_response_name="serviceNotSupported",
+                )
+            ]
+        },
+    )
+    _update_uds_state(state, result)
+    (row,) = state.uds_recent
+    assert "NRC=serviceNotSupported" in row
+
+
+def test_uds_pane_flags_incomplete_multi_frame_response():
+    state = TuiState()
+    result = _fake_result(
+        "uds trace",
+        {"events": [_uds_event(response_data="62F1900102", complete=False)]},
+    )
+    _update_uds_state(state, result)
+    (row,) = state.uds_recent
+    assert row.startswith("!! incomplete ")
+
+
+def test_uds_pane_keeps_newest_first_within_bound():
+    state = TuiState()
+    events = [
+        _uds_event(service=0x10 + i, response_data=f"50{i:02x}", service_name=f"S{i}")
+        for i in range(12)
+    ]
+    result = _fake_result("uds trace", {"events": events})
+    _update_uds_state(state, result)
+    assert len(state.uds_recent) == 8
+    # Highest service id was generated last; newest-first lands at the top.
+    assert "service=0x1B" in state.uds_recent[0]
+
+
+def test_uds_pane_untouched_when_result_has_no_uds_events():
+    state = TuiState()
+    state.uds_recent = ["service=0x10 (X) req=0x7E0->0x7E8 ecu=0x10 resp=50"]
+    _update_uds_state(state, _fake_result("capture-info", {"frame_count": 0}))
+    assert len(state.uds_recent) == 1
+
+
+def test_uds_pane_lines_render_with_recent_header():
+    state = TuiState()
+    state.uds_recent = ["service=0x10 (X) req=0x7E0->0x7E8 ecu=0x10 resp=50"]
+    lines = _uds_pane_lines(state)
+    assert lines[0] == "recent:"
+    assert "service=0x10" in lines[1]

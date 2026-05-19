@@ -24,6 +24,7 @@ class TuiState:
     j1939_source_addresses: Counter[int] = field(default_factory=Counter)
     j1939_recent: list[str] = field(default_factory=list)
     j1939_dm1_alerts: list[str] = field(default_factory=list)
+    uds_recent: list[str] = field(default_factory=list)
     bus_status: list[str] = field(default_factory=lambda: ["interface: none", "mode: idle"])
 
 
@@ -32,6 +33,7 @@ _MAX_J1939_RECENT_ROWS = 8
 _MAX_J1939_DM1_ALERTS = 4
 _J1939_TOP_PGN_COUNT = 3
 _J1939_TOP_SOURCE_ADDRESS_COUNT = 4
+_MAX_UDS_RECENT_ROWS = 8
 
 
 def _format_signal_row(*, message: str, signal: str, value: object, units: object) -> str:
@@ -238,6 +240,68 @@ def _j1939_pane_lines(state: TuiState) -> list[str]:
     return lines
 
 
+def _format_uds_transaction(payload: dict[str, Any]) -> str:
+    """One-row summary of a `uds_transaction` event for the UDS pane.
+
+    Columns mirror `docs/tui_plan.md#uds-transactions`: service (id +
+    name), request id, response id, ECU address, response summary or
+    NRC name. Truncated multi-frame responses (`complete=false`) are
+    prefixed with `!!` so the operator notices ISO-TP reassembly that
+    didn't finish.
+    """
+
+    service = payload.get("service")
+    service_text = f"0x{service:02X}" if isinstance(service, int) else "?"
+    service_name = payload.get("service_name") or ""
+    request_id = payload.get("request_id")
+    response_id = payload.get("response_id")
+    req_text = f"0x{request_id:03X}" if isinstance(request_id, int) else "?"
+    resp_text = f"0x{response_id:03X}" if isinstance(response_id, int) else "?"
+    ecu = payload.get("ecu_address")
+    ecu_text = "?" if ecu is None else (f"0x{ecu:02X}" if isinstance(ecu, int) else str(ecu))
+    nrc_name = payload.get("negative_response_name")
+    if nrc_name:
+        outcome = f"NRC={nrc_name}"
+    elif payload.get("response_summary"):
+        outcome = f"resp={payload['response_summary']}"
+    else:
+        outcome = f"resp={payload.get('response_data', '')}"
+    prefix = "!! incomplete " if payload.get("complete") is False else ""
+    name_text = f" ({service_name})" if service_name else ""
+    return (
+        f"{prefix}service={service_text}{name_text} req={req_text}->{resp_text} "
+        f"ecu={ecu_text} {outcome}"
+    )
+
+
+def _update_uds_state(state: TuiState, result: CommandResult) -> None:
+    """Fold a command result into the UDS pane state.
+
+    Reads `uds_transaction` events; ignores other event types. Keeps
+    the newest `_MAX_UDS_RECENT_ROWS` transactions at the top.
+    """
+
+    new_rows: list[str] = []
+    for event in result.data.get("events", []) or []:
+        if event.get("event_type") != "uds_transaction":
+            continue
+        payload = event.get("payload") or {}
+        new_rows.append(_format_uds_transaction(payload))
+    if not new_rows:
+        return
+    # Newest event in the batch goes to the top of the pane.
+    merged = list(reversed(new_rows)) + state.uds_recent
+    state.uds_recent = merged[:_MAX_UDS_RECENT_ROWS]
+
+
+def _uds_pane_lines(state: TuiState) -> list[str]:
+    if not state.uds_recent:
+        return []
+    lines = ["recent:"]
+    lines.extend(state.uds_recent)
+    return lines
+
+
 def run_tui(
     execute_command: Any,
     *,
@@ -313,6 +377,7 @@ def _update_state(state: TuiState, result: CommandResult) -> None:
         merged = new_signal_rows + state.decoded_signals
         state.decoded_signals = merged[:_MAX_DECODED_SIGNAL_ROWS]
     _update_j1939_state(state, result)
+    _update_uds_state(state, result)
 
 
 def _traffic_lines(result: CommandResult) -> list[str]:
@@ -370,6 +435,9 @@ def _render(state: TuiState) -> None:
         print(line)
     print("[J1939]")
     for line in _j1939_pane_lines(state) or ["(no J1939 activity)"]:
+        print(line)
+    print("[UDS]")
+    for line in _uds_pane_lines(state) or ["(no UDS transactions)"]:
         print(line)
     print("[Alerts]")
     for line in state.alerts or ["(no alerts)"]:
