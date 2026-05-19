@@ -1,6 +1,17 @@
 # TUI Plan
 
-Current status: `canarchy tui` now starts an initial text-mode shell with bus status, live traffic, **decoded signals**, **J1939 activity**, **UDS transactions**, alerts, and command entry routed through the shared command layer. Sections 3 (Decoded Signals), 4 (J1939), and 5 (UDS) of this document are implemented; the richer Alerts pane (6) plus hotkeys + command palette (7) remain as forward-looking work.
+Current status: `canarchy tui` now starts an initial text-mode shell with bus status, live traffic, **decoded signals**, **J1939 activity**, **UDS transactions**, **alerts** (including replay activity), and a slash-command hotkey palette. Sections 3–7 of this document are implemented. The TUI v2 milestone is closed.
+
+Hotkeys (slash commands at the prompt):
+
+* `/help` — list the hotkey table
+* `/quit`, `/exit` — exit the TUI
+* `/clear` — reset every pane to its initial state
+* `/capture <iface>` — start a candump-style live capture
+* `/save <name>`, `/load <name>` — session management
+* `/dbc <ref>` — inspect a DBC (local path or `opendbc:<name>`)
+* `/doctor` — run environment health checks
+* `/config` — show the effective configuration
 
 This document remains the forward-looking plan for taking that initial shell toward the richer pane model described below.
 
