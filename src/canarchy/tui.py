@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import enum
 import shlex
 from collections import Counter
 from dataclasses import dataclass, field
@@ -11,6 +12,41 @@ from canarchy.completion import install_completion
 
 if TYPE_CHECKING:
     from canarchy.cli import CommandResult
+
+
+class _HotkeyResult(enum.Enum):
+    """Disposition signalled by `_handle_hotkey`."""
+
+    LOCAL = "local"  # state-only handler ran (e.g. /help, /clear); re-render
+    EXPANDED = "expanded"  # the slash command produced an argv to execute
+    QUIT = "quit"  # session should end
+    UNKNOWN = "unknown"  # unrecognised slash command
+
+
+# Hotkey table. Each entry maps a slash command to either a CLI argv
+# template (for execution through the shared command dispatch) or to a
+# local action (`help`, `clear`, `quit`). Templates use `{0}` for a
+# single positional argument the operator supplies after the slash
+# command.
+_HOTKEY_TEMPLATES: dict[str, str] = {
+    "capture": "capture {0} --candump",
+    "save": "session save {0}",
+    "load": "session load {0}",
+    "dbc": "dbc inspect {0}",
+    "doctor": "doctor --text",
+    "config": "config show --text",
+}
+_HOTKEY_HELP_ROWS: list[tuple[str, str]] = [
+    ("/help", "show this hotkey table"),
+    ("/quit, /exit", "exit the TUI"),
+    ("/clear", "reset all panes"),
+    ("/capture <iface>", "start a candump-style live capture"),
+    ("/save <name>", "save the current session context"),
+    ("/load <name>", "load a saved session"),
+    ("/dbc <ref>", "inspect a DBC (path or `opendbc:<name>`)"),
+    ("/doctor", "run environment health checks"),
+    ("/config", "show the effective configuration"),
+]
 
 
 @dataclass(slots=True)
@@ -302,6 +338,59 @@ def _uds_pane_lines(state: TuiState) -> list[str]:
     return lines
 
 
+def _clear_panes(state: TuiState) -> None:
+    """Reset every pane to its initial state. Triggered by `/clear`."""
+
+    state.active_command = None
+    state.last_result = None
+    state.alerts = []
+    state.live_traffic = []
+    state.decoded_signals = []
+    state.j1939_pgn_counts.clear()
+    state.j1939_source_addresses.clear()
+    state.j1939_recent = []
+    state.j1939_dm1_alerts = []
+    state.uds_recent = []
+    state.bus_status = ["interface: none", "mode: idle"]
+
+
+def _hotkey_help_lines() -> list[str]:
+    width = max(len(name) for name, _ in _HOTKEY_HELP_ROWS) + 2
+    return [f"  {name.ljust(width)}{description}" for name, description in _HOTKEY_HELP_ROWS]
+
+
+def _handle_hotkey(line: str, state: TuiState) -> tuple[_HotkeyResult, str | None]:
+    """Dispatch a slash command.
+
+    Returns `(disposition, expanded_argv_string)`. When the
+    disposition is ``EXPANDED`` the caller runs ``expanded_argv_string``
+    through `_run_tui_command` so the existing parser handles the rest.
+    """
+
+    parts = line.strip().split(None, 1)
+    name = parts[0][1:].lower()  # strip the leading "/"
+    arg = parts[1] if len(parts) > 1 else ""
+
+    if name in ("quit", "exit"):
+        return _HotkeyResult.QUIT, None
+    if name == "help":
+        print("Hotkeys:")
+        for row in _hotkey_help_lines():
+            print(row)
+        return _HotkeyResult.LOCAL, None
+    if name == "clear":
+        _clear_panes(state)
+        return _HotkeyResult.LOCAL, None
+    template = _HOTKEY_TEMPLATES.get(name)
+    if template is None:
+        print(f"unknown hotkey: /{name} (try /help)")
+        return _HotkeyResult.UNKNOWN, None
+    if "{0}" in template and not arg:
+        print(f"/{name} requires an argument; see /help")
+        return _HotkeyResult.UNKNOWN, None
+    return _HotkeyResult.EXPANDED, template.format(arg)
+
+
 def run_tui(
     execute_command: Any,
     *,
@@ -330,6 +419,18 @@ def run_tui(
             continue
         if stripped in {"exit", "quit"}:
             return 0
+        if stripped.startswith("/"):
+            handled, expanded = _handle_hotkey(stripped, state)
+            if handled is _HotkeyResult.QUIT:
+                return 0
+            if handled is _HotkeyResult.LOCAL:
+                # /help, /clear, etc. operate on state only — re-render
+                # so the user sees the effect.
+                _render(state)
+                continue
+            if expanded is not None:
+                _run_tui_command(expanded, state, execute_command)
+            continue
         _run_tui_command(stripped, state, execute_command)
 
 
@@ -368,6 +469,16 @@ def _update_state(state: TuiState, result: CommandResult) -> None:
     state.alerts = list(payload["warnings"])
     for error in payload["errors"]:
         state.alerts.append(f"error: {error['code']}: {error['message']}")
+    # Pull `replay_event` activity into the alerts pane so the
+    # operator sees what the replay plan actually emitted alongside
+    # the rest of the canonical envelope's warnings/errors.
+    for event in result.data.get("events", []) or []:
+        if event.get("event_type") == "replay_event":
+            event_payload = event.get("payload") or {}
+            state.alerts.append(
+                f"replay action={event_payload.get('action', '?')} "
+                f"reason={event_payload.get('reason', '')}".strip()
+            )
 
     state.live_traffic = _traffic_lines(result)
     new_signal_rows = _decoded_signal_rows(result)
@@ -443,4 +554,4 @@ def _render(state: TuiState) -> None:
     for line in state.alerts or ["(no alerts)"]:
         print(line)
     print("[Command Entry]")
-    print("Enter existing CANarchy commands or `quit`.")
+    print("Enter existing CANarchy commands, or `/help` for hotkeys; `/quit` to exit.")

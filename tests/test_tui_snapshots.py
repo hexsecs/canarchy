@@ -10,12 +10,16 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+from collections import Counter
 from pathlib import Path
 
 from canarchy.cli import main
 from canarchy.tui import (
     TuiState,
+    _clear_panes,
     _decoded_signal_rows,
+    _handle_hotkey,
+    _HotkeyResult,
     _j1939_pane_lines,
     _render,
     _uds_pane_lines,
@@ -552,3 +556,149 @@ def test_uds_pane_lines_render_with_recent_header():
     lines = _uds_pane_lines(state)
     assert lines[0] == "recent:"
     assert "service=0x10" in lines[1]
+
+
+# ---------------------------------------------------------------------------
+# Alerts pane + hotkeys + command palette
+# ---------------------------------------------------------------------------
+
+
+def test_alerts_pane_surfaces_replay_event_activity():
+    state = TuiState()
+    result = _fake_result(
+        "replay",
+        {
+            "events": [
+                {
+                    "event_type": "replay_event",
+                    "payload": {"action": "send", "reason": "scheduled"},
+                },
+                {
+                    "event_type": "replay_event",
+                    "payload": {"action": "stop", "reason": "max_frames"},
+                },
+            ]
+        },
+        warnings=["replay finished early"],
+    )
+    _update_state(state, result)
+    # Warning preserved + replay events surfaced.
+    assert "replay finished early" in state.alerts
+    assert any("replay action=send" in line for line in state.alerts)
+    assert any("replay action=stop" in line for line in state.alerts)
+
+
+def test_alerts_pane_handles_envelope_with_errors():
+    state = TuiState()
+    result = _fake_result(
+        "decode",
+        {},
+        errors=[{"code": "DBC_NOT_FOUND", "message": "no such DBC"}],
+    )
+    _update_state(state, result)
+    assert any("error: DBC_NOT_FOUND" in line for line in state.alerts)
+
+
+def test_hotkey_help_lists_every_documented_entry():
+    state = TuiState()
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        disposition, expansion = _handle_hotkey("/help", state)
+    rendered = stdout.getvalue()
+    assert disposition is _HotkeyResult.LOCAL
+    assert expansion is None
+    assert "Hotkeys:" in rendered
+    for hotkey in ("/help", "/quit", "/clear", "/capture", "/save", "/load", "/dbc", "/doctor"):
+        assert hotkey in rendered
+
+
+def test_hotkey_quit_and_exit_signal_quit():
+    state = TuiState()
+    assert _handle_hotkey("/quit", state)[0] is _HotkeyResult.QUIT
+    assert _handle_hotkey("/exit", state)[0] is _HotkeyResult.QUIT
+
+
+def test_hotkey_capture_expands_to_capture_command():
+    state = TuiState()
+    disposition, argv = _handle_hotkey("/capture vcan0", state)
+    assert disposition is _HotkeyResult.EXPANDED
+    assert argv == "capture vcan0 --candump"
+
+
+def test_hotkey_save_expands_to_session_save_command():
+    state = TuiState()
+    disposition, argv = _handle_hotkey("/save lab-a", state)
+    assert disposition is _HotkeyResult.EXPANDED
+    assert argv == "session save lab-a"
+
+
+def test_hotkey_dbc_expands_to_dbc_inspect_command():
+    state = TuiState()
+    disposition, argv = _handle_hotkey("/dbc opendbc:toyota_tnga_k_pt_generated", state)
+    assert disposition is _HotkeyResult.EXPANDED
+    assert argv == "dbc inspect opendbc:toyota_tnga_k_pt_generated"
+
+
+def test_hotkey_doctor_expands_without_arguments():
+    state = TuiState()
+    disposition, argv = _handle_hotkey("/doctor", state)
+    assert disposition is _HotkeyResult.EXPANDED
+    assert argv == "doctor --text"
+
+
+def test_hotkey_missing_argument_returns_unknown():
+    state = TuiState()
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        disposition, argv = _handle_hotkey("/capture", state)
+    assert disposition is _HotkeyResult.UNKNOWN
+    assert argv is None
+    assert "requires an argument" in stdout.getvalue()
+
+
+def test_hotkey_unknown_name_returns_unknown_with_diagnostic():
+    state = TuiState()
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        disposition, argv = _handle_hotkey("/nope", state)
+    assert disposition is _HotkeyResult.UNKNOWN
+    assert argv is None
+    assert "unknown hotkey" in stdout.getvalue()
+
+
+def test_hotkey_clear_resets_every_pane():
+    state = TuiState()
+    state.alerts = ["something"]
+    state.decoded_signals = ["M.S = 1"]
+    state.uds_recent = ["service=0x10"]
+    state.j1939_recent = ["pgn=65262"]
+    state.j1939_pgn_counts[65262] = 3
+    disposition, argv = _handle_hotkey("/clear", state)
+    assert disposition is _HotkeyResult.LOCAL
+    assert argv is None
+    assert state.alerts == []
+    assert state.decoded_signals == []
+    assert state.uds_recent == []
+    assert state.j1939_recent == []
+    assert state.j1939_pgn_counts == Counter()
+    assert state.bus_status == ["interface: none", "mode: idle"]
+
+
+def test_command_entry_render_advertises_hotkeys():
+    state = TuiState()
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        _render(state)
+    rendered = stdout.getvalue()
+    assert "[Command Entry]" in rendered
+    assert "/help" in rendered
+    assert "/quit" in rendered
+
+
+def test_clear_panes_reuses_bus_status_default():
+    """`_clear_panes` should reset bus_status to the documented default tuple."""
+
+    state = TuiState()
+    state.bus_status = ["interface: vcan0", "mode: active"]
+    _clear_panes(state)
+    assert state.bus_status == ["interface: none", "mode: idle"]
