@@ -190,11 +190,14 @@ Every important workflow must be reachable as a non-interactive command.
 Examples:
 
 * `canarchy capture can0 --jsonl`
+* `canarchy capture --jsonl` when `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE` is configured
 * `canarchy capture-info --file capture.log --json`
 * `canarchy decode --file capture.log --dbc truck.dbc --json`
 * `canarchy j1939 monitor --pgn 65262 --json`
 * `canarchy uds scan can0 --json`
 * `canarchy replay --file drive.log --rate 0.5`
+
+Single-interface transport commands may resolve their CAN interface from user config when the command-line value is omitted. The explicit command-line interface always has the highest precedence; use `[transport].default_interface` in `~/.canarchy/config.toml` or `CANARCHY_DEFAULT_INTERFACE` for the fallback channel. This is separate from `[transport].interface`, which selects the python-can backend type such as `socketcan` or `udp_multicast`.
 
 ### REPL
 

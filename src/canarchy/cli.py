@@ -55,6 +55,7 @@ from canarchy.transport import (
     TransportError,
     active_ack_required,
     config_show_payload,
+    default_can_interface,
     default_j1939_dbc,
     generate_frames,
 )
@@ -334,7 +335,7 @@ def build_parser() -> CanarchyArgumentParser:
     subparsers = parser.add_subparsers(dest="command_name", required=True)
 
     capture = subparsers.add_parser("capture", help="capture CAN traffic")
-    capture.add_argument("interface")
+    capture.add_argument("interface", nargs="?")
     capture.add_argument(
         "--candump",
         action="store_true",
@@ -344,15 +345,18 @@ def build_parser() -> CanarchyArgumentParser:
     capture.set_defaults(command="capture")
 
     send = subparsers.add_parser("send", help="send CAN frames")
-    send.add_argument("interface")
-    send.add_argument("frame_id")
-    send.add_argument("data")
+    send.add_argument(
+        "send_args",
+        nargs="+",
+        metavar="interface frame_id data",
+        help="CAN interface plus frame ID and payload, or frame ID and payload when a default interface is configured",
+    )
     add_active_ack_argument(send)
     add_output_arguments(send)
     send.set_defaults(command="send")
 
     generate = subparsers.add_parser("generate", help="generate CAN frames")
-    generate.add_argument("interface")
+    generate.add_argument("interface", nargs="?")
     generate.add_argument("--id", default="R", help="frame ID as hex or R for random")
     generate.add_argument("--dlc", default="R", help="data length 0-8 or R for random")
     generate.add_argument(
@@ -821,13 +825,13 @@ def build_parser() -> CanarchyArgumentParser:
     uds_subparsers = uds.add_subparsers(dest="uds_action", required=True)
 
     uds_scan = uds_subparsers.add_parser("scan", help="scan for UDS responders")
-    uds_scan.add_argument("interface")
+    uds_scan.add_argument("interface", nargs="?")
     add_active_ack_argument(uds_scan)
     add_output_arguments(uds_scan)
     uds_scan.set_defaults(command="uds scan")
 
     uds_trace = uds_subparsers.add_parser("trace", help="trace UDS transactions")
-    uds_trace.add_argument("interface")
+    uds_trace.add_argument("interface", nargs="?")
     add_output_arguments(uds_trace)
     uds_trace.set_defaults(command="uds trace")
 
@@ -902,7 +906,7 @@ def build_parser() -> CanarchyArgumentParser:
     fuzz_payload = fuzz_subparsers.add_parser(
         "payload", help="mutate a fixed-id payload through a strategy"
     )
-    fuzz_payload.add_argument("interface")
+    fuzz_payload.add_argument("interface", nargs="?")
     fuzz_payload.add_argument("--id", required=True, help="hex CAN ID (e.g. 0x123)")
     fuzz_payload.add_argument(
         "--strategy",
@@ -970,7 +974,7 @@ def build_parser() -> CanarchyArgumentParser:
         "arbitration-id",
         help="walk an arbitration-id range emitting one frame per ID",
     )
-    fuzz_arbid.add_argument("interface")
+    fuzz_arbid.add_argument("interface", nargs="?")
     fuzz_arbid.add_argument(
         "--range",
         dest="id_range",
@@ -1103,6 +1107,68 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         sub = args.command.removeprefix("fuzz ")
         return f"confirm: type YES to fuzz `{sub}` on `{target}`: "
     raise AssertionError(f"unsupported active transmit command: {args.command}")
+
+
+INTERFACE_FALLBACK_COMMANDS = {
+    "capture",
+    "send",
+    "generate",
+    "j1939 monitor",
+    "uds scan",
+    "uds trace",
+    "fuzz payload",
+    "fuzz replay",
+    "fuzz arbitration-id",
+}
+
+
+def prepare_args(args: argparse.Namespace) -> None:
+    if args.command == "send":
+        send_args = getattr(args, "send_args", [])
+        if len(send_args) == 3:
+            args.interface, args.frame_id, args.data = send_args
+        elif len(send_args) == 2:
+            args.interface = None
+            args.frame_id, args.data = send_args
+        else:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_ARGUMENTS",
+                        message="send requires either <interface> <frame_id> <data> or <frame_id> <data> with a configured default interface.",
+                        hint="Pass an interface explicitly or set `[transport].default_interface` in `~/.canarchy/config.toml`.",
+                    )
+                ],
+            )
+
+    if args.command not in INTERFACE_FALLBACK_COMMANDS:
+        return
+    if getattr(args, "interface", None):
+        args.interface_source = "cli"
+        return
+    configured = default_can_interface()
+    if configured:
+        args.interface = configured
+        args.interface_source = "config"
+        return
+    args.interface_source = "missing"
+    if args.command == "j1939 monitor":
+        return
+    if args.command == "fuzz replay":
+        return
+    raise CommandError(
+        command=args.command,
+        exit_code=EXIT_USER_ERROR,
+        errors=[
+            ErrorDetail(
+                code="INTERFACE_REQUIRED",
+                message=f"{args.command} requires a CAN interface.",
+                hint="Pass an interface on the command line or set `[transport].default_interface` in `~/.canarchy/config.toml`.",
+            )
+        ],
+    )
 
 
 def enforce_active_transmit_safety(
@@ -4448,6 +4514,8 @@ def build_result(args: argparse.Namespace) -> CommandResult:
             "text",
             "table",
             "ack_active",
+            "send_args",
+            "interface_source",
             "log_level",
             "quiet",
         }
@@ -5814,7 +5882,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
     if output_format == "text" and result.ok and result.command == "config show":
         sources = result.data.get("sources", {})
         print("Effective transport configuration:")
-        for field in ("backend", "interface", "capture_limit", "capture_timeout"):
+        for field in (
+            "backend",
+            "interface",
+            "default_interface",
+            "capture_limit",
+            "capture_timeout",
+        ):
             src = sources.get(field, "?")
             print(f"  {field}: {result.data.get(field)}  [{src}]")
         print(
@@ -5916,6 +5990,7 @@ def execute_command(argv: Sequence[str] | None = None) -> tuple[int, CommandResu
         )
 
     try:
+        prepare_args(args)
         validate_args(args)
         if args.command in {"shell", "tui"}:
             return (
@@ -6006,6 +6081,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         quiet=bool(getattr(args, "quiet", False)),
     )
     output_format = format_name(args)
+    try:
+        prepare_args(args)
+    except CommandError as exc:
+        emit_result(
+            error_result(exc.command, errors=exc.errors, data=exc.data, warnings=exc.warnings),
+            output_format,
+        )
+        return exc.exit_code
     if args.command == "completion":
         return emit_completion_script(args, output_format)
     if args.command == "mcp serve":

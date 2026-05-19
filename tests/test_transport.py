@@ -234,13 +234,14 @@ class TransportBackendTests(unittest.TestCase):
             config_dir = Path(tmp) / ".canarchy"
             config_dir.mkdir()
             (config_dir / "config.toml").write_text(
-                '[transport]\nbackend = "python-can"\ninterface = "udp_multicast"\n'
+                '[transport]\nbackend = "python-can"\ninterface = "udp_multicast"\ndefault_interface = "can0"\n'
             )
             with patch("pathlib.Path.home", return_value=Path(tmp)):
                 result = _load_user_config()
 
         self.assertEqual(result["CANARCHY_TRANSPORT_BACKEND"], "python-can")
         self.assertEqual(result["CANARCHY_PYTHON_CAN_INTERFACE"], "udp_multicast")
+        self.assertEqual(result["CANARCHY_DEFAULT_INTERFACE"], "can0")
 
     def test_user_config_file_missing_returns_empty(self) -> None:
         import tempfile

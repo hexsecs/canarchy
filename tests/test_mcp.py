@@ -318,6 +318,16 @@ def test_build_argv_capture():
     assert argv == ["capture", "can0", "--json"]
 
 
+def test_build_argv_capture_omits_interface_for_config_fallback():
+    argv = _build_argv("capture", {})
+    assert argv == ["capture", "--json"]
+
+
+def test_build_argv_send_omits_interface_for_config_fallback():
+    argv = _build_argv("send", {"frame_id": "0x123", "data": "1122"})
+    assert argv == ["send", "0x123", "1122", "--json"]
+
+
 def test_build_argv_capture_info():
     argv = _build_argv("capture_info", {"file": "trace.candump"})
     assert argv == ["capture-info", "--file", "trace.candump", "--json"]

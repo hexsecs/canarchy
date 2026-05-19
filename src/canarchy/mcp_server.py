@@ -28,9 +28,11 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "interface": {"type": "string", "description": "CAN interface name (e.g. can0)"},
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name (e.g. can0); omit to use configured default",
+                },
             },
-            "required": ["interface"],
         },
     ),
     types.Tool(
@@ -39,14 +41,17 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "interface": {"type": "string", "description": "CAN interface name"},
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name; omit to use configured default",
+                },
                 "frame_id": {
                     "type": "string",
                     "description": "Frame ID as hex (e.g. 0x123 or 291)",
                 },
                 "data": {"type": "string", "description": "Payload as hex bytes (e.g. 11223344)"},
             },
-            "required": ["interface", "frame_id", "data"],
+            "required": ["frame_id", "data"],
         },
     ),
     types.Tool(
@@ -55,7 +60,10 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "interface": {"type": "string", "description": "CAN interface name"},
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name; omit to use configured default",
+                },
                 "id": {
                     "type": "string",
                     "description": "Frame ID as hex or R for random",
@@ -87,7 +95,6 @@ _TOOLS: list[types.Tool] = [
                     "default": False,
                 },
             },
-            "required": ["interface"],
         },
     ),
     types.Tool(
@@ -586,9 +593,11 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "interface": {"type": "string", "description": "CAN interface name"},
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name; omit to use configured default",
+                },
             },
-            "required": ["interface"],
         },
     ),
     types.Tool(
@@ -597,9 +606,11 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "interface": {"type": "string", "description": "CAN interface name"},
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name; omit to use configured default",
+                },
             },
-            "required": ["interface"],
         },
     ),
     types.Tool(
@@ -1061,7 +1072,7 @@ _TOOLS: list[types.Tool] = [
                     "description": "Explicit run UUID (random if omitted)",
                 },
             },
-            "required": ["interface", "id", "strategy", "ack_active"],
+            "required": ["id", "strategy", "ack_active"],
         },
     ),
     types.Tool(
@@ -1147,7 +1158,7 @@ _TOOLS: list[types.Tool] = [
                     "description": "Explicit run UUID (random if omitted)",
                 },
             },
-            "required": ["interface", "range", "ack_active"],
+            "required": ["range", "ack_active"],
         },
     ),
 ]
@@ -1160,11 +1171,19 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
     a = arguments
     match tool_name:
         case "capture":
-            return ["capture", a["interface"], "--json"]
+            argv = ["capture"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            return argv + ["--json"]
         case "send":
-            return ["send", a["interface"], a["frame_id"], a["data"], "--json"]
+            argv = ["send"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            return argv + [a["frame_id"], a["data"], "--json"]
         case "generate":
-            argv = ["generate", a["interface"]]
+            argv = ["generate"]
+            if a.get("interface"):
+                argv.append(a["interface"])
             if "id" in a:
                 argv += ["--id", str(a["id"])]
             if "dlc" in a:
@@ -1369,9 +1388,15 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "uds_scan":
-            return ["uds", "scan", a["interface"], "--json"]
+            argv = ["uds", "scan"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            return argv + ["--json"]
         case "uds_trace":
-            return ["uds", "trace", a["interface"], "--json"]
+            argv = ["uds", "trace"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            return argv + ["--json"]
         case "uds_services":
             return ["uds", "services", "--json"]
         case "config_show":
@@ -1492,7 +1517,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--limit", str(a["limit"])]
             return argv + ["--json"]
         case "fuzz_payload":
-            argv = ["fuzz", "payload", a["interface"], "--id", a["id"], "--strategy", a["strategy"]]
+            argv = ["fuzz", "payload"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            argv += ["--id", a["id"], "--strategy", a["strategy"]]
             if "data" in a:
                 argv += ["--data", a["data"]]
             if "dlc" in a:
@@ -1530,13 +1558,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--dry-run"]
             return argv + ["--jsonl"]
         case "fuzz_arbitration_id":
-            argv = [
-                "fuzz",
-                "arbitration-id",
-                a["interface"],
-                "--range",
-                a["range"],
-            ]
+            argv = ["fuzz", "arbitration-id"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            argv += ["--range", a["range"]]
             if "step" in a:
                 argv += ["--step", str(a["step"])]
             if "data" in a:

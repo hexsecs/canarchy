@@ -129,6 +129,7 @@ Set `udp_multicast` in `~/.canarchy/config.toml`:
 [transport]
 backend = "python-can"
 interface = "udp_multicast"
+default_interface = "239.0.0.1"
 ```
 
 Or export for the current session only:
@@ -147,6 +148,12 @@ In another terminal, send a frame:
 
 ```bash
 canarchy send 239.0.0.1 0x123 11223344 --json
+```
+
+If `default_interface` is configured, you can omit the repeated channel:
+
+```bash
+canarchy send 0x123 11223344 --json
 ```
 
 The capture terminal should print a line like:

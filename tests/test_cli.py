@@ -164,6 +164,48 @@ class CliTests(unittest.TestCase):
 
     @patch(
         "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+        },
+    )
+    def test_capture_uses_configured_default_interface(self, _mock_cfg) -> None:
+        exit_code, stdout, stderr = run_cli("capture", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        first_event = json.loads(stdout.strip().splitlines()[0])
+        self.assertEqual(first_event["payload"]["frame"]["interface"], "vcan7")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+        },
+    )
+    def test_capture_cli_interface_overrides_configured_default(self, _mock_cfg) -> None:
+        exit_code, stdout, stderr = run_cli("capture", "can0", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        first_event = json.loads(stdout.strip().splitlines()[0])
+        self.assertEqual(first_event["payload"]["frame"]["interface"], "can0")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_capture_without_interface_or_default_returns_user_error(self, _mock_cfg) -> None:
+        exit_code, stdout, stderr = run_cli("capture", "--json")
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INTERFACE_REQUIRED")
+
+    @patch(
+        "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
     )
     def test_send_json_output_marks_active_mode(self, _mock_cfg) -> None:
@@ -179,6 +221,22 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["frame"]["arbitration_id"], 0x123)
         self.assertEqual(payload["data"]["events"][0]["event_type"], "alert")
         self.assertEqual(payload["warnings"], [])
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+        },
+    )
+    def test_send_uses_configured_default_interface(self, _mock_cfg) -> None:
+        exit_code, stdout, stderr = run_cli("send", "0x123", "11223344", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("warning: `send` will transmit a CAN frame on interface `vcan7`", stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["interface"], "vcan7")
+        self.assertEqual(payload["data"]["frame"]["interface"], "vcan7")
 
     @patch(
         "canarchy.transport._load_user_config",
@@ -4468,11 +4526,13 @@ class ConfigShowTests(unittest.TestCase):
         self.assertEqual(payload["data"]["backend"], "python-can")
         self.assertEqual(payload["data"]["interface"], "socketcan")
         self.assertEqual(payload["data"]["capture_limit"], 2)
+        self.assertIsNone(payload["data"]["default_interface"])
         self.assertFalse(payload["data"]["require_active_ack"])
         self.assertIsNone(payload["data"]["j1939_dbc"])
         sources = payload["data"]["sources"]
         self.assertEqual(sources["backend"], "default")
         self.assertEqual(sources["interface"], "default")
+        self.assertEqual(sources["default_interface"], "default")
         self.assertEqual(sources["capture_limit"], "default")
         self.assertEqual(sources["capture_timeout"], "default")
         self.assertEqual(sources["require_active_ack"], "default")
@@ -4483,6 +4543,7 @@ class ConfigShowTests(unittest.TestCase):
         file_cfg = {
             "CANARCHY_TRANSPORT_BACKEND": "python-can",
             "CANARCHY_PYTHON_CAN_INTERFACE": "udp_multicast",
+            "CANARCHY_DEFAULT_INTERFACE": "can0",
         }
         with (
             patch("canarchy.transport._load_user_config", return_value=file_cfg),
@@ -4493,9 +4554,11 @@ class ConfigShowTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["backend"], "python-can")
         self.assertEqual(payload["data"]["interface"], "udp_multicast")
+        self.assertEqual(payload["data"]["default_interface"], "can0")
         sources = payload["data"]["sources"]
         self.assertEqual(sources["backend"], "file")
         self.assertEqual(sources["interface"], "file")
+        self.assertEqual(sources["default_interface"], "file")
         # capture_limit and capture_timeout not in file_config → default
         self.assertEqual(sources["capture_limit"], "default")
         self.assertEqual(sources["capture_timeout"], "default")
