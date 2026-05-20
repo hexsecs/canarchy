@@ -114,7 +114,7 @@ def segment_path(route: str, segment: str) -> str:
 def resolve_lfs_url(pointer_or_file_url: str) -> str:
     """Resolve a HuggingFace raw URL to its LFS download URL when needed."""
     try:
-        head = requests.head(pointer_or_file_url, timeout=30)
+        head = requests.head(pointer_or_file_url, timeout=30, allow_redirects=True)
         content_type = head.headers.get("content-type", "")
         if "text/plain" not in content_type:
             return pointer_or_file_url

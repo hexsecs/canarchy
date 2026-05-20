@@ -312,7 +312,14 @@ def _auto_compute_checksum(
 
     try:
         temp_encoded = message.encode({**signals, "CHECKSUM": 0})
+        temp_encoded_ff = message.encode({**signals, "CHECKSUM": 0xFF})
     except Exception:
+        return signals
+
+    if len(temp_encoded) == 0 or len(temp_encoded) != len(temp_encoded_ff):
+        return signals
+    differing = [i for i in range(len(temp_encoded)) if temp_encoded[i] != temp_encoded_ff[i]]
+    if len(differing) != 1 or differing[0] != len(temp_encoded) - 1:
         return signals
 
     algorithm = _resolve_crc_algorithm(dbc_path, algorithm_override)
