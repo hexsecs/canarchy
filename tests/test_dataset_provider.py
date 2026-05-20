@@ -169,6 +169,12 @@ class PublicDatasetProviderTests(unittest.TestCase):
         self.assertIn("CAN logs", desc.metadata["note"])
         self.assertIn("capture-info", desc.metadata["note"])
 
+    def test_comma_car_segments_metadata_is_dynamic_replayable(self) -> None:
+        desc = self.provider.inspect("comma-car-segments")
+        self.assertIn("comma-rlog", desc.formats)
+        self.assertIn("candump", desc.conversion_targets)
+        self.assertEqual(desc.metadata["replay"]["dynamic"], "comma-car-segments")
+
     def test_pivot_auto_dataset_index_is_in_catalog(self) -> None:
         desc = self.provider.inspect("pivot-auto-datasets")
         self.assertEqual(desc.source_url, "https://pivot-auto.org/datasets/")
@@ -818,15 +824,67 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertEqual(events[0]["source"], "candump")
         self.assertEqual(events[0]["payload"]["dataset"]["provider_ref"], "catalog:candid")
 
-    def test_datasets_stream_help_lists_candump_source_format(self) -> None:
+    def test_datasets_stream_help_lists_supported_source_formats(self) -> None:
         from canarchy.cli import main
 
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as ctx:
             main(("datasets", "stream", "--help"))
         self.assertEqual(ctx.exception.code, 0)
-        self.assertIn("{hcrl-csv,candump}", stdout.getvalue())
+        self.assertIn("{hcrl-csv,candump,comma-rlog}", stdout.getvalue())
         self.assertIn("--max-frames", stdout.getvalue())
+
+    def test_datasets_stream_comma_rlog_to_stdout_jsonl_with_mock_parser(self) -> None:
+        frames = iter(
+            [
+                {
+                    "timestamp": 1.0,
+                    "interface": "can0",
+                    "arbitration_id": 0x118,
+                    "data": bytes.fromhex("001122334455"),
+                    "dlc": 6,
+                }
+            ]
+        )
+        with patch("canarchy.dataset_convert._iter_comma_can_frames", return_value=frames):
+            code, out, _ = run_cli(
+                "datasets",
+                "stream",
+                str(FIXTURES / "sample.candump"),
+                "--source-format",
+                "comma-rlog",
+                "--format",
+                "jsonl",
+                "--provider-ref",
+                "catalog:comma-car-segments",
+            )
+        self.assertEqual(code, 0)
+        event = json.loads(out)
+        self.assertEqual(event["source"], "comma-rlog")
+        self.assertEqual(event["payload"]["arbitration_id"], 0x118)
+        self.assertEqual(event["payload"]["dataset"]["provider_ref"], "catalog:comma-car-segments")
+
+    def test_datasets_stream_comma_rlog_missing_parser_returns_structured_error(self) -> None:
+        with patch(
+            "canarchy.dataset_convert._iter_comma_can_frames",
+            side_effect=ConversionError(
+                "COMMA_RLOG_SUPPORT_UNAVAILABLE",
+                "comma-rlog streaming requires openpilot LogReader support.",
+                "Install optional parser support.",
+            ),
+        ):
+            code, out, _ = run_cli(
+                "datasets",
+                "stream",
+                str(FIXTURES / "sample.candump"),
+                "--source-format",
+                "comma-rlog",
+                "--format",
+                "jsonl",
+            )
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertEqual(data["errors"][0]["code"], "COMMA_RLOG_SUPPORT_UNAVAILABLE")
 
     def test_datasets_stream_json_summary_does_not_emit_frames(self) -> None:
         src = str(FIXTURES / "dataset_hcrl_sample.csv")
@@ -961,6 +1019,122 @@ class CliIntegrationTests(unittest.TestCase):
         first = data["data"]["files"][0]
         for key in ("id", "name", "size_bytes", "format", "source_url"):
             self.assertIn(key, first)
+
+    def test_datasets_replay_comma_segments_list_files_uses_dynamic_manifest(self) -> None:
+        entries = [
+            {
+                "id": "0",
+                "name": "TESLA_MODEL_3:route/20",
+                "platform": "TESLA_MODEL_3",
+                "route": "route",
+                "segment": "20",
+                "format": "comma-rlog",
+                "size_bytes": None,
+                "source_url": "https://example.test/rlog.zst",
+            }
+        ]
+        with patch(
+            "canarchy.comma_segments.segment_entries", return_value=entries
+        ) as segment_entries:
+            code, out, _ = run_cli(
+                "datasets",
+                "replay",
+                "catalog:comma-car-segments",
+                "--platform",
+                "TESLA_MODEL_3",
+                "--list-files",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        segment_entries.assert_called_once_with(platform="TESLA_MODEL_3", limit=50)
+        data = json.loads(out)
+        self.assertEqual(data["data"]["count"], 1)
+        self.assertEqual(data["data"]["files"][0]["format"], "comma-rlog")
+
+    def test_datasets_replay_comma_segments_dry_run_does_not_resolve_lfs(self) -> None:
+        entries = [
+            {
+                "id": "0",
+                "name": "TESLA_MODEL_3:route/20",
+                "platform": "TESLA_MODEL_3",
+                "route": "route",
+                "segment": "20",
+                "format": "comma-rlog",
+                "size_bytes": None,
+                "source_url": "https://example.test/pointer",
+            }
+        ]
+        with (
+            patch("canarchy.comma_segments.segment_entries", return_value=entries),
+            patch("canarchy.comma_segments.resolve_lfs_url") as resolve_lfs_url,
+        ):
+            code, out, _ = run_cli(
+                "datasets",
+                "replay",
+                "catalog:comma-car-segments",
+                "--platform",
+                "TESLA_MODEL_3",
+                "--file",
+                "0",
+                "--dry-run",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        resolve_lfs_url.assert_not_called()
+        data = json.loads(out)
+        self.assertTrue(data["data"]["dry_run"])
+        self.assertEqual(data["data"]["source_format"], "comma-rlog")
+
+    def test_datasets_replay_comma_segments_json_summary_streams_mock_frames(self) -> None:
+        entries = [
+            {
+                "id": "0",
+                "name": "TESLA_MODEL_3:route/20",
+                "platform": "TESLA_MODEL_3",
+                "route": "route",
+                "segment": "20",
+                "format": "comma-rlog",
+                "size_bytes": None,
+                "source_url": "https://example.test/pointer",
+            }
+        ]
+        frames = iter(
+            [
+                {
+                    "timestamp": 0.0,
+                    "interface": "can0",
+                    "arbitration_id": 0x118,
+                    "data": bytes.fromhex("001122334455"),
+                    "dlc": 6,
+                }
+            ]
+        )
+        with (
+            patch("canarchy.comma_segments.segment_entries", return_value=entries),
+            patch(
+                "canarchy.comma_segments.resolve_lfs_url",
+                return_value="https://example.test/rlog.zst",
+            ),
+            patch("canarchy.dataset_convert._iter_comma_can_frames", return_value=frames),
+        ):
+            code, out, _ = run_cli(
+                "datasets",
+                "replay",
+                "catalog:comma-car-segments",
+                "--platform",
+                "TESLA_MODEL_3",
+                "--file",
+                "0",
+                "--rate",
+                "1000",
+                "--max-frames",
+                "1",
+                "--json",
+            )
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(data["data"]["frame_count"], 1)
+        self.assertEqual(data["data"]["download_url"], "https://example.test/rlog.zst")
 
     def test_datasets_replay_selected_file_uses_manifest_url(self) -> None:
         response = FakeStreamingResponse(["(0.000000) can0 316#0000000000000000"])

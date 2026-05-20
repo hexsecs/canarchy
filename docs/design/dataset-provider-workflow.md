@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented (Phase 2) |
-| Issue | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259 |
+| Status | Implemented (Phase 3) |
+| Issue | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #367 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -31,8 +31,8 @@ canarchy datasets fetch <ref>
 canarchy datasets cache list
 canarchy datasets cache refresh [--provider <name>]
 canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>]
-canarchy datasets stream <file> --source-format hcrl-csv|candump --format candump|jsonl [--chunk-size N] [--max-frames N] [--provider-ref <ref>] [--output <path>]
-canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--list-files] [--format candump|jsonl] [--rate N] [--max-frames N] [--max-seconds N] [--dry-run]
+canarchy datasets stream <file> --source-format hcrl-csv|candump|comma-rlog --format candump|jsonl [--chunk-size N] [--max-frames N] [--provider-ref <ref>] [--output <path>]
+canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--platform <name>] [--limit N] [--list-files] [--format candump|jsonl] [--rate N] [--max-frames N] [--max-seconds N] [--dry-run]
 ```
 
 All commands follow the standard `--json`, `--jsonl`, `--text` output modes.
@@ -150,6 +150,7 @@ file into a CANarchy-native format.
 |--------------|-------------|----------------|
 | `hcrl-csv` | HCRL Car-Hacking CSV: `Timestamp,ID,DLC,Data[,Label]` | `candump`, `jsonl` |
 | `candump` | can-utils timestamped log lines such as `(0.000000) can0 123#AABB` | `candump`, `jsonl` |
+| `comma-rlog` | openpilot/comma `rlog.zst` cereal logs parsed through optional LogReader support | `candump`, `jsonl` |
 
 ### candump output
 
@@ -187,6 +188,8 @@ building a full in-memory frame list.
 | REQ-DATASET-STREAM-06 | Unwanted behaviour | If the source file is malformed, the system shall return a structured `MALFORMED_SOURCE` error instead of emitting partial success as a normal completion. |
 | REQ-DATASET-STREAM-07 | Optional feature | Where `--max-frames` is specified, the system shall stop local dataset streaming after emitting at most the requested number of frames. |
 | REQ-DATASET-STREAM-08 | Unwanted behaviour | If `--max-frames` is less than 1, the system shall return a structured `INVALID_MAX_FRAMES` error. |
+| REQ-DATASET-STREAM-09 | Optional feature | Where `comma-rlog` is specified, the system shall stream CAN events from openpilot rlog sources when optional LogReader support is installed. |
+| REQ-DATASET-STREAM-10 | Unwanted behaviour | If `comma-rlog` support is unavailable, the system shall return `COMMA_RLOG_SUPPORT_UNAVAILABLE`. |
 
 ### JSONL Stream Event
 
@@ -219,6 +222,9 @@ building a full in-memory frame list.
 | REQ-DATASET-REPLAY-11 | Optional feature | Where replay file metadata is available for a dataset descriptor, the system shall list replayable files with stable id, name, size, format, and source URL fields. |
 | REQ-DATASET-REPLAY-12 | Optional feature | Where `--file` is specified, the system shall replay the selected file by id or name instead of the default replay file. |
 | REQ-DATASET-REPLAY-13 | Unwanted behaviour | If `--file` names a file that is not present in the replay manifest, the system shall return `DATASET_REPLAY_FILE_NOT_FOUND`. |
+| REQ-DATASET-REPLAY-14 | Optional feature | Where a dataset uses a dynamic replay manifest such as `catalog:comma-car-segments`, the system shall list segment entries from provider metadata without opening rlog payload streams. |
+| REQ-DATASET-REPLAY-15 | Optional feature | Where `--platform` is specified for a dynamic replay manifest, the system shall restrict replay file entries to that platform. |
+| REQ-DATASET-REPLAY-16 | Optional feature | Where `--limit` is specified for a dynamic replay manifest, the system shall return at most that many replay file entries. |
 
 ---
 
@@ -235,7 +241,7 @@ building a full in-memory frame list.
 ## Future Work
 
 - Automated download for small, openly-licensed datasets (e.g., SynCAN)
-- Additional source formats (SynCAN CSV, ROAD CSV, comma.ai msgpack)
+- Additional source formats (SynCAN CSV, ROAD CSV)
 - `datasets convert` reading from a provider ref after a future automated-download feature resolves the dataset payload
-- Provider-specific streaming adapters for remote datasets such as commaCarSegments
+- Richer commaCarSegments vehicle/platform metadata beyond the upstream `database.json` manifest
 - Explicit safe live-bus replay from dataset streams

@@ -488,6 +488,8 @@ def test_build_argv_datasets_replay_plan_forces_dry_run():
             "source": "catalog:candid",
             "format": "jsonl",
             "file": "2_indicator_CAN.log",
+            "platform": "TESLA_MODEL_3",
+            "limit": 20,
             "rate": 10.0,
             "max_frames": 100,
             "max_seconds": 2.5,
@@ -501,6 +503,10 @@ def test_build_argv_datasets_replay_plan_forces_dry_run():
         "jsonl",
         "--file",
         "2_indicator_CAN.log",
+        "--platform",
+        "TESLA_MODEL_3",
+        "--limit",
+        "20",
         "--rate",
         "10.0",
         "--max-frames",
@@ -537,8 +543,21 @@ def test_build_argv_datasets_convert():
 
 
 def test_build_argv_datasets_replay_files():
-    argv = _build_argv("datasets_replay_files", {"source": "catalog:candid"})
-    assert argv == ["datasets", "replay", "catalog:candid", "--list-files", "--json"]
+    argv = _build_argv(
+        "datasets_replay_files",
+        {"source": "catalog:comma-car-segments", "platform": "TESLA_MODEL_3", "limit": 20},
+    )
+    assert argv == [
+        "datasets",
+        "replay",
+        "catalog:comma-car-segments",
+        "--list-files",
+        "--platform",
+        "TESLA_MODEL_3",
+        "--limit",
+        "20",
+        "--json",
+    ]
 
 
 def test_build_argv_skills_tools():

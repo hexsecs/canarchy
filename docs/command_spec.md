@@ -277,7 +277,9 @@ Notes:
 Encode a DBC message into a frame payload.
 
 ```bash
-canarchy encode --dbc <file> <message> <signal=value>... [--json|--jsonl|--text]
+canarchy encode --dbc <file> <message> <signal=value>...
+                 [--crc-algorithm stellantis|sae-j1850|fca-giorgio]
+                 [--json|--jsonl|--text]
 ```
 
 Example:
@@ -289,6 +291,8 @@ canarchy encode --dbc tests/fixtures/sample.dbc EngineStatus1 CoolantTemp=55 Oil
 Notes:
 
 * `--dbc` accepts a local file path or a provider ref such as `opendbc:toyota_tnga_k_pt_generated`
+* `--crc-algorithm` overrides checksum detection for DBC messages with an 8-bit `CHECKSUM` signal; when omitted, CANarchy attempts DBC-name detection and otherwise uses the default supported CRC behavior
+* explicitly supplied `CHECKSUM=<value>` signal assignments are preserved
 * structured output includes a `dbc_source` object describing the provider-backed or local DBC resolution that was used
 
 ### dbc inspect
@@ -507,7 +511,7 @@ canarchy datasets cache refresh [--provider <name>] [--json|--jsonl|--text]
 Convert a downloaded dataset file to a CANarchy-compatible capture format.
 
 ```bash
-canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>] [--json|--jsonl|--text]
+canarchy datasets convert <file> --source-format hcrl-csv|candump|comma-rlog --format candump|jsonl [--output <path>] [--json|--jsonl|--text]
 ```
 
 ### datasets stream
@@ -515,7 +519,7 @@ canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl
 Stream a downloaded dataset file to candump or JSONL without loading the full conversion into memory.
 
 ```bash
-canarchy datasets stream <file> --source-format hcrl-csv|candump --format candump|jsonl [--chunk-size <n>] [--max-frames <n>] [--provider-ref <ref>] [--output <path>] [--json]
+canarchy datasets stream <file> --source-format hcrl-csv|candump|comma-rlog --format candump|jsonl [--chunk-size <n>] [--max-frames <n>] [--provider-ref <ref>] [--output <path>] [--json]
 ```
 
 Examples:
@@ -523,6 +527,7 @@ Examples:
 ```bash
 canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --provider-ref catalog:hcrl-car-hacking
 canarchy datasets stream sample.log --source-format candump --format jsonl --provider-ref catalog:candid
+canarchy datasets stream rlog.zst --source-format comma-rlog --format jsonl --provider-ref catalog:comma-car-segments --max-frames 1000
 canarchy datasets stream sample.csv --source-format hcrl-csv --format candump --output sample.candump
 canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --max-frames 1000
 canarchy datasets stream sample.csv --source-format hcrl-csv --format jsonl --json
@@ -532,6 +537,7 @@ Notes:
 
 * `datasets search` defaults to a compact human-readable table with a `TYPE` column (`INDEX` for curated indexes, `PLAY` for replayable datasets); use `--verbose` for detailed result blocks with type labels, descriptions, source URLs, replay defaults, index notes, and access notes
 * without `--json`, stream records are written directly to stdout or `--output`
+* `comma-rlog` parses openpilot/comma `rlog.zst` CAN events when optional openpilot LogReader support is installed; missing support returns `COMMA_RLOG_SUPPORT_UNAVAILABLE`
 * JSONL stream records include `payload.dataset.provider_ref`, `frame_offset`, `chunk_index`, and `chunk_position`
 * `--chunk-size` controls JSONL provenance chunk metadata and does not bound emitted frames
 * `--max-frames` stops local dataset streaming after at most N emitted frames for candump and JSONL output
@@ -543,7 +549,7 @@ Notes:
 Stream a remote candump dataset file directly to stdout with replay timing. The source may be a direct candump download URL or a replayable dataset ref such as `catalog:candid`.
 
 ```bash
-canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--list-files] [--format candump|jsonl] [--rate <multiplier>] [--max-frames <n>] [--max-seconds <seconds>] [--dry-run] [--json]
+canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--platform <name>] [--limit <n>] [--list-files] [--format candump|jsonl] [--rate <multiplier>] [--max-frames <n>] [--max-seconds <seconds>] [--dry-run] [--json]
 ```
 
 Examples:
@@ -557,6 +563,8 @@ canarchy datasets replay catalog:candid --file 2_indicator_CAN.log --rate 1000 -
 canarchy datasets replay https://ndownloader.figshare.com/files/54551156 --rate 1000 --max-frames 10
 canarchy datasets replay catalog:candid --rate 1000 --max-frames 10 --json
 canarchy datasets replay catalog:candid --dry-run --json
+canarchy datasets replay catalog:comma-car-segments --platform TESLA_MODEL_3 --list-files --limit 20 --json
+canarchy datasets replay catalog:comma-car-segments --platform TESLA_MODEL_3 --file 0 --format jsonl --max-frames 1000
 ```
 
 Notes:
@@ -566,6 +574,8 @@ Notes:
 * with `--json`, stdout contains a clean standard result envelope with replay metadata and no frame records
 * `--list-files --json` returns replay file entries with stable `id`, `name`, `size_bytes`, `format`, and `source_url` fields
 * `--file` accepts a replay file `id` or `name`; unknown files fail with `DATASET_REPLAY_FILE_NOT_FOUND`
+* `catalog:comma-car-segments` builds a dynamic replay manifest from HuggingFace `database.json`; use `--platform` to filter platforms such as `TESLA_MODEL_3`, and `--limit` to bound listed entries
+* commaCarSegments replay resolves HuggingFace LFS URLs only for active streaming; `--dry-run` and `--list-files` do not open rlog payload streams
 * Curated indexes that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`
 * Stdin pipeline: pipe `datasets replay` output into `stats --file -`, `capture-info --file -`, or `filter --file -` for analysis without temporary files
 * JSON summary output reports `stop_reason`, including `eof`, `max_frames`, `max_seconds`, `broken_pipe`, or `interrupted`
@@ -977,14 +987,22 @@ config-driven prompt) applies before any frame is transmitted via
 canarchy fuzz payload <interface> --id <hex> --strategy {bitflip,random,boundary}
                                   [--data <hex>] [--dlc <n>] [--max <n>]
                                   [--rate <hz>] [--seed <int>] [--extended]
+                                  [--repair-crc] [--crc-algorithm <name>] [--crc-address <id>]
                                   [--dry-run] [--run-id <uuid>] [--ack-active]
 canarchy fuzz replay --file <capture> --strategy {timing,payload-bitflip}
-                     [--interface <iface>] [--max <n>] [--rate <hz>] [--seed <int>]
-                     [--dry-run] [--run-id <uuid>] [--ack-active]
+                      [--interface <iface>] [--max <n>] [--rate <hz>] [--seed <int>]
+                      [--repair-crc] [--crc-algorithm <name>] [--crc-address <id>]
+                      [--dry-run] [--run-id <uuid>] [--ack-active]
 canarchy fuzz arbitration-id <interface> --range <start>:<end> [--step <n>]
-                              [--data <hex>] [--rate <hz>] [--extended]
-                              [--dry-run] [--run-id <uuid>] [--ack-active]
+                               [--data <hex>] [--rate <hz>] [--extended]
+                               [--repair-crc] [--crc-algorithm <name>] [--crc-address <id>]
+                               [--dry-run] [--run-id <uuid>] [--ack-active]
 ```
+
+`--repair-crc` recomputes the final payload byte after mutation. `--crc-algorithm`
+accepts `stellantis`, `sae-j1850`, or `fca-giorgio`; if omitted, fuzz repair uses
+`stellantis`. `--crc-address` supplies the arbitration ID used by algorithms that
+include the message address; when omitted, each generated frame's arbitration ID is used.
 
 Strategies and the engine they map to are documented in the
 [active-transmit safety design](design/active-transmit-safety.md). The

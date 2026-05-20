@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #270 |
+| Issues | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #270, #367 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -175,6 +175,28 @@ Then the command fails with `INVALID_MAX_FRAMES`
 
 **Fixture:** `tests/fixtures/dataset_hcrl_sample.csv`
 
+### TEST-DATASET-STREAM-11: Stream comma-rlog With Mock Parser
+
+```gherkin
+Given a local dataset stream command using source format `comma-rlog`
+And optional openpilot LogReader parsing is represented by a mocked frame iterator
+When the operator streams the source as JSONL
+Then stdout contains FrameEvents sourced from `comma-rlog`
+And dataset provenance preserves the provider ref
+```
+
+**Fixture:** mocked `canarchy.dataset_convert._iter_comma_can_frames`
+
+### TEST-DATASET-STREAM-12: Missing comma-rlog Parser Support
+
+```gherkin
+Given optional openpilot LogReader support is unavailable
+When the operator streams a `comma-rlog` source
+Then the command fails with `COMMA_RLOG_SUPPORT_UNAVAILABLE`
+```
+
+**Fixture:** mocked `ConversionError` from `canarchy.dataset_convert._iter_comma_can_frames`
+
 ### TEST-DATASET-REPLAY-01: Remote Candump Replay Without Local File
 
 ```gherkin
@@ -290,6 +312,40 @@ And no remote stream is opened
 
 **Fixture:** embedded catalog metadata and mocked `requests.get` assertion in `tests/test_dataset_provider.py`
 
+### TEST-DATASET-REPLAY-11: commaCarSegments Dynamic File Listing
+
+```gherkin
+Given the commaCarSegments catalog entry defines a dynamic replay manifest
+When the operator lists files with `--platform TESLA_MODEL_3`
+Then the command fetches bounded segment metadata
+And the result returns `comma-rlog` replay entries without opening rlog payload streams
+```
+
+**Fixture:** mocked `canarchy.comma_segments.segment_entries`
+
+### TEST-DATASET-REPLAY-12: commaCarSegments Dry Run Avoids LFS Resolution
+
+```gherkin
+Given a selected commaCarSegments replay file
+When the operator runs replay with `--dry-run --json`
+Then the result describes the selected `comma-rlog` source
+And the command does not resolve the HuggingFace LFS payload URL
+```
+
+**Fixture:** mocked `segment_entries` and `resolve_lfs_url` assertions
+
+### TEST-DATASET-REPLAY-13: commaCarSegments JSON Summary Streams Mock Frames
+
+```gherkin
+Given a selected commaCarSegments replay file
+And optional rlog parsing returns a CAN frame
+When the operator runs replay in JSON summary mode
+Then the result reports the streamed frame count
+And the resolved LFS URL is preserved in replay metadata
+```
+
+**Fixture:** mocked `segment_entries`, `resolve_lfs_url`, and `_iter_comma_can_frames`
+
 ---
 
 ## Traceability
@@ -307,6 +363,10 @@ And no remote stream is opened
 | REQ-DATASET-STREAM-04 | TEST-DATASET-STREAM-01, TEST-DATASET-STREAM-04 |
 | REQ-DATASET-STREAM-05 | TEST-DATASET-STREAM-03 |
 | REQ-DATASET-STREAM-06 | Covered by existing malformed HCRL CSV conversion tests in `tests/test_dataset_provider.py` |
+| REQ-DATASET-STREAM-07 | TEST-DATASET-STREAM-08, TEST-DATASET-STREAM-09 |
+| REQ-DATASET-STREAM-08 | TEST-DATASET-STREAM-10 |
+| REQ-DATASET-STREAM-09 | TEST-DATASET-STREAM-11 |
+| REQ-DATASET-STREAM-10 | TEST-DATASET-STREAM-12 |
 | REQ-DATASET-REPLAY-01 | TEST-DATASET-REPLAY-01 |
 | REQ-DATASET-REPLAY-02 | TEST-DATASET-REPLAY-02 |
 | REQ-DATASET-REPLAY-03 | TEST-DATASET-REPLAY-01 |
@@ -320,6 +380,9 @@ And no remote stream is opened
 | REQ-DATASET-REPLAY-11 | TEST-DATASET-REPLAY-08 |
 | REQ-DATASET-REPLAY-12 | TEST-DATASET-REPLAY-09 |
 | REQ-DATASET-REPLAY-13 | TEST-DATASET-REPLAY-10 |
+| REQ-DATASET-REPLAY-14 | TEST-DATASET-REPLAY-11, TEST-DATASET-REPLAY-12 |
+| REQ-DATASET-REPLAY-15 | TEST-DATASET-REPLAY-11 |
+| REQ-DATASET-REPLAY-16 | TEST-DATASET-REPLAY-11 |
 
 ---
 

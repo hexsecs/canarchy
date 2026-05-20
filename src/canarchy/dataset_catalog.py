@@ -36,19 +36,25 @@ _CATALOG: list[dict[str, Any]] = [
         "source_url": "https://huggingface.co/datasets/commaai/commaCarSegments",
         "license": "MIT",
         "protocol_family": "can",
-        "formats": ("msgpack",),
+        "formats": ("comma-rlog", "rlog.zst"),
         "size_description": "100+ GB",
         "description": (
             "comma.ai commaCarSegments: real-world vehicle driving segments with CAN, GPS, "
             "and sensor data recorded by comma devices. Requires opendbc for signal decoding. "
-            "Data is stored in msgpack-encoded route segments."
+            "Data is stored as zstandard-compressed openpilot/cereal rlog segments."
         ),
         "access_notes": "HuggingFace account required for download via `huggingface_hub`.",
-        "conversion_targets": ("jsonl",),
+        "conversion_targets": ("candump", "jsonl"),
         "metadata": {
             "publisher": "comma.ai",
             "vehicle_type": "passenger",
-            "note": "Raw CAN bytes are available but signal names require opendbc DBC files.",
+            "note": "Raw CAN bytes are available in can events; signal names require opendbc DBC files.",
+            "replay": {
+                "dynamic": "comma-car-segments",
+                "default_file": None,
+                "download_url": "dynamic",
+                "source_format": "comma-rlog",
+            },
         },
     },
     {

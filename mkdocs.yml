@@ -88,6 +88,7 @@ nav:
       - Fuzz Tesla DI_torque2 vehicle speed: cookbook/fuzz-tesla-di-torque2-speed.md
       - Match an unknown capture against opendbc: cookbook/match-dbc-against-capture.md
       - Stream the CANdid dataset into stats: cookbook/stream-candid-into-stats.md
+      - Stream commaCarSegments CAN data: cookbook/stream-comma-car-segments.md
       - Wire CANarchy into Claude Desktop or Claude Code: cookbook/mcp-claude-integration.md
       - Build a virtual CAN loop for offline testing: cookbook/virtual-can-loop.md
       - Compare two captures for DM1 fault diffs: cookbook/compare-dm1-faults.md

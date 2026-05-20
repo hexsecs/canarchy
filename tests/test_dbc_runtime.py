@@ -152,3 +152,56 @@ def test_decode_j1939_spn_runtime_valid_value_returns_scaled_result() -> None:
     obs = decode_j1939_spn_runtime([frame], str(FIXTURES / "j1939_sample.dbc"), 175)
     assert len(obs) == 1
     assert obs[0]["value"] == 100.0
+
+
+_CHECKSUM_DBC = str(FIXTURES / "checksum_sample.dbc")
+
+
+def test_encode_auto_checksum_sets_valid_crc_on_short_message() -> None:
+    frame, _ = encode_message_runtime(
+        _CHECKSUM_DBC,
+        "TestButtons",
+        {"Button1": 1, "Button2": 0, "Button3": 1, "COUNTER": 0},
+    )
+    assert frame.dlc == 3
+    assert len(frame.data) == 3
+
+    from canarchy.checksum import chrysler_message_checksum
+
+    checksum_byte = frame.data[2]
+    expected = chrysler_message_checksum(bytes(frame.data))
+    assert checksum_byte == expected
+
+
+def test_encode_auto_checksum_sets_valid_crc_on_long_message() -> None:
+    frame, _ = encode_message_runtime(
+        _CHECKSUM_DBC,
+        "TestSensor",
+        {"Value": 12345, "STATUS": 7, "COUNTER": 0},
+    )
+    assert frame.dlc == 8
+    assert len(frame.data) == 8
+
+    from canarchy.checksum import chrysler_message_checksum
+
+    checksum_byte = frame.data[7]
+    expected = chrysler_message_checksum(bytes(frame.data))
+    assert checksum_byte == expected
+
+
+def test_encode_auto_checksum_respects_explicit_checksum() -> None:
+    frame, _ = encode_message_runtime(
+        _CHECKSUM_DBC,
+        "TestButtons",
+        {"Button1": 1, "Button2": 0, "Button3": 1, "COUNTER": 0, "CHECKSUM": 0xAB},
+    )
+    assert frame.data[2] == 0xAB
+
+
+def test_encode_auto_checksum_coverage_for_no_checksum_signal() -> None:
+    frame, _ = encode_message_runtime(
+        str(FIXTURES / "sample.dbc"),
+        "EngineStatus1",
+        {"CoolantTemp": 55, "OilTemp": 65, "Load": 40, "LampState": 1},
+    )
+    assert frame.dlc == 4
