@@ -288,27 +288,21 @@ def test_call_tool_replay_invalid_rate():
 
 
 def test_call_tool_replay_without_ack_active_returns_structured_error():
-    results = asyncio.run(
-        handle_call_tool("replay", {"file": "any.candump"})
-    )
+    results = asyncio.run(handle_call_tool("replay", {"file": "any.candump"}))
     payload = json.loads(results[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
 
 def test_call_tool_replay_ack_active_false_returns_structured_error():
-    results = asyncio.run(
-        handle_call_tool("replay", {"file": "any.candump", "ack_active": False})
-    )
+    results = asyncio.run(handle_call_tool("replay", {"file": "any.candump", "ack_active": False}))
     payload = json.loads(results[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
 
 def test_call_tool_replay_defaults_to_dry_run():
-    results = asyncio.run(
-        handle_call_tool("replay", {"file": "any.candump", "ack_active": True})
-    )
+    results = asyncio.run(handle_call_tool("replay", {"file": "any.candump", "ack_active": True}))
     payload = json.loads(results[0].text)
     # Should return INVALID_RATE since no file path matches, but the
     # important assertion is that dry_run was set, so we reach the CLI

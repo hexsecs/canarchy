@@ -2880,7 +2880,9 @@ class CliTests(unittest.TestCase):
         "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
     )
-    def test_replay_live_transmit_sends_frames_and_returns_structured_output(self, _mock_cfg) -> None:
+    def test_replay_live_transmit_sends_frames_and_returns_structured_output(
+        self, _mock_cfg
+    ) -> None:
         exit_code, stdout, _ = run_cli(
             "replay",
             "--file",

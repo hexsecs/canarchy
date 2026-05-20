@@ -391,7 +391,8 @@ def build_parser() -> CanarchyArgumentParser:
     )
     replay.add_argument("--rate", type=float, default=1.0)
     replay.add_argument(
-        "--interface", help="target CAN interface for live transmission (omit for planning-only mode)"
+        "--interface",
+        help="target CAN interface for live transmission (omit for planning-only mode)",
     )
     replay.add_argument(
         "--dry-run", action="store_true", help="plan live transmission without sending frames"
@@ -4394,7 +4395,12 @@ def replay_payload(
         enforce_active_transmit_safety(args)
         last_timestamp: float | None = None
         for i, frame in enumerate(frames):
-            if i > 0 and last_timestamp is not None and frame.timestamp is not None and frame.timestamp > last_timestamp:
+            if (
+                i > 0
+                and last_timestamp is not None
+                and frame.timestamp is not None
+                and frame.timestamp > last_timestamp
+            ):
                 delay = (frame.timestamp - last_timestamp) / args.rate
                 if delay > 0:
                     time.sleep(min(delay, 1.0))
