@@ -1033,7 +1033,9 @@ class CliIntegrationTests(unittest.TestCase):
                 "source_url": "https://example.test/rlog.zst",
             }
         ]
-        with patch("canarchy.comma_segments.segment_entries", return_value=entries) as segment_entries:
+        with patch(
+            "canarchy.comma_segments.segment_entries", return_value=entries
+        ) as segment_entries:
             code, out, _ = run_cli(
                 "datasets",
                 "replay",
@@ -1062,9 +1064,10 @@ class CliIntegrationTests(unittest.TestCase):
                 "source_url": "https://example.test/pointer",
             }
         ]
-        with patch("canarchy.comma_segments.segment_entries", return_value=entries), patch(
-            "canarchy.comma_segments.resolve_lfs_url"
-        ) as resolve_lfs_url:
+        with (
+            patch("canarchy.comma_segments.segment_entries", return_value=entries),
+            patch("canarchy.comma_segments.resolve_lfs_url") as resolve_lfs_url,
+        ):
             code, out, _ = run_cli(
                 "datasets",
                 "replay",
@@ -1106,9 +1109,14 @@ class CliIntegrationTests(unittest.TestCase):
                 }
             ]
         )
-        with patch("canarchy.comma_segments.segment_entries", return_value=entries), patch(
-            "canarchy.comma_segments.resolve_lfs_url", return_value="https://example.test/rlog.zst"
-        ), patch("canarchy.dataset_convert._iter_comma_can_frames", return_value=frames):
+        with (
+            patch("canarchy.comma_segments.segment_entries", return_value=entries),
+            patch(
+                "canarchy.comma_segments.resolve_lfs_url",
+                return_value="https://example.test/rlog.zst",
+            ),
+            patch("canarchy.dataset_convert._iter_comma_can_frames", return_value=frames),
+        ):
             code, out, _ = run_cli(
                 "datasets",
                 "replay",

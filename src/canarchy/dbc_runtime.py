@@ -399,7 +399,10 @@ def encode_message_runtime(
     cs = _checksum_signal(message)
     if cs is not None:
         resolved_signals = _auto_compute_checksum(
-            message, cs, resolved_signals, dbc_path,
+            message,
+            cs,
+            resolved_signals,
+            dbc_path,
             algorithm_override=crc_algorithm,
             arbitration_id=int(message.frame_id),
         )

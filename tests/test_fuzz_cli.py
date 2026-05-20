@@ -206,6 +206,7 @@ def test_fuzz_payload_repair_crc_not_applied_without_flag():
     assert len(frames) == 3
     # At least one frame should have a CRC that doesn't match
     from canarchy.checksum import chrysler_message_checksum
+
     mismatches = 0
     for evt in frames:
         payload = bytes.fromhex(evt["payload"]["frame"]["data"])

@@ -45,11 +45,16 @@ def fetch_database() -> dict[str, list[str]]:
             message="commaCarSegments database.json did not contain a platform mapping.",
             hint="Refresh from the upstream dataset or report an upstream format change.",
         )
-    return {str(platform): list(routes) for platform, routes in data.items() if isinstance(routes, list)}
+    return {
+        str(platform): list(routes) for platform, routes in data.items() if isinstance(routes, list)
+    }
 
 
 def segment_entries(
-    *, platform: str | None = None, limit: int | None = None, database: dict[str, list[str]] | None = None
+    *,
+    platform: str | None = None,
+    limit: int | None = None,
+    database: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Return stable replay file entries for commaCarSegments."""
     db = database if database is not None else fetch_database()
@@ -157,7 +162,9 @@ def lfs_download_url(oid: str, size: int) -> str:
         "Accept": "application/vnd.git-lfs+json",
         "Content-Type": "application/vnd.git-lfs+json",
     }
-    response = requests.post(f"{repo_url()}.git/info/lfs/objects/batch", json=payload, headers=headers, timeout=30)
+    response = requests.post(
+        f"{repo_url()}.git/info/lfs/objects/batch", json=payload, headers=headers, timeout=30
+    )
     try:
         response.raise_for_status()
         obj = response.json()["objects"][0]

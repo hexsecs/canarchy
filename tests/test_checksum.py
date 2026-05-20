@@ -29,6 +29,7 @@ def test_crc8_sae_j1850_deterministic() -> None:
 
 def test_crc8_sae_j1850_table_vs_direct() -> None:
     """Verify table-based implementation matches a bit-by-bit reference."""
+
     def reference(data: bytes) -> int:
         crc = 0x00
         for byte in data:
@@ -40,7 +41,7 @@ def test_crc8_sae_j1850_table_vs_direct() -> None:
                     crc = (crc << 1) & 0xFF
         return crc
 
-    for payload in [b"", b"\x00", b"\xFF", b"test", bytes(range(256))]:
+    for payload in [b"", b"\x00", b"\xff", b"test", bytes(range(256))]:
         assert crc8_sae_j1850(payload) == reference(payload)
 
 

@@ -124,4 +124,6 @@ def encode_message(
 ) -> tuple[CanFrame, list[dict[str, Any]]]:
     from canarchy.dbc_runtime import encode_message_runtime
 
-    return encode_message_runtime(dbc_path, message_name, signals, interface=interface, crc_algorithm=crc_algorithm)
+    return encode_message_runtime(
+        dbc_path, message_name, signals, interface=interface, crc_algorithm=crc_algorithm
+    )
