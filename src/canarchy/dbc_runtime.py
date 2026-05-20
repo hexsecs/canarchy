@@ -8,6 +8,7 @@ from typing import Any
 import cantools
 from cantools.database.utils import create_encode_decode_formats, decode_data
 
+from canarchy.checksum import CrcAlgorithm, compute_checksum, detect_algorithm_from_dbc
 from canarchy.dbc import DbcError, normalize_value
 from canarchy.dbc_types import DatabaseInfo, DatabaseInspection, MessageInfo, SignalInfo
 from canarchy.j1939 import decompose_arbitration_id
@@ -268,12 +269,64 @@ def _signal_raw_hex(message: Any, signal: Any, data: bytes) -> str | None:
     return str(raw_value)
 
 
+def _checksum_signal(message: Any) -> Any | None:
+    """Return the CHECKSUM signal if the message has one, else None."""
+    for signal in message.signals:
+        if signal.name == "CHECKSUM":
+            return signal
+    return None
+
+
+def _checksum_byte_index(signal: Any) -> int:
+    """Derive the checksum byte index from a signal's start bit and length."""
+    return (signal.start + signal.length - 1) // 8
+
+
+def _resolve_crc_algorithm(dbc_path: str, algorithm_override: str | None) -> CrcAlgorithm:
+    """Resolve the CRC algorithm from an explicit flag or DBC detection."""
+    if algorithm_override:
+        return CrcAlgorithm(algorithm_override)
+    detected = detect_algorithm_from_dbc(dbc_path)
+    return detected if detected is not None else CrcAlgorithm.STELLANTIS
+
+
+def _auto_compute_checksum(
+    message: Any,
+    checksum_signal: Any,
+    signals: dict[str, Any],
+    dbc_path: str,
+    *,
+    algorithm_override: str | None = None,
+    arbitration_id: int | None = None,
+) -> dict[str, Any]:
+    """Encode with CHECKSUM=0, compute the correct CRC, return updated signals.
+
+    Only triggers when the user did not supply a CHECKSUM value and the
+    CHECKSUM signal is 8 bits wide. The algorithm is resolved from
+    *algorithm_override* or auto-detected from the DBC name.
+    """
+    if "CHECKSUM" in signals:
+        return signals
+    if checksum_signal.length != 8:
+        return signals
+
+    try:
+        temp_encoded = message.encode({**signals, "CHECKSUM": 0})
+    except Exception:
+        return signals
+
+    algorithm = _resolve_crc_algorithm(dbc_path, algorithm_override)
+    crc = compute_checksum(algorithm, temp_encoded, address=arbitration_id)
+    return {**signals, "CHECKSUM": crc}
+
+
 def encode_message_runtime(
     dbc_path: str,
     message_name: str,
     signals: dict[str, Any],
     *,
     interface: str | None = None,
+    crc_algorithm: str | None = None,
 ) -> tuple[CanFrame, list[dict[str, Any]]]:
     database = load_runtime_database(dbc_path)
 
@@ -342,8 +395,17 @@ def encode_message_runtime(
                     },
                 )
 
+    resolved_signals = dict(signals)
+    cs = _checksum_signal(message)
+    if cs is not None:
+        resolved_signals = _auto_compute_checksum(
+            message, cs, resolved_signals, dbc_path,
+            algorithm_override=crc_algorithm,
+            arbitration_id=int(message.frame_id),
+        )
+
     try:
-        encoded = message.encode(signals)
+        encoded = message.encode(resolved_signals)
     except Exception as exc:  # pragma: no cover
         raise DbcError(
             code="DBC_SIGNAL_INVALID",

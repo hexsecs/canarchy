@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
-from canarchy.cli import main
+from canarchy.cli import EXIT_OK, main
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -113,6 +113,105 @@ def test_fuzz_payload_dry_run_skips_active_ack_prompt():
     assert payload["ok"] is True
     assert payload["data"]["mode"] == "dry_run"
     assert payload["data"]["dry_run"] is True
+
+
+def test_fuzz_payload_repair_crc_fixes_last_byte():
+    """--repair-crc recomputes the Stellantis CRC-8 in the last byte."""
+    from canarchy.checksum import chrysler_message_checksum
+
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "bitflip",
+        "--data",
+        "010000",
+        "--max",
+        "3",
+        "--seed",
+        "0",
+        "--repair-crc",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    lines = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+    frames = [evt for evt in lines if evt.get("event_type") == "frame"]
+    assert len(frames) == 3
+    for evt in frames:
+        data_hex = evt["payload"]["frame"]["data"]
+        payload = bytes.fromhex(data_hex)
+        assert len(payload) == 3
+        expected_crc = chrysler_message_checksum(payload)
+        assert payload[2] == expected_crc, f"CRC mismatch in {data_hex}"
+
+
+def test_fuzz_payload_repair_crc_on_8_byte_payload():
+    """--repair-crc works on 8-byte Stellantis messages."""
+    from canarchy.checksum import chrysler_message_checksum
+
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "bitflip",
+        "--data",
+        "1122334455667700",
+        "--max",
+        "2",
+        "--seed",
+        "0",
+        "--repair-crc",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    lines = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+    frames = [evt for evt in lines if evt.get("event_type") == "frame"]
+    assert len(frames) == 2
+    for evt in frames:
+        payload = bytes.fromhex(evt["payload"]["frame"]["data"])
+        assert len(payload) == 8
+        assert payload[7] == chrysler_message_checksum(payload)
+
+
+def test_fuzz_payload_repair_crc_not_applied_without_flag():
+    """Without --repair-crc, the last byte is not fixed."""
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "bitflip",
+        "--data",
+        "010000",
+        "--max",
+        "3",
+        "--seed",
+        "0",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    lines = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+    frames = [evt for evt in lines if evt.get("event_type") == "frame"]
+    assert len(frames) == 3
+    # At least one frame should have a CRC that doesn't match
+    from canarchy.checksum import chrysler_message_checksum
+    mismatches = 0
+    for evt in frames:
+        payload = bytes.fromhex(evt["payload"]["frame"]["data"])
+        if payload[2] != chrysler_message_checksum(payload):
+            mismatches += 1
+    assert mismatches > 0
 
 
 # ---------------------------------------------------------------------------

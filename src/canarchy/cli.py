@@ -431,6 +431,12 @@ def build_parser() -> CanarchyArgumentParser:
     encode.add_argument("--dbc", required=True)
     encode.add_argument("message")
     encode.add_argument("signals", nargs="*", help="key=value signal assignments")
+    encode.add_argument(
+        "--crc-algorithm",
+        choices=("stellantis", "sae-j1850", "fca-giorgio"),
+        default=None,
+        help="CRC algorithm override (default: auto-detect from DBC filename)",
+    )
     add_output_arguments(encode)
     encode.set_defaults(command="encode")
 
@@ -603,8 +609,8 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_convert.add_argument(
         "--source-format",
         required=True,
-        choices=["hcrl-csv"],
-        help="source file format (hcrl-csv: HCRL Timestamp,ID,DLC,Data CSV)",
+        choices=["hcrl-csv", "candump", "comma-rlog"],
+        help="source file format (hcrl-csv CSV, candump log, comma-rlog openpilot rlog.zst)",
     )
     datasets_convert.add_argument(
         "--format",
@@ -626,8 +632,8 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_stream.add_argument(
         "--source-format",
         required=True,
-        choices=["hcrl-csv", "candump"],
-        help="source file format (hcrl-csv: HCRL Timestamp,ID,DLC,Data CSV; candump: can-utils log)",
+        choices=["hcrl-csv", "candump", "comma-rlog"],
+        help="source file format (hcrl-csv CSV, candump log, comma-rlog openpilot rlog.zst)",
     )
     datasets_stream.add_argument(
         "--format",
@@ -665,6 +671,17 @@ def build_parser() -> CanarchyArgumentParser:
     )
     datasets_replay.add_argument(
         "--file", dest="replay_file", help="replay file id or name from the dataset manifest"
+    )
+    datasets_replay.add_argument(
+        "--platform",
+        help="dataset-specific platform filter for dynamic replay manifests (e.g. TESLA_MODEL_3)",
+    )
+    datasets_replay.add_argument(
+        "--limit",
+        dest="replay_limit",
+        type=int,
+        default=None,
+        help="limit dynamic replay manifest entries when listing files",
     )
     datasets_replay.add_argument(
         "--list-files",
@@ -934,6 +951,21 @@ def build_parser() -> CanarchyArgumentParser:
         "--dry-run", action="store_true", help="emit JSONL plan without transmitting"
     )
     fuzz_payload.add_argument(
+        "--repair-crc", action="store_true", help="recompute CRC in the last byte after mutation"
+    )
+    fuzz_payload.add_argument(
+        "--crc-algorithm",
+        choices=("stellantis", "sae-j1850", "fca-giorgio"),
+        default=None,
+        help="CRC algorithm for --repair-crc (default: stellantis)",
+    )
+    fuzz_payload.add_argument(
+        "--crc-address",
+        type=lambda x: int(x, 0),
+        default=None,
+        help="CAN arbitration ID for CRC computation (required by some algorithms, e.g. fca-giorgio)",
+    )
+    fuzz_payload.add_argument(
         "--run-id", default=None, help="explicit run UUID (random if omitted)"
     )
     add_active_ack_argument(fuzz_payload)
@@ -965,6 +997,21 @@ def build_parser() -> CanarchyArgumentParser:
     fuzz_replay.add_argument(
         "--dry-run", action="store_true", help="emit JSONL plan without transmitting"
     )
+    fuzz_replay.add_argument(
+        "--repair-crc", action="store_true", help="recompute CRC in the last byte after mutation"
+    )
+    fuzz_replay.add_argument(
+        "--crc-algorithm",
+        choices=("stellantis", "sae-j1850", "fca-giorgio"),
+        default=None,
+        help="CRC algorithm for --repair-crc (default: stellantis)",
+    )
+    fuzz_replay.add_argument(
+        "--crc-address",
+        type=lambda x: int(x, 0),
+        default=None,
+        help="CAN arbitration ID for CRC computation (required by some algorithms, e.g. fca-giorgio)",
+    )
     fuzz_replay.add_argument("--run-id", default=None, help="explicit run UUID (random if omitted)")
     add_active_ack_argument(fuzz_replay)
     add_output_arguments(fuzz_replay)
@@ -991,6 +1038,21 @@ def build_parser() -> CanarchyArgumentParser:
     fuzz_arbid.add_argument("--extended", action="store_true", help="emit 29-bit extended CAN IDs")
     fuzz_arbid.add_argument(
         "--dry-run", action="store_true", help="emit JSONL plan without transmitting"
+    )
+    fuzz_arbid.add_argument(
+        "--repair-crc", action="store_true", help="recompute CRC in the last byte after mutation"
+    )
+    fuzz_arbid.add_argument(
+        "--crc-algorithm",
+        choices=("stellantis", "sae-j1850", "fca-giorgio"),
+        default=None,
+        help="CRC algorithm for --repair-crc (default: stellantis)",
+    )
+    fuzz_arbid.add_argument(
+        "--crc-address",
+        type=lambda x: int(x, 0),
+        default=None,
+        help="CAN arbitration ID for CRC computation (required by some algorithms, e.g. fca-giorgio)",
     )
     fuzz_arbid.add_argument("--run-id", default=None, help="explicit run UUID (random if omitted)")
     add_active_ack_argument(fuzz_arbid)
@@ -3158,9 +3220,12 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         )
     if args.command == "encode":
         signals = parse_signal_assignments(args.signals)
-        frame, events = encode_message(dbc_path, args.message, signals)
+        frame, events = encode_message(
+            dbc_path, args.message, signals, crc_algorithm=args.crc_algorithm
+        )
         return (
             {
+                "crc_algorithm": args.crc_algorithm or "auto",
                 "dbc": args.dbc,
                 "dbc_source": dbc_source,
                 "frame": frame.to_payload(),
@@ -3508,13 +3573,22 @@ def datasets_payload(
 
         try:
             replay_source = resolve_dataset_replay_source(
-                args.source, registry, replay_file=getattr(args, "replay_file", None)
+                args.source,
+                registry,
+                replay_file=getattr(args, "replay_file", None),
+                platform=getattr(args, "platform", None),
+                limit=getattr(args, "replay_limit", None),
+                list_files=getattr(args, "list_files", False),
             )
             if getattr(args, "list_files", False):
                 return (dataset_replay_files_payload(replay_source), [], [])
             validate_dataset_replay_options(args, replay_source)
             if getattr(args, "dry_run", False):
                 return (dataset_replay_plan(args, replay_source), [], [])
+            if replay_source.get("dynamic_manifest") == "comma-car-segments":
+                from canarchy.comma_segments import resolve_lfs_url
+
+                replay_source["download_url"] = resolve_lfs_url(replay_source["download_url"])
             result = stream_replay(
                 replay_source["download_url"],
                 source_format=replay_source["source_format"],
@@ -3543,7 +3617,13 @@ def datasets_payload(
 
 
 def resolve_dataset_replay_source(
-    source: str, registry: Any, *, replay_file: str | None = None
+    source: str,
+    registry: Any,
+    *,
+    replay_file: str | None = None,
+    platform: str | None = None,
+    limit: int | None = None,
+    list_files: bool = False,
 ) -> dict[str, Any]:
     """Resolve a replay source from either a direct URL or dataset descriptor metadata."""
     if source.startswith(("http://", "https://")):
@@ -3563,6 +3643,16 @@ def resolve_dataset_replay_source(
 
     descriptor = registry.inspect(source)
     replay = descriptor.metadata.get("replay") if isinstance(descriptor.metadata, dict) else None
+    if isinstance(replay, dict) and replay.get("dynamic") == "comma-car-segments":
+        return resolve_comma_car_segments_replay_source(
+            source,
+            descriptor,
+            replay,
+            replay_file=replay_file,
+            platform=platform,
+            limit=limit,
+            list_files=list_files,
+        )
     if not isinstance(replay, dict) or not replay.get("download_url"):
         machine = dataset_machine_fields(descriptor)
         if machine["is_index"]:
@@ -3597,6 +3687,63 @@ def resolve_dataset_replay_source(
         "replay_file": selected_file.get("name"),
         "replay_file_id": selected_file.get("id"),
         "replay_files": files,
+    }
+
+
+def resolve_comma_car_segments_replay_source(
+    source: str,
+    descriptor: Any,
+    replay: dict[str, Any],
+    *,
+    replay_file: str | None,
+    platform: str | None,
+    limit: int | None,
+    list_files: bool,
+) -> dict[str, Any]:
+    """Resolve dynamic commaCarSegments replay metadata."""
+    from canarchy.comma_segments import segment_entries
+    from canarchy.dataset_provider import DatasetError
+
+    if limit is not None and limit < 1:
+        raise DatasetError(
+            code="INVALID_LIMIT",
+            message=f"Replay file list limit must be positive, got {limit}.",
+            hint="Use `--limit` with a positive integer.",
+        )
+    effective_limit = limit
+    if effective_limit is None and list_files:
+        effective_limit = 50
+    if effective_limit is None and replay_file is None:
+        effective_limit = 1
+    files = segment_entries(platform=platform, limit=effective_limit)
+    if not files:
+        raise DatasetError(
+            code="COMMA_SEGMENTS_MANIFEST_EMPTY",
+            message="commaCarSegments did not return any replayable segment entries.",
+            hint="Try a different `--platform`, remove `--limit`, or check the upstream dataset manifest.",
+        )
+    selected_file = select_replay_file(files, replay_file, source) if replay_file else files[0]
+    raw_download_url = selected_file.get("source_url")
+    return {
+        "source": source,
+        "source_type": "dataset_ref",
+        "is_replayable": True,
+        "is_index": False,
+        "provider": descriptor.provider,
+        "name": descriptor.name,
+        "ref": f"{descriptor.provider}:{descriptor.name}",
+        "default_file": replay.get("default_file"),
+        "default_replay_file": replay.get("default_file"),
+        "download_url_available": bool(raw_download_url),
+        "download_url": raw_download_url,
+        "source_format": "comma-rlog",
+        "replay_file": selected_file.get("name"),
+        "replay_file_id": selected_file.get("id"),
+        "replay_files": files,
+        "platform": selected_file.get("platform"),
+        "route": selected_file.get("route"),
+        "segment": selected_file.get("segment"),
+        "dynamic_manifest": "comma-car-segments",
     }
 
 
@@ -3734,11 +3881,11 @@ def validate_dataset_replay_options(
     from canarchy.dataset_convert import ConversionError
 
     source_format = replay_source.get("source_format", "candump")
-    if source_format != "candump":
+    if source_format not in {"candump", "comma-rlog"}:
         raise ConversionError(
             code="UNSUPPORTED_SOURCE_FORMAT",
-            message=f"Streaming replay only supports candump format, got '{source_format}'.",
-            hint="Use source_format='candump' for streaming replay.",
+            message=f"Streaming replay only supports candump or comma-rlog format, got '{source_format}'.",
+            hint="Use source_format='candump' or source_format='comma-rlog' for streaming replay.",
         )
     if args.rate <= 0:
         raise ConversionError(
@@ -4091,6 +4238,30 @@ def fuzz_payload(
         target = args.interface
     else:  # pragma: no cover — guarded by IMPLEMENTED_COMMANDS
         raise AssertionError(f"unexpected fuzz command: {args.command}")
+
+    if getattr(args, "repair_crc", False):
+        from dataclasses import replace as dc_replace
+
+        from canarchy.checksum import CrcAlgorithm, repair_crc
+
+        crc_algorithm_map: dict[str, CrcAlgorithm] = {
+            "stellantis": CrcAlgorithm.STELLANTIS,
+            "sae-j1850": CrcAlgorithm.SAE_J1850,
+            "fca-giorgio": CrcAlgorithm.FCA_GIORGIO,
+        }
+        algo_str = getattr(args, "crc_algorithm", None) or "stellantis"
+        algo = crc_algorithm_map[algo_str]
+        explicit_address = getattr(args, "crc_address", None)
+        if explicit_address is not None:
+            frames = [
+                dc_replace(frame, data=repair_crc(frame.data, algo, address=explicit_address))
+                for frame in frames
+            ]
+        else:
+            frames = [
+                dc_replace(frame, data=repair_crc(frame.data, algo, address=frame.arbitration_id))
+                for frame in frames
+            ]
 
     if not dry_run:
         enforce_active_transmit_safety(args)

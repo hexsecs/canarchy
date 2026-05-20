@@ -17,7 +17,7 @@ import requests
 from canarchy.dataset_provider import DatasetError
 
 
-_SUPPORTED_SOURCE_FORMATS = ("hcrl-csv", "candump")
+_SUPPORTED_SOURCE_FORMATS = ("hcrl-csv", "candump", "comma-rlog")
 _SUPPORTED_OUTPUT_FORMATS = ("candump", "jsonl")
 
 
@@ -58,6 +58,8 @@ def convert_file(
         frames = list(_parse_hcrl_csv(src))
     elif source_format == "candump":
         frames = list(_parse_candump(src))
+    elif source_format == "comma-rlog":
+        frames = list(_parse_comma_rlog(str(src)))
     else:
         raise AssertionError(f"unhandled source format: {source_format}")
 
@@ -130,6 +132,8 @@ def stream_file(
         frames = _parse_hcrl_csv(src)
     elif source_format == "candump":
         frames = _parse_candump(src)
+    elif source_format == "comma-rlog":
+        frames = _parse_comma_rlog(str(src))
     else:
         raise AssertionError(f"unhandled source format: {source_format}")
 
@@ -188,11 +192,11 @@ def stream_replay(
     Downloads from remote URL incrementally and replays with original timing * rate.
     No local file is required — frames stream directly from HTTP to output.
     """
-    if source_format != "candump":
+    if source_format not in {"candump", "comma-rlog"}:
         raise ConversionError(
             code="UNSUPPORTED_SOURCE_FORMAT",
-            message=f"Streaming replay only supports candump format, got '{source_format}'.",
-            hint="Use source_format='candump' for streaming replay.",
+            message=f"Streaming replay only supports candump or comma-rlog format, got '{source_format}'.",
+            hint="Use source_format='candump' or source_format='comma-rlog' for streaming replay.",
         )
 
     if output_format not in _SUPPORTED_OUTPUT_FORMATS:
@@ -223,21 +227,9 @@ def stream_replay(
     stop_reason = "eof"
 
     try:
-        with requests.get(source_url, stream=True) as resp:
-            resp.raise_for_status()
-            for line in resp.iter_lines():
-                if not line or not line.strip():
-                    continue
-
-                # iter_lines() returns bytes, decode to string
-                if isinstance(line, bytes):
-                    line = line.decode("utf-8", errors="replace")
-
-                # Parse candump line to get timestamp
-                frame = _parse_candump_line(line)
-                if frame is None:
-                    continue
-
+        if source_format == "comma-rlog":
+            frames = _parse_comma_rlog(source_url)
+            for frame in frames:
                 if first_timestamp is None:
                     first_timestamp = frame["timestamp"]
                 capture_elapsed = frame["timestamp"] - first_timestamp
@@ -250,11 +242,10 @@ def stream_replay(
                 frame_offset = frame_count
                 frame_count += 1
 
-                # Timing: sleep to maintain original timing * rate
                 if last_timestamp is not None and frame["timestamp"] > last_timestamp:
                     delay = (frame["timestamp"] - last_timestamp) / rate
                     if delay > 0:
-                        time.sleep(min(delay, 1.0))  # Cap sleeps at 1s for safety
+                        time.sleep(min(delay, 1.0))
 
                 last_timestamp = frame["timestamp"]
 
@@ -277,6 +268,61 @@ def stream_replay(
                         stop_reason = "broken_pipe"
                         _silence_broken_stdout(output)
                         break
+        else:
+            with requests.get(source_url, stream=True) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line or not line.strip():
+                        continue
+
+                    # iter_lines() returns bytes, decode to string
+                    if isinstance(line, bytes):
+                        line = line.decode("utf-8", errors="replace")
+
+                    # Parse candump line to get timestamp
+                    frame = _parse_candump_line(line)
+                    if frame is None:
+                        continue
+
+                    if first_timestamp is None:
+                        first_timestamp = frame["timestamp"]
+                    capture_elapsed = frame["timestamp"] - first_timestamp
+                    if max_seconds is not None and capture_elapsed > max_seconds:
+                        stop_reason = "max_seconds"
+                        break
+                    if max_frames is not None and frame_count >= max_frames:
+                        stop_reason = "max_frames"
+                        break
+                    frame_offset = frame_count
+                    frame_count += 1
+
+                    # Timing: sleep to maintain original timing * rate
+                    if last_timestamp is not None and frame["timestamp"] > last_timestamp:
+                        delay = (frame["timestamp"] - last_timestamp) / rate
+                        if delay > 0:
+                            time.sleep(min(delay, 1.0))  # Cap sleeps at 1s for safety
+
+                    last_timestamp = frame["timestamp"]
+
+                    if emit_frames:
+                        if output_format == "candump":
+                            output_line = f"({frame['timestamp']:.6f}) {frame.get('interface') or 'can0'} {frame['arbitration_id']:X}#{frame['data'].hex().upper()}"
+                        elif output_format == "jsonl":
+                            event = _frame_to_event(frame, source=source_format)
+                            event["payload"]["dataset"] = {
+                                **(provenance or {}),
+                                "frame_offset": frame_offset,
+                                "source_format": source_format,
+                            }
+                            output_line = json.dumps(event)
+                        else:
+                            raise AssertionError(f"unhandled output format: {output_format}")
+                        try:
+                            print(output_line, file=output, flush=True)
+                        except BrokenPipeError:
+                            stop_reason = "broken_pipe"
+                            _silence_broken_stdout(output)
+                            break
     except KeyboardInterrupt:
         stop_reason = "interrupted"
     except requests.RequestException as exc:
@@ -346,6 +392,48 @@ def _parse_candump_line(line: str) -> dict | None:
         "data": data_bytes,
         "dlc": len(data_bytes),
     }
+
+
+def _parse_comma_rlog(source: str) -> Iterator[dict]:
+    """Parse openpilot/comma rlog data through optional LogReader support."""
+    yield from _iter_comma_can_frames(source)
+
+
+def _iter_comma_can_frames(source: str) -> Iterator[dict]:
+    try:
+        from openpilot.tools.lib.logreader import LogReader  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise ConversionError(
+            code="COMMA_RLOG_SUPPORT_UNAVAILABLE",
+            message="comma-rlog streaming requires openpilot LogReader support.",
+            hint="Install openpilot/cereal tooling in the environment, or use `--dry-run` / `--list-files` for metadata-only commaCarSegments workflows.",
+        ) from exc
+
+    try:
+        for event in LogReader(source):
+            try:
+                event_type = event.which()
+            except Exception:
+                continue
+            if event_type != "can":
+                continue
+            timestamp = getattr(event, "logMonoTime", 0) / 1_000_000_000
+            for can_msg in getattr(event, "can"):
+                yield {
+                    "timestamp": timestamp,
+                    "interface": f"can{getattr(can_msg, 'src', 0)}",
+                    "arbitration_id": int(getattr(can_msg, "address")),
+                    "data": bytes(getattr(can_msg, "dat")),
+                    "dlc": len(getattr(can_msg, "dat")),
+                }
+    except ConversionError:
+        raise
+    except Exception as exc:
+        raise ConversionError(
+            code="MALFORMED_SOURCE",
+            message=f"Failed to parse comma-rlog source: {source}",
+            hint="Verify the source is an openpilot rlog.zst file and optional parser dependencies are installed.",
+        ) from exc
 
 
 def _parse_hcrl_csv(path: Path) -> Iterator[dict]:

@@ -29,6 +29,7 @@ For longer walkthroughs, see the [Tutorials](../tutorials/index.md) page.
 ## Datasets and external sources
 
 * [Stream the CANdid dataset into stats](stream-candid-into-stats.md)
+* [Stream commaCarSegments CAN data](stream-comma-car-segments.md)
 
 ## Agents and MCP
 

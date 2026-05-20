@@ -727,7 +727,7 @@ _TOOLS: list[types.Tool] = [
                 "source_format": {
                     "type": "string",
                     "description": "Source file format",
-                    "enum": ["hcrl-csv"],
+                    "enum": ["hcrl-csv", "candump", "comma-rlog"],
                 },
                 "format": {
                     "type": "string",
@@ -767,6 +767,14 @@ _TOOLS: list[types.Tool] = [
                     "type": "string",
                     "description": "Replay file id or name from the dataset manifest",
                 },
+                "platform": {
+                    "type": "string",
+                    "description": "Platform filter for dynamic manifests such as commaCarSegments",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Limit dynamic manifest entries while planning",
+                },
                 "max_frames": {"type": "integer", "description": "Planned frame limit"},
                 "max_seconds": {
                     "type": "number",
@@ -785,6 +793,14 @@ _TOOLS: list[types.Tool] = [
                 "source": {
                     "type": "string",
                     "description": "Replayable dataset ref (e.g. catalog:candid)",
+                },
+                "platform": {
+                    "type": "string",
+                    "description": "Platform filter for dynamic manifests such as commaCarSegments",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Limit dynamic manifest entries",
                 },
             },
             "required": ["source"],
@@ -1212,6 +1228,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["replay"]
             if a.get("file"):
                 argv += ["--file", a["file"]]
+            if a.get("platform"):
+                argv += ["--platform", a["platform"]]
+            if a.get("limit") is not None:
+                argv += ["--limit", str(a["limit"])]
             if "rate" in a:
                 argv += ["--rate", str(a["rate"])]
             return argv + ["--json"]
@@ -1444,6 +1464,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--format", a["format"]]
             if a.get("file"):
                 argv += ["--file", a["file"]]
+            if a.get("platform"):
+                argv += ["--platform", a["platform"]]
+            if a.get("limit") is not None:
+                argv += ["--limit", str(a["limit"])]
             if "rate" in a:
                 argv += ["--rate", str(a["rate"])]
             if a.get("max_frames") is not None:
@@ -1452,7 +1476,12 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--max-seconds", str(a["max_seconds"])]
             return argv + ["--dry-run", "--json"]
         case "datasets_replay_files":
-            return ["datasets", "replay", a["source"], "--list-files", "--json"]
+            argv = ["datasets", "replay", a["source"], "--list-files"]
+            if a.get("platform"):
+                argv += ["--platform", a["platform"]]
+            if a.get("limit") is not None:
+                argv += ["--limit", str(a["limit"])]
+            return argv + ["--json"]
         case "skills_provider_list":
             return ["skills", "provider", "list", "--json"]
         case "skills_search":
