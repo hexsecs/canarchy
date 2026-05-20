@@ -1,8 +1,9 @@
 # Cookbook
 
 Short, task-oriented recipes for common CANarchy workflows. Each recipe
-is one page, runs against a fixture checked into the repository, and
-links back to the full tutorial or command spec where it applies.
+is one page and either runs against a fixture checked into the repository
+or names the controlled lab setup required for active transport work.
+Recipes link back to the full tutorial or command spec where it applies.
 
 For longer walkthroughs, see the [Tutorials](../tutorials/index.md) page.
 
@@ -20,6 +21,10 @@ For longer walkthroughs, see the [Tutorials](../tutorials/index.md) page.
 ## Reverse engineering
 
 * [Find counter signals in a capture](find-counter-signals.md)
+
+## Active fuzzing
+
+* [Fuzz Tesla DI_torque2 vehicle speed](fuzz-tesla-di-torque2-speed.md)
 
 ## Datasets and external sources
 
