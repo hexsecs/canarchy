@@ -4,13 +4,13 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented |
+| Status | Implemented with live transmit |
 | Related design spec | `docs/design/replay-command.md` |
 | Primary test area | CLI, replay |
 
 ## Test Objectives
 
-Validate deterministic replay-plan behavior, CLI result structure, and structured validation/transport errors.
+Validate deterministic replay-plan behavior, CLI result structure, live frame transmission, active-transmit safety gating, and structured validation/transport errors.
 
 ## Coverage Requirements
 
@@ -18,6 +18,10 @@ Validate deterministic replay-plan behavior, CLI result structure, and structure
 * replay rate scales relative timing
 * replay CLI returns structured JSON output
 * invalid rate and missing source errors are surfaced
+* live transmit to interface sends frames and returns interface metadata
+* live transmit requires `--ack-active` when safety config demands it
+* dry-run with interface returns plan and warning without sending frames
+* planning mode (no interface) unchanged from prior behavior
 
 ## Requirement Traceability
 
@@ -28,6 +32,10 @@ Validate deterministic replay-plan behavior, CLI result structure, and structure
 | `REQ-REPLAY-03` | `TEST-REPLAY-02` |
 | `REQ-REPLAY-04` | `TEST-REPLAY-03` |
 | `REQ-REPLAY-05` | `TEST-REPLAY-04`, `TEST-REPLAY-05` |
+| `REQ-REPLAY-07` | `TEST-REPLAY-06`, `TEST-REPLAY-07` |
+| `REQ-REPLAY-08` | `TEST-REPLAY-08` |
+| `REQ-REPLAY-09` | `TEST-REPLAY-06` |
+| `REQ-REPLAY-10` | `TEST-REPLAY-07` |
 
 ## Representative Test Cases
 
@@ -94,13 +102,66 @@ And    `errors[0].code` shall equal `"CAPTURE_SOURCE_UNAVAILABLE"`
 
 ---
 
+### `TEST-REPLAY-06` — Live transmit requires `--ack-active` when config demands it
+
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+And    `[safety].require_active_ack` is `true`
+When   the operator runs `canarchy replay --file sample.candump --interface vcan0 --json`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"ACTIVE_ACK_REQUIRED"`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-REPLAY-07` — Live transmit sends frames and returns metadata
+
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy replay --file sample.candump --interface vcan0 --ack-active --json`
+And    answers the confirmation prompt with `YES`
+Then   the result shall include `mode = "active"`, `interface = "vcan0"`, and `frame_count = 3`
+And    the events shall be replay events
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-REPLAY-08` — Dry-run with interface returns plan and warning
+
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy replay --file sample.candump --interface vcan0 --dry-run --json`
+Then   the result shall include `mode = "dry_run"` and `interface = "vcan0"`
+And    `warnings` shall contain `"ACTIVE_TRANSMIT_DRY_RUN"`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-REPLAY-09` — Planning mode without interface is unchanged
+
+```gherkin
+Given  the file `tests/fixtures/sample.candump` is available
+When   the operator runs `canarchy replay --file sample.candump --json`
+Then   the result shall include `mode = "active"` and `frame_count = 3`
+And    `interface` shall not be in the result data
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
 ## Fixtures And Environment
 
 * `tests/fixtures/sample.candump`
 
 ## Explicit Non-Coverage
 
-* live replay scheduling against hardware
 * replay looping or advanced pacing controls
 
 ## Traceability
