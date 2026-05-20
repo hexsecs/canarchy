@@ -116,9 +116,10 @@ canarchy fuzz payload \
 ## Checksum caveat
 
 Tesla messages include counters and checksums, but CANarchy does not yet
-implement Tesla checksum repair. Do **not** use `--repair-crc` for this
-workflow unless the checksum algorithm has been added and validated for the
-target message family.
+implement Tesla checksum repair or expose a Tesla-specific checksum repair
+flag for this workflow. Keep the fuzz commands above as raw payload mutation
+until the checksum algorithm has been added and validated for the target
+message family.
 
 Without checksum repair, this recipe is best for:
 
