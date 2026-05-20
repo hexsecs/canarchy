@@ -537,7 +537,7 @@ Notes:
 
 * `datasets search` defaults to a compact human-readable table with a `TYPE` column (`INDEX` for curated indexes, `PLAY` for replayable datasets); use `--verbose` for detailed result blocks with type labels, descriptions, source URLs, replay defaults, index notes, and access notes
 * without `--json`, stream records are written directly to stdout or `--output`
-* `comma-rlog` parses openpilot/comma `rlog.zst` CAN events when optional openpilot LogReader support is installed; missing support returns `COMMA_RLOG_SUPPORT_UNAVAILABLE`
+* `comma-rlog` parses openpilot/comma `rlog.zst` CAN events when optional openpilot LogReader support is installed (`uv pip install git+https://github.com/commaai/openpilot.git` on Python 3.12.x); missing support returns `COMMA_RLOG_SUPPORT_UNAVAILABLE`
 * JSONL stream records include `payload.dataset.provider_ref`, `frame_offset`, `chunk_index`, and `chunk_position`
 * `--chunk-size` controls JSONL provenance chunk metadata and does not bound emitted frames
 * `--max-frames` stops local dataset streaming after at most N emitted frames for candump and JSONL output

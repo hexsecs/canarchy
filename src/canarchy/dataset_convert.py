@@ -406,7 +406,7 @@ def _iter_comma_can_frames(source: str) -> Iterator[dict]:
         raise ConversionError(
             code="COMMA_RLOG_SUPPORT_UNAVAILABLE",
             message="comma-rlog streaming requires openpilot LogReader support.",
-            hint="Install openpilot/cereal tooling in the environment, or use `--dry-run` / `--list-files` for metadata-only commaCarSegments workflows.",
+            hint="Run `uv pip install git+https://github.com/commaai/openpilot.git` on Python 3.12, or use `--dry-run` / `--list-files` for metadata-only commaCarSegments workflows.",
         ) from exc
 
     try:

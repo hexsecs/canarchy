@@ -9,7 +9,8 @@ bounded replay, and stream CAN frames from a selected openpilot `rlog.zst`.
 
 * Network access to the HuggingFace `commaai/commaCarSegments` dataset.
 * Optional openpilot LogReader/cereal support installed for actual `comma-rlog`
-  frame streaming.
+  frame streaming (`uv pip install git+https://github.com/commaai/openpilot.git`;
+  requires Python 3.12.x).
 * A bounded plan (`--limit`, `--max-frames`, or `--max-seconds`) before
   working with large segment lists.
 
