@@ -193,16 +193,18 @@ Notes:
 
 ### replay
 
-Replay a capture source with deterministic timing derived from relative frame timestamps.
+Replay a capture source with deterministic timing derived from relative frame timestamps. By default this returns a replay plan (planning mode). When `--interface` is specified, frames are transmitted onto a live CAN bus with capture timing.
 
 ```bash
-canarchy replay --file <path> [--rate <factor>] [--json|--jsonl|--text]
+canarchy replay --file <path> [--interface <iface>] [--rate <factor>] [--dry-run] [--ack-active] [--json|--jsonl|--text]
 ```
 
-Example:
+Examples:
 
 ```bash
 canarchy replay --file tests/fixtures/sample.candump --rate 2.0 --json
+canarchy replay --file tests/fixtures/sample.candump --interface vcan0 --rate 1.0 --ack-active --json
+canarchy replay --file tests/fixtures/sample.candump --interface vcan0 --dry-run --json
 ```
 
 ### gateway

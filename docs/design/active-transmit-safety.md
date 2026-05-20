@@ -246,7 +246,7 @@ the existing CLI safety controls to pass.
 | `send` | ✓ | n/a (single frame) | gap | n/a | + | + | + |
 | `generate` | ✓ | + | + | + | + | + | + |
 | `gateway` | ✓ | + | + | + | + | + | + |
-| `replay` | partial | + | + | + | + (existing) | + | + |
+| `replay` | ✓ | + | + | + | ✓ | + | ✓ |
 | `uds scan` | ✓ | + | + | + | + | + | + |
 | `fuzz payload` | + | + | + | + | + | + | + |
 | `fuzz replay` | + | + | + | + | + | + | + |

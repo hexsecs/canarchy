@@ -125,7 +125,7 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="replay",
-        description="Replay recorded CAN traffic from a candump capture file.",
+        description="Replay recorded CAN traffic from a candump capture file onto a live interface or return a replay plan.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -134,6 +134,20 @@ _TOOLS: list[types.Tool] = [
                     "type": "number",
                     "description": "Playback rate multiplier",
                     "default": 1.0,
+                },
+                "interface": {
+                    "type": "string",
+                    "description": "Target CAN interface for live transmission (omit for planning-only)",
+                },
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory acknowledgement for live transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Plan without transmitting (default: true for MCP)",
+                    "default": True,
                 },
             },
             "required": ["file"],
@@ -1228,12 +1242,14 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["replay"]
             if a.get("file"):
                 argv += ["--file", a["file"]]
-            if a.get("platform"):
-                argv += ["--platform", a["platform"]]
-            if a.get("limit") is not None:
-                argv += ["--limit", str(a["limit"])]
             if "rate" in a:
                 argv += ["--rate", str(a["rate"])]
+            if a.get("interface"):
+                argv += ["--interface", a["interface"]]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
             return argv + ["--json"]
         case "filter":
             argv = ["filter", a["expression"], "--file", a["file"]]
@@ -1620,6 +1636,7 @@ _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
         "fuzz_payload",
         "fuzz_replay",
         "fuzz_arbitration_id",
+        "replay",
     }
 )
 

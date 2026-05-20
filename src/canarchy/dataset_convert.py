@@ -186,6 +186,7 @@ def stream_replay(
     provenance: dict | None = None,
     emit_frames: bool = True,
     handle: IO[str] | None = None,
+    send_interface: str | None = None,
 ) -> dict:
     """Netflix-style streaming replay: download and play frames with timing.
 
@@ -249,7 +250,9 @@ def stream_replay(
 
                 last_timestamp = frame["timestamp"]
 
-                if emit_frames:
+                if send_interface:
+                    _send_frame_to_interface(frame, send_interface)
+                elif emit_frames:
                     if output_format == "candump":
                         output_line = f"({frame['timestamp']:.6f}) {frame.get('interface') or 'can0'} {frame['arbitration_id']:X}#{frame['data'].hex().upper()}"
                     elif output_format == "jsonl":
@@ -304,7 +307,9 @@ def stream_replay(
 
                     last_timestamp = frame["timestamp"]
 
-                    if emit_frames:
+                    if send_interface:
+                        _send_frame_to_interface(frame, send_interface)
+                    elif emit_frames:
                         if output_format == "candump":
                             output_line = f"({frame['timestamp']:.6f}) {frame.get('interface') or 'can0'} {frame['arbitration_id']:X}#{frame['data'].hex().upper()}"
                         elif output_format == "jsonl":
@@ -356,6 +361,30 @@ def _silence_broken_stdout(output: IO[str]) -> None:
         os.close(devnull)
     except (AttributeError, OSError, ValueError):
         pass
+
+
+def _send_frame_to_interface(
+    frame_dict: dict,
+    interface: str,
+) -> None:
+    """Send a parsed frame dict to a live CAN interface."""
+    from canarchy.models import CanFrame
+    from canarchy.transport import LocalTransport, TransportError
+
+    frame = CanFrame(
+        arbitration_id=frame_dict["arbitration_id"],
+        data=frame_dict.get("data", b""),
+        timestamp=frame_dict.get("timestamp"),
+        interface=frame_dict.get("interface", "can0"),
+    )
+    try:
+        LocalTransport().send(interface, frame)
+    except TransportError as exc:
+        raise ConversionError(
+            code=exc.code,
+            message=f"Failed to send frame to {interface}: {exc}",
+            hint=exc.hint,
+        ) from exc
 
 
 def _parse_candump(path: Path) -> Iterator[dict]:

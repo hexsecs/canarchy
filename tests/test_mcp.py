@@ -279,10 +279,36 @@ def test_call_tool_send_invalid_frame_id():
 
 
 def test_call_tool_replay_invalid_rate():
-    results = asyncio.run(handle_call_tool("replay", {"file": "any.candump", "rate": 0.0}))
+    results = asyncio.run(
+        handle_call_tool("replay", {"file": "any.candump", "rate": 0.0, "ack_active": True})
+    )
     payload = json.loads(results[0].text)
     assert payload["ok"] is False
     assert any(e["code"] == "INVALID_RATE" for e in payload["errors"])
+
+
+def test_call_tool_replay_without_ack_active_returns_structured_error():
+    results = asyncio.run(handle_call_tool("replay", {"file": "any.candump"}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_call_tool_replay_ack_active_false_returns_structured_error():
+    results = asyncio.run(handle_call_tool("replay", {"file": "any.candump", "ack_active": False}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_call_tool_replay_defaults_to_dry_run():
+    results = asyncio.run(handle_call_tool("replay", {"file": "any.candump", "ack_active": True}))
+    payload = json.loads(results[0].text)
+    # Should return INVALID_RATE since no file path matches, but the
+    # important assertion is that dry_run was set, so we reach the CLI
+    # without an ACTIVE_TRANSMIT_REQUIRES_ACK gate rejection.
+    assert payload["ok"] is False
+    assert not any(e["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK" for e in payload.get("errors", []))
 
 
 # --- TEST-MCP-09: unknown tool name raises ValueError ----------------------

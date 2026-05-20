@@ -128,6 +128,7 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
+    "replay",
 }
 FUZZ_COMMANDS = {"fuzz payload", "fuzz replay", "fuzz arbitration-id"}
 IMPLEMENTED_COMMANDS = (
@@ -389,6 +390,14 @@ def build_parser() -> CanarchyArgumentParser:
         "--file", required=True, help="path to candump capture file (use - for stdin)"
     )
     replay.add_argument("--rate", type=float, default=1.0)
+    replay.add_argument(
+        "--interface",
+        help="target CAN interface for live transmission (omit for planning-only mode)",
+    )
+    replay.add_argument(
+        "--dry-run", action="store_true", help="plan live transmission without sending frames"
+    )
+    add_active_ack_argument(replay)
     add_output_arguments(replay)
     replay.set_defaults(command="replay")
 
@@ -697,6 +706,10 @@ def build_parser() -> CanarchyArgumentParser:
         action="store_true",
         help="resolve replay source metadata without opening the stream",
     )
+    datasets_replay.add_argument(
+        "--interface", help="target CAN interface for live transmission (omit for stdout streaming)"
+    )
+    add_active_ack_argument(datasets_replay)
     add_output_arguments(datasets_replay)
     datasets_replay.set_defaults(command="datasets replay")
 
@@ -1152,6 +1165,11 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `fuzz {sub}` will transmit mutated frames on `{target}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command == "replay":
+        return (
+            f"warning: `replay` will transmit recorded frames on interface `{args.interface}`; "
+            "use intentionally on a controlled bus."
+        )
     raise AssertionError(f"unsupported active transmit command: {args.command}")
 
 
@@ -1168,6 +1186,8 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         target = getattr(args, "interface", None) or getattr(args, "file", "<input>")
         sub = args.command.removeprefix("fuzz ")
         return f"confirm: type YES to fuzz `{sub}` on `{target}`: "
+    if args.command == "replay":
+        return f"confirm: type YES to replay frames on `{args.interface}`: "
     raise AssertionError(f"unsupported active transmit command: {args.command}")
 
 
@@ -3585,6 +3605,10 @@ def datasets_payload(
             validate_dataset_replay_options(args, replay_source)
             if getattr(args, "dry_run", False):
                 return (dataset_replay_plan(args, replay_source), [], [])
+            interface = getattr(args, "interface", None)
+            live_mode = interface is not None
+            if live_mode:
+                enforce_active_transmit_safety(args)
             if replay_source.get("dynamic_manifest") == "comma-car-segments":
                 from canarchy.comma_segments import resolve_lfs_url
 
@@ -3598,6 +3622,7 @@ def datasets_payload(
                 max_seconds=getattr(args, "max_seconds", None),
                 provenance=dataset_replay_provenance(replay_source),
                 emit_frames=False,
+                send_interface=interface,
             )
         except ConversionError as exc:
             raise CommandError(
@@ -4359,17 +4384,54 @@ def replay_payload(
     transport = LocalTransport()
     frames = transport.frames_from_file(args.file)
     plan = build_replay_plan(frames, rate=args.rate)
-    return (
-        {
-            "duration": plan.duration,
-            "file": args.file,
-            "frame_count": plan.frame_count,
-            "mode": "active",
-            "rate": plan.rate,
-        },
-        plan.events,
-        [],
-    )
+
+    interface = getattr(args, "interface", None)
+    dry_run = getattr(args, "dry_run", False)
+    live_mode = interface is not None and not dry_run
+
+    if live_mode:
+        from canarchy.transport import TransportError
+
+        enforce_active_transmit_safety(args)
+        last_timestamp: float | None = None
+        for i, frame in enumerate(frames):
+            if (
+                i > 0
+                and last_timestamp is not None
+                and frame.timestamp is not None
+                and frame.timestamp > last_timestamp
+            ):
+                delay = (frame.timestamp - last_timestamp) / args.rate
+                if delay > 0:
+                    time.sleep(min(delay, 1.0))
+            last_timestamp = frame.timestamp if frame.timestamp is not None else last_timestamp
+            try:
+                transport.send(interface, frame)
+            except TransportError as exc:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_TRANSPORT_ERROR,
+                    errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+                ) from exc
+
+    data: dict[str, Any] = {
+        "duration": plan.duration,
+        "file": args.file,
+        "frame_count": plan.frame_count,
+        "rate": plan.rate,
+    }
+    if interface is not None:
+        data["interface"] = interface
+        data["mode"] = "dry_run" if dry_run else "active"
+    else:
+        data["mode"] = "active"
+
+    warnings: list[str] = []
+    if dry_run and interface is not None:
+        warnings.append(
+            f"ACTIVE_TRANSMIT_DRY_RUN: {plan.frame_count} frames planned; no transport opened."
+        )
+    return data, plan.events, warnings
 
 
 def session_payload(
@@ -6282,6 +6344,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         and not args.json
         and not getattr(args, "dry_run", False)
         and not getattr(args, "list_files", False)
+        and not getattr(args, "interface", None)
     ):
         return emit_dataset_replay(args)
 

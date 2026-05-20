@@ -2859,6 +2859,75 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_UNAVAILABLE")
 
+    def test_replay_live_transmit_requires_ack_when_config_demands_it(self) -> None:
+        from canarchy import cli as _cli
+
+        with patch.object(_cli, "active_ack_required", return_value=True):
+            exit_code, stdout, _ = run_cli(
+                "replay",
+                "--file",
+                str(FIXTURES / "sample.candump"),
+                "--interface",
+                "vcan0",
+                "--json",
+            )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "ACTIVE_ACK_REQUIRED")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_replay_live_transmit_sends_frames_and_returns_structured_output(
+        self, _mock_cfg
+    ) -> None:
+        exit_code, stdout, _ = run_cli(
+            "replay",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--interface",
+            "vcan0",
+            "--ack-active",
+            "--json",
+            input="YES\n",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["interface"], "vcan0")
+        self.assertEqual(payload["data"]["frame_count"], 3)
+        self.assertEqual(payload["data"]["events"][0]["event_type"], "replay_event")
+
+    def test_replay_dry_run_with_interface_returns_plan_and_warning(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "replay",
+            "--file",
+            str(FIXTURES / "sample.candump"),
+            "--interface",
+            "vcan0",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertEqual(payload["data"]["interface"], "vcan0")
+        self.assertEqual(payload["data"]["frame_count"], 3)
+        self.assertIn("ACTIVE_TRANSMIT_DRY_RUN", payload["warnings"][0])
+
+    def test_replay_without_interface_still_returns_planning_mode(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "replay", "--file", str(FIXTURES / "sample.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertNotIn("interface", payload["data"])
+        self.assertEqual(payload["data"]["frame_count"], 3)
+
     @patch(
         "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
