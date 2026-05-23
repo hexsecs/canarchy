@@ -130,8 +130,10 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "fuzz replay",
     "fuzz arbitration-id",
     "replay",
+    "sequence replay",
 }
 FUZZ_COMMANDS = {"fuzz payload", "fuzz replay", "fuzz arbitration-id"}
+SEQUENCE_COMMANDS = {"sequence replay"}
 IMPLEMENTED_COMMANDS = (
     TRANSPORT_COMMANDS
     | DBC_COMMANDS
@@ -145,6 +147,7 @@ IMPLEMENTED_COMMANDS = (
     | DOCTOR_COMMANDS
     | RE_COMMANDS
     | FUZZ_COMMANDS
+    | SEQUENCE_COMMANDS
     | {"mcp serve", "replay", "gateway", "shell", "export"}
 )
 
@@ -434,6 +437,33 @@ def build_parser() -> CanarchyArgumentParser:
     add_active_ack_argument(replay)
     add_output_arguments(replay)
     replay.set_defaults(command="replay")
+
+    sequence = subparsers.add_parser("sequence", help="sequence-based coordinated CAN transmit")
+    sequence_subparsers = sequence.add_subparsers(dest="sequence_action", required=True)
+    sequence_replay = sequence_subparsers.add_parser(
+        "replay", help="replay a YAML/JSON sequence of DBC-encoded frames"
+    )
+    sequence_replay.add_argument("--file", required=True, help="path to YAML or JSON sequence file")
+    sequence_replay.add_argument(
+        "--interface", help="target CAN interface for live transmission (omit for dry-run)"
+    )
+    sequence_replay.add_argument(
+        "--rate",
+        type=float,
+        default=1.0,
+        help="time-scale factor: 2.0 plays back at 2× speed (default: 1.0)",
+    )
+    sequence_replay.add_argument(
+        "--loop", action="store_true", help="repeat the sequence until interrupted"
+    )
+    sequence_replay.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="plan transmission without opening an interface",
+    )
+    add_active_ack_argument(sequence_replay)
+    add_output_arguments(sequence_replay)
+    sequence_replay.set_defaults(command="sequence replay")
 
     filter_parser = subparsers.add_parser("filter", help="filter recorded traffic")
     filter_parser.add_argument("expression", help="filter expression")
@@ -1223,6 +1253,11 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `replay` will transmit recorded frames on interface `{args.interface}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command == "sequence replay":
+        return (
+            f"warning: `sequence replay` will transmit DBC-encoded frames on interface `{args.interface}`; "
+            "use intentionally on a controlled bus."
+        )
     raise AssertionError(f"unsupported active transmit command: {args.command}")
 
 
@@ -1241,6 +1276,8 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return f"confirm: type YES to fuzz `{sub}` on `{target}`: "
     if args.command == "replay":
         return f"confirm: type YES to replay frames on `{args.interface}`: "
+    if args.command == "sequence replay":
+        return f"confirm: type YES to transmit sequence on `{args.interface}`: "
     raise AssertionError(f"unsupported active transmit command: {args.command}")
 
 
@@ -1401,6 +1438,19 @@ def validate_args(args: argparse.Namespace) -> None:
                     code="INVALID_RATE",
                     message="Replay rate must be greater than zero.",
                     hint="Pass a positive value to --rate, such as 1.0 or 0.5.",
+                )
+            ],
+            data={"rate": args.rate},
+        )
+    if args.command == "sequence replay" and (not math.isfinite(args.rate) or args.rate <= 0):
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_RATE",
+                    message="Sequence replay rate must be a finite positive number.",
+                    hint="Pass a positive value to --rate, such as 1.0 or 2.0.",
                 )
             ],
             data={"rate": args.rate},
@@ -4707,6 +4757,116 @@ def replay_payload(
     return data, plan.events, warnings
 
 
+def sequence_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.sequence import SequenceError, encode_sequence, load_sequence
+
+    try:
+        seq = load_sequence(args.file)
+    except SequenceError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="SEQUENCE_LOAD_ERROR",
+                    message=str(exc),
+                    hint="Ensure the file exists, is valid YAML or JSON, and follows the sequence schema.",
+                )
+            ],
+        ) from exc
+
+    try:
+        encoded_steps = encode_sequence(seq)
+    except SequenceError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="SEQUENCE_ENCODE_ERROR",
+                    message=str(exc),
+                    hint="Check that the DBC file is accessible and each frame id matches a message in the DBC.",
+                )
+            ],
+        ) from exc
+
+    interface = getattr(args, "interface", None)
+    dry_run = getattr(args, "dry_run", False)
+    rate = getattr(args, "rate", 1.0)
+    loop = getattr(args, "loop", False)
+    live_mode = interface is not None and not dry_run
+
+    if live_mode:
+        enforce_active_transmit_safety(args)
+
+    events: list[dict[str, Any]] = [
+        {
+            "event_type": "sequence_step",
+            "source": "sequence.replay",
+            "timestamp": None,
+            "payload": step,
+        }
+        for step in encoded_steps
+    ]
+
+    if live_mode:
+        from canarchy.models import CanFrame
+
+        def _transmit_once() -> None:
+            for step in encoded_steps:
+                effective_delay_s = step["delay_ms"] / rate / 1000.0
+                if effective_delay_s > 0:
+                    time.sleep(effective_delay_s)
+                for frame_data in step["frames"]:
+                    frame = CanFrame(
+                        arbitration_id=frame_data["frame_id"],
+                        data=bytes.fromhex(frame_data["data"]),
+                        is_extended_id=frame_data["is_extended_id"],
+                        interface=interface,
+                        timestamp=0.0,
+                    )
+                    try:
+                        LocalTransport().send(interface, frame)
+                    except TransportError as exc:
+                        raise CommandError(
+                            command=args.command,
+                            exit_code=EXIT_TRANSPORT_ERROR,
+                            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+                        ) from exc
+
+        if loop:
+            try:
+                while True:
+                    _transmit_once()
+            except KeyboardInterrupt:
+                pass
+        else:
+            _transmit_once()
+
+    total_frames = sum(s["frame_count"] for s in encoded_steps)
+    data: dict[str, Any] = {
+        "file": args.file,
+        "step_count": len(encoded_steps),
+        "frame_count": total_frames,
+        "rate": rate,
+        "loop": loop,
+    }
+    if interface is not None:
+        data["interface"] = interface
+        data["mode"] = "dry_run" if dry_run else "active"
+    else:
+        data["mode"] = "plan"
+
+    warnings: list[str] = []
+    if dry_run:
+        warnings.append(
+            f"ACTIVE_TRANSMIT_DRY_RUN: {total_frames} frames planned; no transport opened."
+        )
+    return data, events, warnings
+
+
 def session_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -5037,6 +5197,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(replay_data)
         data["events"] = replay_events
         warnings.extend(replay_warnings)
+    elif args.command in SEQUENCE_COMMANDS:
+        seq_data, seq_events, seq_warnings = sequence_payload(args)
+        data.update(seq_data)
+        data["events"] = seq_events
+        warnings.extend(seq_warnings)
     elif args.command in SESSION_COMMANDS:
         session_data, session_events, session_warnings = session_payload(args)
         data.update(session_data)
