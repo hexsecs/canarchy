@@ -277,6 +277,29 @@ _TOOLS: list[types.Tool] = [
                     "description": "Return signal-centric metadata without full message definitions",
                     "default": False,
                 },
+                "search": {
+                    "type": "string",
+                    "description": "Case-insensitive regex/substring filter on message and signal names",
+                },
+            },
+            "required": ["dbc"],
+        },
+    ),
+    types.Tool(
+        name="dbc_signals",
+        description="List and search signals from a DBC file (signal-centric view).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "dbc": {"type": "string", "description": "Path to DBC file or provider ref"},
+                "message": {
+                    "type": "string",
+                    "description": "Restrict results to a single message name",
+                },
+                "search": {
+                    "type": "string",
+                    "description": "Case-insensitive regex/substring filter on message and signal names",
+                },
             },
             "required": ["dbc"],
         },
@@ -1294,6 +1317,15 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--message", a["message"]]
             if a.get("signals_only"):
                 argv.append("--signals-only")
+            if a.get("search"):
+                argv += ["--search", a["search"]]
+            return argv + ["--json"]
+        case "dbc_signals":
+            argv = ["dbc", "signals", a["dbc"]]
+            if a.get("message"):
+                argv += ["--message", a["message"]]
+            if a.get("search"):
+                argv += ["--search", a["search"]]
             return argv + ["--json"]
         case "export":
             return ["export", a["source"], a["destination"], "--json"]

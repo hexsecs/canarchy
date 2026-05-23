@@ -396,6 +396,24 @@ class CliTests(unittest.TestCase):
         "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
     )
+    def test_send_raw_dry_run_does_not_transmit(self, _mock_cfg) -> None:
+        with patch(
+            "canarchy.cli.LocalTransport.send_events",
+            side_effect=AssertionError("send_events must not be called in dry-run"),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "send", "can0", "0x123", "11223344", "--dry-run", "--json"
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertEqual(payload["data"]["frame"]["arbitration_id"], 0x123)
+        self.assertEqual(payload["data"]["events"], [])
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_send_dbc_active_transmits_frame(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
@@ -4544,6 +4562,113 @@ class CliTests(unittest.TestCase):
         self.assertEqual(signal["length"], 8)
         self.assertEqual(signal["offset"], -40)
         self.assertEqual(signal["unit"], "degC")
+
+    def test_dbc_inspect_search_filters_by_signal_name(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--search", "coolant", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        messages = payload["data"]["messages"]
+        self.assertEqual(len(messages), 1)
+        signal_names = [s["name"] for s in messages[0]["signals"]]
+        self.assertIn("CoolantTemp", signal_names)
+        self.assertNotIn("OilTemp", signal_names)
+
+    def test_dbc_inspect_search_with_signals_only(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--signals-only",
+            "--search",
+            "temp",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        names = [s["name"] for s in payload["data"]["signals"]]
+        self.assertIn("CoolantTemp", names)
+        self.assertIn("OilTemp", names)
+        self.assertNotIn("Load", names)
+
+    def test_dbc_inspect_search_no_match_returns_empty(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--search",
+            "nonexistentsignal",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["messages"], [])
+
+    def test_dbc_signals_returns_signal_centric_output(self) -> None:
+        exit_code, stdout, _ = run_cli("dbc", "signals", str(FIXTURES / "sample.dbc"), "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["signal_count"], 6)
+        self.assertEqual(len(payload["data"]["signals"]), 6)
+
+    def test_dbc_signals_search_filters_results(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "signals", str(FIXTURES / "sample.dbc"), "--search", "coolant", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        names = [s["name"] for s in payload["data"]["signals"]]
+        self.assertEqual(names, ["CoolantTemp"])
+
+    def test_dbc_signals_text_output_lists_signal_rows(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "signals", str(FIXTURES / "sample.dbc"), "--search", "temp"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("CoolantTemp", stdout)
+        self.assertIn("OilTemp", stdout)
+        self.assertNotIn("Load", stdout)
+
+    def test_dbc_inspect_search_is_case_insensitive(self) -> None:
+        exit_code_lower, stdout_lower, _ = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--search", "COOLANT", "--json"
+        )
+        exit_code_upper, stdout_upper, _ = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--search", "coolant", "--json"
+        )
+        self.assertEqual(exit_code_lower, EXIT_OK)
+        self.assertEqual(exit_code_upper, EXIT_OK)
+        self.assertEqual(
+            json.loads(stdout_lower)["data"]["messages"],
+            json.loads(stdout_upper)["data"]["messages"],
+        )
+
+    def test_dbc_inspect_search_filters_jsonl_events(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--search", "coolant", "--jsonl"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        events = [json.loads(line) for line in stdout.strip().splitlines()]
+        signal_events = [e for e in events if e.get("event_type") == "dbc_signal"]
+        signal_names = [e["payload"]["name"] for e in signal_events]
+        self.assertIn("CoolantTemp", signal_names)
+        self.assertNotIn("OilTemp", signal_names)
+        self.assertNotIn("Load", signal_names)
+
+    def test_dbc_signals_search_filters_jsonl_events(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "signals", str(FIXTURES / "sample.dbc"), "--search", "temp", "--jsonl"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        events = [json.loads(line) for line in stdout.strip().splitlines()]
+        signal_events = [e for e in events if e.get("event_type") == "dbc_signal"]
+        signal_names = [e["payload"]["name"] for e in signal_events]
+        self.assertIn("CoolantTemp", signal_names)
+        self.assertIn("OilTemp", signal_names)
+        self.assertNotIn("Load", signal_names)
 
 
 class CompletionTests(unittest.TestCase):
