@@ -346,9 +346,19 @@ class CliTests(unittest.TestCase):
     def test_send_dbc_dry_run_returns_encoded_frame(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
-            "send", "can0", "--dbc", dbc, "--message", "EngineStatus1",
-            "--signals", "CoolantTemp=80", "OilTemp=90", "Load=50", "LampState=0",
-            "--dry-run", "--json",
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=80",
+            "OilTemp=90",
+            "Load=50",
+            "LampState=0",
+            "--dry-run",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -365,9 +375,18 @@ class CliTests(unittest.TestCase):
     def test_send_dbc_dry_run_no_interface_allowed(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
-            "send", "--dbc", dbc, "--message", "EngineStatus1",
-            "--signals", "CoolantTemp=80", "OilTemp=90", "Load=50", "LampState=0",
-            "--dry-run", "--json",
+            "send",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=80",
+            "OilTemp=90",
+            "Load=50",
+            "LampState=0",
+            "--dry-run",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -380,8 +399,17 @@ class CliTests(unittest.TestCase):
     def test_send_dbc_active_transmits_frame(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
-            "send", "can0", "--dbc", dbc, "--message", "EngineStatus1",
-            "--signals", "CoolantTemp=55", "OilTemp=60", "Load=40", "LampState=0",
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=55",
+            "OilTemp=60",
+            "Load=40",
+            "LampState=0",
             "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
@@ -406,9 +434,20 @@ class CliTests(unittest.TestCase):
 
         with patch("canarchy.cli.LocalTransport.send_events", new=fake_send_events):
             exit_code, stdout, stderr = run_cli(
-                "send", "can0", "--dbc", dbc, "--message", "EngineStatus1",
-                "--signals", "CoolantTemp=55", "OilTemp=60", "Load=40", "LampState=0",
-                "--count", "3", "--json",
+                "send",
+                "can0",
+                "--dbc",
+                dbc,
+                "--message",
+                "EngineStatus1",
+                "--signals",
+                "CoolantTemp=55",
+                "OilTemp=60",
+                "Load=40",
+                "LampState=0",
+                "--count",
+                "3",
+                "--json",
             )
 
         self.assertEqual(exit_code, EXIT_OK)
@@ -421,7 +460,13 @@ class CliTests(unittest.TestCase):
     def test_send_dbc_missing_message_flag_is_error(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
-            "send", "can0", "--dbc", dbc, "--signals", "CoolantTemp=55", "--json",
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--signals",
+            "CoolantTemp=55",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         payload = json.loads(stdout)
@@ -434,8 +479,15 @@ class CliTests(unittest.TestCase):
     def test_send_dbc_bad_signal_assignment_is_error(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
-            "send", "can0", "--dbc", dbc, "--message", "EngineStatus1",
-            "--signals", "CoolantTemp", "--json",
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         payload = json.loads(stdout)
@@ -448,8 +500,15 @@ class CliTests(unittest.TestCase):
     def test_send_dbc_invalid_count_is_error(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
-            "send", "can0", "--dbc", dbc, "--message", "EngineStatus1",
-            "--count", "0", "--json",
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--count",
+            "0",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         payload = json.loads(stdout)
@@ -462,8 +521,17 @@ class CliTests(unittest.TestCase):
     def test_send_dbc_invalid_rate_is_error(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
-            "send", "can0", "--dbc", dbc, "--message", "EngineStatus1",
-            "--signals", "CoolantTemp=55", "--rate", "-1", "--json",
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=55",
+            "--rate",
+            "-1",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         payload = json.loads(stdout)
