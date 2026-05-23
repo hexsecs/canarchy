@@ -541,6 +541,29 @@ class CliTests(unittest.TestCase):
         "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
     )
+    def test_send_dbc_nan_rate_is_error(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=55",
+            "--rate",
+            "nan",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_RATE")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_capture_candump_streams_fixture_frames_on_scaffold(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--candump")
         self.assertEqual(exit_code, EXIT_OK)

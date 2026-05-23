@@ -7,6 +7,7 @@ import hashlib
 import itertools
 import json
 import logging
+import math
 import os
 import shlex
 import sys
@@ -1291,7 +1292,7 @@ def prepare_args(args: argparse.Namespace) -> None:
         return
     if args.command == "fuzz replay":
         return
-    if args.command == "send" and getattr(args, "dry_run", False):
+    if args.command == "send" and getattr(args, "dry_run", False) and getattr(args, "dbc", None):
         return
     raise CommandError(
         command=args.command,
@@ -1474,7 +1475,9 @@ def validate_args(args: argparse.Namespace) -> None:
                         ],
                         data={"signal": assignment},
                     )
-            if getattr(args, "rate", None) is not None and args.rate <= 0:
+            if getattr(args, "rate", None) is not None and (
+                not math.isfinite(args.rate) or args.rate <= 0
+            ):
                 raise CommandError(
                     command=args.command,
                     exit_code=EXIT_USER_ERROR,
