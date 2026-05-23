@@ -4858,6 +4858,34 @@ class SequenceReplayTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["rate"], 2.0)
 
+    def test_sequence_replay_nan_delay_ms_is_load_error(self) -> None:
+        import tempfile
+        import json as _json
+
+        seq = {"steps": [{"delay_ms": float("nan"), "frames": []}]}
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            _json.dump(seq, f)
+            fname = f.name
+
+        exit_code, stdout, _ = run_cli("sequence", "replay", "--file", fname, "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "SEQUENCE_LOAD_ERROR")
+
+    def test_sequence_replay_negative_delay_ms_is_load_error(self) -> None:
+        import tempfile
+        import json as _json
+
+        seq = {"steps": [{"delay_ms": -10, "frames": []}]}
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            _json.dump(seq, f)
+            fname = f.name
+
+        exit_code, stdout, _ = run_cli("sequence", "replay", "--file", fname, "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "SEQUENCE_LOAD_ERROR")
+
 
 class CompletionTests(unittest.TestCase):
     """Tests for tab completion in the shell and TUI."""

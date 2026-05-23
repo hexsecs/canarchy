@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,8 @@ def _parse_step(raw: Any) -> SequenceStep:
     delay_ms = raw.get("delay_ms", 0)
     if not isinstance(delay_ms, (int, float)):
         raise SequenceError(f"'delay_ms' must be a number, got {type(delay_ms).__name__}")
+    if not math.isfinite(float(delay_ms)) or float(delay_ms) < 0:
+        raise SequenceError(f"'delay_ms' must be a finite non-negative number, got {delay_ms!r}")
 
     raw_frames = raw.get("frames", [])
     if not isinstance(raw_frames, list):
