@@ -69,7 +69,7 @@ EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
-DBC_COMMANDS = {"decode", "encode", "dbc inspect"}
+DBC_COMMANDS = {"decode", "encode", "dbc inspect", "dbc signals"}
 DBC_PROVIDER_COMMANDS = {
     "dbc provider list",
     "dbc search",
@@ -497,8 +497,27 @@ def build_parser() -> CanarchyArgumentParser:
         action="store_true",
         help="emit signal-centric metadata instead of full message definitions",
     )
+    dbc_inspect.add_argument(
+        "--search",
+        metavar="PATTERN",
+        help="case-insensitive regex/substring filter on message and signal names",
+    )
     add_output_arguments(dbc_inspect)
     dbc_inspect.set_defaults(command="dbc inspect")
+
+    dbc_signals = dbc_subparsers.add_parser(
+        "signals",
+        help="list and search signals from a DBC file",
+    )
+    dbc_signals.add_argument("dbc")
+    dbc_signals.add_argument("--message", help="restrict output to a single message name")
+    dbc_signals.add_argument(
+        "--search",
+        metavar="PATTERN",
+        help="case-insensitive regex/substring filter on message and signal names",
+    )
+    add_output_arguments(dbc_signals)
+    dbc_signals.set_defaults(command="dbc signals")
 
     dbc_provider = dbc_subparsers.add_parser("provider", help="manage DBC providers")
     dbc_provider_subparsers = dbc_provider.add_subparsers(dest="dbc_provider_action", required=True)
@@ -3354,6 +3373,40 @@ def _build_dbc_source(resolution: Any) -> dict[str, Any]:
     }
 
 
+def _filter_dbc_payload_by_search(
+    payload: dict[str, Any],
+    pattern: str,
+    *,
+    signals_only: bool,
+) -> dict[str, Any]:
+    import re as _re
+
+    try:
+        regex = _re.compile(pattern, _re.IGNORECASE)
+    except _re.error:
+        regex = _re.compile(_re.escape(pattern), _re.IGNORECASE)
+
+    if signals_only:
+        filtered = [
+            sig
+            for sig in payload.get("signals", [])
+            if regex.search(sig["name"]) or regex.search(sig["message_name"])
+        ]
+        return {**payload, "signals": filtered, "signal_count": len(filtered)}
+
+    filtered_messages = []
+    for msg in payload.get("messages", []):
+        if regex.search(msg["name"]):
+            filtered_messages.append(msg)
+        else:
+            matching_signals = [sig for sig in msg.get("signals", []) if regex.search(sig["name"])]
+            if matching_signals:
+                filtered_messages.append(
+                    {**msg, "signals": matching_signals, "signal_count": len(matching_signals)}
+                )
+    return {**payload, "messages": filtered_messages}
+
+
 def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     from canarchy.dbc_provider import get_registry
 
@@ -3416,6 +3469,20 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             message_name=args.message,
             signals_only=args.signals_only,
         )
+        search = getattr(args, "search", None)
+        if search:
+            data = _filter_dbc_payload_by_search(data, search, signals_only=bool(args.signals_only))
+        data["dbc_source"] = dbc_source
+        return (data, events, [])
+    if args.command == "dbc signals":
+        data, events = inspect_database(
+            dbc_path,
+            message_name=args.message,
+            signals_only=True,
+        )
+        search = getattr(args, "search", None)
+        if search:
+            data = _filter_dbc_payload_by_search(data, search, signals_only=True)
         data["dbc_source"] = dbc_source
         return (data, events, [])
     raise AssertionError(f"unsupported dbc command: {args.command}")
@@ -5591,7 +5658,7 @@ def format_dbc_table(result: CommandResult) -> list[str]:
     db = result.data.get("database", {})
     if db:
         lines.append(f"path: {db.get('path', '')}")
-        if result.data.get("signals_only"):
+        if result.data.get("signals_only") or result.command == "dbc signals":
             lines.append(f"signals: {result.data.get('signal_count', 0)}")
             for signal in result.data.get("signals", []):
                 unit = f"  [{signal['unit']}]" if signal.get("unit") else ""
@@ -6182,7 +6249,7 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             print(f"warning: {warning}")
         return
 
-    if output_format == "text" and result.ok and result.command == "dbc inspect":
+    if output_format == "text" and result.ok and result.command in {"dbc inspect", "dbc signals"}:
         for line in format_dbc_table(result):
             print(line)
         for warning in payload["warnings"]:
