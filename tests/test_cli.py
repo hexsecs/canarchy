@@ -343,6 +343,227 @@ class CliTests(unittest.TestCase):
         "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
     )
+    def test_send_dbc_dry_run_returns_encoded_frame(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=80",
+            "OilTemp=90",
+            "Load=50",
+            "LampState=0",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertEqual(payload["data"]["message"], "EngineStatus1")
+        self.assertEqual(payload["data"]["signals"]["CoolantTemp"], 80)
+        self.assertIn("arbitration_id", payload["data"]["frame"])
+        self.assertEqual(payload["data"]["events"], [])
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_dry_run_no_interface_allowed(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=80",
+            "OilTemp=90",
+            "Load=50",
+            "LampState=0",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_active_transmits_frame(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=55",
+            "OilTemp=60",
+            "Load=40",
+            "LampState=0",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("warning: `send` will transmit a CAN frame", stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["message"], "EngineStatus1")
+        self.assertEqual(payload["data"]["signals"]["CoolantTemp"], 55)
+        self.assertGreater(len(payload["data"]["events"]), 0)
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_count_sends_multiple_frames(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        sent: list[object] = []
+
+        def fake_send_events(_transport, _interface, _frame):
+            sent.append(_frame)
+            return []
+
+        with patch("canarchy.cli.LocalTransport.send_events", new=fake_send_events):
+            exit_code, stdout, stderr = run_cli(
+                "send",
+                "can0",
+                "--dbc",
+                dbc,
+                "--message",
+                "EngineStatus1",
+                "--signals",
+                "CoolantTemp=55",
+                "OilTemp=60",
+                "Load=40",
+                "LampState=0",
+                "--count",
+                "3",
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(len(sent), 3)
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_missing_message_flag_is_error(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--signals",
+            "CoolantTemp=55",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "MISSING_MESSAGE")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_bad_signal_assignment_is_error(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_SIGNAL_ASSIGNMENT")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_invalid_count_is_error(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--count",
+            "0",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_COUNT")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_invalid_rate_is_error(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=55",
+            "--rate",
+            "-1",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_RATE")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_nan_rate_is_error(self, _mock_cfg) -> None:
+        dbc = str(FIXTURES / "sample.dbc")
+        exit_code, stdout, stderr = run_cli(
+            "send",
+            "can0",
+            "--dbc",
+            dbc,
+            "--message",
+            "EngineStatus1",
+            "--signals",
+            "CoolantTemp=55",
+            "--rate",
+            "nan",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_RATE")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_capture_candump_streams_fixture_frames_on_scaffold(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli("capture", "can0", "--candump")
         self.assertEqual(exit_code, EXIT_OK)

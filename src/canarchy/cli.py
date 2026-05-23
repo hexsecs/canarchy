@@ -7,6 +7,7 @@ import hashlib
 import itertools
 import json
 import logging
+import math
 import os
 import shlex
 import sys
@@ -348,9 +349,42 @@ def build_parser() -> CanarchyArgumentParser:
     send = subparsers.add_parser("send", help="send CAN frames")
     send.add_argument(
         "send_args",
-        nargs="+",
+        nargs="*",
         metavar="interface frame_id data",
         help="CAN interface plus frame ID and payload, or frame ID and payload when a default interface is configured",
+    )
+    send.add_argument("--dbc", help="DBC file path or provider ref (e.g. opendbc:name)")
+    send.add_argument("--message", help="DBC message name to encode (requires --dbc)")
+    send.add_argument(
+        "--signals",
+        nargs="*",
+        default=[],
+        metavar="KEY=VALUE",
+        help="signal values to encode, e.g. CoolantTemp=55 (requires --dbc and --message)",
+    )
+    send.add_argument(
+        "--crc-algorithm",
+        choices=("stellantis", "sae-j1850", "fca-giorgio"),
+        default=None,
+        help="CRC algorithm override for DBC encode (default: auto-detect from DBC filename)",
+    )
+    send.add_argument(
+        "--rate",
+        type=float,
+        default=None,
+        metavar="HZ",
+        help="repeat rate in frames per second",
+    )
+    send.add_argument(
+        "--count",
+        type=int,
+        default=1,
+        help="number of frames to send (default: 1)",
+    )
+    send.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the encoded frame without transmitting",
     )
     add_active_ack_argument(send)
     add_output_arguments(send)
@@ -1207,7 +1241,25 @@ INTERFACE_FALLBACK_COMMANDS = {
 def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "send":
         send_args = getattr(args, "send_args", [])
-        if len(send_args) == 3:
+        dbc_mode = bool(getattr(args, "dbc", None))
+        if dbc_mode:
+            if len(send_args) == 1:
+                args.interface = send_args[0]
+            elif len(send_args) == 0:
+                args.interface = None
+            else:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_ARGUMENTS",
+                            message="send --dbc accepts at most one positional argument: the CAN interface.",
+                            hint="Usage: canarchy send [interface] --dbc <dbc> --message <msg> --signals KEY=VAL ...",
+                        )
+                    ],
+                )
+        elif len(send_args) == 3:
             args.interface, args.frame_id, args.data = send_args
         elif len(send_args) == 2:
             args.interface = None
@@ -1239,6 +1291,8 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "j1939 monitor":
         return
     if args.command == "fuzz replay":
+        return
+    if args.command == "send" and getattr(args, "dry_run", False) and getattr(args, "dbc", None):
         return
     raise CommandError(
         command=args.command,
@@ -1364,35 +1418,91 @@ def validate_args(args: argparse.Namespace) -> None:
                 )
 
     if args.command == "send":
-        try:
-            int(args.frame_id, 0)
-        except ValueError as exc:
-            raise CommandError(
-                command=args.command,
-                exit_code=EXIT_USER_ERROR,
-                errors=[
-                    ErrorDetail(
-                        code="INVALID_FRAME_ID",
-                        message="Frame ID must be an integer such as 0x123 or 291.",
-                        hint="Pass a standard or extended CAN identifier.",
-                    )
-                ],
-                data={"frame_id": args.frame_id},
-            ) from exc
+        if not getattr(args, "dbc", None):
+            try:
+                int(args.frame_id, 0)
+            except ValueError as exc:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_FRAME_ID",
+                            message="Frame ID must be an integer such as 0x123 or 291.",
+                            hint="Pass a standard or extended CAN identifier.",
+                        )
+                    ],
+                    data={"frame_id": args.frame_id},
+                ) from exc
 
-        if len(args.data) % 2 != 0:
-            raise CommandError(
-                command=args.command,
-                exit_code=EXIT_USER_ERROR,
-                errors=[
-                    ErrorDetail(
-                        code="INVALID_FRAME_DATA",
-                        message="Frame data must contain an even number of hex characters.",
-                        hint="Use pairs of hex digits such as 11223344.",
+            if len(args.data) % 2 != 0:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_FRAME_DATA",
+                            message="Frame data must contain an even number of hex characters.",
+                            hint="Use pairs of hex digits such as 11223344.",
+                        )
+                    ],
+                    data={"data": args.data},
+                )
+        else:
+            if not getattr(args, "message", None):
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="MISSING_MESSAGE",
+                            message="--message is required when --dbc is specified.",
+                            hint="Pass the DBC message name, e.g. `--message EngineStatus1`.",
+                        )
+                    ],
+                )
+            for assignment in getattr(args, "signals", []) or []:
+                if "=" not in assignment:
+                    raise CommandError(
+                        command=args.command,
+                        exit_code=EXIT_USER_ERROR,
+                        errors=[
+                            ErrorDetail(
+                                code="INVALID_SIGNAL_ASSIGNMENT",
+                                message="Signal assignments must use key=value syntax.",
+                                hint="Pass signal values like `CoolantTemp=55`.",
+                            )
+                        ],
+                        data={"signal": assignment},
                     )
-                ],
-                data={"data": args.data},
-            )
+            if getattr(args, "rate", None) is not None and (
+                not math.isfinite(args.rate) or args.rate <= 0
+            ):
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_RATE",
+                            message="--rate must be greater than zero.",
+                            hint="Pass a positive value such as `--rate 10`.",
+                        )
+                    ],
+                    data={"rate": args.rate},
+                )
+            if args.count < 1:
+                raise CommandError(
+                    command=args.command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="INVALID_COUNT",
+                            message="--count must be a positive integer.",
+                            hint="Pass a positive integer such as `--count 5`.",
+                        )
+                    ],
+                    data={"count": args.count},
+                )
 
     if args.command == "generate":
         if args.id.upper() != "R":
@@ -2625,6 +2735,48 @@ def transport_payload(
             [],
         )
     if args.command == "send":
+        if getattr(args, "dbc", None):
+            import time as _time
+            from canarchy.dbc_provider import get_registry
+
+            resolution = get_registry().resolve(args.dbc)
+            dbc_path = str(resolution.local_path)
+            dbc_source = _build_dbc_source(resolution)
+            signals = parse_signal_assignments(args.signals or [])
+            frame, _ = encode_message(
+                dbc_path,
+                args.message,
+                signals,
+                interface=args.interface,
+                crc_algorithm=args.crc_algorithm,
+            )
+            dry_run = getattr(args, "dry_run", False)
+            count = args.count
+            rate = args.rate
+            base_data: dict[str, Any] = {
+                "dbc": args.dbc,
+                "dbc_source": dbc_source,
+                "message": args.message,
+                "signals": signals,
+                "frame": frame.to_payload(),
+                "count": count,
+                "rate": rate,
+                "interface": args.interface,
+                **backend_metadata,
+                "status": "implemented",
+                "implementation": implementation,
+            }
+            if dry_run:
+                base_data["mode"] = "dry_run"
+                return (base_data, [], [])
+            enforce_active_transmit_safety(args)
+            base_data["mode"] = "active"
+            all_events: list[dict[str, Any]] = []
+            for i in range(count):
+                all_events.extend(transport.send_events(args.interface, frame))
+                if rate and i < count - 1:
+                    _time.sleep(1.0 / rate)
+            return (base_data, all_events, [])
         frame = parse_send_frame(args)
         enforce_active_transmit_safety(args)
         return (
