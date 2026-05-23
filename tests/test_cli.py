@@ -4671,6 +4671,222 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("Load", signal_names)
 
 
+class SequenceReplayTests(unittest.TestCase):
+    """Tests for `canarchy sequence replay` (#362)."""
+
+    def test_sequence_replay_dry_run_returns_plan(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["command"], "sequence replay")
+        self.assertEqual(payload["data"]["step_count"], 2)
+        self.assertEqual(payload["data"]["frame_count"], 3)
+        self.assertEqual(payload["data"]["rate"], 1.0)
+        self.assertFalse(payload["data"]["loop"])
+        self.assertIn("ACTIVE_TRANSMIT_DRY_RUN", payload["warnings"][0])
+
+    def test_sequence_replay_events_contain_step_payloads(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        events = payload["data"]["events"]
+        self.assertEqual(len(events), 2)
+        self.assertTrue(all(e["event_type"] == "sequence_step" for e in events))
+        self.assertEqual(events[0]["payload"]["step"], 0)
+        self.assertEqual(events[0]["payload"]["delay_ms"], 0.0)
+        self.assertEqual(events[0]["payload"]["frame_count"], 1)
+        self.assertEqual(events[1]["payload"]["step"], 1)
+        self.assertEqual(events[1]["payload"]["delay_ms"], 100.0)
+        self.assertEqual(events[1]["payload"]["frame_count"], 2)
+
+    def test_sequence_replay_frames_are_dbc_encoded(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        step0_frame = payload["data"]["events"][0]["payload"]["frames"][0]
+        self.assertEqual(step0_frame["frame_id"], 0x18FEEE31)
+        self.assertIsInstance(step0_frame["data"], str)
+        self.assertGreater(len(step0_frame["data"]), 0)
+        self.assertEqual(step0_frame["message_name"], "EngineStatus1")
+
+    def test_sequence_replay_jsonl_emits_one_line_per_step(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--dry-run",
+            "--jsonl",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        lines = [json.loads(line) for line in stdout.strip().splitlines()]
+        step_events = [ev for ev in lines if ev.get("event_type") == "sequence_step"]
+        self.assertEqual(len(step_events), 2)
+
+    def test_sequence_replay_plan_mode_without_interface(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "plan")
+        self.assertNotIn("interface", payload["data"])
+
+    def test_sequence_replay_dry_run_with_interface_shows_dry_run_mode(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--interface",
+            "vcan0",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertEqual(payload["data"]["interface"], "vcan0")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_sequence_replay_active_transmit_sends_frames(self, _mock_cfg) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--interface",
+            "vcan0",
+            "--ack-active",
+            "--json",
+            input="YES\n",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["interface"], "vcan0")
+        self.assertEqual(payload["data"]["frame_count"], 3)
+
+    def test_sequence_replay_active_transmit_requires_ack_when_config_demands_it(
+        self,
+    ) -> None:
+        from canarchy import cli as _cli
+
+        with patch.object(_cli, "active_ack_required", return_value=True):
+            exit_code, stdout, _ = run_cli(
+                "sequence",
+                "replay",
+                "--file",
+                str(FIXTURES / "sequence_sample.json"),
+                "--interface",
+                "vcan0",
+                "--json",
+            )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "ACTIVE_ACK_REQUIRED")
+
+    def test_sequence_replay_invalid_rate_is_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--rate",
+            "0",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_RATE")
+
+    def test_sequence_replay_missing_file_is_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            "/tmp/no-such-sequence.json",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "SEQUENCE_LOAD_ERROR")
+
+    def test_sequence_replay_rate_scales_effective_delay(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "sequence",
+            "replay",
+            "--file",
+            str(FIXTURES / "sequence_sample.json"),
+            "--rate",
+            "2.0",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["rate"], 2.0)
+
+    def test_sequence_replay_nan_delay_ms_is_load_error(self) -> None:
+        import tempfile
+        import json as _json
+
+        seq = {"steps": [{"delay_ms": float("nan"), "frames": []}]}
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            _json.dump(seq, f)
+            fname = f.name
+
+        exit_code, stdout, _ = run_cli("sequence", "replay", "--file", fname, "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "SEQUENCE_LOAD_ERROR")
+
+    def test_sequence_replay_negative_delay_ms_is_load_error(self) -> None:
+        import tempfile
+        import json as _json
+
+        seq = {"steps": [{"delay_ms": -10, "frames": []}]}
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            _json.dump(seq, f)
+            fname = f.name
+
+        exit_code, stdout, _ = run_cli("sequence", "replay", "--file", fname, "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "SEQUENCE_LOAD_ERROR")
+
+
 class CompletionTests(unittest.TestCase):
     """Tests for tab completion in the shell and TUI."""
 

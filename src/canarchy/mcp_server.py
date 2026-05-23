@@ -154,6 +154,44 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="sequence_replay",
+        description="Replay a YAML/JSON sequence of DBC-encoded CAN frames with configurable timing.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {
+                    "type": "string",
+                    "description": "Path to the YAML or JSON sequence file",
+                },
+                "interface": {
+                    "type": "string",
+                    "description": "Target CAN interface for live transmission (omit for dry-run)",
+                },
+                "rate": {
+                    "type": "number",
+                    "description": "Time-scale factor: 2.0 plays at 2× speed (default: 1.0)",
+                    "default": 1.0,
+                },
+                "loop": {
+                    "type": "boolean",
+                    "description": "Repeat the sequence until interrupted",
+                    "default": False,
+                },
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory acknowledgement for live transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Plan without transmitting (default: true for MCP)",
+                    "default": True,
+                },
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
         name="filter",
         description="Filter CAN frames from a capture file by expression.",
         inputSchema={
@@ -1274,6 +1312,19 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("dry_run", True):
                 argv += ["--dry-run"]
             return argv + ["--json"]
+        case "sequence_replay":
+            argv = ["sequence", "replay", "--file", a["file"]]
+            if "rate" in a:
+                argv += ["--rate", str(a["rate"])]
+            if a.get("interface"):
+                argv += ["--interface", a["interface"]]
+            if a.get("loop"):
+                argv += ["--loop"]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
+            return argv + ["--json"]
         case "filter":
             argv = ["filter", a["expression"], "--file", a["file"]]
             if a.get("offset") is not None and a["offset"] > 0:
@@ -1669,6 +1720,7 @@ _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
         "fuzz_replay",
         "fuzz_arbitration_id",
         "replay",
+        "sequence_replay",
     }
 )
 

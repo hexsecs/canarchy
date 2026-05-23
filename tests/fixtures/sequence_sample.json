@@ -1,0 +1,43 @@
+{
+  "dbc": "tests/fixtures/sample.dbc",
+  "steps": [
+    {
+      "delay_ms": 0,
+      "frames": [
+        {
+          "id": "0x18FEEE31",
+          "is_extended_id": true,
+          "signals": {
+            "CoolantTemp": 80,
+            "OilTemp": 90,
+            "Load": 50,
+            "LampState": 0
+          }
+        }
+      ]
+    },
+    {
+      "delay_ms": 100,
+      "frames": [
+        {
+          "id": "0x18FEEE31",
+          "is_extended_id": true,
+          "signals": {
+            "CoolantTemp": 85,
+            "OilTemp": 95,
+            "Load": 60,
+            "LampState": 1
+          }
+        },
+        {
+          "id": "0x18F00431",
+          "is_extended_id": true,
+          "signals": {
+            "EngineSpeed": 1500,
+            "TorqueMode": 0
+          }
+        }
+      ]
+    }
+  ]
+}
