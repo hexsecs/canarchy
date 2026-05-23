@@ -2797,6 +2797,19 @@ def transport_payload(
                     _time.sleep(1.0 / rate)
             return (base_data, all_events, [])
         frame = parse_send_frame(args)
+        if getattr(args, "dry_run", False):
+            return (
+                {
+                    "mode": "dry_run",
+                    "interface": args.interface,
+                    "frame": frame.to_payload(),
+                    **backend_metadata,
+                    "status": "implemented",
+                    "implementation": implementation,
+                },
+                [],
+                [],
+            )
         enforce_active_transmit_safety(args)
         return (
             {
@@ -3373,6 +3386,44 @@ def _build_dbc_source(resolution: Any) -> dict[str, Any]:
     }
 
 
+def _filter_dbc_events_by_search(
+    events: list[dict[str, Any]],
+    filtered_payload: dict[str, Any],
+    *,
+    signals_only: bool,
+) -> list[dict[str, Any]]:
+    if signals_only:
+        kept = {(s["message_name"], s["name"]) for s in filtered_payload.get("signals", [])}
+        result = []
+        for event in events:
+            if event["event_type"] == "dbc_database":
+                result.append(event)
+            elif event["event_type"] == "dbc_signal":
+                p = event["payload"]
+                if (p.get("message_name"), p.get("name")) in kept:
+                    result.append(event)
+        return result
+
+    kept_msgs = {msg["name"] for msg in filtered_payload.get("messages", [])}
+    kept_sigs = {
+        (msg["name"], sig["name"])
+        for msg in filtered_payload.get("messages", [])
+        for sig in msg.get("signals", [])
+    }
+    result = []
+    for event in events:
+        if event["event_type"] == "dbc_database":
+            result.append(event)
+        elif event["event_type"] == "dbc_message":
+            if event["payload"].get("name") in kept_msgs:
+                result.append(event)
+        elif event["event_type"] == "dbc_signal":
+            p = event["payload"]
+            if (p.get("message_name"), p.get("name")) in kept_sigs:
+                result.append(event)
+    return result
+
+
 def _filter_dbc_payload_by_search(
     payload: dict[str, Any],
     pattern: str,
@@ -3471,7 +3522,9 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         )
         search = getattr(args, "search", None)
         if search:
-            data = _filter_dbc_payload_by_search(data, search, signals_only=bool(args.signals_only))
+            signals_only = bool(args.signals_only)
+            data = _filter_dbc_payload_by_search(data, search, signals_only=signals_only)
+            events = _filter_dbc_events_by_search(events, data, signals_only=signals_only)
         data["dbc_source"] = dbc_source
         return (data, events, [])
     if args.command == "dbc signals":
@@ -3483,6 +3536,7 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         search = getattr(args, "search", None)
         if search:
             data = _filter_dbc_payload_by_search(data, search, signals_only=True)
+            events = _filter_dbc_events_by_search(events, data, signals_only=True)
         data["dbc_source"] = dbc_source
         return (data, events, [])
     raise AssertionError(f"unsupported dbc command: {args.command}")

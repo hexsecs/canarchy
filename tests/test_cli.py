@@ -396,6 +396,24 @@ class CliTests(unittest.TestCase):
         "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
     )
+    def test_send_raw_dry_run_does_not_transmit(self, _mock_cfg) -> None:
+        with patch(
+            "canarchy.cli.LocalTransport.send_events",
+            side_effect=AssertionError("send_events must not be called in dry-run"),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "send", "can0", "0x123", "11223344", "--dry-run", "--json"
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertEqual(payload["data"]["frame"]["arbitration_id"], 0x123)
+        self.assertEqual(payload["data"]["events"], [])
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_send_dbc_active_transmits_frame(self, _mock_cfg) -> None:
         dbc = str(FIXTURES / "sample.dbc")
         exit_code, stdout, stderr = run_cli(
@@ -4627,6 +4645,30 @@ class CliTests(unittest.TestCase):
             json.loads(stdout_lower)["data"]["messages"],
             json.loads(stdout_upper)["data"]["messages"],
         )
+
+    def test_dbc_inspect_search_filters_jsonl_events(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.dbc"), "--search", "coolant", "--jsonl"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        events = [json.loads(line) for line in stdout.strip().splitlines()]
+        signal_events = [e for e in events if e.get("event_type") == "dbc_signal"]
+        signal_names = [e["payload"]["name"] for e in signal_events]
+        self.assertIn("CoolantTemp", signal_names)
+        self.assertNotIn("OilTemp", signal_names)
+        self.assertNotIn("Load", signal_names)
+
+    def test_dbc_signals_search_filters_jsonl_events(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc", "signals", str(FIXTURES / "sample.dbc"), "--search", "temp", "--jsonl"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        events = [json.loads(line) for line in stdout.strip().splitlines()]
+        signal_events = [e for e in events if e.get("event_type") == "dbc_signal"]
+        signal_names = [e["payload"]["name"] for e in signal_events]
+        self.assertIn("CoolantTemp", signal_names)
+        self.assertIn("OilTemp", signal_names)
+        self.assertNotIn("Load", signal_names)
 
 
 class CompletionTests(unittest.TestCase):
