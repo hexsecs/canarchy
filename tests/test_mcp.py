@@ -99,6 +99,70 @@ def test_list_tools_count():
     assert len(tools) >= 25
 
 
+# --- REQ-MCP-16: CLI-to-MCP coverage invariant (audit, #323) ----------------
+
+# Commands intentionally NOT exposed as MCP tools. Keep in sync with the
+# "Excluded" table in docs/design/mcp-server.md.
+_MCP_EXCLUDED_COMMANDS = {
+    "shell",
+    "tui",
+    "mcp serve",
+    "mcp install",
+    "completion",
+    "datasets stream",
+}
+
+# CLI commands whose MCP coverage is split across multiple tools, or whose
+# tool name does not follow the mechanical "spaces/hyphens -> underscores"
+# rule.
+_MCP_SPLIT_COMMANDS = {
+    "datasets replay": {"datasets_replay_plan", "datasets_replay_files"},
+}
+_MCP_TOOL_ALIASES = {
+    "j1939 tp sessions": "j1939_tp",
+}
+
+
+def _expected_tool_name(command: str) -> str:
+    return _MCP_TOOL_ALIASES.get(command, command.replace(" ", "_").replace("-", "_"))
+
+
+def test_every_cli_command_is_exposed_or_documented():
+    """Each implemented CLI command is an MCP tool or a documented exclusion."""
+    from canarchy.cli import IMPLEMENTED_COMMANDS
+    from canarchy.mcp_server import _TOOLS
+
+    tool_names = {tool.name for tool in _TOOLS}
+    missing = []
+    for command in IMPLEMENTED_COMMANDS:
+        if command in _MCP_EXCLUDED_COMMANDS:
+            continue
+        if command in _MCP_SPLIT_COMMANDS:
+            if not _MCP_SPLIT_COMMANDS[command] <= tool_names:
+                missing.append(command)
+            continue
+        if _expected_tool_name(command) not in tool_names:
+            missing.append(command)
+    assert not missing, (
+        f"CLI commands without an MCP tool or documented exclusion: {sorted(missing)}"
+    )
+
+
+def test_no_orphan_mcp_tools():
+    """Every MCP tool maps back to an implemented CLI command."""
+    from canarchy.cli import IMPLEMENTED_COMMANDS
+    from canarchy.mcp_server import _TOOLS
+
+    expected: set[str] = set()
+    for command in IMPLEMENTED_COMMANDS:
+        if command in _MCP_SPLIT_COMMANDS:
+            expected |= _MCP_SPLIT_COMMANDS[command]
+        else:
+            expected.add(_expected_tool_name(command))
+    orphans = sorted({tool.name for tool in _TOOLS} - expected)
+    assert not orphans, f"MCP tools with no matching CLI command: {orphans}"
+
+
 # --- TEST-MCP-04: tool metadata validity -----------------------------------
 
 
