@@ -156,7 +156,7 @@ IMPLEMENTED_COMMANDS = (
     | RE_COMMANDS
     | FUZZ_COMMANDS
     | SEQUENCE_COMMANDS
-    | {"mcp serve", "replay", "gateway", "shell", "export"}
+    | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export"}
 )
 
 
@@ -1259,6 +1259,38 @@ def build_parser() -> CanarchyArgumentParser:
     mcp_subparsers = mcp.add_subparsers(dest="mcp_action", required=True)
     mcp_serve = mcp_subparsers.add_parser("serve", help="start MCP server over stdio")
     mcp_serve.set_defaults(command="mcp serve")
+    mcp_install = mcp_subparsers.add_parser(
+        "install", help="write the canarchy MCP server block into a client config"
+    )
+    mcp_install.add_argument(
+        "--client",
+        required=True,
+        choices=("claude-desktop", "claude-code"),
+        help="target MCP client",
+    )
+    mcp_install.add_argument(
+        "--config-path",
+        default=None,
+        help="override the auto-detected client config path",
+    )
+    mcp_install.add_argument(
+        "--command",
+        dest="server_command",
+        default="canarchy",
+        help="command the client runs for the server (default: canarchy)",
+    )
+    mcp_install.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the would-write config without touching disk",
+    )
+    mcp_install.add_argument(
+        "--ack",
+        action="store_true",
+        help="skip the confirmation prompt and write immediately",
+    )
+    add_output_arguments(mcp_install)
+    mcp_install.set_defaults(command="mcp install")
 
     shell = subparsers.add_parser("shell", help="start the interactive shell")
     shell.add_argument("--command", dest="shell_command", help="run a single shell command")
@@ -6648,6 +6680,126 @@ def emit_completion_script(args: argparse.Namespace, output_format: str) -> int:
     return EXIT_OK
 
 
+def emit_mcp_install(args: argparse.Namespace, output_format: str) -> int:
+    """Write the canarchy MCP server block into a client config file."""
+    from canarchy import mcp_install as mi
+
+    def _fail(code: str, message: str, hint: str, *, data: dict[str, Any] | None = None) -> int:
+        emit_result(
+            error_result(
+                "mcp install",
+                errors=[ErrorDetail(code=code, message=message, hint=hint)],
+                data=data,
+            ),
+            output_format,
+        )
+        return EXIT_USER_ERROR
+
+    config_path = mi.resolve_config_path(args.client, override=args.config_path)
+    base_data: dict[str, Any] = {
+        "client": args.client,
+        "config_path": str(config_path),
+        "command": args.server_command,
+    }
+
+    existing_text: str | None = None
+    if config_path.exists():
+        if config_path.is_dir():
+            return _fail(
+                "MCP_INSTALL_INVALID_CONFIG",
+                f"Config path `{config_path}` is a directory.",
+                "Pass --config-path pointing at the client's JSON config file.",
+                data=dict(base_data),
+            )
+        try:
+            existing_text = config_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            return _fail(
+                "MCP_INSTALL_READ_FAILED",
+                f"Could not read `{config_path}`: {exc}.",
+                "Check file permissions, or pass --config-path to a readable file.",
+                data=dict(base_data),
+            )
+    elif not config_path.parent.exists():
+        return _fail(
+            "MCP_INSTALL_DIR_MISSING",
+            f"Config directory `{config_path.parent}` does not exist.",
+            "Install the client first, or pass --config-path to an existing directory.",
+            data=dict(base_data),
+        )
+
+    try:
+        plan = mi.plan_install(existing_text, command=args.server_command)
+    except mi.McpInstallError as exc:
+        return _fail(exc.code, exc.message, exc.hint, data=dict(base_data))
+
+    rendered = json.dumps(plan.config, indent=2, sort_keys=True) + "\n"
+    data = dict(base_data)
+    data["server_block"] = plan.block
+
+    if args.dry_run:
+        data["action"] = "planned" if plan.action != "unchanged" else "unchanged"
+        data["preview"] = rendered
+        emit_result(
+            CommandResult(
+                command="mcp install",
+                data=data,
+                warnings=[f"MCP_INSTALL_DRY_RUN: would write `{config_path}`; no file changed."],
+            ),
+            output_format,
+        )
+        return EXIT_OK
+
+    if plan.action == "unchanged":
+        data["action"] = "unchanged"
+        emit_result(
+            CommandResult(
+                command="mcp install",
+                data=data,
+                warnings=[f"canarchy MCP block already present in `{config_path}`; no change."],
+            ),
+            output_format,
+        )
+        return EXIT_OK
+
+    if not args.ack and os.environ.get("CANARCHY_MCP_NONINTERACTIVE_ACK") != "1":
+        print(
+            f"confirm: type YES to write the canarchy MCP block to `{config_path}`: ",
+            file=sys.stderr,
+            end="",
+            flush=True,
+        )
+        if sys.stdin.readline().strip() != "YES":
+            return _fail(
+                "MCP_INSTALL_DECLINED",
+                "MCP install confirmation was not accepted.",
+                "Re-run with --ack to skip the prompt, or reply `YES`.",
+                data=dict(data, action=plan.action),
+            )
+
+    try:
+        config_path.write_text(rendered, encoding="utf-8")
+    except OSError as exc:
+        return _fail(
+            "MCP_INSTALL_WRITE_FAILED",
+            f"Could not write `{config_path}`: {exc}.",
+            "Check directory permissions, or pass --config-path to a writable location.",
+            data=dict(data, action=plan.action),
+        )
+
+    data["action"] = plan.action
+    data["written"] = True
+    emit_result(
+        CommandResult(
+            command="mcp install",
+            data=data,
+            warnings=[],
+        ),
+        output_format,
+    )
+    return EXIT_OK
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     _J1939_SESSION_COMMANDS = {
@@ -7024,6 +7176,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         run_server()
         return EXIT_OK
+    if args.command == "mcp install":
+        return emit_mcp_install(args, output_format)
     if args.command == "shell":
         return run_shell(args.shell_command)
     if args.command == "tui":

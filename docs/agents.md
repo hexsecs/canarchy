@@ -20,6 +20,20 @@ The server communicates over stdio using JSON-RPC 2.0 and runs until the client 
 
 ### Claude Desktop Configuration
 
+The fastest way to wire CANarchy into a client is the `canarchy mcp install`
+helper, which merges the `mcpServers.canarchy` block for you (see
+[Install the CANarchy MCP server](mcp_install.md)):
+
+```bash
+canarchy mcp install --client claude-desktop --dry-run   # preview
+canarchy mcp install --client claude-desktop             # write (prompts; --ack to skip)
+canarchy mcp install --client claude-code --ack
+```
+
+It is CLI-only (writing a client config is a user action, so it is not an
+MCP tool) and refuses to overwrite a different existing `canarchy` entry.
+To wire it up by hand instead, add the block directly:
+
 ```json
 {
   "mcpServers": {
@@ -121,7 +135,7 @@ For MCP tools that accept a single CAN interface, omit the `interface` argument 
 Current exclusions:
 
 * dataset streaming commands that emit frame records, such as `datasets stream` and non-dry-run `datasets replay`
-* interactive or service commands such as `shell`, `tui`, and `mcp serve`
+* interactive or service commands such as `shell`, `tui`, `mcp serve`, and `mcp install`
 
 For dataset workflows, agents should prefer MCP dataset tools when available. `datasets_search` and `datasets_inspect` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. `datasets_fetch` distinguishes curated indexes from normal dataset entries with `is_index`, `index_instructions`, and `download_instructions`. Use `datasets_replay_plan` for safe replay preflight; use CLI `datasets replay --list-files --json` to choose a replay file and `--file <id-or-name>` to select it. Use `max_frames` or `max_seconds` to bound replay. For `catalog:comma-car-segments`, pass `--platform <name>` and `--limit <n>` when listing files so dynamic HuggingFace manifests remain bounded. Use CLI `datasets stream --max-frames <n>` to bound local downloaded dataset-file streaming. `--chunk-size` controls JSONL provenance chunk metadata only; it is not a frame limit. `comma-rlog` streaming requires optional openpilot LogReader support (`uv pip install git+https://github.com/commaai/openpilot.git` on Python 3.12.x) and returns `COMMA_RLOG_SUPPORT_UNAVAILABLE` when unavailable. Actual frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 
@@ -185,6 +199,6 @@ tool: send {"interface": "vcan0", "frame_id": "0x7DF", "data": "0201F1"}
 ### Notes
 
 * MCP streaming is not supported in v1 — live-capture tools (`capture`, `gateway`) return a buffered batch from the active backend. Use CLI `datasets stream --max-frames <n>` for bounded local dataset-file JSONL or candump pipelines, and `datasets replay --max-frames <n>` or `--max-seconds <s>` for bounded remote dataset-ref or URL playback to stdout.
-* `shell`, `tui`, and `mcp serve` are not exposed as MCP tools.
+* `shell`, `tui`, `mcp serve`, and `mcp install` are not exposed as MCP tools.
 * Error codes are identical to the CLI, so existing JSON-parsing logic transfers without changes.
 * Stdin pipelines: `capture-info`, `stats`, and `filter --file -` read candump text from stdin. `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin regardless of output format. This enables piping `datasets replay` candump output directly into analysis commands without temporary files.
