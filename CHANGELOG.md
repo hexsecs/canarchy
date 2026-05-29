@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-29
+
 ### Changed
 
 * **Audited MCP coverage against the full CLI surface (#323):** Refreshed the authoritative CLI-to-MCP coverage matrix in `docs/design/mcp-server.md` so every implemented command is classified as exposed, intentionally excluded (with rationale), or deferred (not yet implemented). The audit confirms the active surface is complete: all 63 exposable commands have MCP mirrors (64 tools, since `datasets replay` splits into `datasets_replay_plan` / `datasets_replay_files`), with `shell`, `tui`, `mcp serve`, `mcp install`, `completion`, and `datasets stream` intentionally excluded, and `plugins list/info` (#317) and `re anomalies` (#321) deferred until those commands land. Corrected stale docs that still listed fuzzing as "deferred"/"not exposed" (the `fuzz_*` tools shipped in #312/#346–#348) and added the newer `dbc_signals`, `doctor`, `sequence_replay`, and `fuzz_signal` / `fuzz_spn` tools to the naming table. Added two guard tests in `tests/test_mcp.py` — `test_every_cli_command_is_exposed_or_documented` and `test_no_orphan_mcp_tools` — that fail the build if a new command drifts out of coverage or a tool loses its CLI counterpart (`REQ-MCP-16`). `docs/agents.md` and `AGENTS.md` updated to reflect the final surface and point at the matrix.
