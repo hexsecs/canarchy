@@ -116,6 +116,7 @@ For MCP tools that accept a single CAN interface, omit the `interface` argument 
 | `fuzz_replay` | `canarchy fuzz replay` |
 | `fuzz_arbitration_id` | `canarchy fuzz arbitration-id` |
 | `fuzz_signal` | `canarchy fuzz signal` |
+| `fuzz_spn` | `canarchy fuzz spn` |
 
 Current exclusions:
 

@@ -669,6 +669,104 @@ def test_fuzz_signal_invalid_rate_returns_structured_error():
     assert payload["errors"][0]["code"] == "INVALID_RATE"
 
 
+# ---------------------------------------------------------------------------
+# fuzz spn (J1939 SPN-aware)
+# ---------------------------------------------------------------------------
+
+
+def test_fuzz_spn_not_available_sentinel_dry_run():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "spn",
+        "--spn",
+        "110",
+        "--mode",
+        "not_available",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code == EXIT_OK
+    payload = json.loads(stdout)
+    assert payload["data"]["spn"] == 110
+    assert payload["data"]["pgn"] == 65262
+    assert payload["data"]["spn_mode"] == "not_available"
+    frame = next(evt for evt in payload["data"]["events"] if evt.get("event_type") == "frame")
+    assert frame["payload"]["frame"]["data"].startswith("ff")
+    # PGN 65262 broadcast -> arbitration id 0x18FEEE00.
+    assert frame["payload"]["frame"]["arbitration_id"] == 0x18FEEE00
+    assert frame["payload"]["frame"]["is_extended_id"] is True
+
+
+def test_fuzz_spn_boundary_sweeps_operational_edges():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "spn",
+        "--spn",
+        "110",
+        "--mode",
+        "boundary",
+        "--count",
+        "8",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    frames = _signal_frames(stdout)
+    first_bytes = {bytes.fromhex(evt["payload"]["frame"]["data"])[0] for evt in frames}
+    assert first_bytes == {0x00, 0xFA, 0x01, 0xF9, 0xFB}
+
+
+def test_fuzz_spn_unknown_spn_returns_structured_error():
+    exit_code, stdout, _ = run_cli(
+        "fuzz", "spn", "--spn", "987654", "--mode", "in_bounds", "--dry-run", "--json"
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "INVALID_FUZZ_SPN"
+
+
+def test_fuzz_spn_incomplete_metadata_returns_structured_error():
+    # SPN 695 exists in the metadata with only a name (no layout fields).
+    # Must return INVALID_FUZZ_SPN, not crash with a KeyError.
+    exit_code, stdout, _ = run_cli(
+        "fuzz", "spn", "--spn", "695", "--mode", "in_bounds", "--dry-run", "--json"
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "INVALID_FUZZ_SPN"
+
+
+def test_fuzz_spn_invalid_rate_returns_structured_error():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "spn",
+        "can0",
+        "--spn",
+        "110",
+        "--mode",
+        "boundary",
+        "--rate",
+        "0",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "INVALID_RATE"
+
+
+def test_fuzz_spn_live_mode_requires_ack_when_config_demands_it():
+    from canarchy import cli as _cli
+
+    with patch.object(_cli, "active_ack_required", return_value=True):
+        exit_code, stdout, _ = run_cli(
+            "fuzz", "spn", "can0", "--spn", "110", "--mode", "boundary", "--json"
+        )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "ACTIVE_ACK_REQUIRED"
+
+
 def test_fuzz_signal_live_mode_requires_ack_when_config_demands_it():
     from canarchy import cli as _cli
 

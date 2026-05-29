@@ -85,6 +85,36 @@ def decompose_arbitration_id(arbitration_id: int) -> J1939Identifier:
     )
 
 
+def compose_arbitration_id(
+    pgn: int,
+    *,
+    priority: int = 6,
+    source_address: int = 0x00,
+    destination_address: int = 0xFF,
+) -> int:
+    """Build a 29-bit J1939 arbitration id for a broadcast/targeted ``pgn``.
+
+    For PDU1 PGNs (``pdu_format < 240``) the PDU-specific byte carries the
+    destination address; for PDU2 PGNs it is the low byte of the PGN itself.
+    Inverse of :func:`decompose_arbitration_id` for the fields it sets.
+    """
+
+    if pgn < 0 or pgn > 0x3FFFF:
+        raise ValueError("J1939 PGN must fit in 18 bits")
+    if not 0 <= priority <= 7:
+        raise ValueError("J1939 priority must be in [0, 7]")
+    data_page = (pgn >> 16) & 0x1
+    pdu_format = (pgn >> 8) & 0xFF
+    pdu_specific = (destination_address & 0xFF) if pdu_format < 240 else (pgn & 0xFF)
+    return (
+        ((priority & 0x7) << 26)
+        | (data_page << 24)
+        | (pdu_format << 16)
+        | (pdu_specific << 8)
+        | (source_address & 0xFF)
+    )
+
+
 def spn_observations(frames: list[CanFrame], spn: int) -> list[dict[str, object]]:
     meta = spn_lookup(spn)
     if meta is None:

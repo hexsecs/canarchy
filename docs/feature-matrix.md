@@ -87,7 +87,7 @@ The workflow matrix does not fully capture several important reasons someone mig
 * `python-can` excels at hardware abstraction, interface coverage, and embedded Python integration.
 * `cantools` excels at database-heavy engineering: multiple schema formats, inspection, plotting, monitor workflows, and C code generation.
 * CANarchy now includes provider-backed DBC discovery plus initial reverse-engineering DBC matching, but it is still much earlier in depth than mature database-centric or visual RE tools.
-* CANarchy's active-transmit fuzzing now spans raw payloads (`fuzz payload`), capture replay mutation (`fuzz replay`), arbitration-id walks (`fuzz arbitration-id`), and DBC-aware signal mutation (`fuzz signal` — in-bounds, out-of-bounds, boundary, and enum-gap modes), all behind the active-transmit safety model.
+* CANarchy's active-transmit fuzzing now spans raw payloads (`fuzz payload`), capture replay mutation (`fuzz replay`), arbitration-id walks (`fuzz arbitration-id`), DBC-aware signal mutation (`fuzz signal` — in-bounds, out-of-bounds, boundary, enum-gap, and full-field modes), and J1939 SPN-aware mutation (`fuzz spn` — operational bounds plus the not-available / error sentinels), all behind the active-transmit safety model.
 * SavvyCAN excels at visual exploration and reverse-engineering-oriented desktop analysis.
 * Caring Caribou excels at automotive security workflows, including UDS fuzzing, DoIP, and XCP-oriented work.
 * TruckDevil excels at truck and J1939-focused ECU assessment workflows.
