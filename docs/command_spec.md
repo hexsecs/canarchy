@@ -1029,6 +1029,35 @@ Notes:
 
 ---
 
+### mcp install
+
+Write the canarchy MCP server block into a client configuration file.
+
+```bash
+canarchy mcp install --client {claude-desktop,claude-code} [--config-path PATH] \
+    [--command COMMAND] [--dry-run] [--ack] [--json|--jsonl|--text]
+```
+
+Flags:
+
+* `--client {claude-desktop,claude-code}` — required; selects the target client. `claude-desktop` resolves the per-platform config path (macOS / Windows / Linux); `claude-code` writes a project-scoped `.mcp.json` in the current directory.
+* `--config-path PATH` — override the auto-detected config path.
+* `--command COMMAND` — the command the client runs for the server (default `canarchy`; use an absolute venv path when `canarchy` is not on `PATH`).
+* `--dry-run` — print the would-write config without touching disk.
+* `--ack` — skip the `YES` confirmation prompt and write immediately.
+
+Behavior:
+
+* merges the `mcpServers.canarchy` entry without disturbing other servers
+* treats an identical existing entry as a no-op (`action: unchanged`)
+* refuses to overwrite a *different* existing `canarchy` entry
+* `action` in the envelope data is one of `create`, `update`, `unchanged`, or `planned` (dry-run)
+* this command is CLI-only and is not exposed as an MCP tool (writing a client config is a user action)
+
+Structured error codes: `MCP_INSTALL_CONFLICT`, `MCP_INSTALL_INVALID_CONFIG`, `MCP_INSTALL_DIR_MISSING`, `MCP_INSTALL_READ_FAILED`, `MCP_INSTALL_WRITE_FAILED`, `MCP_INSTALL_DECLINED`.
+
+---
+
 ## Output Modes
 
 All commands support:
