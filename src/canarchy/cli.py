@@ -4605,6 +4605,13 @@ def _build_fuzz_payload_frames(args: argparse.Namespace) -> list[CanFrame]:
         else:  # boundary
             payloads = fuzzing.boundary_payload(dlc=args.dlc)
         materialised = list(itertools.islice(payloads, args.max_frames_fuzz))
+        # `havoc` and `splice` can grow a payload beyond the input length
+        # (block insertion, prefix+suffix joins), and the engine only caps
+        # at the 64-byte CAN FD ceiling. `fuzz payload` emits classic CAN
+        # frames, which top out at 8 bytes, so clamp these strategies to a
+        # classic DLC before building frames.
+        if args.strategy in ("havoc", "splice"):
+            materialised = [payload[:8] for payload in materialised]
     except ValueError as exc:
         raise _wrap_fuzz_value_error(args, exc) from exc
     return [

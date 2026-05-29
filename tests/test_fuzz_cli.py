@@ -524,6 +524,59 @@ def test_fuzz_payload_havoc_dry_run_is_deterministic():
     assert len(data_a) == 8
 
 
+def test_fuzz_payload_havoc_clamps_to_classic_dlc():
+    """Regression for Codex P2 on PR #376.
+
+    havoc starts from the default 8-byte seed and can insert bytes,
+    growing past 8; classic CAN frames cap at 8 bytes, so the CLI must
+    clamp rather than crash with a raw ValueError.
+    """
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "havoc",
+        "--max",
+        "16",
+        "--seed",
+        "0",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    frames = _signal_frames(stdout)
+    assert len(frames) == 16
+    assert all(len(bytes.fromhex(evt["payload"]["frame"]["data"])) <= 8 for evt in frames)
+
+
+def test_fuzz_payload_splice_clamps_to_classic_dlc():
+    """Splicing two 8-byte corpus frames can exceed 8 bytes; must clamp."""
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "splice",
+        "--corpus",
+        str(FIXTURES / "complex.candump"),
+        "--max",
+        "20",
+        "--seed",
+        "3",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    frames = _signal_frames(stdout)
+    assert frames
+    assert all(len(bytes.fromhex(evt["payload"]["frame"]["data"])) <= 8 for evt in frames)
+
+
 def test_fuzz_payload_interesting_dry_run_emits_known_values():
     exit_code, stdout, _ = run_cli(
         "fuzz",
