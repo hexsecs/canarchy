@@ -23,6 +23,35 @@ If either fails, follow the
 first. A clean `canarchy doctor --text` run is a fast way to verify the
 local environment before wiring it into a client.
 
+## Quick install with `canarchy mcp install`
+
+Instead of editing config files by hand, let CANarchy write the
+`mcpServers.canarchy` block for you:
+
+```bash
+# Preview the change without touching disk
+canarchy mcp install --client claude-desktop --dry-run
+
+# Write it (prompts for confirmation; --ack skips the prompt)
+canarchy mcp install --client claude-desktop
+canarchy mcp install --client claude-code --ack
+```
+
+The helper:
+
+* detects the client config path per platform (`--config-path` overrides it),
+* merges the `canarchy` entry into `mcpServers` without disturbing other
+  servers,
+* refuses to clobber a *different* existing `canarchy` entry
+  (`MCP_INSTALL_CONFLICT`) and leaves unrelated or invalid configs untouched
+  (`MCP_INSTALL_INVALID_CONFIG`, `MCP_INSTALL_DIR_MISSING`),
+* and accepts `--command` when `canarchy` lives in a venv rather than on
+  `PATH` (e.g. `--command /path/to/.venv/bin/canarchy`).
+
+`--client claude-desktop` targets the platform path below;
+`--client claude-code` writes a project-scoped `.mcp.json` in the current
+directory. The hand-edit paths below remain the canonical fallback.
+
 ## Claude Desktop
 
 Edit Claude Desktop's MCP config file:

@@ -5650,5 +5650,204 @@ class ErrorHintConventionTests(unittest.TestCase):
                 )
 
 
+class McpInstallTests(unittest.TestCase):
+    def test_dry_run_does_not_write_and_previews_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            exit_code, stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--dry-run",
+                "--json",
+            )
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["data"]["action"], "planned")
+            self.assertIn("mcpServers", payload["data"]["preview"])
+            self.assertEqual(
+                payload["data"]["server_block"],
+                {"command": "canarchy", "args": ["mcp", "serve"]},
+            )
+            self.assertFalse(config.exists())
+
+    def test_fresh_install_writes_canarchy_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            exit_code, stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--ack",
+                "--json",
+            )
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["data"]["action"], "create")
+            self.assertTrue(payload["data"]["written"])
+            written = json.loads(config.read_text())
+            self.assertEqual(
+                written["mcpServers"]["canarchy"],
+                {"command": "canarchy", "args": ["mcp", "serve"]},
+            )
+
+    def test_confirmation_prompt_accepts_yes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            exit_code, _stdout, _stderr = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--json",
+                input="YES\n",
+            )
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(config.exists())
+
+    def test_confirmation_prompt_declined(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            exit_code, stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--json",
+                input="no\n",
+            )
+            self.assertNotEqual(exit_code, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["errors"][0]["code"], "MCP_INSTALL_DECLINED")
+            self.assertFalse(config.exists())
+
+    def test_merge_preserves_other_servers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            config.write_text(json.dumps({"mcpServers": {"other": {"command": "foo", "args": []}}}))
+            exit_code, stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--ack",
+                "--json",
+            )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(json.loads(stdout)["data"]["action"], "update")
+            written = json.loads(config.read_text())
+            self.assertEqual(set(written["mcpServers"]), {"other", "canarchy"})
+
+    def test_identical_entry_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            config.write_text(
+                json.dumps(
+                    {"mcpServers": {"canarchy": {"command": "canarchy", "args": ["mcp", "serve"]}}}
+                )
+            )
+            exit_code, stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--ack",
+                "--json",
+            )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(json.loads(stdout)["data"]["action"], "unchanged")
+
+    def test_conflicting_entry_returns_structured_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            config.write_text(
+                json.dumps({"mcpServers": {"canarchy": {"command": "OTHER", "args": ["x"]}}})
+            )
+            exit_code, stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--ack",
+                "--json",
+            )
+            self.assertNotEqual(exit_code, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["errors"][0]["code"], "MCP_INSTALL_CONFLICT")
+            # The conflicting entry is left untouched.
+            self.assertEqual(
+                json.loads(config.read_text())["mcpServers"]["canarchy"]["command"], "OTHER"
+            )
+
+    def test_invalid_json_config_returns_structured_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            config.write_text("not json {")
+            exit_code, stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--ack",
+                "--json",
+            )
+            self.assertNotEqual(exit_code, 0)
+            self.assertEqual(json.loads(stdout)["errors"][0]["code"], "MCP_INSTALL_INVALID_CONFIG")
+
+    def test_missing_config_directory_returns_structured_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "no_such_dir" / "client.json"
+            exit_code, stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--ack",
+                "--json",
+            )
+            self.assertNotEqual(exit_code, 0)
+            self.assertEqual(json.loads(stdout)["errors"][0]["code"], "MCP_INSTALL_DIR_MISSING")
+
+    def test_command_override_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "client.json"
+            exit_code, _stdout, _ = run_cli(
+                "mcp",
+                "install",
+                "--client",
+                "claude-code",
+                "--config-path",
+                str(config),
+                "--command",
+                "/opt/venv/bin/canarchy",
+                "--ack",
+                "--json",
+            )
+            self.assertEqual(exit_code, 0)
+            written = json.loads(config.read_text())
+            self.assertEqual(written["mcpServers"]["canarchy"]["command"], "/opt/venv/bin/canarchy")
+
+
 if __name__ == "__main__":
     unittest.main()
