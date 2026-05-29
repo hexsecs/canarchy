@@ -109,6 +109,7 @@ For MCP tools that accept a single CAN interface, omit the `interface` argument 
 | `uds_trace` | `canarchy uds trace` |
 | `uds_services` | `canarchy uds services` |
 | `config_show` | `canarchy config show` |
+| `doctor` | `canarchy doctor` |
 | `re_correlate` | `canarchy re correlate` |
 | `re_counters` | `canarchy re counters` |
 | `re_entropy` | `canarchy re entropy` |
@@ -136,6 +137,9 @@ Current exclusions:
 
 * dataset streaming commands that emit frame records, such as `datasets stream` and non-dry-run `datasets replay`
 * interactive or service commands such as `shell`, `tui`, `mcp serve`, and `mcp install`
+* `completion`, which emits a raw shell script rather than a JSON envelope
+
+The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred, with rationale) lives in [`docs/design/mcp-server.md`](design/mcp-server.md#mcp-coverage-decisions); a test guard (`test_every_cli_command_is_exposed_or_documented`) fails the build if a new command drifts out of coverage.
 
 For dataset workflows, agents should prefer MCP dataset tools when available. `datasets_search` and `datasets_inspect` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. `datasets_fetch` distinguishes curated indexes from normal dataset entries with `is_index`, `index_instructions`, and `download_instructions`. Use `datasets_replay_plan` for safe replay preflight; use CLI `datasets replay --list-files --json` to choose a replay file and `--file <id-or-name>` to select it. Use `max_frames` or `max_seconds` to bound replay. For `catalog:comma-car-segments`, pass `--platform <name>` and `--limit <n>` when listing files so dynamic HuggingFace manifests remain bounded. Use CLI `datasets stream --max-frames <n>` to bound local downloaded dataset-file streaming. `--chunk-size` controls JSONL provenance chunk metadata only; it is not a frame limit. `comma-rlog` streaming requires optional openpilot LogReader support (`uv pip install git+https://github.com/commaai/openpilot.git` on Python 3.12.x) and returns `COMMA_RLOG_SUPPORT_UNAVAILABLE` when unavailable. Actual frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 

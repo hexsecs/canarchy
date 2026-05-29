@@ -7,6 +7,7 @@
 | Status | Implemented |
 | Command surface | `canarchy mcp serve` |
 | Primary area | CLI, agent integration |
+| Coverage audit | #323 (matrix in *MCP Coverage Decisions* below) |
 
 ## Goal
 
@@ -35,6 +36,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-13` | Ubiquitous | Dataset provider workflows selected for MCP shall expose provider list, search, inspect, fetch, cache list, cache refresh, conversion, replay file listing, and safe replay planning tools while excluding streaming dataset frame output. |
 | `REQ-MCP-14` | Ubiquitous | Skills provider workflows selected for MCP shall expose provider list, search, fetch, cache list, and cache refresh tools while preserving the same CLI result envelope. |
 | `REQ-MCP-15` | Ubiquitous | Reverse-engineering helpers selected for MCP shall include `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, and `re shortlist-dbc`. |
+| `REQ-MCP-16` | Ubiquitous | Every implemented CLI command shall be either exposed as an MCP tool or listed in the documented exclusion set (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`); a test shall enforce this invariant so new commands cannot silently drift out of coverage. |
 
 ## Command Surface
 
@@ -106,20 +108,75 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `re entropy` | `re_entropy` |
 | `re match-dbc` | `re_match_dbc` |
 | `re shortlist-dbc` | `re_shortlist_dbc` |
+| `dbc signals` | `dbc_signals` |
+| `doctor` | `doctor` |
+| `sequence replay` | `sequence_replay` |
+| `fuzz payload` | `fuzz_payload` |
+| `fuzz replay` | `fuzz_replay` |
+| `fuzz arbitration-id` | `fuzz_arbitration_id` |
+| `fuzz signal` | `fuzz_signal` |
+| `fuzz spn` | `fuzz_spn` |
 
 ## MCP Coverage Decisions
 
-| CLI surface | MCP status | Rationale |
-|-------------|------------|-----------|
-| Transport, DBC, DBC provider, session, export, UDS, config | Exposed | Non-interactive commands with bounded JSON envelopes. |
-| Dataset provider/cache/fetch/search/inspect/convert | Exposed | Metadata and local conversion workflows return bounded JSON envelopes. |
-| `datasets replay --dry-run` and `datasets replay --list-files` | Exposed | Safe planning and manifest inspection do not open or stream remote frame data. |
-| `datasets stream` and non-dry-run `datasets replay` | Excluded | They emit frame records to stdout and require streaming semantics outside MCP's current buffered response model. |
-| Skills provider/cache/search/fetch | Exposed | They are non-interactive provider workflows with canonical JSON envelopes. |
-| J1939 analysis including `j1939 compare`, `j1939 faults`, and TP compare | Exposed | File-backed analysis commands are safe, bounded, and deterministic. |
-| Reverse-engineering helpers including `re signals` | Exposed | File-backed analysis commands are safe and deterministic. |
-| `shell`, `tui`, `mcp serve` | Excluded | Interactive or service commands have no direct one-shot MCP tool equivalent. |
-| Fuzzing workflows | Deferred | Active fuzzing needs separate safety design before CLI or MCP exposure. |
+This matrix is the authoritative CLI-to-MCP coverage audit. Every
+implemented CLI command (the `IMPLEMENTED_COMMANDS` set in `canarchy.cli`)
+is accounted for as **Exposed**, **Excluded** (with rationale), or
+**Deferred** (the command does not exist yet). The
+`test_every_cli_command_is_exposed_or_documented` guard in
+`tests/test_mcp.py` fails the build if a future command is added without
+landing here.
+
+### Exposed
+
+| CLI surface | Rationale |
+|-------------|-----------|
+| Transport reads (`capture`, `filter`, `stats`, `capture-info`, `decode`, `encode`) | Non-interactive commands with bounded JSON envelopes. |
+| MCP-gated active transmit (`replay`, `sequence replay`) | In `_ACTIVE_TRANSMIT_TOOLS`: schemas require `ack_active=true` and default `dry_run=true`. |
+| Fuzzing (`fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz signal`, `fuzz spn`) | In `_ACTIVE_TRANSMIT_TOOLS`: mandatory `ack_active=true`, default `dry_run=true`. |
+| Active transmit without an MCP gate (`send`, `generate`, `gateway`) | Exposed, but **not** in `_ACTIVE_TRANSMIT_TOOLS`; their schemas accept no `ack_active`/`dry_run`. They rely only on the CLI-side `enforce_active_transmit_safety`, which over MCP (with `CANARCHY_MCP_NONINTERACTIVE_ACK=1`) blocks **only** when `[safety].require_active_ack` is set. Under the default config an agent can perform a live transmit through these tools. See the gap note below. |
+| DBC + DBC provider (`dbc inspect`, `dbc signals`, `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list/prune/refresh`) | Bounded inspection and provider/cache workflows. |
+| Datasets provider/cache/fetch/search/inspect/convert | Metadata and local conversion workflows return bounded JSON envelopes. |
+| `datasets replay --dry-run` (`datasets_replay_plan`) and `--list-files` (`datasets_replay_files`) | Safe planning and manifest inspection do not open or stream remote frame data. |
+| Skills provider/cache/search/fetch | Non-interactive provider workflows with canonical JSON envelopes. |
+| J1939 analysis (`j1939 decode/pgn/spn/tp sessions/tp compare/dm1/faults/summary/inventory/compare/monitor`) | File-backed analysis commands are safe, bounded, and deterministic. |
+| Reverse-engineering helpers (`re signals/counters/entropy/correlate/match-dbc/shortlist-dbc`) | File-backed analysis commands are safe and deterministic. |
+| Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`) | Bounded, non-interactive envelopes. |
+
+### Excluded
+
+| CLI surface | Rationale |
+|-------------|-----------|
+| `shell`, `tui` | Interactive front ends with no one-shot RPC equivalent. |
+| `mcp serve` | The server itself; not a tool it would expose. |
+| `mcp install` | Writes a client config file — a user action, like `plugins enable/disable`, kept off the agent surface. |
+| `completion` | Emits a raw shell script, not a JSON envelope. |
+| `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
+
+### Deferred (not yet implemented)
+
+| Planned CLI surface | Notes |
+|---------------------|-------|
+| `plugins list` / `plugins info` (#317) | Add MCP mirrors when the plugins CLI lands; `plugins enable/disable` stay CLI-only. |
+| `re anomalies` (#321) | Add an MCP mirror with the other file-backed `re` tools when the command lands. |
+
+As of this audit, every implemented command that should have MCP coverage
+does; there are no missing mirrors and no orphan tools.
+
+### Known gap — `send` / `generate` / `gateway` MCP safety (follow-up)
+
+These three active-transmit tools are exposed but are **not** in
+`_ACTIVE_TRANSMIT_TOOLS`, so the MCP-side `ack_active` / default-`dry_run`
+gate does not apply to them. Over MCP they fall back to the CLI's
+`enforce_active_transmit_safety`, which — with the server's
+`CANARCHY_MCP_NONINTERACTIVE_ACK=1` — only blocks when
+`[safety].require_active_ack` is set. Under the default configuration an
+agent can therefore perform a live transmit through `send`, `generate`, or
+`gateway` without an explicit acknowledgement or a dry-run default. Closing
+this gap (mandatory `ack_active`, default `dry_run=true`, and adding the
+tools to `_ACTIVE_TRANSMIT_TOOLS` — which also needs a `--dry-run` mode for
+`generate` / `gateway`) is tracked as #380 and is a behaviour change
+beyond this coverage audit.
 
 ## Response Envelope
 
