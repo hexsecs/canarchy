@@ -73,6 +73,7 @@ _EXPECTED_TOOLS = {
     "fuzz_payload",
     "fuzz_replay",
     "fuzz_arbitration_id",
+    "fuzz_signal",
 }
 
 
@@ -915,6 +916,67 @@ def test_fuzz_arbitration_id_without_ack_active_returns_structured_error():
     payload = json.loads(results[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_fuzz_signal_without_ack_active_returns_structured_error():
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_signal",
+            {
+                "interface": "can0",
+                "dbc": "tests/fixtures/sample.dbc",
+                "message": "EngineStatus1",
+                "signal": "CoolantTemp",
+                "mode": "boundary",
+            },
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_fuzz_signal_with_ack_active_defaults_to_dry_run():
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_signal",
+            {
+                "interface": "can0",
+                "dbc": "tests/fixtures/sample.dbc",
+                "message": "EngineStatus1",
+                "signal": "CoolantTemp",
+                "mode": "boundary",
+                "count": 6,
+                "ack_active": True,
+            },
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["mode"] == "dry_run"
+    assert payload["data"]["signal_mode"] == "boundary"
+
+
+def test_fuzz_signal_build_argv_orders_flags_and_defaults_dry_run():
+    argv = _build_argv(
+        "fuzz_signal",
+        {
+            "interface": "can0",
+            "dbc": "tests/fixtures/sample.dbc",
+            "message": "EngineStatus1",
+            "signal": "CoolantTemp",
+            "mode": "in_bounds",
+            "count": 8,
+            "ack_active": True,
+            "dry_run": True,
+        },
+    )
+    assert argv[0:3] == ["fuzz", "signal", "can0"]
+    assert "--dbc" in argv and "--message" in argv and "--signal" in argv
+    assert "--mode" in argv
+    assert "--dry-run" in argv
+    assert "--ack-active" in argv
 
 
 def test_fuzz_payload_build_argv_includes_dry_run_default():

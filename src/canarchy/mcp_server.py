@@ -1252,6 +1252,57 @@ _TOOLS: list[types.Tool] = [
             "required": ["range", "ack_active"],
         },
     ),
+    types.Tool(
+        name="fuzz_signal",
+        description=(
+            "Active-transmit DBC signal fuzzing gated by docs/design/active-transmit-safety.md. "
+            "Mutates a single DBC signal within or beyond its declared bounds. "
+            "Mandatory `ack_active=true`. `dry_run` defaults to true; set to false only after "
+            "explicit human authorisation."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "interface": {"type": "string", "description": "Target CAN interface"},
+                "dbc": {
+                    "type": "string",
+                    "description": "DBC path or provider ref (e.g. `opendbc:...`)",
+                },
+                "message": {"type": "string", "description": "DBC message name"},
+                "signal": {"type": "string", "description": "Signal name to mutate"},
+                "mode": {
+                    "type": "string",
+                    "enum": ["in_bounds", "out_of_bounds", "boundary", "enum_gaps", "full_field"],
+                    "description": (
+                        "Mutation mode; full_field sweeps the entire signal field, "
+                        "ignoring the declared DBC bounds"
+                    ),
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "Maximum mutated frames to emit",
+                    "default": 64,
+                },
+                "rate": {"type": "number", "description": "Frames per second", "default": 100.0},
+                "seed": {"type": "integer", "description": "Seed for the mutator", "default": 0},
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory explicit human acknowledgement of active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "When true, emit JSONL plan without transmitting",
+                    "default": True,
+                },
+                "run_id": {
+                    "type": "string",
+                    "description": "Explicit run UUID (random if omitted)",
+                },
+            },
+            "required": ["dbc", "message", "signal", "mode", "ack_active"],
+        },
+    ),
 ]
 
 _TOOL_NAMES: frozenset[str] = frozenset(tool.name for tool in _TOOLS)
@@ -1705,6 +1756,33 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("dry_run", True):
                 argv += ["--dry-run"]
             return argv + ["--jsonl"]
+        case "fuzz_signal":
+            argv = ["fuzz", "signal"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            argv += [
+                "--dbc",
+                a["dbc"],
+                "--message",
+                a["message"],
+                "--signal",
+                a["signal"],
+                "--mode",
+                a["mode"],
+            ]
+            if "count" in a:
+                argv += ["--count", str(a["count"])]
+            if "rate" in a:
+                argv += ["--rate", str(a["rate"])]
+            if "seed" in a:
+                argv += ["--seed", str(a["seed"])]
+            if "run_id" in a:
+                argv += ["--run-id", a["run_id"]]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
+            return argv + ["--jsonl"]
         case _:
             raise ValueError(f"Unknown tool: {tool_name!r}")
 
@@ -1719,6 +1797,7 @@ _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
         "fuzz_payload",
         "fuzz_replay",
         "fuzz_arbitration_id",
+        "fuzz_signal",
         "replay",
         "sequence_replay",
     }

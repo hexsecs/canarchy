@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from canarchy import fuzzing
 from canarchy.models import CanFrame
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +275,286 @@ def test_arbitration_id_range_rejects_non_positive_step():
         list(fuzzing.arbitration_id_range(0x100, 0x110, extended=False, step=0))
     with pytest.raises(ValueError):
         list(fuzzing.arbitration_id_range(0x100, 0x110, extended=False, step=-1))
+
+
+# ---------------------------------------------------------------------------
+# signal_payload (DBC-aware)
+# ---------------------------------------------------------------------------
+
+
+def _sample_message(name: str = "EngineStatus1"):
+    import cantools
+
+    database = cantools.database.load_file(str(FIXTURES / "sample.dbc"))
+    return database.get_message_by_name(name)
+
+
+def _complex_message(name: str):
+    import cantools
+
+    database = cantools.database.load_file(str(FIXTURES / "complex.dbc"))
+    return database.get_message_by_name(name)
+
+
+def _decode(message, payload: bytes, signal: str):
+    return message.decode(payload, decode_choices=False)[signal]
+
+
+def test_signal_payload_in_bounds_stays_within_declared_range():
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="CoolantTemp", mode="in_bounds", seed=1, count=16
+        )
+    )
+    assert len(payloads) == 16
+    # CoolantTemp declares [0, 210] degC.
+    for payload in payloads:
+        value = _decode(message, payload, "CoolantTemp")
+        assert 0 <= value <= 210
+
+
+def test_signal_payload_in_bounds_respects_scale_and_offset():
+    """Load uses scale 0.4 — sampled values must still land in [0, 100]."""
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(message=message, signal="Load", mode="in_bounds", seed=3, count=12)
+    )
+    for payload in payloads:
+        value = _decode(message, payload, "Load")
+        assert 0 <= value <= 100
+
+
+def test_signal_payload_in_bounds_rounds_non_lsb_aligned_bounds_inward():
+    """Regression for Codex P2 on PR #374.
+
+    A signal whose declared min/max do not fall on a raw lsb must not emit
+    decoded values outside [minimum, maximum]. With scale 0.4 and bounds
+    [0.1, 99.8], naive round() maps to raw [0, 250] -> phys 0.0 / 100.0,
+    which are outside the declared range. Directional rounding (ceil the
+    lower bound, floor the upper) keeps every in_bounds value inside.
+    """
+    import cantools
+
+    dbc = (
+        'VERSION ""\n'
+        "BS_:\n"
+        "BU_: ECU\n"
+        "BO_ 100 Msg: 1 ECU\n"
+        ' SG_ Scaled : 0|8@1+ (0.4,0) [0.1|99.8] "" ECU\n'
+    )
+    database = cantools.database.load_string(dbc, database_format="dbc")
+    message = database.get_message_by_name("Msg")
+    payloads = list(
+        fuzzing.signal_payload(message=message, signal="Scaled", mode="in_bounds", seed=0, count=64)
+    )
+    assert payloads
+    for payload in payloads:
+        value = message.decode(payload)["Scaled"]
+        assert 0.1 <= value <= 99.8
+
+
+def test_signal_payload_out_of_bounds_falls_outside_declared_range():
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="CoolantTemp", mode="out_of_bounds", seed=0, count=64
+        )
+    )
+    assert payloads, "out_of_bounds should emit at least one frame for a sub-range signal"
+    for payload in payloads:
+        value = _decode(message, payload, "CoolantTemp")
+        assert value < 0 or value > 210
+
+
+def test_signal_payload_boundary_includes_min_max_and_one_lsb_steps():
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="CoolantTemp", mode="boundary", seed=0, count=64
+        )
+    )
+    values = {_decode(message, payload, "CoolantTemp") for payload in payloads}
+    # 1 lsb == scale == 1 degC for CoolantTemp; declared [0, 210].
+    assert {0, 210, 1, 209, -1, 211} <= values
+
+
+def test_signal_payload_boundary_drops_unrepresentable_steps():
+    """LampState spans the full 8-bit range [0, 255]; min-1 / max+1 are not representable."""
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="boundary", seed=0, count=64
+        )
+    )
+    values = {_decode(message, payload, "LampState") for payload in payloads}
+    assert values == {0, 255, 1, 254}
+
+
+def test_signal_payload_out_of_bounds_empty_for_full_range_signal():
+    """When the declared range already spans the representable range, nothing is out of bounds."""
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="out_of_bounds", seed=0, count=64
+        )
+    )
+    assert payloads == []
+
+
+def test_signal_payload_full_field_sweeps_entire_representable_range():
+    """full_field ignores the declared bounds and spans the whole field."""
+    message = _sample_message()
+    # CoolantTemp is 8-bit unsigned -> representable physical range
+    # [-40, 215] (raw 0..255 with offset -40). Declared range is only
+    # [0, 210], so full_field must reach below 0 and above 210.
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="CoolantTemp", mode="full_field", seed=0, count=256
+        )
+    )
+    values = [_decode(message, payload, "CoolantTemp") for payload in payloads]
+    assert len(values) == 256
+    assert min(values) == -40
+    assert max(values) == 215
+
+
+def test_signal_payload_full_field_covers_full_range_signal_with_no_out_of_bounds():
+    """The motivating case: a signal whose declared range == its field range.
+
+    `out_of_bounds` is empty for LampState ([0, 255] over an 8-bit field),
+    but `full_field` still sweeps every value.
+    """
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="full_field", seed=0, count=256
+        )
+    )
+    values = sorted(_decode(message, payload, "LampState") for payload in payloads)
+    assert values == list(range(256))
+
+
+def test_signal_payload_full_field_evenly_spaced_when_count_below_field_size():
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="full_field", seed=0, count=5
+        )
+    )
+    # Raw values span [0, 255] with both extrema included, evenly spaced.
+    values = sorted(_decode(message, payload, "LampState") for payload in payloads)
+    assert values == [0, 64, 128, 191, 255]
+
+
+def test_signal_payload_full_field_is_deterministic():
+    message = _sample_message()
+    a = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="full_field", seed=0, count=17
+        )
+    )
+    b = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="full_field", seed=99, count=17
+        )
+    )
+    # Deterministic and seed-independent (full_field does not use the seed).
+    assert a == b
+
+
+def test_signal_payload_enum_gaps_emits_only_undefined_choices():
+    message = _complex_message("HVAC_Mode")
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="HVAC_Mode", mode="enum_gaps", seed=0, count=64
+        )
+    )
+    values = sorted(_decode(message, payload, "HVAC_Mode") for payload in payloads)
+    # 4-bit signal [0, 15]; choices defined for 0..5, so gaps are 6..15.
+    assert values == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+
+def test_signal_payload_enum_gaps_respects_count_cap():
+    message = _complex_message("HVAC_Mode")
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="HVAC_Mode", mode="enum_gaps", seed=0, count=3
+        )
+    )
+    assert len(payloads) == 3
+
+
+def test_signal_payload_is_deterministic_for_same_seed():
+    message = _sample_message()
+    a = list(
+        fuzzing.signal_payload(
+            message=message, signal="CoolantTemp", mode="in_bounds", seed=7, count=10
+        )
+    )
+    b = list(
+        fuzzing.signal_payload(
+            message=message, signal="CoolantTemp", mode="in_bounds", seed=7, count=10
+        )
+    )
+    assert a == b
+
+
+def test_signal_payload_holds_other_signals_at_baseline_zero():
+    message = _sample_message()
+    payload = next(
+        fuzzing.signal_payload(
+            message=message, signal="CoolantTemp", mode="boundary", seed=0, count=1
+        )
+    )
+    decoded = message.decode(payload, decode_choices=False)
+    assert decoded["OilTemp"] == -40  # raw 0 -> physical 0 - 40
+    assert decoded["Load"] == 0
+    assert decoded["LampState"] == 0
+
+
+def test_signal_payload_unknown_signal_raises():
+    message = _sample_message()
+    with pytest.raises(ValueError):
+        list(
+            fuzzing.signal_payload(
+                message=message, signal="DoesNotExist", mode="in_bounds", seed=0, count=1
+            )
+        )
+
+
+def test_signal_payload_enum_gaps_without_choices_raises():
+    message = _sample_message()
+    with pytest.raises(ValueError):
+        list(
+            fuzzing.signal_payload(
+                message=message, signal="CoolantTemp", mode="enum_gaps", seed=0, count=1
+            )
+        )
+
+
+def test_signal_payload_negative_count_raises():
+    message = _sample_message()
+    with pytest.raises(ValueError):
+        list(
+            fuzzing.signal_payload(
+                message=message, signal="CoolantTemp", mode="in_bounds", seed=0, count=-1
+            )
+        )
+
+
+def test_signal_payload_unknown_mode_raises():
+    message = _sample_message()
+    with pytest.raises(ValueError):
+        list(
+            fuzzing.signal_payload(
+                message=message,
+                signal="CoolantTemp",
+                mode="nope",  # type: ignore[arg-type]
+                seed=0,
+                count=1,
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
