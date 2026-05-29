@@ -402,6 +402,67 @@ def test_signal_payload_out_of_bounds_empty_for_full_range_signal():
     assert payloads == []
 
 
+def test_signal_payload_full_field_sweeps_entire_representable_range():
+    """full_field ignores the declared bounds and spans the whole field."""
+    message = _sample_message()
+    # CoolantTemp is 8-bit unsigned -> representable physical range
+    # [-40, 215] (raw 0..255 with offset -40). Declared range is only
+    # [0, 210], so full_field must reach below 0 and above 210.
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="CoolantTemp", mode="full_field", seed=0, count=256
+        )
+    )
+    values = [_decode(message, payload, "CoolantTemp") for payload in payloads]
+    assert len(values) == 256
+    assert min(values) == -40
+    assert max(values) == 215
+
+
+def test_signal_payload_full_field_covers_full_range_signal_with_no_out_of_bounds():
+    """The motivating case: a signal whose declared range == its field range.
+
+    `out_of_bounds` is empty for LampState ([0, 255] over an 8-bit field),
+    but `full_field` still sweeps every value.
+    """
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="full_field", seed=0, count=256
+        )
+    )
+    values = sorted(_decode(message, payload, "LampState") for payload in payloads)
+    assert values == list(range(256))
+
+
+def test_signal_payload_full_field_evenly_spaced_when_count_below_field_size():
+    message = _sample_message()
+    payloads = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="full_field", seed=0, count=5
+        )
+    )
+    # Raw values span [0, 255] with both extrema included, evenly spaced.
+    values = sorted(_decode(message, payload, "LampState") for payload in payloads)
+    assert values == [0, 64, 128, 191, 255]
+
+
+def test_signal_payload_full_field_is_deterministic():
+    message = _sample_message()
+    a = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="full_field", seed=0, count=17
+        )
+    )
+    b = list(
+        fuzzing.signal_payload(
+            message=message, signal="LampState", mode="full_field", seed=99, count=17
+        )
+    )
+    # Deterministic and seed-independent (full_field does not use the seed).
+    assert a == b
+
+
 def test_signal_payload_enum_gaps_emits_only_undefined_choices():
     message = _complex_message("HVAC_Mode")
     payloads = list(

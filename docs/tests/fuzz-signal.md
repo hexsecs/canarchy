@@ -16,6 +16,7 @@
 | `REQ-FZS-03` | out_of_bounds falls outside declared range | `TEST-FZS-03`, `TEST-FZS-08` |
 | `REQ-FZS-04` | boundary emits min/max ± 1 lsb | `TEST-FZS-04`, `TEST-FZS-09` |
 | `REQ-FZS-05` | enum_gaps emits only undefined choices | `TEST-FZS-05` |
+| `REQ-FZS-15` | full_field sweeps the whole field, ignoring DBC bounds | `TEST-FZS-20`, `TEST-FZS-21` |
 | `REQ-FZS-06` | non-target signals held at baseline | `TEST-FZS-10` |
 | `REQ-FZS-07` | determinism for a fixed seed | `TEST-FZS-06`, `TEST-FZS-13` |
 | `REQ-FZS-08` | unknown signal errors | `TEST-FZS-07`, `TEST-FZS-15` |
@@ -116,6 +117,27 @@ Then   the system shall return an error with code "ACTIVE_TRANSMIT_REQUIRES_ACK"
 Given  the MCP server
 When   fuzz_signal is called with ack_active=true and no dry_run
 Then   the system shall return data.mode == "dry_run" and data.signal_mode == "boundary"
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`.
+
+### TEST-FZS-20 — full_field sweeps the entire representable field
+
+```gherkin
+Given  CoolantTemp is 8-bit with declared range [0, 210] but field range [-40, 215]
+When   signal_payload runs for CoolantTemp in mode full_field with count 256
+Then   the decoded values shall span the full field, reaching min -40 and max 215
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`.
+
+### TEST-FZS-21 — full_field covers a full-range signal that has no out_of_bounds
+
+```gherkin
+Given  LampState declares [0, 255] over an 8-bit field (out_of_bounds is empty)
+When   signal_payload runs for LampState in mode full_field with count 256
+Then   the decoded value set shall equal every integer in [0, 255]
+And    a count below the field size shall yield evenly spaced samples including 0 and 255
 ```
 
 **Fixture:** `tests/fixtures/sample.dbc`.

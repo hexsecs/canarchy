@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 ReplayStrategy = Literal["timing", "payload-bitflip"]
-SignalFuzzMode = Literal["in_bounds", "out_of_bounds", "boundary", "enum_gaps"]
+SignalFuzzMode = Literal["in_bounds", "out_of_bounds", "boundary", "enum_gaps", "full_field"]
 
 # Maximum payload length the generators emit. Classic CAN tops out at 8;
 # CAN FD allows 64. We use 64 as the upper bound to be future-proof.
@@ -244,9 +244,12 @@ def signal_payload(
       to representable values.
     * ``enum_gaps`` — every representable raw value that is **not** a
       defined choice; only valid for signals with a choice set.
+    * ``full_field`` — sweeps the entire representable raw field,
+      ignoring the declared DBC bounds. When the field is wider than
+      ``count``, emits evenly spaced samples that include both extrema.
 
-    For the finite modes (``out_of_bounds``, ``boundary``, ``enum_gaps``)
-    ``count`` caps the number of payloads emitted. Raising on misuse is
+    For the finite modes (``out_of_bounds``, ``boundary``, ``enum_gaps``,
+    ``full_field``) ``count`` caps the number of payloads emitted. Raising on misuse is
     deferred to first iteration: ``count < 0``, an unknown ``signal``, an
     unknown ``mode``, or ``enum_gaps`` on a signal without choices all
     raise ``ValueError``.
@@ -367,9 +370,31 @@ def _signal_raw_candidates(
             if value not in defined:
                 yield value
         return
+    if mode == "full_field":
+        # Sweep the entire representable raw field, ignoring the declared
+        # DBC bounds. When the field is larger than `count`, emit evenly
+        # spaced samples that always include both extrema so coverage spans
+        # the whole field rather than just its low end. Deterministic; the
+        # seed is unused.
+        if count <= 0:
+            return
+        total = raw_hi - raw_lo + 1
+        if total <= count:
+            yield from range(raw_lo, raw_hi + 1)
+            return
+        if count == 1:
+            yield raw_lo
+            return
+        seen: set[int] = set()
+        for i in range(count):
+            value = raw_lo + round(i * (total - 1) / (count - 1))
+            if value not in seen:
+                seen.add(value)
+                yield value
+        return
     raise ValueError(
-        f"unknown signal fuzz mode: {mode!r}. "
-        "Supported: 'in_bounds', 'out_of_bounds', 'boundary', 'enum_gaps'."
+        f"unknown signal fuzz mode: {mode!r}. Supported: 'in_bounds', "
+        "'out_of_bounds', 'boundary', 'enum_gaps', 'full_field'."
     )
 
 

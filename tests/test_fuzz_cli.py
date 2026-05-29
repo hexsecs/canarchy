@@ -582,6 +582,30 @@ def test_fuzz_signal_emits_metadata_in_json_envelope():
     assert payload["data"]["mode"] == "dry_run"
 
 
+def test_fuzz_signal_full_field_sweeps_entire_field():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "signal",
+        "--dbc",
+        str(FIXTURES / "sample.dbc"),
+        "--message",
+        "EngineStatus1",
+        "--signal",
+        "LampState",
+        "--mode",
+        "full_field",
+        "--count",
+        "256",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code == EXIT_OK
+    payload = json.loads(stdout)
+    assert payload["data"]["signal_mode"] == "full_field"
+    # LampState is a full-range 8-bit signal: full_field sweeps all 256 values.
+    assert payload["data"]["frame_count"] == 256
+
+
 def test_fuzz_signal_unknown_message_returns_structured_error():
     exit_code, stdout, _ = run_cli(
         "fuzz",

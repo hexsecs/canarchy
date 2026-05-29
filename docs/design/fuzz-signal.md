@@ -38,6 +38,7 @@ the fuzz campaign.
 | `REQ-FZS-03` | Event-driven | When `fuzz signal --mode out_of_bounds` is invoked, the system shall emit payloads whose target signal decodes strictly outside the declared range, including the representable type extrema. |
 | `REQ-FZS-04` | Event-driven | When `fuzz signal --mode boundary` is invoked, the system shall emit the declared minimum, maximum, and the min / max ± 1 lsb values that are representable in the signal field. |
 | `REQ-FZS-05` | Optional feature | Where `--mode enum_gaps` is selected, the system shall emit every representable raw value that is not a defined choice. |
+| `REQ-FZS-15` | Optional feature | Where `--mode full_field` is selected, the system shall sweep the entire representable raw field, ignoring the declared bounds, emitting evenly spaced samples (including both extrema) when the field is wider than `--count`. |
 | `REQ-FZS-06` | Ubiquitous | The system shall hold all non-target signals at a baseline (raw zero by default) while mutating the target signal. |
 | `REQ-FZS-07` | State-driven | While generating payloads, the system shall be deterministic for a fixed `(message, signal, mode, seed, count)`. |
 | `REQ-FZS-08` | Unwanted behaviour | If the target signal is not defined on the message, the system shall return a structured error and exit non-zero. |
@@ -52,7 +53,7 @@ the fuzz campaign.
 
 ```text
 canarchy fuzz signal [<interface>] --dbc <path|ref> --message <name> --signal <name> \
-    --mode {in_bounds,out_of_bounds,boundary,enum_gaps} \
+    --mode {in_bounds,out_of_bounds,boundary,enum_gaps,full_field} \
     [--count <n>] [--rate <hz>] [--seed <n>] [--dry-run] [--ack-active] \
     [--run-id <uuid>] [--json|--jsonl|--text]
 ```
@@ -91,9 +92,15 @@ Per mode, the raw candidate set is:
 | `boundary` | `dmin_raw`, `dmax_raw`, `dmin_raw±1`, `dmax_raw±1` (representable only) |
 | `out_of_bounds` | `dmin_raw-1`, `dmax_raw+1`, `raw_lo`, `raw_hi` (representable and strictly outside the declared range) |
 | `enum_gaps` | every raw in `[raw_lo, raw_hi]` not in the choice set |
+| `full_field` | the whole `[raw_lo, raw_hi]` field; evenly spaced (extrema included) when wider than `count` |
 
 Each candidate is packed into a full-message payload with other signals at the
 baseline (raw zero unless a baseline mapping is supplied).
+
+`full_field` is the escape hatch for signals whose declared range already spans
+the full bit width (e.g. an 8-bit `[0, 255]` signal), where `out_of_bounds`
+correctly yields nothing — it sweeps every representable value regardless of the
+DBC bounds.
 
 ## Output Contracts
 

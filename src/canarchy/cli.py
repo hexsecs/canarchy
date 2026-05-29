@@ -1168,8 +1168,8 @@ def build_parser() -> CanarchyArgumentParser:
     fuzz_signal.add_argument(
         "--mode",
         required=True,
-        choices=("in_bounds", "out_of_bounds", "boundary", "enum_gaps"),
-        help="mutation mode",
+        choices=("in_bounds", "out_of_bounds", "boundary", "enum_gaps", "full_field"),
+        help="mutation mode (full_field sweeps the whole signal field, ignoring DBC bounds)",
     )
     fuzz_signal.add_argument(
         "--count", type=int, default=64, help="maximum mutated frames to emit (default 64)"

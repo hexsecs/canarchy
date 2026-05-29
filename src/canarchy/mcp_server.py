@@ -1272,8 +1272,11 @@ _TOOLS: list[types.Tool] = [
                 "signal": {"type": "string", "description": "Signal name to mutate"},
                 "mode": {
                     "type": "string",
-                    "enum": ["in_bounds", "out_of_bounds", "boundary", "enum_gaps"],
-                    "description": "Mutation mode",
+                    "enum": ["in_bounds", "out_of_bounds", "boundary", "enum_gaps", "full_field"],
+                    "description": (
+                        "Mutation mode; full_field sweeps the entire signal field, "
+                        "ignoring the declared DBC bounds"
+                    ),
                 },
                 "count": {
                     "type": "integer",
