@@ -650,6 +650,13 @@ def test_spn_payload_unknown_spn_raises():
         list(fuzzing.spn_payload(spn=987654, mode="in_bounds", seed=0, count=1))
 
 
+def test_spn_payload_incomplete_metadata_raises():
+    # SPN 695 (Engine Override Control Mode) is present with only a name —
+    # no layout fields. Must raise ValueError, not a raw KeyError.
+    with pytest.raises(ValueError):
+        list(fuzzing.spn_payload(spn=695, mode="in_bounds", seed=0, count=1))
+
+
 def test_spn_payload_mismatched_pgn_raises():
     with pytest.raises(ValueError):
         list(fuzzing.spn_payload(spn=110, pgn=1, mode="in_bounds", seed=0, count=1))

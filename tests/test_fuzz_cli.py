@@ -725,6 +725,17 @@ def test_fuzz_spn_unknown_spn_returns_structured_error():
     assert payload["errors"][0]["code"] == "INVALID_FUZZ_SPN"
 
 
+def test_fuzz_spn_incomplete_metadata_returns_structured_error():
+    # SPN 695 exists in the metadata with only a name (no layout fields).
+    # Must return INVALID_FUZZ_SPN, not crash with a KeyError.
+    exit_code, stdout, _ = run_cli(
+        "fuzz", "spn", "--spn", "695", "--mode", "in_bounds", "--dry-run", "--json"
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "INVALID_FUZZ_SPN"
+
+
 def test_fuzz_spn_invalid_rate_returns_structured_error():
     exit_code, stdout, _ = run_cli(
         "fuzz",

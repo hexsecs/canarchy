@@ -446,7 +446,7 @@ def spn_payload(
     ``pgn_length``, or an unknown ``mode`` (deferred to first iteration).
     """
 
-    from canarchy.j1939_metadata import spn_lookup
+    from canarchy.j1939_metadata import decodable_spns, spn_lookup
 
     if count < 0:
         raise ValueError("count must be zero or greater")
@@ -455,6 +455,10 @@ def spn_payload(
     if meta is None:
         raise ValueError(
             f"SPN {spn} has no built-in J1939 metadata; cannot derive its layout for fuzzing"
+        )
+    if spn not in decodable_spns():
+        raise ValueError(
+            f"SPN {spn} has incomplete J1939 metadata (missing layout fields); cannot fuzz it"
         )
 
     spn_pgn = int(meta["pgn"])

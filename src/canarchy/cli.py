@@ -4695,21 +4695,10 @@ def _build_fuzz_spn_frames(args: argparse.Namespace) -> list[CanFrame]:
     from canarchy.j1939 import compose_arbitration_id
     from canarchy.j1939_metadata import spn_lookup
 
-    meta = spn_lookup(args.spn)
-    if meta is None:
-        raise CommandError(
-            command=args.command,
-            exit_code=EXIT_USER_ERROR,
-            errors=[
-                ErrorDetail(
-                    code="INVALID_FUZZ_SPN",
-                    message=f"SPN {args.spn} has no built-in J1939 metadata.",
-                    hint="Use an SPN present in CANarchy's bundled J1939 metadata (see `j1939 spn`).",
-                )
-            ],
-        )
-    spn_pgn = int(meta["pgn"])
-
+    # `spn_payload` validates that the SPN exists, has complete layout
+    # metadata, and that any supplied --pgn matches — raising ValueError
+    # which we translate to a structured error. Generating first means we
+    # never dereference incomplete metadata (e.g. a name-only SPN).
     try:
         payloads = list(
             itertools.islice(
@@ -4732,13 +4721,16 @@ def _build_fuzz_spn_frames(args: argparse.Namespace) -> list[CanFrame]:
                     code="INVALID_FUZZ_SPN",
                     message=str(exc),
                     hint=(
-                        "Check --spn exists in the J1939 metadata, --count is non-negative, "
-                        "and any --pgn matches the SPN's PGN."
+                        "Use an SPN with complete built-in J1939 metadata (see `j1939 spn`); "
+                        "--count must be non-negative and any --pgn must match the SPN's PGN."
                     ),
                 )
             ],
         ) from exc
 
+    # Safe: a successful spn_payload guarantees complete metadata, so the
+    # PGN field is present.
+    spn_pgn = int(spn_lookup(args.spn)["pgn"])
     arbitration_id = compose_arbitration_id(spn_pgn)
     return [
         CanFrame(
@@ -4907,8 +4899,8 @@ def fuzz_payload(
 
         data["spn_mode"] = args.mode
         data["spn"] = args.spn
-        spn_meta = spn_lookup(args.spn)
-        data["pgn"] = int(spn_meta["pgn"]) if spn_meta else args.pgn
+        spn_meta = spn_lookup(args.spn) or {}
+        data["pgn"] = int(spn_meta["pgn"]) if "pgn" in spn_meta else args.pgn
     warnings: list[str] = []
     if dry_run:
         warnings.append(
