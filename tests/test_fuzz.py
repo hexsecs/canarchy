@@ -325,6 +325,35 @@ def test_signal_payload_in_bounds_respects_scale_and_offset():
         assert 0 <= value <= 100
 
 
+def test_signal_payload_in_bounds_rounds_non_lsb_aligned_bounds_inward():
+    """Regression for Codex P2 on PR #374.
+
+    A signal whose declared min/max do not fall on a raw lsb must not emit
+    decoded values outside [minimum, maximum]. With scale 0.4 and bounds
+    [0.1, 99.8], naive round() maps to raw [0, 250] -> phys 0.0 / 100.0,
+    which are outside the declared range. Directional rounding (ceil the
+    lower bound, floor the upper) keeps every in_bounds value inside.
+    """
+    import cantools
+
+    dbc = (
+        'VERSION ""\n'
+        "BS_:\n"
+        "BU_: ECU\n"
+        "BO_ 100 Msg: 1 ECU\n"
+        ' SG_ Scaled : 0|8@1+ (0.4,0) [0.1|99.8] "" ECU\n'
+    )
+    database = cantools.database.load_string(dbc, database_format="dbc")
+    message = database.get_message_by_name("Msg")
+    payloads = list(
+        fuzzing.signal_payload(message=message, signal="Scaled", mode="in_bounds", seed=0, count=64)
+    )
+    assert payloads
+    for payload in payloads:
+        value = message.decode(payload)["Scaled"]
+        assert 0.1 <= value <= 99.8
+
+
 def test_signal_payload_out_of_bounds_falls_outside_declared_range():
     message = _sample_message()
     payloads = list(

@@ -17,6 +17,7 @@ Design constraints (per :issue:`310`):
 
 from __future__ import annotations
 
+import math
 import random
 from collections.abc import Iterable, Iterator
 from dataclasses import replace
@@ -267,10 +268,20 @@ def signal_payload(
     raw_lo, raw_hi = _raw_signal_bounds(length, is_signed)
 
     if sig.minimum is not None and sig.maximum is not None and scale != 0.0:
-        dmin_raw = round((float(sig.minimum) - offset) / scale)
-        dmax_raw = round((float(sig.maximum) - offset) / scale)
-        if dmin_raw > dmax_raw:  # negative scale inverts the ordering
-            dmin_raw, dmax_raw = dmax_raw, dmin_raw
+        # Convert the declared physical bounds to raw, rounding *inward* so
+        # the resulting raw interval never decodes outside [minimum, maximum]
+        # for signals whose bounds are not aligned to a raw lsb. The two
+        # physical endpoints map to raw endpoints `a` and `b`; a negative
+        # scale flips their order, so we take ceil of the smaller (lower
+        # raw edge) and floor of the larger (upper raw edge).
+        a = (float(sig.minimum) - offset) / scale
+        b = (float(sig.maximum) - offset) / scale
+        dmin_raw = math.ceil(min(a, b))
+        dmax_raw = math.floor(max(a, b))
+        if dmin_raw > dmax_raw:
+            # Declared range spans less than one lsb: collapse to the single
+            # nearest representable raw value so the modes stay well-defined.
+            dmin_raw = dmax_raw = round((a + b) / 2)
     else:
         dmin_raw, dmax_raw = raw_lo, raw_hi
     dmin_raw = max(raw_lo, min(raw_hi, dmin_raw))
