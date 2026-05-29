@@ -28,16 +28,19 @@ from canarchy.models import CanFrame
 __all__ = [
     "ReplayStrategy",
     "SignalFuzzMode",
+    "SpnFuzzMode",
     "arbitration_id_range",
     "bitflip_payload",
     "boundary_payload",
     "mutate_replay",
     "random_payload",
     "signal_payload",
+    "spn_payload",
 ]
 
 ReplayStrategy = Literal["timing", "payload-bitflip"]
 SignalFuzzMode = Literal["in_bounds", "out_of_bounds", "boundary", "enum_gaps", "full_field"]
+SpnFuzzMode = Literal["in_bounds", "not_available", "error", "out_of_bounds", "boundary"]
 
 # Maximum payload length the generators emit. Classic CAN tops out at 8;
 # CAN FD allows 64. We use 64 as the upper bound to be future-proof.
@@ -395,6 +398,155 @@ def _signal_raw_candidates(
     raise ValueError(
         f"unknown signal fuzz mode: {mode!r}. Supported: 'in_bounds', "
         "'out_of_bounds', 'boundary', 'enum_gaps', 'full_field'."
+    )
+
+
+# ---------------------------------------------------------------------------
+# J1939 SPN-aware mutation
+# ---------------------------------------------------------------------------
+
+
+def spn_payload(
+    *,
+    spn: int,
+    mode: SpnFuzzMode,
+    seed: int,
+    count: int,
+    pgn: int | None = None,
+    pgn_length: int = 8,
+    baseline: int = 0xFF,
+) -> Iterator[bytes]:
+    """Yield full PGN payloads that mutate a single J1939 ``spn``.
+
+    SPN layout (byte ``start``, byte ``length``, byte order, resolution,
+    offset) is resolved from the built-in J1939 metadata
+    (``canarchy.j1939_metadata``). Each emitted payload is ``pgn_length``
+    bytes, filled with ``baseline`` (``0xFF`` — the J1939 "not available"
+    idiom) and with the targeted SPN's bytes overwritten.
+
+    Modes target the canonical J1939 sentinels and operational bounds.
+    The operational raw maximum reserves the top of the field per
+    SAE J1939: ``0xFA``, ``0xFAFF``, ``0xFAFFFFFF`` for 1 / 2 / 4-byte
+    SPNs, with ``0xFB..0xFD`` reserved, ``0xFE..`` error, ``0xFF..`` not
+    available.
+
+    * ``in_bounds`` — ``count`` seeded uniform samples in the operational
+      range ``[0, op_max]``.
+    * ``not_available`` — the all-ones not-available sentinel
+      (``0xFF`` / ``0xFFFF`` / ``0xFFFFFFFF``).
+    * ``error`` — the error sentinel (``0xFE`` / ``0xFEFF`` /
+      ``0xFEFFFFFF``).
+    * ``out_of_bounds`` — one lsb past the operational max (one lsb past
+      the min is raw ``-1``, which is not representable and is skipped).
+    * ``boundary`` — ``0``, ``op_max``, and the representable ``± 1 lsb``
+      neighbours.
+
+    ``count`` caps the number of payloads. ``ValueError`` is raised for an
+    unknown SPN, ``count < 0``, an SPN field that does not fit
+    ``pgn_length``, or an unknown ``mode`` (deferred to first iteration).
+    """
+
+    from canarchy.j1939_metadata import spn_lookup
+
+    if count < 0:
+        raise ValueError("count must be zero or greater")
+
+    meta = spn_lookup(spn)
+    if meta is None:
+        raise ValueError(
+            f"SPN {spn} has no built-in J1939 metadata; cannot derive its layout for fuzzing"
+        )
+
+    spn_pgn = int(meta["pgn"])
+    if pgn is not None and pgn != spn_pgn:
+        raise ValueError(f"SPN {spn} belongs to PGN {spn_pgn}, not the supplied PGN {pgn}")
+
+    start = int(meta["start"])
+    width = int(meta["length"])
+    byteorder = meta.get("byteorder", "little")
+    if width <= 0:
+        raise ValueError(f"SPN {spn} has a non-positive byte width: {width!r}")
+    if start < 0 or start + width > pgn_length:
+        raise ValueError(
+            f"SPN {spn} occupies bytes [{start}:{start + width}], which does not fit "
+            f"a {pgn_length}-byte PGN payload"
+        )
+
+    field_max = (1 << (8 * width)) - 1
+    op_max = _spn_operational_max(width)
+    baseline_bytes = bytes([baseline & 0xFF]) * pgn_length
+
+    emitted = 0
+    for raw in _spn_raw_candidates(
+        mode, width=width, op_max=op_max, field_max=field_max, seed=seed, count=count
+    ):
+        if emitted >= count:
+            return
+        payload = bytearray(baseline_bytes)
+        payload[start : start + width] = int(raw).to_bytes(width, byteorder=byteorder)
+        yield bytes(payload)
+        emitted += 1
+
+
+def _spn_operational_max(width: int) -> int:
+    """Return the J1939 operational raw maximum for a ``width``-byte SPN.
+
+    The top of the field is reserved (``0xFB..0xFF`` in the high byte), so
+    the largest valid operational raw value is ``0xFA`` followed by all
+    ``0xFF`` lower bytes: ``0xFA``, ``0xFAFF``, ``0xFAFFFFFF``.
+    """
+
+    high = 0xFA << (8 * (width - 1))
+    low = (1 << (8 * (width - 1))) - 1
+    return high | low
+
+
+def _spn_not_available_raw(width: int) -> int:
+    return (1 << (8 * width)) - 1
+
+
+def _spn_error_raw(width: int) -> int:
+    return _spn_not_available_raw(width) - (1 << (8 * (width - 1)))
+
+
+def _spn_raw_candidates(
+    mode: SpnFuzzMode,
+    *,
+    width: int,
+    op_max: int,
+    field_max: int,
+    seed: int,
+    count: int,
+) -> Iterator[int]:
+    """Yield raw SPN values for ``mode`` (capped by the caller)."""
+
+    if mode == "in_bounds":
+        rng = random.Random(seed)
+        for _ in range(count):
+            yield rng.randint(0, op_max)
+        return
+    if mode == "not_available":
+        yield _spn_not_available_raw(width)
+        return
+    if mode == "error":
+        yield _spn_error_raw(width)
+        return
+    if mode == "boundary":
+        seen: set[int] = set()
+        # min - 1 lsb == -1 is not representable and is omitted.
+        for value in (0, op_max, 1, op_max - 1, op_max + 1):
+            if 0 <= value <= field_max and value not in seen:
+                seen.add(value)
+                yield value
+        return
+    if mode == "out_of_bounds":
+        value = op_max + 1
+        if value <= field_max:
+            yield value
+        return
+    raise ValueError(
+        f"unknown SPN fuzz mode: {mode!r}. Supported: 'in_bounds', "
+        "'not_available', 'error', 'out_of_bounds', 'boundary'."
     )
 
 

@@ -558,6 +558,120 @@ def test_signal_payload_unknown_mode_raises():
 
 
 # ---------------------------------------------------------------------------
+# spn_payload (J1939 SPN-aware)
+# ---------------------------------------------------------------------------
+
+# SPN 110 (Engine Coolant Temperature): PGN 65262, byte 0, 1 byte, res 1,
+# offset -40 -> operational range [-40, 210] degC, raw [0, 0xFA].
+
+
+def test_spn_payload_in_bounds_stays_within_operational_raw_range():
+    payloads = list(fuzzing.spn_payload(spn=110, mode="in_bounds", seed=1, count=32))
+    assert len(payloads) == 32
+    for payload in payloads:
+        assert len(payload) == 8
+        assert payload[0] <= 0xFA  # operational max for a 1-byte SPN
+
+
+def test_spn_payload_not_available_emits_all_ones_sentinel():
+    (payload,) = list(fuzzing.spn_payload(spn=110, mode="not_available", seed=0, count=4))
+    assert payload[0] == 0xFF
+
+
+def test_spn_payload_error_emits_error_sentinel():
+    (payload,) = list(fuzzing.spn_payload(spn=110, mode="error", seed=0, count=4))
+    assert payload[0] == 0xFE
+
+
+def test_spn_payload_boundary_covers_operational_edges():
+    payloads = list(fuzzing.spn_payload(spn=110, mode="boundary", seed=0, count=8))
+    raws = {payload[0] for payload in payloads}
+    # min, max, min+1lsb, max-1lsb, max+1lsb (min-1lsb == -1 is omitted).
+    assert raws == {0x00, 0xFA, 0x01, 0xF9, 0xFB}
+
+
+def test_spn_payload_out_of_bounds_is_one_lsb_past_operational_max():
+    payloads = list(fuzzing.spn_payload(spn=110, mode="out_of_bounds", seed=0, count=8))
+    assert [payload[0] for payload in payloads] == [0xFB]
+
+
+def test_spn_payload_targets_only_its_own_bytes_and_defaults_rest_to_ff():
+    (payload,) = list(fuzzing.spn_payload(spn=110, mode="boundary", seed=0, count=1))
+    # byte 0 is the SPN (min == 0x00); the rest stay at the 0xFF baseline.
+    assert payload == b"\x00" + b"\xff" * 7
+
+
+def test_spn_payload_sentinel_widths_match_j1939_spec():
+    # Pure-function sentinel/operational-max helpers across 1/2/4-byte SPNs.
+    assert fuzzing._spn_not_available_raw(1) == 0xFF
+    assert fuzzing._spn_not_available_raw(2) == 0xFFFF
+    assert fuzzing._spn_not_available_raw(4) == 0xFFFFFFFF
+    assert fuzzing._spn_error_raw(1) == 0xFE
+    assert fuzzing._spn_error_raw(2) == 0xFEFF
+    assert fuzzing._spn_error_raw(4) == 0xFEFFFFFF
+    assert fuzzing._spn_operational_max(1) == 0xFA
+    assert fuzzing._spn_operational_max(2) == 0xFAFF
+    assert fuzzing._spn_operational_max(4) == 0xFAFFFFFF
+
+
+def test_spn_payload_width_2_sentinels_are_little_endian():
+    # SPN 27 (EGR Valve Position): 2-byte SPN at byte 0.
+    meta = _spn_meta(27)
+    start, width = meta["start"], meta["length"]
+    assert width == 2
+    (na,) = list(fuzzing.spn_payload(spn=27, mode="not_available", seed=0, count=1))
+    assert int.from_bytes(na[start : start + width], "little") == 0xFFFF
+    (err,) = list(fuzzing.spn_payload(spn=27, mode="error", seed=0, count=1))
+    assert int.from_bytes(err[start : start + width], "little") == 0xFEFF
+
+
+def test_spn_payload_width_4_sentinels_match_spec():
+    # SPN 182 (Engine Trip Fuel): 4-byte SPN at byte 0.
+    meta = _spn_meta(182)
+    start, width = meta["start"], meta["length"]
+    assert width == 4
+    (na,) = list(fuzzing.spn_payload(spn=182, mode="not_available", seed=0, count=1))
+    assert int.from_bytes(na[start : start + width], "little") == 0xFFFFFFFF
+    (err,) = list(fuzzing.spn_payload(spn=182, mode="error", seed=0, count=1))
+    assert int.from_bytes(err[start : start + width], "little") == 0xFEFFFFFF
+    in_bounds = list(fuzzing.spn_payload(spn=182, mode="in_bounds", seed=3, count=20))
+    for payload in in_bounds:
+        assert int.from_bytes(payload[start : start + width], "little") <= 0xFAFFFFFF
+
+
+def test_spn_payload_is_deterministic_for_same_seed():
+    a = list(fuzzing.spn_payload(spn=110, mode="in_bounds", seed=7, count=16))
+    b = list(fuzzing.spn_payload(spn=110, mode="in_bounds", seed=7, count=16))
+    assert a == b
+
+
+def test_spn_payload_unknown_spn_raises():
+    with pytest.raises(ValueError):
+        list(fuzzing.spn_payload(spn=987654, mode="in_bounds", seed=0, count=1))
+
+
+def test_spn_payload_mismatched_pgn_raises():
+    with pytest.raises(ValueError):
+        list(fuzzing.spn_payload(spn=110, pgn=1, mode="in_bounds", seed=0, count=1))
+
+
+def test_spn_payload_negative_count_raises():
+    with pytest.raises(ValueError):
+        list(fuzzing.spn_payload(spn=110, mode="in_bounds", seed=0, count=-1))
+
+
+def test_spn_payload_unknown_mode_raises():
+    with pytest.raises(ValueError):
+        list(fuzzing.spn_payload(spn=110, mode="nope", seed=0, count=1))  # type: ignore[arg-type]
+
+
+def _spn_meta(spn: int):
+    from canarchy.j1939_metadata import spn_lookup
+
+    return spn_lookup(spn)
+
+
+# ---------------------------------------------------------------------------
 # Module-level invariants
 # ---------------------------------------------------------------------------
 

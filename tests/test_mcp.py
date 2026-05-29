@@ -74,6 +74,7 @@ _EXPECTED_TOOLS = {
     "fuzz_replay",
     "fuzz_arbitration_id",
     "fuzz_signal",
+    "fuzz_spn",
 }
 
 
@@ -975,6 +976,52 @@ def test_fuzz_signal_build_argv_orders_flags_and_defaults_dry_run():
     assert argv[0:3] == ["fuzz", "signal", "can0"]
     assert "--dbc" in argv and "--message" in argv and "--signal" in argv
     assert "--mode" in argv
+    assert "--dry-run" in argv
+    assert "--ack-active" in argv
+
+
+def test_fuzz_spn_without_ack_active_returns_structured_error():
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_spn",
+            {"interface": "can0", "spn": 110, "mode": "not_available"},
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_fuzz_spn_with_ack_active_defaults_to_dry_run():
+    results = asyncio.run(
+        handle_call_tool(
+            "fuzz_spn",
+            {"spn": 110, "mode": "boundary", "count": 5, "ack_active": True},
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["mode"] == "dry_run"
+    assert payload["data"]["spn_mode"] == "boundary"
+    assert payload["data"]["spn"] == 110
+
+
+def test_fuzz_spn_build_argv_orders_flags_and_defaults_dry_run():
+    argv = _build_argv(
+        "fuzz_spn",
+        {
+            "interface": "can0",
+            "spn": 110,
+            "pgn": 65262,
+            "mode": "in_bounds",
+            "count": 8,
+            "ack_active": True,
+            "dry_run": True,
+        },
+    )
+    assert argv[0:3] == ["fuzz", "spn", "can0"]
+    assert "--spn" in argv and "--mode" in argv and "--pgn" in argv
     assert "--dry-run" in argv
     assert "--ack-active" in argv
 

@@ -130,10 +130,17 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "fuzz replay",
     "fuzz arbitration-id",
     "fuzz signal",
+    "fuzz spn",
     "replay",
     "sequence replay",
 }
-FUZZ_COMMANDS = {"fuzz payload", "fuzz replay", "fuzz arbitration-id", "fuzz signal"}
+FUZZ_COMMANDS = {
+    "fuzz payload",
+    "fuzz replay",
+    "fuzz arbitration-id",
+    "fuzz signal",
+    "fuzz spn",
+}
 SEQUENCE_COMMANDS = {"sequence replay"}
 IMPLEMENTED_COMMANDS = (
     TRANSPORT_COMMANDS
@@ -1184,6 +1191,36 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(fuzz_signal)
     fuzz_signal.set_defaults(command="fuzz signal")
 
+    fuzz_spn = fuzz_subparsers.add_parser(
+        "spn", help="mutate a J1939 SPN across its operational range and sentinels"
+    )
+    fuzz_spn.add_argument("interface", nargs="?")
+    fuzz_spn.add_argument("--spn", required=True, type=int, help="J1939 SPN to mutate")
+    fuzz_spn.add_argument(
+        "--pgn",
+        type=lambda x: int(x, 0),
+        default=None,
+        help="expected PGN (validated against the SPN's PGN; derived if omitted)",
+    )
+    fuzz_spn.add_argument(
+        "--mode",
+        required=True,
+        choices=("in_bounds", "not_available", "error", "out_of_bounds", "boundary"),
+        help="mutation mode (not_available / error emit the J1939 sentinels)",
+    )
+    fuzz_spn.add_argument(
+        "--count", type=int, default=64, help="maximum mutated frames to emit (default 64)"
+    )
+    fuzz_spn.add_argument("--rate", type=float, default=100.0, help="frames per second")
+    fuzz_spn.add_argument("--seed", type=int, default=0, help="seed for the mutator")
+    fuzz_spn.add_argument(
+        "--dry-run", action="store_true", help="emit JSONL plan without transmitting"
+    )
+    fuzz_spn.add_argument("--run-id", default=None, help="explicit run UUID (random if omitted)")
+    add_active_ack_argument(fuzz_spn)
+    add_output_arguments(fuzz_spn)
+    fuzz_spn.set_defaults(command="fuzz spn")
+
     config = subparsers.add_parser("config", help="inspect CANarchy configuration")
     config_subparsers = config.add_subparsers(dest="config_action", required=True)
     config_show = config_subparsers.add_parser(
@@ -1321,6 +1358,7 @@ INTERFACE_FALLBACK_COMMANDS = {
     "fuzz replay",
     "fuzz arbitration-id",
     "fuzz signal",
+    "fuzz spn",
 }
 
 
@@ -1378,7 +1416,7 @@ def prepare_args(args: argparse.Namespace) -> None:
         return
     if args.command == "fuzz replay":
         return
-    if args.command == "fuzz signal" and getattr(args, "dry_run", False):
+    if args.command in ("fuzz signal", "fuzz spn") and getattr(args, "dry_run", False):
         return
     if args.command == "send" and getattr(args, "dry_run", False) and getattr(args, "dbc", None):
         return
@@ -4653,6 +4691,66 @@ def _build_fuzz_signal_frames(args: argparse.Namespace) -> list[CanFrame]:
     ]
 
 
+def _build_fuzz_spn_frames(args: argparse.Namespace) -> list[CanFrame]:
+    from canarchy.j1939 import compose_arbitration_id
+    from canarchy.j1939_metadata import spn_lookup
+
+    meta = spn_lookup(args.spn)
+    if meta is None:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_FUZZ_SPN",
+                    message=f"SPN {args.spn} has no built-in J1939 metadata.",
+                    hint="Use an SPN present in CANarchy's bundled J1939 metadata (see `j1939 spn`).",
+                )
+            ],
+        )
+    spn_pgn = int(meta["pgn"])
+
+    try:
+        payloads = list(
+            itertools.islice(
+                fuzzing.spn_payload(
+                    spn=args.spn,
+                    mode=args.mode,
+                    seed=args.seed,
+                    count=args.count,
+                    pgn=args.pgn,
+                ),
+                args.count,
+            )
+        )
+    except ValueError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_FUZZ_SPN",
+                    message=str(exc),
+                    hint=(
+                        "Check --spn exists in the J1939 metadata, --count is non-negative, "
+                        "and any --pgn matches the SPN's PGN."
+                    ),
+                )
+            ],
+        ) from exc
+
+    arbitration_id = compose_arbitration_id(spn_pgn)
+    return [
+        CanFrame(
+            arbitration_id=arbitration_id,
+            data=payload,
+            is_extended_id=True,
+            timestamp=i / args.rate if args.rate else None,
+        )
+        for i, payload in enumerate(payloads)
+    ]
+
+
 def fuzz_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -4686,6 +4784,9 @@ def fuzz_payload(
         target = args.interface
     elif args.command == "fuzz signal":
         frames = _build_fuzz_signal_frames(args)
+        target = args.interface
+    elif args.command == "fuzz spn":
+        frames = _build_fuzz_spn_frames(args)
         target = args.interface
     else:  # pragma: no cover — guarded by IMPLEMENTED_COMMANDS
         raise AssertionError(f"unexpected fuzz command: {args.command}")
@@ -4801,6 +4902,13 @@ def fuzz_payload(
         data["dbc"] = args.dbc
         data["message"] = args.message
         data["signal"] = args.signal
+    if args.command == "fuzz spn":
+        from canarchy.j1939_metadata import spn_lookup
+
+        data["spn_mode"] = args.mode
+        data["spn"] = args.spn
+        spn_meta = spn_lookup(args.spn)
+        data["pgn"] = int(spn_meta["pgn"]) if spn_meta else args.pgn
     warnings: list[str] = []
     if dry_run:
         warnings.append(
