@@ -1032,16 +1032,24 @@ def build_parser() -> CanarchyArgumentParser:
     fuzz_payload.add_argument(
         "--strategy",
         required=True,
-        choices=("bitflip", "random", "boundary"),
+        choices=("bitflip", "random", "boundary", "havoc", "splice", "interesting"),
         help="mutation strategy",
     )
     fuzz_payload.add_argument(
         "--data",
         default=None,
-        help="baseline hex payload for bitflip; defaults to 8 zero bytes",
+        help="baseline hex payload for bitflip / havoc; defaults to 8 zero bytes",
     )
     fuzz_payload.add_argument(
-        "--dlc", type=int, default=8, help="payload length for random / boundary (default 8)"
+        "--dlc",
+        type=int,
+        default=8,
+        help="payload length for random / boundary / interesting (default 8)",
+    )
+    fuzz_payload.add_argument(
+        "--corpus",
+        default=None,
+        help="candump capture supplying the seed corpus for the splice strategy",
     )
     fuzz_payload.add_argument(
         "--max", dest="max_frames_fuzz", type=int, default=64, help="maximum frames to emit"
@@ -4538,6 +4546,32 @@ def _wrap_fuzz_value_error(args: argparse.Namespace, exc: ValueError) -> Command
     )
 
 
+def _load_fuzz_corpus(args: argparse.Namespace) -> list[bytes]:
+    """Load the seed corpus (frame payloads) for the splice strategy."""
+    if not args.corpus:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="MISSING_INPUT",
+                    message="`fuzz payload --strategy splice` requires --corpus <capture>.",
+                    hint="Pass a candump capture whose frame payloads seed the splice corpus.",
+                )
+            ],
+        )
+    transport_backend = LocalTransport()
+    try:
+        frames = transport_backend.frames_from_file(args.corpus)
+    except TransportError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        ) from exc
+    return [frame.data for frame in frames]
+
+
 def _build_fuzz_payload_frames(args: argparse.Namespace) -> list[CanFrame]:
     arbitration_id = _parse_fuzz_hex_id(args.id, command=args.command)
     # For bitflip we mutate the explicit (or default-8-byte-zero) baseline
@@ -4560,9 +4594,24 @@ def _build_fuzz_payload_frames(args: argparse.Namespace) -> list[CanFrame]:
             payloads = fuzzing.random_payload(
                 dlc=args.dlc, seed=args.seed, count=args.max_frames_fuzz
             )
+        elif args.strategy == "havoc":
+            baseline = _parse_fuzz_payload_data(args.data, default_dlc=8, command=args.command)
+            payloads = fuzzing.havoc_payload(baseline, seed=args.seed, count=args.max_frames_fuzz)
+        elif args.strategy == "splice":
+            corpus = _load_fuzz_corpus(args)
+            payloads = fuzzing.splice_payload(corpus, seed=args.seed, count=args.max_frames_fuzz)
+        elif args.strategy == "interesting":
+            payloads = fuzzing.interesting_values_payload(dlc=args.dlc)
         else:  # boundary
             payloads = fuzzing.boundary_payload(dlc=args.dlc)
         materialised = list(itertools.islice(payloads, args.max_frames_fuzz))
+        # `havoc` and `splice` can grow a payload beyond the input length
+        # (block insertion, prefix+suffix joins), and the engine only caps
+        # at the 64-byte CAN FD ceiling. `fuzz payload` emits classic CAN
+        # frames, which top out at 8 bytes, so clamp these strategies to a
+        # classic DLC before building frames.
+        if args.strategy in ("havoc", "splice"):
+            materialised = [payload[:8] for payload in materialised]
     except ValueError as exc:
         raise _wrap_fuzz_value_error(args, exc) from exc
     return [

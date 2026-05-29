@@ -679,6 +679,104 @@ def _spn_meta(spn: int):
 
 
 # ---------------------------------------------------------------------------
+# havoc_payload / splice_payload / interesting_values_payload (AFL-style)
+# ---------------------------------------------------------------------------
+
+
+def test_havoc_payload_is_deterministic_for_same_seed():
+    base = b"\x11\x22\x33\x44"
+    a = list(fuzzing.havoc_payload(base, seed=1, count=20))
+    b = list(fuzzing.havoc_payload(base, seed=1, count=20))
+    assert a == b
+    assert len(a) == 20
+
+
+def test_havoc_payload_is_diverse_and_mutates_the_input():
+    base = b"\x11\x22\x33\x44"
+    out = list(fuzzing.havoc_payload(base, seed=2, count=32))
+    # Stacked mutations produce variety and (almost always) change the input.
+    assert len(set(out)) > 1
+    assert sum(variant != base for variant in out) >= len(out) - 1
+
+
+def test_havoc_payload_clamps_to_max_dlc():
+    out = list(fuzzing.havoc_payload(b"\x00" * 8, seed=3, count=50))
+    assert all(len(variant) <= 64 for variant in out)
+
+
+def test_havoc_payload_different_seeds_diverge():
+    base = b"\x01\x02\x03\x04"
+    a = list(fuzzing.havoc_payload(base, seed=1, count=16))
+    b = list(fuzzing.havoc_payload(base, seed=2, count=16))
+    assert a != b
+
+
+def test_havoc_payload_negative_count_rejected():
+    with pytest.raises(ValueError):
+        list(fuzzing.havoc_payload(b"\x00", seed=0, count=-1))
+
+
+def test_splice_payload_joins_prefix_and_suffix_from_corpus():
+    corpus = [b"\xaa\xaa\xaa\xaa", b"\xbb\xbb\xbb\xbb\xbb\xbb"]
+    out = list(fuzzing.splice_payload(corpus, seed=2, count=10))
+    assert len(out) == 10
+    # Every spliced byte must originate from one of the corpus byte values.
+    allowed = {0xAA, 0xBB}
+    for variant in out:
+        assert set(variant) <= allowed
+
+
+def test_splice_payload_is_deterministic_for_same_seed():
+    corpus = [b"\x01\x02\x03", b"\x04\x05\x06\x07"]
+    a = list(fuzzing.splice_payload(corpus, seed=9, count=12))
+    b = list(fuzzing.splice_payload(corpus, seed=9, count=12))
+    assert a == b
+
+
+def test_splice_payload_empty_corpus_raises():
+    with pytest.raises(ValueError):
+        list(fuzzing.splice_payload([], seed=0, count=3))
+
+
+def test_splice_payload_clamps_to_max_dlc():
+    corpus = [b"\xaa" * 64, b"\xbb" * 64]
+    out = list(fuzzing.splice_payload(corpus, seed=1, count=10))
+    assert all(len(variant) <= 64 for variant in out)
+
+
+def test_splice_payload_negative_count_rejected():
+    with pytest.raises(ValueError):
+        list(fuzzing.splice_payload([b"\x00"], seed=0, count=-1))
+
+
+def test_interesting_values_payload_includes_known_patterns():
+    out = list(fuzzing.interesting_values_payload(dlc=4))
+    # 8-bit interesting values at byte 0 over a zero baseline.
+    assert b"\xff\x00\x00\x00" in out  # 255
+    assert b"\x7f\x00\x00\x00" in out  # 127
+    assert b"\x80\x00\x00\x00" in out  # 128 / -128
+    assert b"\x00\x00\x00\x00" in out  # 0
+    # 16-bit little-endian interesting value (256) at word offset 0.
+    assert b"\x00\x01\x00\x00" in out
+
+
+def test_interesting_values_payload_is_deterministic_and_deduplicated():
+    a = list(fuzzing.interesting_values_payload(dlc=4))
+    b = list(fuzzing.interesting_values_payload(dlc=4))
+    assert a == b
+    assert len(a) == len(set(a))  # no duplicate payloads
+
+
+def test_interesting_values_payload_dlc_zero_yields_nothing():
+    assert list(fuzzing.interesting_values_payload(dlc=0)) == []
+
+
+def test_interesting_values_payload_invalid_dlc_rejected():
+    with pytest.raises(ValueError):
+        list(fuzzing.interesting_values_payload(dlc=65))
+
+
+# ---------------------------------------------------------------------------
 # Module-level invariants
 # ---------------------------------------------------------------------------
 

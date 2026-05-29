@@ -494,6 +494,153 @@ def test_fuzz_payload_live_mode_requires_ack_when_config_demands_it():
 
 
 # ---------------------------------------------------------------------------
+# fuzz payload — AFL-style strategies (havoc / splice / interesting)
+# ---------------------------------------------------------------------------
+
+
+def test_fuzz_payload_havoc_dry_run_is_deterministic():
+    args = (
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "havoc",
+        "--data",
+        "11223344",
+        "--max",
+        "8",
+        "--seed",
+        "5",
+        "--dry-run",
+        "--jsonl",
+    )
+    _, out_a, _ = run_cli(*args)
+    _, out_b, _ = run_cli(*args)
+    data_a = [evt["payload"]["frame"]["data"] for evt in _signal_frames(out_a)]
+    data_b = [evt["payload"]["frame"]["data"] for evt in _signal_frames(out_b)]
+    assert data_a == data_b
+    assert len(data_a) == 8
+
+
+def test_fuzz_payload_havoc_clamps_to_classic_dlc():
+    """Regression for Codex P2 on PR #376.
+
+    havoc starts from the default 8-byte seed and can insert bytes,
+    growing past 8; classic CAN frames cap at 8 bytes, so the CLI must
+    clamp rather than crash with a raw ValueError.
+    """
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "havoc",
+        "--max",
+        "16",
+        "--seed",
+        "0",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    frames = _signal_frames(stdout)
+    assert len(frames) == 16
+    assert all(len(bytes.fromhex(evt["payload"]["frame"]["data"])) <= 8 for evt in frames)
+
+
+def test_fuzz_payload_splice_clamps_to_classic_dlc():
+    """Splicing two 8-byte corpus frames can exceed 8 bytes; must clamp."""
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "splice",
+        "--corpus",
+        str(FIXTURES / "complex.candump"),
+        "--max",
+        "20",
+        "--seed",
+        "3",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    frames = _signal_frames(stdout)
+    assert frames
+    assert all(len(bytes.fromhex(evt["payload"]["frame"]["data"])) <= 8 for evt in frames)
+
+
+def test_fuzz_payload_interesting_dry_run_emits_known_values():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "interesting",
+        "--dlc",
+        "2",
+        "--max",
+        "200",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    datas = {evt["payload"]["frame"]["data"] for evt in _signal_frames(stdout)}
+    assert "ff00" in datas  # 0xFF at byte 0
+    assert "7f00" in datas  # 0x7F at byte 0
+
+
+def test_fuzz_payload_splice_requires_corpus():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "splice",
+        "--max",
+        "5",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "MISSING_INPUT"
+
+
+def test_fuzz_payload_splice_with_corpus_emits_frames():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x123",
+        "--strategy",
+        "splice",
+        "--corpus",
+        str(FIXTURES / "complex.candump"),
+        "--max",
+        "6",
+        "--seed",
+        "1",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    assert len(_signal_frames(stdout)) == 6
+
+
+# ---------------------------------------------------------------------------
 # fuzz signal (DBC-aware)
 # ---------------------------------------------------------------------------
 

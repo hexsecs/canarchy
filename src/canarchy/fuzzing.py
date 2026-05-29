@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import replace
 from typing import Any, Literal
 
@@ -32,11 +32,33 @@ __all__ = [
     "arbitration_id_range",
     "bitflip_payload",
     "boundary_payload",
+    "havoc_payload",
+    "interesting_values_payload",
     "mutate_replay",
     "random_payload",
     "signal_payload",
+    "splice_payload",
     "spn_payload",
 ]
+
+# AFL "interesting" numeric values (signed). The 16-bit set extends the
+# 8-bit set; the 32-bit set extends the 16-bit set — matching AFL's
+# INTERESTING_8 / _16 / _32 tables (afl-fuzz.c).
+_INTERESTING_8 = (-128, -1, 0, 1, 16, 32, 64, 100, 127, 128, 255)
+_INTERESTING_16 = _INTERESTING_8 + (-32768, -129, 128, 255, 256, 512, 1000, 1024, 4096, 32767)
+_INTERESTING_32 = _INTERESTING_16 + (
+    -2147483648,
+    -100663046,
+    -32769,
+    32768,
+    65535,
+    65536,
+    100663045,
+    2147483647,
+)
+
+# AFL's arithmetic mutation magnitude ceiling (ARITH_MAX).
+_ARITH_MAX = 35
 
 ReplayStrategy = Literal["timing", "payload-bitflip"]
 SignalFuzzMode = Literal["in_bounds", "out_of_bounds", "boundary", "enum_gaps", "full_field"]
@@ -552,6 +574,160 @@ def _spn_raw_candidates(
         f"unknown SPN fuzz mode: {mode!r}. Supported: 'in_bounds', "
         "'not_available', 'error', 'out_of_bounds', 'boundary'."
     )
+
+
+# ---------------------------------------------------------------------------
+# AFL-style mutators (havoc / splice / interesting values)
+# ---------------------------------------------------------------------------
+
+
+def havoc_payload(data: bytes, *, seed: int, count: int) -> Iterator[bytes]:
+    """Yield ``count`` AFL-havoc variants of ``data``.
+
+    Each variant stacks a random sequence of basic mutations on a fresh
+    copy of ``data``: single-bit flips, interesting-value injection (8 /
+    16 / 32-bit), arithmetic ``± [1, 35]`` at 8 / 16 / 32-bit widths,
+    random byte replacement, and block deletion / insertion / overwrite —
+    the operators AFL's ``havoc`` stage uses. Output length is clamped to
+    64 bytes (CAN FD maximum). Deterministic for a fixed ``seed``.
+    """
+
+    if count < 0:
+        raise ValueError("count must be zero or greater")
+    rng = random.Random(seed)
+    base = bytes(data)
+    for _ in range(count):
+        buf = bytearray(base)
+        for _ in range(rng.randint(1, 16)):
+            _havoc_mutate(buf, rng)
+            if len(buf) > _MAX_DLC:
+                del buf[_MAX_DLC:]
+        yield bytes(buf)
+
+
+def splice_payload(corpus: Sequence[bytes], *, seed: int, count: int) -> Iterator[bytes]:
+    """Yield ``count`` spliced variants drawn from ``corpus``.
+
+    Each variant picks two seeds from ``corpus`` and joins a random prefix
+    of the first with a random suffix of the second. Output length is
+    clamped to 64 bytes. Deterministic for a fixed ``seed``. Raises
+    ``ValueError`` when ``corpus`` is empty.
+    """
+
+    if count < 0:
+        raise ValueError("count must be zero or greater")
+    seeds = [bytes(entry) for entry in corpus]
+    if not seeds:
+        raise ValueError("corpus must contain at least one payload for splicing")
+    rng = random.Random(seed)
+    for _ in range(count):
+        left = seeds[rng.randrange(len(seeds))]
+        right = seeds[rng.randrange(len(seeds))]
+        cut_left = rng.randint(0, len(left))
+        cut_right = rng.randint(0, len(right))
+        yield (left[:cut_left] + right[cut_right:])[:_MAX_DLC]
+
+
+def interesting_values_payload(*, dlc: int) -> Iterator[bytes]:
+    """Yield ``dlc``-byte payloads seeding AFL "interesting" values.
+
+    Enumerates, in a fixed order, every 8-bit interesting value at each
+    byte offset, every 16-bit value at each word offset, and every 32-bit
+    value at each dword offset, written little-endian over a zero
+    baseline. Duplicates are suppressed. Deterministic; yields nothing for
+    ``dlc == 0``.
+    """
+
+    _validate_dlc(dlc)
+    if dlc == 0:
+        return
+    base = bytes(dlc)
+    seen: set[bytes] = set()
+
+    def _emit(offset: int, width: int, value: int) -> bytes | None:
+        buf = bytearray(base)
+        buf[offset : offset + width] = (value & ((1 << (8 * width)) - 1)).to_bytes(width, "little")
+        candidate = bytes(buf)
+        if candidate in seen:
+            return None
+        seen.add(candidate)
+        return candidate
+
+    for offset in range(dlc):
+        for value in _INTERESTING_8:
+            emitted = _emit(offset, 1, value)
+            if emitted is not None:
+                yield emitted
+    if dlc >= 2:
+        for offset in range(dlc - 1):
+            for value in _INTERESTING_16:
+                emitted = _emit(offset, 2, value)
+                if emitted is not None:
+                    yield emitted
+    if dlc >= 4:
+        for offset in range(dlc - 3):
+            for value in _INTERESTING_32:
+                emitted = _emit(offset, 4, value)
+                if emitted is not None:
+                    yield emitted
+
+
+def _havoc_mutate(buf: bytearray, rng: random.Random) -> None:
+    """Apply a single random AFL-havoc operator to ``buf`` in place.
+
+    Operators whose preconditions are not met (e.g. a 32-bit write on a
+    1-byte buffer) are no-ops for that round, mirroring AFL's stacked
+    havoc loop where individual picks can be skipped.
+    """
+
+    op = rng.randint(0, 10)
+    n = len(buf)
+    if op == 0 and n > 0:  # single-bit flip
+        bit = rng.randrange(n * 8)
+        buf[bit // 8] ^= 1 << (bit % 8)
+    elif op == 1 and n > 0:  # interesting 8
+        buf[rng.randrange(n)] = rng.choice(_INTERESTING_8) & 0xFF
+    elif op == 2 and n >= 2:  # interesting 16 (little-endian)
+        pos = rng.randrange(n - 1)
+        buf[pos : pos + 2] = (rng.choice(_INTERESTING_16) & 0xFFFF).to_bytes(2, "little")
+    elif op == 3 and n >= 4:  # interesting 32 (little-endian)
+        pos = rng.randrange(n - 3)
+        buf[pos : pos + 4] = (rng.choice(_INTERESTING_32) & 0xFFFFFFFF).to_bytes(4, "little")
+    elif op == 4 and n > 0:  # 8-bit arithmetic
+        pos = rng.randrange(n)
+        delta = rng.randint(1, _ARITH_MAX)
+        buf[pos] = (buf[pos] + (delta if rng.random() < 0.5 else -delta)) & 0xFF
+    elif op == 5 and n >= 2:  # 16-bit arithmetic (little-endian)
+        pos = rng.randrange(n - 1)
+        cur = int.from_bytes(buf[pos : pos + 2], "little")
+        delta = rng.randint(1, _ARITH_MAX)
+        cur = (cur + (delta if rng.random() < 0.5 else -delta)) & 0xFFFF
+        buf[pos : pos + 2] = cur.to_bytes(2, "little")
+    elif op == 6 and n >= 4:  # 32-bit arithmetic (little-endian)
+        pos = rng.randrange(n - 3)
+        cur = int.from_bytes(buf[pos : pos + 4], "little")
+        delta = rng.randint(1, _ARITH_MAX)
+        cur = (cur + (delta if rng.random() < 0.5 else -delta)) & 0xFFFFFFFF
+        buf[pos : pos + 4] = cur.to_bytes(4, "little")
+    elif op == 7 and n > 0:  # random byte replacement
+        buf[rng.randrange(n)] ^= rng.randint(1, 255)
+    elif op == 8 and n > 1:  # block deletion
+        del_len = rng.randint(1, n - 1)
+        start = rng.randrange(n - del_len + 1)
+        del buf[start : start + del_len]
+    elif op == 9:  # block insertion (cloned or random bytes)
+        ins_len = rng.randint(1, 8)
+        if n > 0 and rng.random() < 0.5:
+            src = rng.randrange(n)
+            chunk = bytes(buf[src : src + ins_len]) or bytes([rng.randint(0, 255)])
+        else:
+            chunk = bytes(rng.randint(0, 255) for _ in range(ins_len))
+        pos = rng.randrange(n + 1)
+        buf[pos:pos] = chunk
+    elif op == 10 and n > 0:  # block overwrite (constant fill)
+        ov_len = rng.randint(1, n)
+        start = rng.randrange(n - ov_len + 1)
+        buf[start : start + ov_len] = bytes([rng.randint(0, 255)]) * ov_len
 
 
 # ---------------------------------------------------------------------------
