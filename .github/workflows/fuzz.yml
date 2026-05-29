@@ -1,0 +1,58 @@
+name: fuzz
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  atheris:
+    name: atheris (${{ matrix.harness }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - harness: fuzz_candump_parser
+            corpus: candump
+          - harness: fuzz_dbc_parser
+            corpus: dbc
+          - harness: fuzz_isotp_reassembly
+            corpus: isotp
+          - harness: fuzz_j1939_tp
+            corpus: j1939_tp
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install clang (atheris build dependency)
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Install project with the fuzz extra
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[fuzz]
+
+      - name: Run ${{ matrix.harness }} (bounded smoke)
+        # Bounded libFuzzer budget: stop at 10000 runs or 30 seconds,
+        # whichever comes first. Seeds are warmed from the checked-in
+        # corpus. A crash makes the harness exit non-zero and fails CI.
+        run: |
+          python tests/fuzz/${{ matrix.harness }}.py \
+            -runs=10000 -max_total_time=30 \
+            tests/fuzz/corpora/${{ matrix.corpus }}

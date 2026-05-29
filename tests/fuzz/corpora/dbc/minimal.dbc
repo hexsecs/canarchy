@@ -1,0 +1,5 @@
+VERSION ""
+BS_:
+BU_: ECU
+BO_ 256 Msg: 8 ECU
+ SG_ Sig : 0|8@1+ (1,0) [0|255] "" ECU
