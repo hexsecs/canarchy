@@ -39,6 +39,9 @@ dependencies = [
 scapy = [
     "scapy>=2.6",
 ]
+fuzz = [
+    "atheris>=2.3.0",
+]
 
 [dependency-groups]
 dev = [

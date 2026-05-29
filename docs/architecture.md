@@ -106,6 +106,12 @@ DBC architecture (current):
 
 This layer should remain reusable without depending on any specific front end.
 
+Parser self-fuzzing (current):
+
+* `tests/fuzz/` holds [atheris](https://github.com/google/atheris) coverage-guided harnesses that fuzz this layer's input parsers: the candump line parser (`transport.parse_candump_line`), the cantools-backed DBC parse path, the ISO-TP reassembler (`uds.reassemble_uds_pdus`), and the J1939 TP CM/DT reassembler.
+* `atheris` is an opt-in dev dependency (`pip install .[fuzz]`); seed inputs live under `tests/fuzz/corpora/<harness>/`, and any crashing input is preserved under `tests/fuzz/regressions/` with a paired regression test.
+* The `fuzz` CI workflow runs each harness on a bounded budget per pull request, while `tests/test_fuzz_harnesses.py` exercises the harness logic over the corpora in the regular (atheris-free) test suite.
+
 Skills provider architecture (current):
 
 * `src/canarchy/skills_provider.py` defines the provider registry, descriptors, resolutions, and ref parsing for repository-backed skills
