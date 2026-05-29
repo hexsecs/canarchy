@@ -1124,17 +1124,21 @@ _TOOLS: list[types.Tool] = [
                 "id": {"type": "string", "description": "Hex CAN ID (e.g. `0x123`)"},
                 "strategy": {
                     "type": "string",
-                    "enum": ["bitflip", "random", "boundary"],
+                    "enum": ["bitflip", "random", "boundary", "havoc", "splice", "interesting"],
                     "description": "Mutation strategy",
                 },
                 "data": {
                     "type": "string",
-                    "description": "Baseline hex payload for bitflip (defaults to 8 zero bytes)",
+                    "description": "Baseline hex payload for bitflip / havoc (defaults to 8 zero bytes)",
                 },
                 "dlc": {
                     "type": "integer",
-                    "description": "Payload length for random / boundary",
+                    "description": "Payload length for random / boundary / interesting",
                     "default": 8,
+                },
+                "corpus": {
+                    "type": "string",
+                    "description": "Candump capture supplying the seed corpus for the splice strategy",
                 },
                 "max": {
                     "type": "integer",
@@ -1751,6 +1755,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--data", a["data"]]
             if "dlc" in a:
                 argv += ["--dlc", str(a["dlc"])]
+            if a.get("corpus"):
+                argv += ["--corpus", a["corpus"]]
             if "max" in a:
                 argv += ["--max", str(a["max"])]
             if "rate" in a:
