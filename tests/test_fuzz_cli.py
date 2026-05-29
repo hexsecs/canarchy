@@ -493,5 +493,180 @@ def test_fuzz_payload_live_mode_requires_ack_when_config_demands_it():
     assert payload["errors"][0]["code"] == "ACTIVE_ACK_REQUIRED"
 
 
+# ---------------------------------------------------------------------------
+# fuzz signal (DBC-aware)
+# ---------------------------------------------------------------------------
+
+
+def _signal_frames(stdout: str) -> list[dict]:
+    return [
+        json.loads(line)
+        for line in stdout.splitlines()
+        if line.strip() and json.loads(line)["event_type"] == "frame"
+    ]
+
+
+def test_fuzz_signal_dry_run_plans_without_interface():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "signal",
+        "--dbc",
+        str(FIXTURES / "sample.dbc"),
+        "--message",
+        "EngineStatus1",
+        "--signal",
+        "CoolantTemp",
+        "--mode",
+        "boundary",
+        "--count",
+        "8",
+        "--dry-run",
+        "--jsonl",
+    )
+    assert exit_code == EXIT_OK
+    frames = _signal_frames(stdout)
+    assert frames
+    # Boundary mode yields min, max, and the ±1 lsb steps.
+    assert all(evt["payload"]["frame"]["dry_run"] is True for evt in frames)
+    # Every frame targets the same (single) message arbitration id.
+    arb_ids = {evt["payload"]["frame"]["arbitration_id"] for evt in frames}
+    assert len(arb_ids) == 1
+
+
+def test_fuzz_signal_dry_run_is_deterministic_for_same_seed():
+    args = (
+        "fuzz",
+        "signal",
+        "--dbc",
+        str(FIXTURES / "sample.dbc"),
+        "--message",
+        "EngineStatus1",
+        "--signal",
+        "CoolantTemp",
+        "--mode",
+        "in_bounds",
+        "--count",
+        "8",
+        "--seed",
+        "42",
+        "--dry-run",
+        "--jsonl",
+    )
+    _, out_a, _ = run_cli(*args)
+    _, out_b, _ = run_cli(*args)
+    data_a = [evt["payload"]["frame"]["data"] for evt in _signal_frames(out_a)]
+    data_b = [evt["payload"]["frame"]["data"] for evt in _signal_frames(out_b)]
+    assert data_a == data_b
+
+
+def test_fuzz_signal_emits_metadata_in_json_envelope():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "signal",
+        "--dbc",
+        str(FIXTURES / "sample.dbc"),
+        "--message",
+        "EngineStatus1",
+        "--signal",
+        "CoolantTemp",
+        "--mode",
+        "out_of_bounds",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code == EXIT_OK
+    payload = json.loads(stdout)
+    assert payload["data"]["signal_mode"] == "out_of_bounds"
+    assert payload["data"]["message"] == "EngineStatus1"
+    assert payload["data"]["signal"] == "CoolantTemp"
+    assert payload["data"]["mode"] == "dry_run"
+
+
+def test_fuzz_signal_unknown_message_returns_structured_error():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "signal",
+        "--dbc",
+        str(FIXTURES / "sample.dbc"),
+        "--message",
+        "NoSuchMessage",
+        "--signal",
+        "CoolantTemp",
+        "--mode",
+        "in_bounds",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "DBC_MESSAGE_NOT_FOUND"
+
+
+def test_fuzz_signal_enum_gaps_on_plain_signal_returns_structured_error():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "signal",
+        "--dbc",
+        str(FIXTURES / "sample.dbc"),
+        "--message",
+        "EngineStatus1",
+        "--signal",
+        "CoolantTemp",
+        "--mode",
+        "enum_gaps",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "INVALID_FUZZ_SIGNAL"
+
+
+def test_fuzz_signal_invalid_rate_returns_structured_error():
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "signal",
+        "can0",
+        "--dbc",
+        str(FIXTURES / "sample.dbc"),
+        "--message",
+        "EngineStatus1",
+        "--signal",
+        "CoolantTemp",
+        "--mode",
+        "boundary",
+        "--rate",
+        "0",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "INVALID_RATE"
+
+
+def test_fuzz_signal_live_mode_requires_ack_when_config_demands_it():
+    from canarchy import cli as _cli
+
+    with patch.object(_cli, "active_ack_required", return_value=True):
+        exit_code, stdout, _ = run_cli(
+            "fuzz",
+            "signal",
+            "can0",
+            "--dbc",
+            str(FIXTURES / "sample.dbc"),
+            "--message",
+            "EngineStatus1",
+            "--signal",
+            "CoolantTemp",
+            "--mode",
+            "boundary",
+            "--json",
+        )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["errors"][0]["code"] == "ACTIVE_ACK_REQUIRED"
+
+
 if __name__ == "__main__":
     unittest.main()

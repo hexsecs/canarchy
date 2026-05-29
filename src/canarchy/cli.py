@@ -129,10 +129,11 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
+    "fuzz signal",
     "replay",
     "sequence replay",
 }
-FUZZ_COMMANDS = {"fuzz payload", "fuzz replay", "fuzz arbitration-id"}
+FUZZ_COMMANDS = {"fuzz payload", "fuzz replay", "fuzz arbitration-id", "fuzz signal"}
 SEQUENCE_COMMANDS = {"sequence replay"}
 IMPLEMENTED_COMMANDS = (
     TRANSPORT_COMMANDS
@@ -1155,6 +1156,34 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(fuzz_arbid)
     fuzz_arbid.set_defaults(command="fuzz arbitration-id")
 
+    fuzz_signal = fuzz_subparsers.add_parser(
+        "signal", help="mutate a single DBC signal within or beyond its declared bounds"
+    )
+    fuzz_signal.add_argument("interface", nargs="?")
+    fuzz_signal.add_argument(
+        "--dbc", required=True, help="DBC path or provider ref (e.g. opendbc:...)"
+    )
+    fuzz_signal.add_argument("--message", required=True, help="DBC message name")
+    fuzz_signal.add_argument("--signal", required=True, help="signal name to mutate")
+    fuzz_signal.add_argument(
+        "--mode",
+        required=True,
+        choices=("in_bounds", "out_of_bounds", "boundary", "enum_gaps"),
+        help="mutation mode",
+    )
+    fuzz_signal.add_argument(
+        "--count", type=int, default=64, help="maximum mutated frames to emit (default 64)"
+    )
+    fuzz_signal.add_argument("--rate", type=float, default=100.0, help="frames per second")
+    fuzz_signal.add_argument("--seed", type=int, default=0, help="seed for the mutator")
+    fuzz_signal.add_argument(
+        "--dry-run", action="store_true", help="emit JSONL plan without transmitting"
+    )
+    fuzz_signal.add_argument("--run-id", default=None, help="explicit run UUID (random if omitted)")
+    add_active_ack_argument(fuzz_signal)
+    add_output_arguments(fuzz_signal)
+    fuzz_signal.set_defaults(command="fuzz signal")
+
     config = subparsers.add_parser("config", help="inspect CANarchy configuration")
     config_subparsers = config.add_subparsers(dest="config_action", required=True)
     config_show = config_subparsers.add_parser(
@@ -1291,6 +1320,7 @@ INTERFACE_FALLBACK_COMMANDS = {
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
+    "fuzz signal",
 }
 
 
@@ -1347,6 +1377,8 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "j1939 monitor":
         return
     if args.command == "fuzz replay":
+        return
+    if args.command == "fuzz signal" and getattr(args, "dry_run", False):
         return
     if args.command == "send" and getattr(args, "dry_run", False) and getattr(args, "dbc", None):
         return
@@ -4553,6 +4585,74 @@ def _build_fuzz_arbid_frames(args: argparse.Namespace) -> list[CanFrame]:
     ]
 
 
+def _build_fuzz_signal_frames(args: argparse.Namespace) -> list[CanFrame]:
+    from canarchy.dbc import DbcError
+    from canarchy.dbc_runtime import load_runtime_database
+
+    try:
+        database = load_runtime_database(args.dbc)
+    except DbcError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        ) from exc
+
+    try:
+        message = database.get_message_by_name(args.message)
+    except KeyError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="DBC_MESSAGE_NOT_FOUND",
+                    message=f"DBC message '{args.message}' was not found.",
+                    hint="Use a message name that exists in the selected DBC.",
+                )
+            ],
+        ) from exc
+
+    try:
+        payloads = list(
+            itertools.islice(
+                fuzzing.signal_payload(
+                    message=message,
+                    signal=args.signal,
+                    mode=args.mode,
+                    seed=args.seed,
+                    count=args.count,
+                ),
+                args.count,
+            )
+        )
+    except ValueError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_FUZZ_SIGNAL",
+                    message=str(exc),
+                    hint=(
+                        "Check that --signal exists on --message, --count is non-negative, "
+                        "and that --mode enum_gaps is only used on a signal with a value table."
+                    ),
+                )
+            ],
+        ) from exc
+
+    return [
+        CanFrame(
+            arbitration_id=int(message.frame_id),
+            data=payload,
+            is_extended_id=bool(message.is_extended_frame),
+            timestamp=i / args.rate if args.rate else None,
+        )
+        for i, payload in enumerate(payloads)
+    ]
+
+
 def fuzz_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -4583,6 +4683,9 @@ def fuzz_payload(
         target = args.interface or args.file
     elif args.command == "fuzz arbitration-id":
         frames = _build_fuzz_arbid_frames(args)
+        target = args.interface
+    elif args.command == "fuzz signal":
+        frames = _build_fuzz_signal_frames(args)
         target = args.interface
     else:  # pragma: no cover — guarded by IMPLEMENTED_COMMANDS
         raise AssertionError(f"unexpected fuzz command: {args.command}")
@@ -4693,6 +4796,11 @@ def fuzz_payload(
         "status": "implemented",
         "implementation": "fuzzing engine + active-transmit safety gate",
     }
+    if args.command == "fuzz signal":
+        data["signal_mode"] = args.mode
+        data["dbc"] = args.dbc
+        data["message"] = args.message
+        data["signal"] = args.signal
     warnings: list[str] = []
     if dry_run:
         warnings.append(
