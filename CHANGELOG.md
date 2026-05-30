@@ -9,6 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+* Closed the MCP active-transmit safety gap for `send`, `generate`, and `gateway` (#380): these tools now require `ack_active=true`, default to `dry_run=true`, and are enforced by the same MCP gate as replay, sequence replay, and fuzzing. CLI `generate` and `gateway` also gain `--dry-run` planning modes so agents can inspect intended traffic without opening transports.
 * Bumped the locked `cantools` dependency from 41.3.1 to 41.4.0 (latest release). The update also drops the now-unused transitive `diskcache` dependency, slightly reducing the install footprint. The `cantools` APIs CANarchy relies on (DBC/KCD/ARXML/SYM loading, message encode/decode, database serialization) are unchanged; the `pyproject.toml` floor constraint remains `cantools>=39.4`.
 
 ## [0.8.0] - 2026-05-29

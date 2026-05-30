@@ -65,6 +65,8 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 
 For MCP tools that accept a single CAN interface, omit the `interface` argument only when `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE` is configured. Explicit MCP `interface` arguments take precedence over the configured default. `[transport].interface` is the python-can backend type and is not the CAN channel fallback.
 
+Active-transmit MCP tools (`send`, `generate`, `gateway`, `replay`, `sequence_replay`, and `fuzz_*`) require `ack_active=true`. Their `dry_run` argument defaults to `true`, so agent calls plan without transmitting unless an operator explicitly authorizes live transmission with `dry_run=false`.
+
 | MCP tool | CLI equivalent |
 |----------|---------------|
 | `capture` | `canarchy capture` |
@@ -196,13 +198,13 @@ tool: uds_services {}
 tool: j1939_spn {"spn": 190, "file": "trace.candump"}
 → {"ok": true, "command": "j1939 spn", "data": {"observations": [...]}}
 
-tool: send {"interface": "vcan0", "frame_id": "0x7DF", "data": "0201F1"}
-→ {"ok": true, "command": "send", "data": {"frame": {...}, "mode": "active"}}
+tool: send {"interface": "vcan0", "frame_id": "0x7DF", "data": "0201F1", "ack_active": true}
+→ {"ok": true, "command": "send", "data": {"frame": {...}, "mode": "dry_run"}}
 ```
 
 ### Notes
 
-* MCP streaming is not supported in v1 — live-capture tools (`capture`, `gateway`) return a buffered batch from the active backend. Use CLI `datasets stream --max-frames <n>` for bounded local dataset-file JSONL or candump pipelines, and `datasets replay --max-frames <n>` or `--max-seconds <s>` for bounded remote dataset-ref or URL playback to stdout.
+* MCP streaming is not supported in v1 — live-capture tools (`capture`, live `gateway` with `dry_run=false`) return a buffered batch from the active backend. Use CLI `datasets stream --max-frames <n>` for bounded local dataset-file JSONL or candump pipelines, and `datasets replay --max-frames <n>` or `--max-seconds <s>` for bounded remote dataset-ref or URL playback to stdout.
 * `shell`, `tui`, `mcp serve`, and `mcp install` are not exposed as MCP tools.
 * Error codes are identical to the CLI, so existing JSON-parsing logic transfers without changes.
 * Stdin pipelines: `capture-info`, `stats`, and `filter --file -` read candump text from stdin. `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin regardless of output format. This enables piping `datasets replay` candump output directly into analysis commands without temporary files.

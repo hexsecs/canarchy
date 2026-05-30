@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from canarchy.cli import EXIT_OK, EXIT_TRANSPORT_ERROR, EXIT_USER_ERROR, main
 from canarchy.models import CanFrame
-from canarchy.transport import PythonCanBackend, TransportError
+from canarchy.transport import LocalTransport, PythonCanBackend, TransportError
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -717,6 +717,37 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_COUNT")
+
+    def test_gateway_dry_run_does_not_open_transport(self) -> None:
+        with patch.object(
+            LocalTransport,
+            "gateway_events",
+            side_effect=AssertionError("gateway_events must not be called in dry-run"),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "gateway", "src0", "dst0", "--count", "1", "--dry-run", "--json"
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertTrue(payload["data"]["dry_run"])
+        self.assertTrue(payload["data"]["would_forward"])
+
+    def test_gateway_text_dry_run_does_not_stream_transport(self) -> None:
+        with patch.object(
+            LocalTransport,
+            "gateway_stream_events",
+            side_effect=AssertionError("gateway_stream_events must not be called in dry-run"),
+        ):
+            exit_code, stdout, stderr = run_cli("gateway", "src0", "dst0", "--dry-run", "--text")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("gateway: src=src0 dst=dst0", stdout)
+        self.assertIn("(no frames captured)", stdout)
+        self.assertIn("ACTIVE_TRANSMIT_DRY_RUN", stdout)
 
     def test_gateway_channel_error_returns_transport_error(self) -> None:
         def fake_open_bus(backend: PythonCanBackend, interface: str):
@@ -3515,6 +3546,44 @@ class CliTests(unittest.TestCase):
         self.assertEqual(frame_event["event_type"], "frame")
         self.assertEqual(frame_event["payload"]["frame"]["arbitration_id"], 0x123)
         self.assertEqual(frame_event["payload"]["frame"]["data"], "11223344")
+
+    @patch("canarchy.transport.time.sleep")
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_generate_dry_run_plans_frames_without_sending(self, _mock_cfg, mock_sleep) -> None:
+        with patch.object(
+            LocalTransport,
+            "generate_events",
+            side_effect=AssertionError("generate_events must not be called in dry-run"),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "generate",
+                "--id",
+                "0x123",
+                "--dlc",
+                "4",
+                "--data",
+                "11223344",
+                "--count",
+                "2",
+                "--gap",
+                "100",
+                "--dry-run",
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        mock_sleep.assert_not_called()
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertTrue(payload["data"]["dry_run"])
+        self.assertEqual(payload["data"]["frame_count"], 2)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 2)
+        self.assertEqual(frame_events[1]["timestamp"], 0.1)
 
     @patch("canarchy.transport.time.sleep")
     @patch(
