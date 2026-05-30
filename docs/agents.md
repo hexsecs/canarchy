@@ -67,6 +67,8 @@ For MCP tools that accept a single CAN interface, omit the `interface` argument 
 
 Active-transmit MCP tools (`send`, `generate`, `gateway`, `replay`, `sequence_replay`, and `fuzz_*`) require `ack_active=true`. Their `dry_run` argument defaults to `true`, so agent calls plan without transmitting unless an operator explicitly authorizes live transmission with `dry_run=false`.
 
+For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-rendered message bit diagrams, signal trees, and choice tables as structured strings on each message payload.
+
 | MCP tool | CLI equivalent |
 |----------|---------------|
 | `capture` | `canarchy capture` |

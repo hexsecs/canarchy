@@ -359,6 +359,11 @@ _TOOLS: list[types.Tool] = [
                     "type": "string",
                     "description": "Case-insensitive regex/substring filter on message and signal names",
                 },
+                "layout": {
+                    "type": "boolean",
+                    "description": "Include cantools-rendered bit layout, signal tree, and choice tables",
+                    "default": False,
+                },
             },
             "required": ["dbc"],
         },
@@ -1525,6 +1530,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv.append("--signals-only")
             if a.get("search"):
                 argv += ["--search", a["search"]]
+            if a.get("layout"):
+                argv.append("--layout")
             return argv + ["--json"]
         case "dbc_signals":
             argv = ["dbc", "signals", a["dbc"]]

@@ -224,6 +224,9 @@ DBC message metadata emitted by `dbc inspect`.
 
 Emitted by: `dbc inspect`
 
+When `dbc inspect --layout` is used, the payload also includes string fields
+`layout`, `signal_tree`, and `signal_choices` rendered by cantools.
+
 ```json
 {
   "event_type": "dbc_message",

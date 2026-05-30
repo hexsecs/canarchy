@@ -255,8 +255,8 @@ Then   the result shall contain `["j1939", "monitor", "can0", "--pgn", "60160"]`
 When   called with `("encode", {"dbc": "t.dbc", "message": "Msg", "signals": ["RPM=1000"]})`
 Then   the result shall contain `"--dbc"`, `"t.dbc"`, `"Msg"`, and `"RPM=1000"`
 
-When   called with `("dbc_inspect", {"dbc": "t.dbc", "message": "Msg", "signals_only": true})`
-Then   the result shall contain `"dbc"`, `"inspect"`, `"t.dbc"`, `"--message"`, `"Msg"`, and `"--signals-only"`
+When   called with `("dbc_inspect", {"dbc": "t.dbc", "message": "Msg", "signals_only": true, "layout": true})`
+Then   the result shall contain `"dbc"`, `"inspect"`, `"t.dbc"`, `"--message"`, `"Msg"`, `"--signals-only"`, and `"--layout"`
 
 When   called with `("j1939_pgn", {"pgn": 61444, "file": "trace.candump"})`
 Then   the result shall contain `["j1939", "pgn", "61444", "--file", "trace.candump"]` in order

@@ -478,13 +478,39 @@ def test_build_argv_encode_with_signals():
 def test_build_argv_dbc_inspect_with_options():
     argv = _build_argv(
         "dbc_inspect",
-        {"dbc": "test.dbc", "message": "EngineData", "signals_only": True},
+        {"dbc": "test.dbc", "message": "EngineData", "signals_only": True, "layout": True},
     )
     assert argv[:3] == ["dbc", "inspect", "test.dbc"]
     assert "--message" in argv
     assert "EngineData" in argv
     assert "--signals-only" in argv
+    assert "--layout" in argv
     assert argv[-1] == "--json"
+
+
+def test_dbc_inspect_schema_exposes_layout_flag():
+    tools_by_name = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    props = tools_by_name["dbc_inspect"].inputSchema["properties"]
+    assert props["layout"]["type"] == "boolean"
+    assert props["layout"]["default"] is False
+
+
+def test_call_tool_dbc_inspect_layout_returns_layout_strings():
+    results = asyncio.run(
+        handle_call_tool(
+            "dbc_inspect",
+            {
+                "dbc": str(FIXTURES / "sample.dbc"),
+                "message": "EngineStatus1",
+                "layout": True,
+            },
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    message = payload["data"]["messages"][0]
+    assert "CoolantTemp" in message["layout"]
+    assert "+-- CoolantTemp" in message["signal_tree"]
 
 
 def test_build_argv_decode_uses_file_flag():

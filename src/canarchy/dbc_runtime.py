@@ -66,10 +66,17 @@ def _signal_info(signal: Any, *, message_name: str) -> SignalInfo:
     )
 
 
-def _message_info(message: Any) -> MessageInfo:
+def _message_info(message: Any, *, include_layout: bool = False) -> MessageInfo:
     senders = sorted(str(sender) for sender in getattr(message, "senders", []) if sender)
     signals = [_signal_info(signal, message_name=message.name) for signal in message.signals]
     cycle_time_ms = getattr(message, "cycle_time", None)
+    layout = signal_tree = signal_choices = None
+    if include_layout:
+        from cantools.subparsers.dump import formatting
+
+        layout = formatting.layout_string(message)
+        signal_tree = formatting.signal_tree_string(message)
+        signal_choices = formatting.signal_choices_string(message)
     return MessageInfo(
         name=message.name,
         arbitration_id=int(message.frame_id),
@@ -79,6 +86,9 @@ def _message_info(message: Any) -> MessageInfo:
         cycle_time_ms=0 if cycle_time_ms is None else int(cycle_time_ms),
         senders=senders,
         signals=signals,
+        layout=layout,
+        signal_tree=signal_tree,
+        signal_choices=signal_choices,
     )
 
 
@@ -86,6 +96,7 @@ def inspect_database_runtime(
     dbc_path: str,
     *,
     message_name: str | None = None,
+    include_layout: bool = False,
 ) -> DatabaseInspection:
     database = load_runtime_database(dbc_path)
 
@@ -102,7 +113,9 @@ def inspect_database_runtime(
     else:
         selected_messages = sorted(database.messages, key=lambda current: current.name)
 
-    messages = [_message_info(message) for message in selected_messages]
+    messages = [
+        _message_info(message, include_layout=include_layout) for message in selected_messages
+    ]
     node_names = {sender for message in messages for sender in message.senders}
     return DatabaseInspection(
         database=DatabaseInfo(

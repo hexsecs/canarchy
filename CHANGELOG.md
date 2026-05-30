@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+* Added `canarchy dbc inspect --layout` (#384), which reuses cantools' bit-layout, signal-tree, and choice-table renderers. Text output now shows per-message diagrams, while JSON/JSONL include `layout`, `signal_tree`, and `signal_choices` fields for agent consumption.
+
 ### Changed
 
 * Closed the MCP active-transmit safety gap for `send`, `generate`, and `gateway` (#380): these tools now require `ack_active=true`, default to `dry_run=true`, and are enforced by the same MCP gate as replay, sequence replay, and fuzzing. CLI `generate` and `gateway` also gain `--dry-run` planning modes so agents can inspect intended traffic without opening transports.
