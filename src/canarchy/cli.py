@@ -39,6 +39,7 @@ from canarchy import pretty_j1939_support
 from canarchy.models import (
     AlertEvent,
     CanFrame,
+    FrameEvent,
     serialize_events,
 )
 from canarchy.replay import build_replay_plan
@@ -413,6 +414,11 @@ def build_parser() -> CanarchyArgumentParser:
         "--gap", type=float, default=200.0, help="inter-frame gap in milliseconds"
     )
     generate.add_argument("--extended", action="store_true", help="force 29-bit extended IDs")
+    generate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="plan generated frames without transmitting",
+    )
     add_active_ack_argument(generate)
     add_output_arguments(generate)
     generate.set_defaults(command="generate")
@@ -426,6 +432,11 @@ def build_parser() -> CanarchyArgumentParser:
         "--bidirectional", action="store_true", help="also forward frames from dst back to src"
     )
     gateway.add_argument("--count", type=int, help="stop after forwarding N frames")
+    gateway.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="plan gateway forwarding without opening transport",
+    )
     add_active_ack_argument(gateway)
     add_output_arguments(gateway)
     gateway.set_defaults(command="gateway")
@@ -1458,7 +1469,9 @@ def prepare_args(args: argparse.Namespace) -> None:
         return
     if args.command in ("fuzz signal", "fuzz spn") and getattr(args, "dry_run", False):
         return
-    if args.command == "send" and getattr(args, "dry_run", False) and getattr(args, "dbc", None):
+    if args.command == "generate" and getattr(args, "dry_run", False):
+        return
+    if args.command == "send" and getattr(args, "dry_run", False):
         return
     raise CommandError(
         command=args.command,
@@ -2993,11 +3006,37 @@ def transport_payload(
             gap_ms=args.gap,
             extended=args.extended,
         )
+        if getattr(args, "dry_run", False):
+            frame_events = serialize_events(
+                [
+                    FrameEvent(
+                        frame=frame,
+                        source="generate",
+                        timestamp=index * (args.gap / 1000.0),
+                    ).to_event()
+                    for index, frame in enumerate(frames)
+                ]
+            )
+            return (
+                {
+                    "interface": args.interface,
+                    "mode": "dry_run",
+                    "dry_run": True,
+                    "frame_count": len(frames),
+                    "gap_ms": args.gap,
+                    **backend_metadata,
+                    "status": "implemented",
+                    "implementation": implementation,
+                },
+                frame_events,
+                [f"ACTIVE_TRANSMIT_DRY_RUN: {len(frames)} frames planned; no transport opened."],
+            )
         enforce_active_transmit_safety(args)
         return (
             {
                 "interface": args.interface,
                 "mode": "active",
+                "dry_run": False,
                 "frame_count": len(frames),
                 "gap_ms": args.gap,
                 **backend_metadata,
@@ -4415,6 +4454,25 @@ def gateway_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
+    if getattr(args, "dry_run", False):
+        return (
+            {
+                "mode": "dry_run",
+                "dry_run": True,
+                "src": args.src,
+                "dst": args.dst,
+                "src_backend": args.src_backend,
+                "dst_backend": args.dst_backend,
+                "bidirectional": args.bidirectional,
+                "count": args.count,
+                "forwarded_frames": 0,
+                "would_forward": True,
+                "status": "implemented",
+                "implementation": "live transport gateway",
+            },
+            [],
+            ["ACTIVE_TRANSMIT_DRY_RUN: gateway planned; no transport opened."],
+        )
     enforce_active_transmit_safety(args)
     events = transport.gateway_events(
         args.src,
@@ -4427,6 +4485,7 @@ def gateway_payload(
     return (
         {
             "mode": "active",
+            "dry_run": False,
             "src": args.src,
             "dst": args.dst,
             "src_backend": args.src_backend,

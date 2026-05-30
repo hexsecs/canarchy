@@ -37,7 +37,10 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="send",
-        description="Send a single CAN frame to an interface.",
+        description=(
+            "Send a single CAN frame to an interface. Mandatory `ack_active=true`; "
+            "`dry_run` defaults to true."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -50,13 +53,26 @@ _TOOLS: list[types.Tool] = [
                     "description": "Frame ID as hex (e.g. 0x123 or 291)",
                 },
                 "data": {"type": "string", "description": "Payload as hex bytes (e.g. 11223344)"},
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory acknowledgement for active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Plan without transmitting (default: true for MCP)",
+                    "default": True,
+                },
             },
-            "required": ["frame_id", "data"],
+            "required": ["frame_id", "data", "ack_active"],
         },
     ),
     types.Tool(
         name="generate",
-        description="Generate CAN frames on an interface.",
+        description=(
+            "Generate CAN frames on an interface. Mandatory `ack_active=true`; "
+            "`dry_run` defaults to true."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -94,12 +110,26 @@ _TOOLS: list[types.Tool] = [
                     "description": "Force 29-bit extended IDs",
                     "default": False,
                 },
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory acknowledgement for active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Plan without transmitting (default: true for MCP)",
+                    "default": True,
+                },
             },
+            "required": ["ack_active"],
         },
     ),
     types.Tool(
         name="gateway",
-        description="Bridge CAN frames between two interfaces.",
+        description=(
+            "Bridge CAN frames between two interfaces. Mandatory `ack_active=true`; "
+            "`dry_run` defaults to true."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -119,8 +149,18 @@ _TOOLS: list[types.Tool] = [
                     "default": False,
                 },
                 "count": {"type": "integer", "description": "Stop after forwarding N frames"},
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory acknowledgement for active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Plan without transmitting (default: true for MCP)",
+                    "default": True,
+                },
             },
-            "required": ["src", "dst"],
+            "required": ["src", "dst", "ack_active"],
         },
     ),
     types.Tool(
@@ -1372,7 +1412,12 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             argv = ["send"]
             if a.get("interface"):
                 argv.append(a["interface"])
-            return argv + [a["frame_id"], a["data"], "--json"]
+            argv += [a["frame_id"], a["data"]]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
+            return argv + ["--json"]
         case "generate":
             argv = ["generate"]
             if a.get("interface"):
@@ -1389,6 +1434,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--gap", str(a["gap"])]
             if a.get("extended"):
                 argv.append("--extended")
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
             return argv + ["--json"]
         case "gateway":
             argv = ["gateway", a["src"], a["dst"]]
@@ -1400,6 +1449,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv.append("--bidirectional")
             if a.get("count") is not None:
                 argv += ["--count", str(a["count"])]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
             return argv + ["--json"]
         case "replay":
             argv = ["replay"]
@@ -1867,6 +1920,9 @@ async def handle_list_tools() -> list[types.Tool]:
 
 _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
     {
+        "send",
+        "generate",
+        "gateway",
         "fuzz_payload",
         "fuzz_replay",
         "fuzz_arbitration_id",

@@ -103,7 +103,7 @@ Supported file input today:
 Prepare an active transmit frame.
 
 ```bash
-canarchy send [interface] <frame-id> <hex-data> [--ack-active] [--json|--jsonl|--text]
+canarchy send [interface] <frame-id> <hex-data> [--dry-run] [--ack-active] [--json|--jsonl|--text]
 ```
 
 Example:
@@ -115,6 +115,7 @@ canarchy send can0 0x123 11223344 --json
 Notes:
 
 * `--ack-active` requests an interactive `YES` confirmation before the frame is transmitted
+* `--dry-run` returns the planned frame without opening a transport or requiring confirmation
 * when active acknowledgement is required by configuration, omitting `--ack-active` returns a structured `ACTIVE_ACK_REQUIRED` error
 * if `interface` is omitted, `send` uses `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE`; explicit command-line interfaces take precedence over the configured default
 
@@ -174,19 +175,21 @@ Notes:
 Generate CAN frames from explicit, random, or incrementing inputs.
 
 ```bash
-canarchy generate [interface] [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>] [--count <n>] [--gap <ms>] [--extended] [--ack-active] [--json|--jsonl|--text]
+canarchy generate [interface] [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>] [--count <n>] [--gap <ms>] [--extended] [--dry-run] [--ack-active] [--json|--jsonl|--text]
 ```
 
 Examples:
 
 ```bash
 canarchy generate can0 --id 0x123 --dlc 4 --data 11223344 --count 2 --gap 100 --json
+canarchy generate --id 0x123 --dlc 4 --data 11223344 --count 2 --dry-run --json
 canarchy generate can0 --data I --count 4 --text
 ```
 
 Notes:
 
 * `--id`, `--dlc`, and `--data` accept `R` for random generation, and `--data I` enables a deterministic incrementing payload pattern
+* `--dry-run` emits the planned generated frame events without requiring an interface or opening a transport
 * `--ack-active` requests an interactive `YES` confirmation before generated frames are transmitted
 * when active acknowledgement is required by configuration, omitting `--ack-active` returns a structured `ACTIVE_ACK_REQUIRED` error
 * generated JSON output includes an active-transmit alert followed by generated frame events
@@ -212,13 +215,14 @@ canarchy replay --file tests/fixtures/sample.candump --interface vcan0 --dry-run
 Bridge frames from one live CAN interface to another through the `python-can` backend.
 
 ```bash
-canarchy gateway <src> <dst> [--src-backend <type>] [--dst-backend <type>] [--bidirectional] [--count <n>] [--ack-active] [--json|--jsonl|--text]
+canarchy gateway <src> <dst> [--src-backend <type>] [--dst-backend <type>] [--bidirectional] [--count <n>] [--dry-run] [--ack-active] [--json|--jsonl|--text]
 ```
 
 Examples:
 
 ```bash
 canarchy gateway can0 can1 --text
+canarchy gateway can0 can1 --dry-run --json
 canarchy gateway can0 239.0.0.1 --dst-backend udp_multicast --count 10 --json
 ```
 
@@ -226,6 +230,7 @@ Notes:
 
 * `gateway` requires the `python-can` backend (set in `~/.canarchy/config.toml` or via `CANARCHY_TRANSPORT_BACKEND=python-can`)
 * `--src-backend` and `--dst-backend` default to the configured `interface` value
+* `--dry-run` returns the forwarding plan without opening either transport
 * `--ack-active` requests an interactive `YES` confirmation before forwarding begins
 * default text output use candump-style forwarded frame lines with direction labels such as `[src->dst]`
 * `--json` returns a standard command envelope; `--jsonl` emits one forwarded event per line for `gateway`

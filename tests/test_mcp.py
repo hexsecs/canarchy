@@ -334,7 +334,15 @@ def test_call_tool_skills_provider_list():
 
 def test_call_tool_send_invalid_frame_id():
     results = asyncio.run(
-        handle_call_tool("send", {"interface": "can0", "frame_id": "not_hex", "data": "1122"})
+        handle_call_tool(
+            "send",
+            {
+                "interface": "can0",
+                "frame_id": "not_hex",
+                "data": "1122",
+                "ack_active": True,
+            },
+        )
     )
     payload = json.loads(results[0].text)
     assert payload["ok"] is False
@@ -416,8 +424,8 @@ def test_build_argv_capture_omits_interface_for_config_fallback():
 
 
 def test_build_argv_send_omits_interface_for_config_fallback():
-    argv = _build_argv("send", {"frame_id": "0x123", "data": "1122"})
-    assert argv == ["send", "0x123", "1122", "--json"]
+    argv = _build_argv("send", {"frame_id": "0x123", "data": "1122", "ack_active": True})
+    assert argv == ["send", "0x123", "1122", "--ack-active", "--dry-run", "--json"]
 
 
 def test_build_argv_capture_info():
@@ -550,12 +558,16 @@ def test_build_argv_session_save_with_options():
 
 
 def test_build_argv_generate_with_options():
-    argv = _build_argv("generate", {"interface": "can0", "count": 5, "extended": True})
+    argv = _build_argv(
+        "generate", {"interface": "can0", "count": 5, "extended": True, "ack_active": True}
+    )
     assert "generate" in argv
     assert "can0" in argv
     assert "--count" in argv
     assert "5" in argv
     assert "--extended" in argv
+    assert "--ack-active" in argv
+    assert "--dry-run" in argv
     assert argv[-1] == "--json"
 
 
@@ -896,6 +908,96 @@ def test_run_server_handles_sigint():
 
 
 # --- fuzz MCP gating (REQ-ATS-11, REQ-ATS-12, REQ-ATS-13) ------------------
+
+
+def test_send_without_ack_active_returns_structured_error():
+    results = asyncio.run(handle_call_tool("send", {"frame_id": "0x100", "data": "1122"}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_send_ack_active_false_returns_structured_error():
+    results = asyncio.run(
+        handle_call_tool("send", {"frame_id": "0x100", "data": "1122", "ack_active": False})
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_send_with_ack_active_defaults_to_dry_run():
+    results = asyncio.run(
+        handle_call_tool("send", {"frame_id": "0x100", "data": "1122", "ack_active": True})
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["mode"] == "dry_run"
+
+
+def test_generate_without_ack_active_returns_structured_error():
+    results = asyncio.run(handle_call_tool("generate", {"interface": "can0"}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_generate_ack_active_false_returns_structured_error():
+    results = asyncio.run(handle_call_tool("generate", {"interface": "can0", "ack_active": False}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_generate_with_ack_active_defaults_to_dry_run():
+    results = asyncio.run(
+        handle_call_tool(
+            "generate", {"id": "0x100", "dlc": "2", "data": "1122", "ack_active": True}
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["mode"] == "dry_run"
+    assert payload["data"]["frame_count"] == 1
+
+
+def test_gateway_without_ack_active_returns_structured_error():
+    results = asyncio.run(handle_call_tool("gateway", {"src": "can0", "dst": "can1"}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_gateway_ack_active_false_returns_structured_error():
+    results = asyncio.run(
+        handle_call_tool("gateway", {"src": "can0", "dst": "can1", "ack_active": False})
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_gateway_with_ack_active_defaults_to_dry_run():
+    results = asyncio.run(
+        handle_call_tool("gateway", {"src": "can0", "dst": "can1", "ack_active": True})
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["mode"] == "dry_run"
+    assert payload["data"]["would_forward"] is True
+
+
+def test_send_generate_gateway_schemas_require_ack_and_default_dry_run():
+    tools_by_name = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    for tool_name in ("send", "generate", "gateway"):
+        schema = tools_by_name[tool_name].inputSchema
+        props = schema["properties"]
+        assert "ack_active" in schema.get("required", [])
+        assert props["ack_active"]["const"] is True
+        assert props["dry_run"]["default"] is True
 
 
 def test_fuzz_payload_without_ack_active_returns_structured_error():

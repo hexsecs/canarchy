@@ -132,9 +132,8 @@ landing here.
 | CLI surface | Rationale |
 |-------------|-----------|
 | Transport reads (`capture`, `filter`, `stats`, `capture-info`, `decode`, `encode`) | Non-interactive commands with bounded JSON envelopes. |
-| MCP-gated active transmit (`replay`, `sequence replay`) | In `_ACTIVE_TRANSMIT_TOOLS`: schemas require `ack_active=true` and default `dry_run=true`. |
+| MCP-gated active transmit (`send`, `generate`, `gateway`, `replay`, `sequence replay`) | In `_ACTIVE_TRANSMIT_TOOLS`: schemas require `ack_active=true` and default `dry_run=true`. |
 | Fuzzing (`fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz signal`, `fuzz spn`) | In `_ACTIVE_TRANSMIT_TOOLS`: mandatory `ack_active=true`, default `dry_run=true`. |
-| Active transmit without an MCP gate (`send`, `generate`, `gateway`) | Exposed, but **not** in `_ACTIVE_TRANSMIT_TOOLS`; their schemas accept no `ack_active`/`dry_run`. They rely only on the CLI-side `enforce_active_transmit_safety`, which over MCP (with `CANARCHY_MCP_NONINTERACTIVE_ACK=1`) blocks **only** when `[safety].require_active_ack` is set. Under the default config an agent can perform a live transmit through these tools. See the gap note below. |
 | DBC + DBC provider (`dbc inspect`, `dbc signals`, `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list/prune/refresh`) | Bounded inspection and provider/cache workflows. |
 | Datasets provider/cache/fetch/search/inspect/convert | Metadata and local conversion workflows return bounded JSON envelopes. |
 | `datasets replay --dry-run` (`datasets_replay_plan`) and `--list-files` (`datasets_replay_files`) | Safe planning and manifest inspection do not open or stream remote frame data. |
@@ -161,22 +160,8 @@ landing here.
 | `re anomalies` (#321) | Add an MCP mirror with the other file-backed `re` tools when the command lands. |
 
 As of this audit, every implemented command that should have MCP coverage
-does; there are no missing mirrors and no orphan tools.
-
-### Known gap — `send` / `generate` / `gateway` MCP safety (follow-up)
-
-These three active-transmit tools are exposed but are **not** in
-`_ACTIVE_TRANSMIT_TOOLS`, so the MCP-side `ack_active` / default-`dry_run`
-gate does not apply to them. Over MCP they fall back to the CLI's
-`enforce_active_transmit_safety`, which — with the server's
-`CANARCHY_MCP_NONINTERACTIVE_ACK=1` — only blocks when
-`[safety].require_active_ack` is set. Under the default configuration an
-agent can therefore perform a live transmit through `send`, `generate`, or
-`gateway` without an explicit acknowledgement or a dry-run default. Closing
-this gap (mandatory `ack_active`, default `dry_run=true`, and adding the
-tools to `_ACTIVE_TRANSMIT_TOOLS` — which also needs a `--dry-run` mode for
-`generate` / `gateway`) is tracked as #380 and is a behaviour change
-beyond this coverage audit.
+does; there are no missing mirrors, orphan tools, or ungated active-transmit
+MCP tools.
 
 ## Response Envelope
 
