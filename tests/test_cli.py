@@ -735,6 +735,20 @@ class CliTests(unittest.TestCase):
         self.assertTrue(payload["data"]["dry_run"])
         self.assertTrue(payload["data"]["would_forward"])
 
+    def test_gateway_text_dry_run_does_not_stream_transport(self) -> None:
+        with patch.object(
+            LocalTransport,
+            "gateway_stream_events",
+            side_effect=AssertionError("gateway_stream_events must not be called in dry-run"),
+        ):
+            exit_code, stdout, stderr = run_cli("gateway", "src0", "dst0", "--dry-run", "--text")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("gateway: src=src0 dst=dst0", stdout)
+        self.assertIn("(no frames captured)", stdout)
+        self.assertIn("ACTIVE_TRANSMIT_DRY_RUN", stdout)
+
     def test_gateway_channel_error_returns_transport_error(self) -> None:
         def fake_open_bus(backend: PythonCanBackend, interface: str):
             raise TransportError(

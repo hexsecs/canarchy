@@ -7243,7 +7243,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_tui(execute_command, command=args.tui_command)
     if args.command == "capture":
         return emit_live_capture(args, output_format)
-    if args.command == "gateway" and output_format == "text":
+    if (
+        args.command == "gateway"
+        and output_format == "text"
+        and not getattr(args, "dry_run", False)
+    ):
         return emit_live_gateway(args)
     if args.command == "datasets stream" and not args.json:
         return emit_dataset_stream(args)
