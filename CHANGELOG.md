@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+* Bumped the locked `cantools` dependency from 41.3.1 to 41.4.0 (latest release). The update also drops the now-unused transitive `diskcache` dependency, slightly reducing the install footprint. The `cantools` APIs CANarchy relies on (DBC/KCD/ARXML/SYM loading, message encode/decode, database serialization) are unchanged; the `pyproject.toml` floor constraint remains `cantools>=39.4`.
+
 ## [0.8.0] - 2026-05-29
 
 ### Changed
