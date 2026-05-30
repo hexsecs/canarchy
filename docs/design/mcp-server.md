@@ -134,7 +134,7 @@ landing here.
 | Transport reads (`capture`, `filter`, `stats`, `capture-info`, `decode`, `encode`) | Non-interactive commands with bounded JSON envelopes. |
 | MCP-gated active transmit (`send`, `generate`, `gateway`, `replay`, `sequence replay`) | In `_ACTIVE_TRANSMIT_TOOLS`: schemas require `ack_active=true` and default `dry_run=true`. |
 | Fuzzing (`fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz signal`, `fuzz spn`) | In `_ACTIVE_TRANSMIT_TOOLS`: mandatory `ack_active=true`, default `dry_run=true`. |
-| DBC + DBC provider (`dbc inspect`, `dbc signals`, `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list/prune/refresh`) | Bounded inspection and provider/cache workflows. |
+| DBC + DBC provider (`dbc inspect`, `dbc signals`, `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list/prune/refresh`) | Bounded inspection and provider/cache workflows. `dbc_inspect.layout=true` exposes cantools-rendered bit layouts without ANSI parsing. |
 | Datasets provider/cache/fetch/search/inspect/convert | Metadata and local conversion workflows return bounded JSON envelopes. |
 | `datasets replay --dry-run` (`datasets_replay_plan`) and `--list-files` (`datasets_replay_files`) | Safe planning and manifest inspection do not open or stream remote frame data. |
 | Skills provider/cache/search/fetch | Non-interactive provider workflows with canonical JSON envelopes. |

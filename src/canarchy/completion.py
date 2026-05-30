@@ -67,7 +67,7 @@ FLAGS: dict[str, list[str]] = {
     "capture": ["--candump"] + _OUTPUT,
     "capture-info": ["--file"] + _OUTPUT,
     "config show": _OUTPUT,
-    "dbc inspect": ["--message", "--signals-only"] + _OUTPUT,
+    "dbc inspect": ["--message", "--signals-only", "--search", "--layout"] + _OUTPUT,
     "decode": ["--dbc", "--file"] + _OUTPUT,
     "encode": ["--dbc"] + _OUTPUT,
     "export": _OUTPUT,

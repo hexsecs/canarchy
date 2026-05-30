@@ -107,10 +107,13 @@ def inspect_database(
     *,
     message_name: str | None = None,
     signals_only: bool = False,
+    include_layout: bool = False,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     from canarchy.dbc_runtime import inspect_database_runtime
 
-    inspection = inspect_database_runtime(dbc_path, message_name=message_name)
+    inspection = inspect_database_runtime(
+        dbc_path, message_name=message_name, include_layout=include_layout
+    )
     return inspection.to_payload(signals_only=signals_only), inspection.to_events()
 
 

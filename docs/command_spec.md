@@ -307,7 +307,7 @@ Notes:
 Inspect database, message, and signal metadata for a DBC file or provider ref.
 
 ```bash
-canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json|--jsonl|--text]
+canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--search <pattern>] [--layout] [--json|--jsonl|--text]
 ```
 
 Examples:
@@ -315,12 +315,14 @@ Examples:
 ```bash
 canarchy dbc inspect tests/fixtures/sample.dbc --json
 canarchy dbc inspect opendbc:toyota_tnga_k_pt_generated --message STEER_TORQUE_SENSOR --json
+canarchy dbc inspect tests/fixtures/sample.dbc --message EngineStatus1 --layout --text
 ```
 
 Notes:
 
 * `<dbc>` accepts a local file path or a provider ref such as `opendbc:<name>` or `comma:<name>`
 * structured output includes `dbc_source` provenance alongside the inspection payload
+* `--layout` adds cantools-rendered per-message `layout`, `signal_tree`, and `signal_choices` strings; text output renders those diagrams directly, while JSON/JSONL keep them as fields on each message payload
 
 ### dbc provider list
 

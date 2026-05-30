@@ -4645,6 +4645,92 @@ class CliTests(unittest.TestCase):
         self.assertIn("CoolantTemp", signal_names)
         self.assertNotIn("OilTemp", signal_names)
 
+    def test_dbc_inspect_layout_text_renders_diagram_and_tree(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--message",
+            "EngineStatus1",
+            "--layout",
+            "--text",
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("layout:", stdout)
+        self.assertIn("signal_tree:", stdout)
+        self.assertIn("+-- CoolantTemp", stdout)
+        self.assertIn("Bit", stdout)
+
+    def test_dbc_inspect_layout_json_includes_strings(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--message",
+            "EngineStatus1",
+            "--layout",
+            "--json",
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        message = payload["data"]["messages"][0]
+        self.assertIn("CoolantTemp", message["layout"])
+        self.assertIn("+-- CoolantTemp", message["signal_tree"])
+        self.assertEqual(message["signal_choices"], "")
+
+    def test_dbc_inspect_layout_jsonl_includes_message_layout(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--message",
+            "EngineStatus1",
+            "--layout",
+            "--jsonl",
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        events = [json.loads(line) for line in stdout.strip().splitlines()]
+        message_event = next(e for e in events if e["event_type"] == "dbc_message")
+        self.assertIn("CoolantTemp", message_event["payload"]["layout"])
+        self.assertIn("+-- CoolantTemp", message_event["payload"]["signal_tree"])
+
+    def test_dbc_inspect_layout_with_search_filters_messages(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "sample.dbc"),
+            "--search",
+            "speed",
+            "--layout",
+            "--json",
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        messages = payload["data"]["messages"]
+        self.assertEqual([message["name"] for message in messages], ["EngineSpeed1"])
+        self.assertIn("EngineSpeed", messages[0]["layout"])
+
+    def test_dbc_inspect_layout_renders_choice_tables(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "inspect",
+            str(FIXTURES / "complex.dbc"),
+            "--message",
+            "TransmissionGear",
+            "--layout",
+            "--text",
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("signal_choices:", stdout)
+        self.assertIn("CurrentGear", stdout)
+        self.assertIn("0 N", stdout)
+
     def test_dbc_inspect_search_with_signals_only(self) -> None:
         exit_code, stdout, _ = run_cli(
             "dbc",
@@ -5084,6 +5170,7 @@ class CompletionTests(unittest.TestCase):
         names = [r.strip() for r in results]
         self.assertIn("--message", names)
         self.assertIn("--signals-only", names)
+        self.assertIn("--layout", names)
         self.assertIn("--json", names)
 
     def test_j1939_pgn_flags_include_file(self) -> None:

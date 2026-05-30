@@ -52,9 +52,12 @@ class MessageInfo:
     cycle_time_ms: int | None
     senders: list[str]
     signals: list[SignalInfo]
+    layout: str | None = None
+    signal_tree: str | None = None
+    signal_choices: str | None = None
 
     def to_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "arbitration_id": self.arbitration_id,
             "arbitration_id_hex": self.arbitration_id_hex,
             "cycle_time_ms": self.cycle_time_ms,
@@ -65,6 +68,13 @@ class MessageInfo:
             "signal_count": len(self.signals),
             "signals": [signal.to_payload() for signal in self.signals],
         }
+        if self.layout is not None:
+            payload["layout"] = self.layout
+        if self.signal_tree is not None:
+            payload["signal_tree"] = self.signal_tree
+        if self.signal_choices is not None:
+            payload["signal_choices"] = self.signal_choices
+        return payload
 
 
 @dataclass(slots=True, frozen=True)

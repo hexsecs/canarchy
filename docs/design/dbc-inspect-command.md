@@ -7,7 +7,7 @@
 | Status | Implemented |
 | Command surface | `canarchy dbc inspect` |
 | Primary area | CLI, DBC |
-| Related specs | `docs/design/dbc-command-workflows.md`, `docs/design/dbc-runtime-schema-split.md` |
+| Related specs | `docs/design/dbc-command-workflows.md`, `docs/design/dbc-runtime-schema-split.md`, `docs/design/dbc-inspect-search.md` |
 
 ## Goal
 
@@ -29,11 +29,14 @@ Operators often need to answer questions such as which messages exist in a datab
 | `REQ-DBCI-06` | Optional feature | Where `--signals-only` is specified, the system shall emit signal-centric output without duplicating full database metadata. |
 | `REQ-DBCI-07` | Unwanted behaviour | If the DBC file is invalid or unreadable, the system shall return a structured error with code `DBC_LOAD_FAILED` and exit code 3. |
 | `REQ-DBCI-08` | Unwanted behaviour | If `--message <name>` references an unknown message, the system shall return a structured error with code `DBC_MESSAGE_NOT_FOUND` and exit code 3. |
+| `REQ-DBCI-09` | Optional feature | Where `--layout` is specified, the system shall include cantools-rendered bit-layout, signal-tree, and signal-choice strings for each selected message. |
+| `REQ-DBCI-10` | Optional feature | Where `--layout` is specified with `--message` or `--search`, the system shall render layout metadata only for the selected messages. |
+| `REQ-DBCI-11` | Optional feature | Where the MCP `dbc_inspect` tool is used, the system shall accept a `layout` boolean that maps to CLI `--layout`. |
 
 ## Command Surface
 
 ```text
-canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl] [--text]
+canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--search <pattern>] [--layout] [--json] [--jsonl] [--text]
 ```
 
 ### Arguments
@@ -43,6 +46,8 @@ canarchy dbc inspect <dbc> [--message <name>] [--signals-only] [--json] [--jsonl
 | `<dbc>` | required | Path to the DBC file to inspect |
 | `--message` | unset | Restrict output to a single message name |
 | `--signals-only` | off | Emit signal-centric results instead of the full database summary |
+| `--search` | unset | Restrict output to matching messages/signals |
+| `--layout` | off | Include cantools-rendered bit layout, signal tree, and choice tables |
 
 ## Responsibilities And Boundaries
 
@@ -85,6 +90,9 @@ The command returns a database summary plus zero or more message definitions.
 | `senders` | array[string] | transmitting nodes |
 | `signal_count` | integer | number of signals in the message |
 | `signals` | array[object] | signal definitions |
+| `layout` | string, optional | cantools-rendered bit-layout diagram when `--layout` is specified |
+| `signal_tree` | string, optional | cantools-rendered signal tree when `--layout` is specified |
+| `signal_choices` | string, optional | cantools-rendered signal choice/value table when `--layout` is specified |
 
 ### Signal metadata
 
@@ -161,7 +169,7 @@ Representative response:
 
 ### JSONL
 
-`--jsonl` emits one metadata event per line. The initial event is a `dbc_database` summary event followed by one `dbc_message` event per included message and one `dbc_signal` event per included signal.
+`--jsonl` emits one metadata event per line. The initial event is a `dbc_database` summary event followed by one `dbc_message` event per included message and one `dbc_signal` event per included signal. Where `--layout` is specified, `dbc_message.payload` includes `layout`, `signal_tree`, and `signal_choices` fields.
 
 Representative lines:
 
@@ -173,7 +181,7 @@ Representative lines:
 
 ### Table
 
-`--text` returns a compact summary view.
+`--text` returns a compact summary view. Where `--layout` is specified, each selected message is followed by the cantools-rendered layout, signal tree, and any signal choice table.
 
 ```text
 command: dbc inspect

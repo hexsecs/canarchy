@@ -551,6 +551,11 @@ def build_parser() -> CanarchyArgumentParser:
         metavar="PATTERN",
         help="case-insensitive regex/substring filter on message and signal names",
     )
+    dbc_inspect.add_argument(
+        "--layout",
+        action="store_true",
+        help="include cantools-rendered bit layout, signal tree, and choice tables",
+    )
     add_output_arguments(dbc_inspect)
     dbc_inspect.set_defaults(command="dbc inspect")
 
@@ -3718,6 +3723,7 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             dbc_path,
             message_name=args.message,
             signals_only=args.signals_only,
+            include_layout=getattr(args, "layout", False),
         )
         search = getattr(args, "search", None)
         if search:
@@ -6252,6 +6258,16 @@ def format_dbc_table(result: CommandResult) -> list[str]:
             lines.append(
                 f"    {signal['name']}: {signal.get('byte_order', '')} {signal.get('length', '')}bit{unit}"
             )
+        if result.data.get("layout") or message.get("layout") is not None:
+            if message.get("layout"):
+                lines.append("    layout:")
+                lines.extend(f"      {line}" for line in message["layout"].splitlines())
+            if message.get("signal_tree"):
+                lines.append("    signal_tree:")
+                lines.extend(f"      {line}" for line in message["signal_tree"].splitlines())
+            if message.get("signal_choices"):
+                lines.append("    signal_choices:")
+                lines.extend(f"      {line}" for line in message["signal_choices"].splitlines())
     return lines
 
 

@@ -17,6 +17,7 @@ Validate that `dbc inspect` returns stable structured metadata for database, mes
 * database summary inspection
 * message-filtered inspection
 * signal metadata output including units and ranges
+* optional cantools layout rendering in text, JSON, and JSONL output
 * structured error handling for invalid DBC files and unknown messages
 
 ## Requirement Traceability
@@ -31,6 +32,9 @@ Validate that `dbc inspect` returns stable structured metadata for database, mes
 | `REQ-DBCI-06` | `TEST-DBCI-03` |
 | `REQ-DBCI-07` | `TEST-DBCI-04` |
 | `REQ-DBCI-08` | `TEST-DBCI-05` |
+| `REQ-DBCI-09` | `TEST-DBCI-06`, `TEST-DBCI-07`, `TEST-DBCI-08`, `TEST-DBCI-10` |
+| `REQ-DBCI-10` | `TEST-DBCI-06`, `TEST-DBCI-09` |
+| `REQ-DBCI-11` | `TEST-DBCI-11` |
 
 ## Representative Test Cases
 
@@ -97,9 +101,83 @@ And    `errors[0].code` shall equal `"DBC_MESSAGE_NOT_FOUND"`
 
 **Fixture:** `tests/fixtures/sample.dbc`.
 
+---
+
+### `TEST-DBCI-06` — Text layout for a named message
+
+```gherkin
+Given  the file `tests/fixtures/sample.dbc` is available
+When   the operator runs `canarchy dbc inspect tests/fixtures/sample.dbc --message EngineStatus1 --layout --text`
+Then   the system shall render the bit-layout diagram
+And    the system shall render the signal tree
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`.
+
+---
+
+### `TEST-DBCI-07` — JSON layout fields
+
+```gherkin
+Given  the file `tests/fixtures/sample.dbc` is available
+When   the operator runs `canarchy dbc inspect tests/fixtures/sample.dbc --message EngineStatus1 --layout --json`
+Then   the first message payload shall include `layout`, `signal_tree`, and `signal_choices`
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`.
+
+---
+
+### `TEST-DBCI-08` — JSONL layout fields
+
+```gherkin
+Given  the file `tests/fixtures/sample.dbc` is available
+When   the operator runs `canarchy dbc inspect tests/fixtures/sample.dbc --message EngineStatus1 --layout --jsonl`
+Then   the `dbc_message` event payload shall include `layout` and `signal_tree`
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`.
+
+---
+
+### `TEST-DBCI-09` — Layout combines with search
+
+```gherkin
+Given  the file `tests/fixtures/sample.dbc` is available
+When   the operator runs `canarchy dbc inspect tests/fixtures/sample.dbc --search speed --layout --json`
+Then   the response shall include only the matching message
+And    that message shall include layout metadata
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`.
+
+---
+
+### `TEST-DBCI-10` — Choice table rendering
+
+```gherkin
+Given  the file `tests/fixtures/complex.dbc` is available
+When   the operator runs `canarchy dbc inspect tests/fixtures/complex.dbc --message TransmissionGear --layout --text`
+Then   the system shall render choice tables for choice-bearing signals
+```
+
+**Fixture:** `tests/fixtures/complex.dbc`.
+
+---
+
+### `TEST-DBCI-11` — MCP layout flag
+
+```gherkin
+Given  the MCP server exposes `dbc_inspect`
+When   the tool schema is inspected
+Then   the `layout` property shall be a boolean with default `false`
+```
+
+**Fixture:** none.
+
 ## Fixtures And Environment
 
-The command can be tested with the existing `tests/fixtures/sample.dbc` and `tests/fixtures/invalid.dbc` files. Additional multiplexed and choice-heavy fixtures should be added before implementation begins.
+The command can be tested with the existing `tests/fixtures/sample.dbc`, `tests/fixtures/complex.dbc`, and `tests/fixtures/invalid.dbc` files.
 
 ## Explicit Non-Coverage
 
