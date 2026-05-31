@@ -25,6 +25,7 @@ from canarchy.models import (
     J1939ObservationEvent,
     serialize_events,
 )
+from canarchy.pcap_reader import pcap_metadata as _pcap_metadata, iter_pcap_file
 from canarchy.sample_data import (
     sample_j1939_monitor_frames,
     sample_uds_scan_transactions,
@@ -95,7 +96,7 @@ CANDUMP_CLASSIC_LINE_RE = re.compile(
 CANDUMP_FD_LINE_RE = re.compile(
     r"^\((?P<timestamp>\d+(?:\.\d+)?)\)\s+(?P<interface>\S+)\s+(?P<frame_id>[0-9A-Fa-f]+)##(?P<flags>[0-9A-Fa-f])(?P<data>[0-9A-Fa-f]*)$"
 )
-SUPPORTED_CAPTURE_SUFFIXES = {".candump", ".log"}
+SUPPORTED_CAPTURE_SUFFIXES = {".candump", ".log", ".pcap", ".pcapng"}
 CAN_ERR_FLAG = 0x20000000
 SUPPORTED_CANDUMP_FD_FLAGS = 0x3
 CAPTURE_INFO_MAX_FRAMES_HINT = 500_000
@@ -645,9 +646,14 @@ class LocalTransport:
     ) -> Iterator[CanFrame]:
         path = self._capture_file_path(file_name)
         try:
-            yield from iter_candump_file(
-                path, offset=offset, max_frames=max_frames, seconds=seconds
-            )
+            if path is not None and self._is_pcap_path(path):
+                yield from iter_pcap_file(
+                    path, offset=offset, max_frames=max_frames, seconds=seconds
+                )
+            else:
+                yield from iter_candump_file(
+                    path, offset=offset, max_frames=max_frames, seconds=seconds
+                )
         except OSError as exc:
             raise TransportError(
                 "CAPTURE_SOURCE_UNAVAILABLE",
@@ -915,6 +921,9 @@ class LocalTransport:
     def _frames_for_file(self, file_name: str) -> list[CanFrame]:
         return list(self.iter_frames_from_file(file_name))
 
+    def _is_pcap_path(self, path: Path) -> bool:
+        return path.suffix.lower() in {".pcap", ".pcapng"}
+
     def _capture_file_path(self, file_name: str) -> Path | None:
         if file_name == "-":
             return None  # Signal to use stdin
@@ -929,14 +938,13 @@ class LocalTransport:
             raise TransportError(
                 "CAPTURE_SOURCE_UNAVAILABLE",
                 f"Capture source '{file_name}' is not a readable file.",
-                "Provide a readable candump log file path.",
+                "Provide a readable candump or pcap file path.",
             )
         if path.suffix.lower() not in SUPPORTED_CAPTURE_SUFFIXES:
-            supported_formats = ", ".join(sorted(SUPPORTED_CAPTURE_SUFFIXES))
             raise TransportError(
                 "CAPTURE_FORMAT_UNSUPPORTED",
                 f"Capture source '{file_name}' uses an unsupported file format.",
-                f"Use a candump log file with one of these suffixes: {supported_formats}.",
+                "Use a candump log file (.candump, .log) or pcap file (.pcap, .pcapng).",
             )
         return path
 
@@ -1163,7 +1171,27 @@ def _full_capture_metadata(path: Path) -> CaptureMetadata:
     )
 
 
+def _pcap_capture_metadata(path: Path) -> CaptureMetadata:
+    """Read metadata from a pcap/pcapng file."""
+    stats = _pcap_metadata(path)
+    frame_count = stats["frame_count"]
+    duration = stats["duration_seconds"]
+    suggested_max_frames, suggested_seconds = _capture_info_suggestions(frame_count, duration)
+    return CaptureMetadata(
+        frame_count=frame_count,
+        duration_seconds=duration,
+        unique_ids=stats["unique_ids"],
+        interfaces=["pcap"],
+        first_timestamp=stats["first_timestamp"],
+        last_timestamp=stats["last_timestamp"],
+        suggested_max_frames=suggested_max_frames,
+        suggested_seconds=suggested_seconds,
+    )
+
+
 def capture_metadata(path: Path) -> CaptureMetadata:
+    if path.suffix.lower() in {".pcap", ".pcapng"}:
+        return _pcap_capture_metadata(path)
     if path.stat().st_size >= FAST_SCAN_THRESHOLD_BYTES:
         return _fast_capture_metadata(path)
     return _full_capture_metadata(path)

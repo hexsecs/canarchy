@@ -27,6 +27,7 @@ dependencies = [
     "can-j1939>=2.0.12",
     "canmatrix>=1.2",
     "cantools>=39.4",
+    "dpkt>=1.9.8",
     "mcp>=1.27.0",
     "msgpack>=1.1.2",
     "pretty-j1939>=0.0.6",

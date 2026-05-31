@@ -946,6 +946,49 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["command"], "capture-info")
         self.assertEqual(payload["errors"][0]["code"], "CAPTURE_SOURCE_INVALID")
 
+    def test_capture_info_pcap_works(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "capture-info", "--file", str(FIXTURES / "sample.pcap"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["frame_count"], 9)
+        self.assertAlmostEqual(payload["data"]["duration_seconds"], 0.8, delta=0.01)
+        self.assertEqual(payload["data"]["interfaces"], ["pcap"])
+
+    def test_capture_info_pcapng_works(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "capture-info", "--file", str(FIXTURES / "sample.pcapng"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["frame_count"], 9)
+
+    def test_stats_pcap_works(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "stats", "--file", str(FIXTURES / "sample.pcap"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["total_frames"], 9)
+        self.assertEqual(payload["data"]["unique_arbitration_ids"], 8)
+
+    def test_filter_pcap_works(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "filter", "id==0x456", "--file", str(FIXTURES / "sample.pcap"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["data"]["frames"]), 2)
+
     def test_nested_j1939_command_works(self) -> None:
         exit_code, stdout, _ = run_cli("j1939", "monitor", "--pgn", "65262", "--text")
         self.assertEqual(exit_code, EXIT_OK)

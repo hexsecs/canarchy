@@ -723,6 +723,125 @@ class CaptureMetadataTests(unittest.TestCase):
         self.assertEqual(payload["scan_mode"], "estimated")
 
 
+class PcapSupportTests(unittest.TestCase):
+    """PCAP/PCAPNG read support (issue #319)."""
+
+    def test_iter_pcap_yields_correct_frames(self) -> None:
+        from canarchy.pcap_reader import iter_pcap_file
+
+        frames = list(iter_pcap_file(FIXTURES / "sample.pcap"))
+        self.assertEqual(len(frames), 9)
+
+        self.assertEqual(frames[0].arbitration_id, 0x123)
+        self.assertEqual(frames[0].data, bytes.fromhex("11223344"))
+        self.assertAlmostEqual(frames[0].timestamp, 0.0)
+
+        self.assertEqual(frames[1].arbitration_id, 0x18F00431)
+        self.assertEqual(frames[2].arbitration_id, 0x18FEF100)
+        self.assertEqual(frames[3].arbitration_id, 0x456)
+
+        self.assertTrue(frames[4].is_remote_frame)
+        self.assertFalse(frames[4].data)
+
+        self.assertEqual(frames[7].frame_format, "can_fd")
+        self.assertTrue(frames[7].bitrate_switch)
+
+        self.assertTrue(frames[8].is_error_frame)
+        self.assertEqual(frames[8].arbitration_id, 0)
+
+    def test_iter_pcap_respects_max_frames(self) -> None:
+        from canarchy.pcap_reader import iter_pcap_file
+
+        frames = list(iter_pcap_file(FIXTURES / "sample.pcap", max_frames=3))
+        self.assertEqual(len(frames), 3)
+
+    def test_iter_pcap_respects_offset(self) -> None:
+        from canarchy.pcap_reader import iter_pcap_file
+
+        frames = list(iter_pcap_file(FIXTURES / "sample.pcap", offset=3))
+        self.assertEqual(len(frames), 6)
+        self.assertEqual(frames[0].arbitration_id, 0x456)
+        self.assertEqual(frames[0].timestamp, 0.3)
+
+    def test_iter_pcap_respects_seconds_window(self) -> None:
+        from canarchy.pcap_reader import iter_pcap_file
+
+        frames = list(iter_pcap_file(FIXTURES / "sample.pcap", seconds=0.3))
+        self.assertEqual(len(frames), 4)
+        self.assertAlmostEqual(frames[-1].timestamp, 0.3)
+
+    def test_iter_pcapng_yields_same_frames(self) -> None:
+        from canarchy.pcap_reader import iter_pcap_file
+
+        frames = list(iter_pcap_file(FIXTURES / "sample.pcapng"))
+        self.assertEqual(len(frames), 9)
+        self.assertEqual(frames[0].arbitration_id, 0x123)
+
+    def test_pcap_metadata(self) -> None:
+        from canarchy.pcap_reader import pcap_metadata
+
+        meta = pcap_metadata(FIXTURES / "sample.pcap")
+        self.assertEqual(meta["frame_count"], 9)
+        self.assertAlmostEqual(meta["duration_seconds"], 0.8)
+        self.assertEqual(meta["unique_ids"], 8)
+
+    def test_pcap_metadata_pcapng(self) -> None:
+        from canarchy.pcap_reader import pcap_metadata
+
+        meta = pcap_metadata(FIXTURES / "sample.pcapng")
+        self.assertEqual(meta["frame_count"], 9)
+
+    def test_transport_iter_frames_routes_to_pcap_for_capture_info(self) -> None:
+        transport = LocalTransport()
+        meta = transport.capture_info(str(FIXTURES / "sample.pcap"))
+        self.assertEqual(meta.frame_count, 9)
+        self.assertAlmostEqual(meta.duration_seconds, 0.8, delta=0.01)
+        self.assertEqual(meta.interfaces, ["pcap"])
+
+    def test_transport_iter_frames_from_pcap(self) -> None:
+        transport = LocalTransport()
+        frames = transport.frames_from_file(str(FIXTURES / "sample.pcap"))
+        self.assertEqual(len(frames), 9)
+        self.assertEqual(frames[0].arbitration_id, 0x123)
+
+    def test_transport_iter_frames_from_pcapng(self) -> None:
+        transport = LocalTransport()
+        frames = transport.frames_from_file(str(FIXTURES / "sample.pcapng"))
+        self.assertEqual(len(frames), 9)
+
+    def test_pcap_file_rejected_with_unsupported_linktype(self) -> None:
+        from canarchy.pcap_reader import iter_pcap_file
+        from canarchy.transport import TransportError
+
+        import tempfile
+        import dpkt
+
+        # Write a pcap with DLT_EN10MB (ethernet) instead of CAN SocketCAN
+        tmp = tempfile.NamedTemporaryFile(suffix=".pcap", delete=False)
+        try:
+            with open(tmp.name, "wb") as f:
+                writer = dpkt.pcap.Writer(f, linktype=1, snaplen=65535)  # DLT_EN10MB
+                writer.writepkt(b"\x00" * 64, ts=0.0)
+
+            with self.assertRaises(TransportError) as ctx:
+                list(iter_pcap_file(Path(tmp.name)))
+            self.assertEqual(ctx.exception.code, "CAPTURE_FORMAT_UNSUPPORTED")
+        finally:
+            os.unlink(tmp.name)
+
+    def test_missing_pcap_raises_source_unavailable(self) -> None:
+        transport = LocalTransport()
+        with self.assertRaises(TransportError) as ctx:
+            transport.frames_from_file("nonexistent.pcap")
+        self.assertEqual(ctx.exception.code, "CAPTURE_SOURCE_UNAVAILABLE")
+
+    def test_unsupported_suffix_raises_format_error(self) -> None:
+        transport = LocalTransport()
+        with self.assertRaises(TransportError) as ctx:
+            transport.frames_from_file(str(FIXTURES / "sample.dbc"))
+        self.assertEqual(ctx.exception.code, "CAPTURE_FORMAT_UNSUPPORTED")
+
+
 class StdinSupportTests(unittest.TestCase):
     """Tests for stdin pipeline support (issue #238)."""
 

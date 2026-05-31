@@ -37,7 +37,7 @@ Important current behavior:
 * `decode`, `encode`, and `dbc inspect` include `data.dbc_source` in structured output so callers can see the provider, logical DBC name, pinned version, resolved local path, and database `kind` (`dbc` / `arxml` / `kcd` / `sym`); `dbc inspect` additionally reports the same value as `data.database.format`
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
 * specialized text formatting exists for J1939 monitor and decode style output; other `--text` output is generic key/value rendering
-* file-backed analysis commands support standard timestamped candump log files with `.candump` and `.log` suffixes; selected commands also support `--file -` for candump text from stdin
+* file-backed analysis commands support standard timestamped candump log files (`.candump`, `.log`) and pcap/pcapng files (`.pcap`, `.pcapng`) with CAN SocketCAN (DLT 227) frames; selected commands also support `--file -` for candump text from stdin
 
 ---
 
@@ -96,7 +96,9 @@ Supported file input today:
 * file-backed commands consume standard timestamped candump logs in the form `(timestamp) interface frame#data`
 * supported additional candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier
 * supported CAN FD flags today are the BRS and ESI bits in the single-nibble candump flags field
-* supported capture-file suffixes today are `.candump` and `.log`; `--file -` reads candump text from stdin for commands that explicitly support it
+* supported capture-file suffixes today are `.candump`, `.log`, `.pcap`, and `.pcapng`; `--file -` reads candump text from stdin for commands that explicitly support it
+* pcap/pcapng support requires the file to use the CAN SocketCAN linktype (DLT 227); files with other linktypes are rejected with a clear error
+* pcap/pcapng files are always fully scanned (no fast-scan estimation); the binary format does not support text-based head/tail estimation
 * malformed log lines are skipped during capture parsing rather than falling back to fixture data; commands that require capture metadata or explicitly validate stdin emptiness return structured errors when no valid frames are available
 
 ### send
