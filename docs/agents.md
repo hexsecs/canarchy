@@ -115,6 +115,7 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `uds_services` | `canarchy uds services` |
 | `config_show` | `canarchy config show` |
 | `doctor` | `canarchy doctor` |
+| `re_anomalies` | `canarchy re anomalies` |
 | `re_correlate` | `canarchy re correlate` |
 | `re_counters` | `canarchy re counters` |
 | `re_entropy` | `canarchy re entropy` |

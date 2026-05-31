@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from canarchy.reverse_engineering import (
     ReferenceSeriesError,
+    anomaly_candidates,
     correlate_candidates,
     counter_candidates,
     entropy_candidates,
@@ -443,3 +444,132 @@ class CorrelateCandidatesTests(unittest.TestCase):
             correlate_candidates(frames, ref)
 
         self.assertEqual(ctx.exception.code, "INSUFFICIENT_OVERLAP")
+
+
+class AnomalyCandidatesTests(unittest.TestCase):
+    """Unit tests for the anomaly detector (#321)."""
+
+    def _frames(self, name: str):
+        return LocalTransport().frames_from_file(str(FIXTURES / name))
+
+    def test_baseline_flags_timing_unknown_and_dropped(self) -> None:
+        frames = self._frames("anomaly_input.candump")
+        baseline = self._frames("anomaly_baseline.candump")
+        result = anomaly_candidates(frames, baseline=baseline)
+
+        self.assertEqual(result["mode"], "baseline")
+        kinds = {c["kind"]: c for c in result["candidates"]}
+        self.assertIn("timing", kinds)
+        self.assertIn("unknown-id", kinds)
+        self.assertIn("dropped-id", kinds)
+        # 0x100 has the big timing glitch; 0x300 is new; 0x200 dropped.
+        self.assertEqual(kinds["timing"]["arbitration_id"], 0x100)
+        self.assertEqual(kinds["unknown-id"]["arbitration_id"], 0x300)
+        self.assertEqual(kinds["dropped-id"]["arbitration_id"], 0x200)
+        self.assertGreaterEqual(abs(kinds["timing"]["z_score"]), 3.0)
+
+    def test_self_consistency_flags_internal_glitch(self) -> None:
+        frames = self._frames("anomaly_input.candump")
+        result = anomaly_candidates(frames)
+
+        self.assertEqual(result["mode"], "self-consistency")
+        # No id-presence anomalies without a separate baseline.
+        kinds = {c["kind"] for c in result["candidates"]}
+        self.assertNotIn("unknown-id", kinds)
+        self.assertNotIn("dropped-id", kinds)
+        timing = [c for c in result["candidates"] if c["kind"] == "timing"]
+        self.assertTrue(timing)
+        self.assertEqual(timing[0]["arbitration_id"], 0x100)
+
+    def test_event_traffic_is_not_flagged(self) -> None:
+        # 0x400 is event-based (bursts then long silences); the CV guard must
+        # classify it as event and skip timing analysis entirely.
+        frames = self._frames("anomaly_event_mix.candump")
+        result = anomaly_candidates(frames)
+
+        self.assertIn(0x400, result["event_ids"])
+        self.assertIn(0x100, result["cyclic_ids"])
+        flagged_ids = {c["arbitration_id"] for c in result["candidates"]}
+        self.assertNotIn(0x400, flagged_ids)
+
+    def test_robust_stats_resist_outlier_masking(self) -> None:
+        # A single huge gap must not inflate the spread enough to hide itself.
+        frames = self._frames("anomaly_input.candump")
+        result = anomaly_candidates(frames, z_threshold=3.0)
+        self.assertTrue(any(c["kind"] == "timing" for c in result["candidates"]))
+
+    def test_high_z_threshold_suppresses_timing(self) -> None:
+        frames = self._frames("anomaly_input.candump")
+        result = anomaly_candidates(frames, z_threshold=1e9)
+        self.assertFalse(any(c["kind"] == "timing" for c in result["candidates"]))
+
+    def test_dbc_send_type_overrides_event_classification(self) -> None:
+        # 0x400 looks periodic in this capture, but the DBC marks it event:
+        # the DBC classification is authoritative, so it is skipped.
+        from canarchy.dbc import database_timing_map
+
+        frames = self._frames("anomaly_dbc_capture.candump")
+        timing = database_timing_map(str(FIXTURES / "anomaly_timing.dbc"))
+        result = anomaly_candidates(frames, dbc_timing=timing)
+
+        self.assertEqual(result["timing_source"], "dbc")
+        self.assertIn(0x400, result["event_ids"])
+        self.assertIn(0x100, result["cyclic_ids"])
+        flagged = {c["arbitration_id"] for c in result["candidates"] if c["kind"] == "timing"}
+        self.assertIn(0x100, flagged)
+        self.assertNotIn(0x400, flagged)
+
+
+class AnomaliesCliTests(unittest.TestCase):
+    """CLI-level tests for `canarchy re anomalies`."""
+
+    def test_cli_baseline_run_json_shape(self) -> None:
+        from canarchy.cli import execute_command
+
+        exit_code, result = execute_command(
+            [
+                "re",
+                "anomalies",
+                str(FIXTURES / "anomaly_input.candump"),
+                "--baseline",
+                str(FIXTURES / "anomaly_baseline.candump"),
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        assert result is not None
+        self.assertTrue(result.ok)
+        self.assertEqual(result.command, "re anomalies")
+        data = result.data
+        self.assertEqual(data["mode"], "baseline")
+        for key in ("candidates", "candidate_count", "cyclic_ids", "event_ids", "timing_source"):
+            self.assertIn(key, data)
+        self.assertGreaterEqual(data["candidate_count"], 1)
+
+    def test_cli_self_consistency_run(self) -> None:
+        from canarchy.cli import execute_command
+
+        exit_code, result = execute_command(
+            ["re", "anomalies", str(FIXTURES / "anomaly_input.candump"), "--json"]
+        )
+        self.assertEqual(exit_code, 0)
+        assert result is not None
+        self.assertEqual(result.data["mode"], "self-consistency")
+
+    def test_cli_dbc_flag_sets_timing_source(self) -> None:
+        from canarchy.cli import execute_command
+
+        exit_code, result = execute_command(
+            [
+                "re",
+                "anomalies",
+                str(FIXTURES / "anomaly_dbc_capture.candump"),
+                "--dbc",
+                str(FIXTURES / "anomaly_timing.dbc"),
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        assert result is not None
+        self.assertEqual(result.data["timing_source"], "dbc")
+        self.assertIn(0x400, result.data["event_ids"])

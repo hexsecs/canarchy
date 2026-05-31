@@ -128,6 +128,12 @@ def convert_database(
     return convert_database_runtime(dbc_path, target_format, out_path=out)
 
 
+def database_timing_map(dbc_path: str) -> dict[int, dict[str, Any]]:
+    from canarchy.dbc_runtime import database_timing_map_runtime
+
+    return database_timing_map_runtime(dbc_path)
+
+
 def encode_message(
     dbc_path: str,
     message_name: str,

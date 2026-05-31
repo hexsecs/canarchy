@@ -1117,6 +1117,47 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="re_anomalies",
+        description=(
+            "Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs "
+            "in a capture, optionally against a baseline capture."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+                "baseline": {
+                    "type": "string",
+                    "description": "Reference capture to learn expected timing and ID coverage from",
+                },
+                "dbc": {
+                    "type": "string",
+                    "description": "Database (DBC/ARXML/KCD/SYM or provider ref) whose cycle time and send type classify which messages are cyclic (authoritative over the CV guard)",
+                },
+                "z_threshold": {
+                    "type": "number",
+                    "description": "Minimum absolute z-score to flag a timing anomaly",
+                    "default": 3.0,
+                },
+                "cv_max": {
+                    "type": "number",
+                    "description": "Max coefficient of variation for an ID to be treated as cyclic when no DBC is supplied",
+                    "default": 0.5,
+                },
+                "offset": {"type": "integer", "description": "Skip the first N frames"},
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first N seconds from capture start",
+                },
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
         name="re_counters",
         description="Detect likely counter fields in CAN frames from a capture file.",
         inputSchema={
@@ -1822,6 +1863,23 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return ["re", "signals", a["file"], "--json"]
         case "re_correlate":
             return ["re", "correlate", a["file"], "--reference", a["reference"], "--json"]
+        case "re_anomalies":
+            argv = ["re", "anomalies", a["file"]]
+            if a.get("baseline"):
+                argv += ["--baseline", a["baseline"]]
+            if a.get("dbc"):
+                argv += ["--dbc", a["dbc"]]
+            if "z_threshold" in a:
+                argv += ["--z-threshold", str(a["z_threshold"])]
+            if "cv_max" in a:
+                argv += ["--cv-max", str(a["cv_max"])]
+            if a.get("offset"):
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
         case "re_counters":
             return ["re", "counters", a["file"], "--json"]
         case "re_entropy":
