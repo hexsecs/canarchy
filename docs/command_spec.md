@@ -324,6 +324,29 @@ Notes:
 * structured output includes `dbc_source` provenance alongside the inspection payload
 * `--layout` adds cantools-rendered per-message `layout`, `signal_tree`, and `signal_choices` strings; text output renders those diagrams directly, while JSON/JSONL keep them as fields on each message payload
 
+### dbc convert
+
+Convert a loaded database to another cantools-supported serialization
+format (DBC, KCD, or SYM).
+
+```bash
+canarchy dbc convert <dbc> --to {dbc,kcd,sym} [--out <path>] [--json|--jsonl|--text]
+```
+
+Examples:
+
+```bash
+canarchy dbc convert tests/fixtures/sample.dbc --to kcd --out sample.kcd
+canarchy dbc convert opendbc:toyota_tnga_k_pt_generated --to sym --json
+```
+
+Notes:
+
+* `<dbc>` accepts a local file path or a provider ref such as `opendbc:<name>`; the source may be any format the cantools runtime can load
+* serialization uses the cantools `as_dbc_string` / `as_kcd_string` / `as_sym_string` emitters — no hand-rolled writers
+* with `--out`, the converted database is written to the given path and the envelope reports `out`, `target_format`, `message_count`, and `signal_count`; without `--out`, the serialized `content` is returned in the envelope (and printed directly in `--text` mode)
+* structured errors cover unwritable output directories (`DBC_CONVERT_WRITE_FAILED`) and serialization failures where the target format cannot express a source feature (`DBC_CONVERT_FAILED`)
+
 ### dbc provider list
 
 List registered DBC providers.

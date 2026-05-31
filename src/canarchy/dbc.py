@@ -117,6 +117,17 @@ def inspect_database(
     return inspection.to_payload(signals_only=signals_only), inspection.to_events()
 
 
+def convert_database(
+    dbc_path: str,
+    target_format: str,
+    *,
+    out: str | None = None,
+) -> tuple[str, str | None, int, int]:
+    from canarchy.dbc_runtime import convert_database_runtime
+
+    return convert_database_runtime(dbc_path, target_format, out_path=out)
+
+
 def encode_message(
     dbc_path: str,
     message_name: str,

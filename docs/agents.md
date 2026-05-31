@@ -84,6 +84,7 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `encode` | `canarchy encode` |
 | `dbc_inspect` | `canarchy dbc inspect` |
 | `dbc_signals` | `canarchy dbc signals` |
+| `dbc_convert` | `canarchy dbc convert` |
 | `dbc_provider_list` | `canarchy dbc provider list` |
 | `dbc_search` | `canarchy dbc search` |
 | `dbc_fetch` | `canarchy dbc fetch` |
