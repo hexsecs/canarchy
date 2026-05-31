@@ -3778,20 +3778,10 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         }
         if written is None:
             data["content"] = content
-        events = serialize_events(
-            [
-                AlertEvent(
-                    level="info",
-                    code="DBC_CONVERTED",
-                    message=(
-                        f"Converted {message_count} message(s) to {args.target_format.upper()}"
-                        + (f" → {written}" if written else "")
-                    ),
-                    source="dbc.convert",
-                ).to_event()
-            ]
-        )
-        return (data, events, [])
+        # No event is attached: for a conversion the envelope itself is the
+        # payload. Emitting an event here would make --jsonl stream only the
+        # event and drop the conversion result (content / out / counts).
+        return (data, [], [])
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
 

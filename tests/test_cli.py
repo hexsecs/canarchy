@@ -4874,6 +4874,37 @@ class DbcConvertTests(unittest.TestCase):
             message_names = {m["name"] for m in reloaded["data"]["messages"]}
             self.assertEqual(message_names, {"EngineStatus1", "EngineSpeed1"})
 
+    def test_convert_jsonl_to_stdout_preserves_content(self) -> None:
+        # Regression: an attached event must not cause --jsonl to drop the
+        # conversion payload (PR #389 review).
+        exit_code, stdout, _ = run_cli(
+            "dbc", "convert", str(FIXTURES / "sample.dbc"), "--to", "kcd", "--jsonl"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        records = [json.loads(line) for line in stdout.strip().splitlines()]
+        self.assertEqual(len(records), 1)
+        self.assertIn("NetworkDefinition", records[0]["data"]["content"])
+        self.assertEqual(records[0]["data"]["target_format"], "kcd")
+
+    def test_convert_jsonl_with_out_preserves_envelope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "sample.kcd"
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "convert",
+                str(FIXTURES / "sample.dbc"),
+                "--to",
+                "kcd",
+                "--out",
+                str(out_path),
+                "--jsonl",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            records = [json.loads(line) for line in stdout.strip().splitlines()]
+            self.assertEqual(records[-1]["data"]["out"], str(out_path))
+            self.assertEqual(records[-1]["data"]["message_count"], 2)
+            self.assertEqual(records[-1]["data"]["signal_count"], 6)
+
     def test_convert_text_to_file_prints_confirmation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out_path = Path(tmp) / "sample.sym"
