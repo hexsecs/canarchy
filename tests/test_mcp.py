@@ -113,6 +113,7 @@ _MCP_EXCLUDED_COMMANDS = {
     "mcp install",
     "completion",
     "datasets stream",
+    "dbc generate-c",  # file generation is a developer action, not an agent tool call
 }
 
 # CLI commands whose MCP coverage is split across multiple tools, or whose

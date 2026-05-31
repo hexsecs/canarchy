@@ -159,6 +159,109 @@ _DATABASE_SERIALIZERS: dict[str, str] = {
 }
 
 
+def generate_c_source_runtime(
+    dbc_path: str,
+    *,
+    out_dir: str | None = None,
+    database_name: str | None = None,
+    floating_point_numbers: bool = True,
+    bit_fields: bool = False,
+    use_float: bool = False,
+    node_name: str | None = None,
+    use_round: bool = False,
+) -> dict[str, Any]:
+    """Generate C source and header files from a database using cantools.
+
+    Returns a dict with ``out_dir``, ``database_name``, and ``files`` (a list
+    of dicts each with ``path``, ``kind`` (``header`` / ``source`` /
+    ``fuzzer_source`` / ``fuzzer_makefile``), and ``size_bytes``).
+    """
+    from cantools.database.can.c_source import generate as generate_c_source
+
+    database = load_runtime_database(dbc_path)
+
+    # Derive the database name from the source path when not given.
+    stem = Path(dbc_path).stem
+    resolved_name = database_name or stem
+
+    # Sanitise for use as a C identifier prefix.
+    safe_prefix = "".join(c if c.isalnum() or c == "_" else "_" for c in resolved_name)
+    if safe_prefix[0].isdigit():
+        safe_prefix = f"_{safe_prefix}"
+
+    # Output directory.
+    dest = Path(out_dir) if out_dir else Path.cwd()
+    if not dest.exists():
+        raise DbcError(
+            code="DBC_GENERATE_C_DIR_MISSING",
+            message=(
+                f"Output directory '{dest}' does not exist. "
+                f"Create it or specify an existing directory with --out-dir."
+            ),
+            hint="Use --out-dir to specify an existing output directory.",
+        )
+
+    header_name = f"{stem}.h"
+    source_name = f"{stem}.c"
+    fuzzer_source_name = f"{stem}_fuzzer.c"
+
+    try:
+        header, source, fuzzer_source, makefile = generate_c_source(
+            database,
+            database_name=safe_prefix,
+            header_name=header_name,
+            source_name=source_name,
+            fuzzer_source_name=fuzzer_source_name,
+            floating_point_numbers=floating_point_numbers,
+            bit_fields=bit_fields,
+            use_float=use_float,
+            node_name=node_name,
+            use_round=use_round,
+        )
+    except Exception as exc:
+        raise DbcError(
+            code="DBC_GENERATE_C_FAILED",
+            message="Failed to generate C source from the database.",
+            hint=(
+                "Check that the database is valid and the requested options are "
+                "compatible with the database contents."
+            ),
+        ) from exc
+
+    files: list[dict[str, Any]] = []
+    entries: list[tuple[str, str, str]] = [
+        (header_name, "header", header),
+        (source_name, "source", source),
+        (fuzzer_source_name, "fuzzer_source", fuzzer_source),
+        (f"{stem}_fuzzer.mk", "fuzzer_makefile", makefile),
+    ]
+
+    for filename, kind, content in entries:
+        file_path = dest / filename
+        try:
+            file_path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            raise DbcError(
+                code="DBC_GENERATE_C_WRITE_FAILED",
+                message=f"Failed to write '{file_path}'.",
+                hint="Check that the output directory is writable.",
+            ) from exc
+        files.append(
+            {
+                "path": str(file_path),
+                "kind": kind,
+                "size_bytes": len(content.encode("utf-8")),
+            }
+        )
+
+    return {
+        "out_dir": str(dest),
+        "database_name": safe_prefix,
+        "files": files,
+        "file_count": len(files),
+    }
+
+
 def convert_database_runtime(
     dbc_path: str,
     target_format: str,

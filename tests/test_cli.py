@@ -5006,6 +5006,153 @@ class DbcConvertTests(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["code"], "DBC_CONVERT_WRITE_FAILED")
 
 
+class DbcGenerateCTests(unittest.TestCase):
+    """Tests for `canarchy dbc generate-c` (#386)."""
+
+    def test_generate_c_to_dir_creates_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_code, stdout, stderr = run_cli(
+                "dbc",
+                "generate-c",
+                str(FIXTURES / "sample.dbc"),
+                "--out-dir",
+                tmp,
+                "--json",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["command"], "dbc generate-c")
+            self.assertEqual(payload["data"]["file_count"], 4)
+            self.assertEqual(payload["data"]["out_dir"], tmp)
+            # Check generated files exist.
+            files = {f["kind"]: f for f in payload["data"]["files"]}
+            self.assertIn("header", files)
+            self.assertIn("source", files)
+            self.assertIn("fuzzer_source", files)
+            self.assertIn("fuzzer_makefile", files)
+            header_path = files["header"]["path"]
+            self.assertTrue(Path(header_path).exists())
+            # Verify pack/unpack symbols appear in the header.
+            header_text = Path(header_path).read_text()
+            self.assertIn("EngineStatus1", header_text)
+            self.assertIn("EngineSpeed1", header_text)
+            self.assertIn("pack", header_text)
+            self.assertIn("unpack", header_text)
+
+    def test_generate_c_text_output_prints_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_code, stdout, stderr = run_cli(
+                "dbc",
+                "generate-c",
+                str(FIXTURES / "sample.dbc"),
+                "--out-dir",
+                tmp,
+                "--text",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            self.assertEqual(stderr, "")
+            self.assertIn("generated C source from", stdout)
+            self.assertIn("header", stdout)
+            self.assertIn("source", stdout)
+            self.assertIn(tmp, stdout)
+
+    def test_generate_c_default_out_dir_is_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with working_directory(tmp):
+                exit_code, stdout, _ = run_cli(
+                    "dbc",
+                    "generate-c",
+                    str(FIXTURES / "sample.dbc"),
+                    "--json",
+                )
+            self.assertEqual(exit_code, EXIT_OK)
+            payload = json.loads(stdout)
+            # Resolve both sides because /tmp may be a symlink on macOS.
+            self.assertEqual(Path(payload["data"]["out_dir"]).resolve(), Path(tmp).resolve())
+            self.assertEqual(payload["data"]["file_count"], 4)
+
+    def test_generate_c_with_database_name_uses_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "generate-c",
+                str(FIXTURES / "sample.dbc"),
+                "--out-dir",
+                tmp,
+                "--database-name",
+                "MyCanDb",
+                "--json",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["data"]["database_name"], "MyCanDb")
+            header_path = next(f["path"] for f in payload["data"]["files"] if f["kind"] == "header")
+            header_text = Path(header_path).read_text()
+            self.assertIn("MyCanDb", header_text)
+
+    def test_generate_c_missing_directory_returns_structured_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "generate-c",
+            str(FIXTURES / "sample.dbc"),
+            "--out-dir",
+            "/nonexistent_directory_xyz",
+            "--json",
+        )
+        self.assertNotEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "DBC_GENERATE_C_DIR_MISSING")
+
+    def test_generate_c_jsonl_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "generate-c",
+                str(FIXTURES / "sample.dbc"),
+                "--out-dir",
+                tmp,
+                "--jsonl",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            records = [json.loads(line) for line in stdout.strip().splitlines()]
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["data"]["file_count"], 4)
+
+    def test_generate_c_with_bit_fields_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "generate-c",
+                str(FIXTURES / "sample.dbc"),
+                "--out-dir",
+                tmp,
+                "--bit-fields",
+                "--json",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["data"]["file_count"], 4)
+
+    def test_generate_c_with_node_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "generate-c",
+                str(FIXTURES / "sample.dbc"),
+                "--out-dir",
+                tmp,
+                "--node",
+                "Vector__XXX",
+                "--json",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["data"]["file_count"], 4)
+
+
 class SequenceReplayTests(unittest.TestCase):
     """Tests for `canarchy sequence replay` (#362)."""
 

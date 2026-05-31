@@ -36,7 +36,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-13` | Ubiquitous | Dataset provider workflows selected for MCP shall expose provider list, search, inspect, fetch, cache list, cache refresh, conversion, replay file listing, and safe replay planning tools while excluding streaming dataset frame output. |
 | `REQ-MCP-14` | Ubiquitous | Skills provider workflows selected for MCP shall expose provider list, search, fetch, cache list, and cache refresh tools while preserving the same CLI result envelope. |
 | `REQ-MCP-15` | Ubiquitous | Reverse-engineering helpers selected for MCP shall include `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, and `re shortlist-dbc`. |
-| `REQ-MCP-16` | Ubiquitous | Every implemented CLI command shall be either exposed as an MCP tool or listed in the documented exclusion set (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`); a test shall enforce this invariant so new commands cannot silently drift out of coverage. |
+| `REQ-MCP-16` | Ubiquitous | Every implemented CLI command shall be either exposed as an MCP tool or listed in the documented exclusion set (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`, `dbc generate-c`); a test shall enforce this invariant so new commands cannot silently drift out of coverage. |
 
 ## Command Surface
 
@@ -151,6 +151,7 @@ landing here.
 | `shell`, `tui` | Interactive front ends with no one-shot RPC equivalent. |
 | `mcp serve` | The server itself; not a tool it would expose. |
 | `mcp install` | Writes a client config file — a user action, like `plugins enable/disable`, kept off the agent surface. |
+| `dbc generate-c` | Generates C source/header files to disk — a developer action, not an agent tool call. |
 | `completion` | Emits a raw shell script, not a JSON envelope. |
 | `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
 
@@ -162,8 +163,9 @@ landing here.
 | `re anomalies` (#321) | Add an MCP mirror with the other file-backed `re` tools when the command lands. |
 
 As of this audit, every implemented command that should have MCP coverage
-does; there are no missing mirrors, orphan tools, or ungated active-transmit
-MCP tools.
+does; `dbc generate-c` is the most recent addition and is intentionally
+excluded (file generation is a developer action). There are no missing
+mirrors, orphan tools, or ungated active-transmit MCP tools.
 
 ## Response Envelope
 

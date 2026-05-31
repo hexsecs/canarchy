@@ -117,6 +117,31 @@ def inspect_database(
     return inspection.to_payload(signals_only=signals_only), inspection.to_events()
 
 
+def generate_c_source(
+    dbc_path: str,
+    *,
+    out_dir: str | None = None,
+    database_name: str | None = None,
+    floating_point_numbers: bool = True,
+    bit_fields: bool = False,
+    use_float: bool = False,
+    node_name: str | None = None,
+    use_round: bool = False,
+) -> dict[str, Any]:
+    from canarchy.dbc_runtime import generate_c_source_runtime
+
+    return generate_c_source_runtime(
+        dbc_path,
+        out_dir=out_dir,
+        database_name=database_name,
+        floating_point_numbers=floating_point_numbers,
+        bit_fields=bit_fields,
+        use_float=use_float,
+        node_name=node_name,
+        use_round=use_round,
+    )
+
+
 def convert_database(
     dbc_path: str,
     target_format: str,
