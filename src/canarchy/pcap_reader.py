@@ -17,13 +17,15 @@ CANFD_FDF = 0x01
 CANFD_BRS = 0x02
 CANFD_ESI = 0x04
 
-PCAP_MAGICS = frozenset({
-    b"\xd4\xc3\xb2\xa1",
-    b"\xa1\xb2\xc3\xd4",
-    b"\x4c\x3b\x2a\x1d",
-    b"\xa1\xb2\x3c\x4d",
-    b"\x1a\xc3\xd3\x4c",
-})
+PCAP_MAGICS = frozenset(
+    {
+        b"\xd4\xc3\xb2\xa1",
+        b"\xa1\xb2\xc3\xd4",
+        b"\x4c\x3b\x2a\x1d",
+        b"\xa1\xb2\x3c\x4d",
+        b"\x1a\xc3\xd3\x4c",
+    }
+)
 
 
 def sniff_is_pcap(data: bytes) -> bool:
