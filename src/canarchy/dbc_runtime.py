@@ -130,6 +130,64 @@ def inspect_database_runtime(
     )
 
 
+_DATABASE_SERIALIZERS: dict[str, str] = {
+    "dbc": "as_dbc_string",
+    "kcd": "as_kcd_string",
+    "sym": "as_sym_string",
+}
+
+
+def convert_database_runtime(
+    dbc_path: str,
+    target_format: str,
+    *,
+    out_path: str | None = None,
+) -> tuple[str, str | None, int, int]:
+    """Serialize a loaded database into another cantools-supported format.
+
+    Returns the serialized content, the path it was written to (or ``None``
+    when returned to the caller for stdout), and the message/signal counts.
+    """
+
+    serializer_name = _DATABASE_SERIALIZERS.get(target_format)
+    if serializer_name is None:
+        raise DbcError(
+            code="DBC_CONVERT_UNSUPPORTED_FORMAT",
+            message=f"Unsupported target format '{target_format}'.",
+            hint=f"Choose one of: {', '.join(sorted(_DATABASE_SERIALIZERS))}.",
+        )
+
+    database = load_runtime_database(dbc_path)
+
+    try:
+        content = getattr(database, serializer_name)()
+    except Exception as exc:
+        raise DbcError(
+            code="DBC_CONVERT_FAILED",
+            message=f"Failed to serialize the database as {target_format.upper()}.",
+            hint=(
+                "The target format may not be able to express a feature used by the "
+                "source database; try a different target or simplify the source."
+            ),
+        ) from exc
+
+    written: str | None = None
+    if out_path is not None:
+        try:
+            Path(out_path).write_text(content, encoding="utf-8")
+        except OSError as exc:
+            raise DbcError(
+                code="DBC_CONVERT_WRITE_FAILED",
+                message=f"Failed to write the converted database to '{out_path}'.",
+                hint="Check that the output directory exists and is writable.",
+            ) from exc
+        written = out_path
+
+    message_count = len(database.messages)
+    signal_count = sum(len(message.signals) for message in database.messages)
+    return content, written, message_count, signal_count
+
+
 def decode_frames_runtime(frames: list[CanFrame], dbc_path: str) -> list[dict[str, Any]]:
     database = load_runtime_database(dbc_path)
     events: list[dict[str, Any]] = []

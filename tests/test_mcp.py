@@ -30,6 +30,8 @@ _EXPECTED_TOOLS = {
     "decode",
     "encode",
     "dbc_inspect",
+    "dbc_signals",
+    "dbc_convert",
     "export",
     "session_save",
     "session_load",
@@ -511,6 +513,45 @@ def test_call_tool_dbc_inspect_layout_returns_layout_strings():
     message = payload["data"]["messages"][0]
     assert "CoolantTemp" in message["layout"]
     assert "+-- CoolantTemp" in message["signal_tree"]
+
+
+def test_build_argv_dbc_convert_to_stdout():
+    argv = _build_argv("dbc_convert", {"dbc": "test.dbc", "to": "kcd"})
+    assert argv == ["dbc", "convert", "test.dbc", "--to", "kcd", "--json"]
+
+
+def test_build_argv_dbc_convert_with_out():
+    argv = _build_argv("dbc_convert", {"dbc": "test.dbc", "to": "sym", "out": "out.sym"})
+    assert argv == [
+        "dbc",
+        "convert",
+        "test.dbc",
+        "--to",
+        "sym",
+        "--out",
+        "out.sym",
+        "--json",
+    ]
+
+
+def test_dbc_convert_schema_exposes_target_format_enum():
+    tools_by_name = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    props = tools_by_name["dbc_convert"].inputSchema["properties"]
+    assert props["to"]["enum"] == ["dbc", "kcd", "sym"]
+    assert tools_by_name["dbc_convert"].inputSchema["required"] == ["dbc", "to"]
+
+
+def test_call_tool_dbc_convert_returns_content():
+    results = asyncio.run(
+        handle_call_tool(
+            "dbc_convert",
+            {"dbc": str(FIXTURES / "sample.dbc"), "to": "kcd"},
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["target_format"] == "kcd"
+    assert "NetworkDefinition" in payload["data"]["content"]
 
 
 def test_build_argv_decode_uses_file_flag():

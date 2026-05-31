@@ -23,6 +23,7 @@ from canarchy import fuzzing
 from canarchy.doctor import doctor_payload
 from canarchy.dbc import (
     DbcError,
+    convert_database,
     dbc_supports_spn,
     decode_frames,
     decode_j1939_spn,
@@ -70,7 +71,7 @@ EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
-DBC_COMMANDS = {"decode", "encode", "dbc inspect", "dbc signals"}
+DBC_COMMANDS = {"decode", "encode", "dbc inspect", "dbc signals", "dbc convert"}
 DBC_PROVIDER_COMMANDS = {
     "dbc provider list",
     "dbc search",
@@ -572,6 +573,25 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_output_arguments(dbc_signals)
     dbc_signals.set_defaults(command="dbc signals")
+
+    dbc_convert = dbc_subparsers.add_parser(
+        "convert",
+        help="convert a database between DBC, KCD, and SYM formats",
+    )
+    dbc_convert.add_argument("dbc", help="source database (path or provider ref)")
+    dbc_convert.add_argument(
+        "--to",
+        dest="target_format",
+        required=True,
+        choices=["dbc", "kcd", "sym"],
+        help="target database format",
+    )
+    dbc_convert.add_argument(
+        "--out",
+        help="write the converted database to this path (default: stdout)",
+    )
+    add_output_arguments(dbc_convert)
+    dbc_convert.set_defaults(command="dbc convert")
 
     dbc_provider = dbc_subparsers.add_parser("provider", help="manage DBC providers")
     dbc_provider_subparsers = dbc_provider.add_subparsers(dest="dbc_provider_action", required=True)
@@ -3744,6 +3764,24 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             events = _filter_dbc_events_by_search(events, data, signals_only=True)
         data["dbc_source"] = dbc_source
         return (data, events, [])
+    if args.command == "dbc convert":
+        content, written, message_count, signal_count = convert_database(
+            dbc_path, args.target_format, out=args.out
+        )
+        data = {
+            "dbc": args.dbc,
+            "dbc_source": dbc_source,
+            "target_format": args.target_format,
+            "out": written,
+            "message_count": message_count,
+            "signal_count": signal_count,
+        }
+        if written is None:
+            data["content"] = content
+        # No event is attached: for a conversion the envelope itself is the
+        # payload. Emitting an event here would make --jsonl stream only the
+        # event and drop the conversion result (content / out / counts).
+        return (data, [], [])
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
 
@@ -6955,6 +6993,18 @@ def emit_result(result: CommandResult, output_format: str) -> None:
     if output_format == "text" and result.ok and result.command in {"dbc inspect", "dbc signals"}:
         for line in format_dbc_table(result):
             print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "dbc convert":
+        out = result.data.get("out")
+        if out:
+            target = result.data.get("target_format", "")
+            print(f"converted {result.data.get('dbc')} -> {out} ({target})")
+        else:
+            content = result.data.get("content", "")
+            print(content, end="" if content.endswith("\n") else "\n")
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return

@@ -388,6 +388,35 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="dbc_convert",
+        description=(
+            "Convert a CAN database between DBC, KCD, and SYM formats using the "
+            "cantools serializers."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "dbc": {
+                    "type": "string",
+                    "description": "Source database path or provider ref",
+                },
+                "to": {
+                    "type": "string",
+                    "enum": ["dbc", "kcd", "sym"],
+                    "description": "Target database format",
+                },
+                "out": {
+                    "type": "string",
+                    "description": (
+                        "Write the converted database to this path; omit to return the "
+                        "serialized content in the response envelope"
+                    ),
+                },
+            },
+            "required": ["dbc", "to"],
+        },
+    ),
+    types.Tool(
         name="export",
         description="Export session data or a capture file to a destination path.",
         inputSchema={
@@ -1539,6 +1568,11 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--message", a["message"]]
             if a.get("search"):
                 argv += ["--search", a["search"]]
+            return argv + ["--json"]
+        case "dbc_convert":
+            argv = ["dbc", "convert", a["dbc"], "--to", a["to"]]
+            if a.get("out"):
+                argv += ["--out", a["out"]]
             return argv + ["--json"]
         case "export":
             return ["export", a["source"], a["destination"], "--json"]

@@ -4826,6 +4826,117 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("Load", signal_names)
 
 
+class DbcConvertTests(unittest.TestCase):
+    """Tests for `canarchy dbc convert` (#385)."""
+
+    def test_convert_to_stdout_returns_content_in_envelope(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "dbc", "convert", str(FIXTURES / "sample.dbc"), "--to", "kcd", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["command"], "dbc convert")
+        self.assertEqual(payload["data"]["target_format"], "kcd")
+        self.assertIsNone(payload["data"]["out"])
+        self.assertEqual(payload["data"]["message_count"], 2)
+        self.assertEqual(payload["data"]["signal_count"], 6)
+        self.assertIn("NetworkDefinition", payload["data"]["content"])
+
+    def test_convert_dbc_to_kcd_round_trip_preserves_parity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "sample.kcd"
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "convert",
+                str(FIXTURES / "sample.dbc"),
+                "--to",
+                "kcd",
+                "--out",
+                str(out_path),
+                "--json",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["data"]["out"], str(out_path))
+            self.assertNotIn("content", payload["data"])
+            self.assertTrue(out_path.exists())
+
+            # Reload the converted database and assert message/signal parity.
+            reload_code, reload_stdout, _ = run_cli("dbc", "inspect", str(out_path), "--json")
+            self.assertEqual(reload_code, EXIT_OK)
+            reloaded = json.loads(reload_stdout)
+            self.assertEqual(reloaded["data"]["database"]["message_count"], 2)
+            self.assertEqual(reloaded["data"]["database"]["signal_count"], 6)
+            message_names = {m["name"] for m in reloaded["data"]["messages"]}
+            self.assertEqual(message_names, {"EngineStatus1", "EngineSpeed1"})
+
+    def test_convert_jsonl_to_stdout_preserves_content(self) -> None:
+        # Regression: an attached event must not cause --jsonl to drop the
+        # conversion payload (PR #389 review).
+        exit_code, stdout, _ = run_cli(
+            "dbc", "convert", str(FIXTURES / "sample.dbc"), "--to", "kcd", "--jsonl"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        records = [json.loads(line) for line in stdout.strip().splitlines()]
+        self.assertEqual(len(records), 1)
+        self.assertIn("NetworkDefinition", records[0]["data"]["content"])
+        self.assertEqual(records[0]["data"]["target_format"], "kcd")
+
+    def test_convert_jsonl_with_out_preserves_envelope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "sample.kcd"
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "convert",
+                str(FIXTURES / "sample.dbc"),
+                "--to",
+                "kcd",
+                "--out",
+                str(out_path),
+                "--jsonl",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            records = [json.loads(line) for line in stdout.strip().splitlines()]
+            self.assertEqual(records[-1]["data"]["out"], str(out_path))
+            self.assertEqual(records[-1]["data"]["message_count"], 2)
+            self.assertEqual(records[-1]["data"]["signal_count"], 6)
+
+    def test_convert_text_to_file_prints_confirmation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "sample.sym"
+            exit_code, stdout, _ = run_cli(
+                "dbc",
+                "convert",
+                str(FIXTURES / "sample.dbc"),
+                "--to",
+                "sym",
+                "--out",
+                str(out_path),
+                "--text",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            self.assertIn(f"-> {out_path}", stdout)
+            self.assertTrue(out_path.exists())
+
+    def test_convert_unwritable_output_returns_structured_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "dbc",
+            "convert",
+            str(FIXTURES / "sample.dbc"),
+            "--to",
+            "kcd",
+            "--out",
+            "/nonexistent_directory_xyz/out.kcd",
+            "--json",
+        )
+        self.assertNotEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "DBC_CONVERT_WRITE_FAILED")
+
+
 class SequenceReplayTests(unittest.TestCase):
     """Tests for `canarchy sequence replay` (#362)."""
 
