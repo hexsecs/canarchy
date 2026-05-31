@@ -13,9 +13,9 @@ CAN_EFF_FLAG = 0x80000000
 CAN_RTR_FLAG = 0x40000000
 CAN_ERR_FLAG = 0x20000000
 
-CANFD_FDF = 0x01
-CANFD_BRS = 0x02
-CANFD_ESI = 0x04
+CANFD_BRS = 0x01  # bit 0: bit rate switch
+CANFD_ESI = 0x02  # bit 1: error state indicator
+CANFD_FDF = 0x04  # bit 2: FD format indicator
 
 PCAP_MAGICS = frozenset(
     {
@@ -172,6 +172,14 @@ def pcap_metadata(path: Path) -> dict[str, object]:
                 f"Capture source '{path}' could not be read as pcap/pcapng.",
                 "Verify the file is a valid pcap or pcapng file.",
             ) from None
+
+        linktype = reader.datalink()
+        if linktype != DLT_CAN_SOCKETCAN:
+            raise TransportError(
+                "CAPTURE_FORMAT_UNSUPPORTED",
+                f"Capture source '{path}' uses unsupported pcap linktype {linktype}.",
+                "Only CAN SocketCAN (DLT 227) captures are supported.",
+            )
 
         for timestamp, buf in reader:
             if len(buf) < 8:
