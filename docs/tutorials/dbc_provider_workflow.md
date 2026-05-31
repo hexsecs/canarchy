@@ -69,7 +69,24 @@ Restrict the result to a single message when needed:
 canarchy dbc inspect opendbc:toyota_tnga_k_pt --message STEER_TORQUE_SENSOR --text
 ```
 
-Structured output includes `data.dbc_source`, which records the provider, logical DBC name, pinned version, and resolved local cache path.
+Structured output includes `data.dbc_source`, which records the provider, logical DBC name, pinned version, resolved local cache path, and the database `kind` (`dbc` / `arxml` / `kcd` / `sym`). `dbc inspect` also reports the same value as `data.database.format`.
+
+### Working with non-DBC databases
+
+`--dbc` is a misnomer for convenience: the database commands (`decode`,
+`encode`, `dbc inspect`, `dbc convert`) accept any database the cantools
+runtime can load, selected by filename suffix — DBC (`.dbc`), ARXML
+(`.arxml`), KCD (`.kcd`), and SYM (`.sym`). The same in-tree fixtures are
+shipped in each format:
+
+```bash
+canarchy dbc inspect tests/fixtures/sample.arxml --json   # format/kind: arxml
+canarchy encode --dbc tests/fixtures/sample.kcd EngineStatus1 CoolantTemp=80 --json
+```
+
+To move a database between formats, use `dbc convert` (see the command
+spec); reading and writing share the same cantools codecs, so a
+`convert`-produced KCD or SYM decodes identically to its DBC source.
 
 ## Step 5 — Decode a Capture Using the Provider Ref
 

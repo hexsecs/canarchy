@@ -47,7 +47,7 @@ The workflow matrix above is useful for operator-facing comparison, but several 
 | Engineering Strength | CANarchy | can-utils | python-can | cantools | SavvyCAN | Caring Caribou | TruckDevil | CanCat | BUSMASTER | udsoncan |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Hardware / backend breadth | Partial | Partial | Yes | No | Partial | Partial | Partial | Partial | Yes | No |
-| Database format breadth beyond DBC | Partial | No | No | Yes | Partial | No | No | No | Partial | No |
+| Database format breadth beyond DBC | Yes | No | No | Yes | Partial | No | No | No | Partial | No |
 | Plotting / visualization depth | No | No | No | Yes | Yes | No | No | No | Partial | No |
 | Code generation | No | No | No | Yes | No | No | No | No | No | No |
 | Extensibility via plugins / modules | Planned | No | Yes | Partial | Partial | Yes | Yes | Partial | Partial | Partial |
@@ -86,7 +86,7 @@ The workflow matrix does not fully capture several important reasons someone mig
 
 * `python-can` excels at hardware abstraction, interface coverage, and embedded Python integration.
 * `cantools` excels at database-heavy engineering: multiple schema formats, inspection, plotting, monitor workflows, and C code generation.
-* CANarchy now includes provider-backed DBC discovery, `dbc inspect --search`, cantools-backed `dbc inspect --layout` bit diagrams / signal trees / choice tables, `dbc convert` to write databases out as DBC / KCD / SYM, and initial reverse-engineering DBC matching, but it is still much earlier in depth than mature database-centric or visual RE tools. Reading non-DBC formats (ARXML / KCD / SYM) is tracked separately (#320).
+* CANarchy now reads and writes the full cantools database set — `decode`, `encode`, `dbc inspect`, and `dbc convert` accept DBC, ARXML, KCD, and SYM by filename suffix (#320), and `dbc convert` serializes back out to DBC / KCD / SYM (#385) — alongside provider-backed DBC discovery, `dbc inspect --search`, cantools-backed `dbc inspect --layout` bit diagrams / signal trees / choice tables, and initial reverse-engineering DBC matching. It is still earlier in depth than mature database-centric or visual RE tools.
 * CANarchy's active-transmit fuzzing now spans raw payloads (`fuzz payload`, with bitflip / random / boundary plus AFL-style havoc / splice / interesting-value strategies), capture replay mutation (`fuzz replay`), arbitration-id walks (`fuzz arbitration-id`), DBC-aware signal mutation (`fuzz signal` — in-bounds, out-of-bounds, boundary, enum-gap, and full-field modes), and J1939 SPN-aware mutation (`fuzz spn` — operational bounds plus the not-available / error sentinels), all behind the active-transmit safety model.
 * SavvyCAN excels at visual exploration and reverse-engineering-oriented desktop analysis.
 * Caring Caribou excels at automotive security workflows, including UDS fuzzing, DoIP, and XCP-oriented work.

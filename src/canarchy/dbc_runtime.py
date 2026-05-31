@@ -21,6 +21,25 @@ from canarchy.models import (
 )
 
 
+# Database formats cantools can load, keyed by lowercase filename suffix.
+# DBC is the default for unknown suffixes, matching cantools' own behaviour.
+_DATABASE_FORMATS: dict[str, str] = {
+    ".arxml": "arxml",
+    ".dbc": "dbc",
+    ".kcd": "kcd",
+    ".sym": "sym",
+}
+
+
+def detect_database_format(path: str) -> str:
+    """Return the database format for *path* based on its filename suffix.
+
+    Mirrors cantools' extension-based format selection (`.arxml` / `.dbc` /
+    `.kcd` / `.sym`); anything else falls back to ``dbc``.
+    """
+    return _DATABASE_FORMATS.get(Path(path).suffix.lower(), "dbc")
+
+
 def load_runtime_database(dbc_path: str) -> cantools.database.Database:
     from canarchy.dbc_provider import resolve_dbc_ref
 
@@ -34,8 +53,8 @@ def load_runtime_database(dbc_path: str) -> cantools.database.Database:
     except Exception as exc:  # pragma: no cover
         raise DbcError(
             code="DBC_LOAD_FAILED",
-            message="Failed to parse DBC file.",
-            hint="Validate the DBC syntax and line endings.",
+            message=f"Failed to parse {detect_database_format(str(path)).upper()} database file.",
+            hint="Validate the database syntax, encoding, and line endings.",
         ) from exc
 
 
@@ -98,7 +117,10 @@ def inspect_database_runtime(
     message_name: str | None = None,
     include_layout: bool = False,
 ) -> DatabaseInspection:
+    from canarchy.dbc_provider import resolve_dbc_ref
+
     database = load_runtime_database(dbc_path)
+    database_format = detect_database_format(resolve_dbc_ref(dbc_path))
 
     if message_name is not None:
         try:
@@ -120,7 +142,7 @@ def inspect_database_runtime(
     return DatabaseInspection(
         database=DatabaseInfo(
             path=dbc_path,
-            format="dbc",
+            format=database_format,
             message_count=len(database.messages),
             signal_count=sum(len(message.signals) for message in database.messages),
             node_count=len(node_names),

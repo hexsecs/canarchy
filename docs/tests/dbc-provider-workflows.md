@@ -34,7 +34,7 @@ Validate the shipped provider-backed DBC workflow from provider discovery and ca
 | `REQ-DBCP-06` | `TEST-DBCP-05` |
 | `REQ-DBCP-07` | `TEST-DBCP-06` |
 | `REQ-DBCP-08` | `TEST-DBCP-07`, `TEST-DBCP-08`, `TEST-DBCP-09` |
-| `REQ-DBCP-09` | `TEST-DBCP-07`, `TEST-DBCP-08`, `TEST-DBCP-09`, `TEST-DBCP-10` |
+| `REQ-DBCP-09` | `TEST-DBCP-07`, `TEST-DBCP-08`, `TEST-DBCP-09`, `TEST-DBCP-10`, `TEST-DBCP-16` |
 | `REQ-DBCP-10` | `TEST-DBCP-10` |
 | `REQ-DBCP-11` | `TEST-DBCP-12`, `TEST-DBCP-13` |
 | `REQ-DBCP-12` | `TEST-DBCP-11` |
@@ -124,7 +124,7 @@ And    the response shall include the refreshed DBC count
 Given  a mocked provider registry can resolve a provider-backed DBC ref
 When   the operator runs `canarchy decode --file tests/fixtures/sample.candump --dbc opendbc:toyota_tnga_k_pt_generated --json`
 Then   the system shall decode using the resolved local DBC path
-And    `data.dbc_source` shall include provider, logical DBC name, version, and path
+And    `data.dbc_source` shall include provider, logical DBC name, version, path, and kind (`dbc`)
 ```
 
 **Fixture:** `tests/fixtures/sample.candump`, mocked provider registry, `tests/fixtures/sample.dbc`.
@@ -235,12 +235,27 @@ And    the error shall guide the operator to run `canarchy dbc cache refresh --p
 
 ---
 
+### `TEST-DBCP-16` — Non-DBC database formats report their kind
+
+```gherkin
+Given  the local provider can resolve ARXML, KCD, and SYM database files by path
+When   the operator runs `canarchy dbc inspect <fixture> --json` for each format
+Then   `data.database.format` and `data.dbc_source.kind` shall equal `arxml`, `kcd`, or `sym` respectively
+And    a `.dbc` fixture shall still report `kind` and `format` of `dbc`
+And    an unknown suffix shall fall back to `dbc`
+```
+
+**Fixture:** `tests/fixtures/sample.{arxml,kcd,sym,dbc}`.
+
+---
+
 ## Fixtures And Environment
 
 Coverage uses:
 
 * `tests/fixtures/sample.candump`
 * `tests/fixtures/sample.dbc`
+* `tests/fixtures/sample.arxml`, `tests/fixtures/sample.kcd`, `tests/fixtures/sample.sym`
 * mocked provider registries and mocked `opendbc` provider descriptors
 * temporary cache roots and manifests for cache list/prune behavior
 

@@ -4826,6 +4826,75 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("Load", signal_names)
 
 
+class DatabaseFormatBreadthTests(unittest.TestCase):
+    """Tests for ARXML / KCD / SYM database support (#320)."""
+
+    def test_inspect_arxml_reports_arxml_format_and_kind(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "dbc", "inspect", str(FIXTURES / "sample.arxml"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["database"]["format"], "arxml")
+        self.assertEqual(payload["data"]["dbc_source"]["kind"], "arxml")
+        message_names = {m["name"] for m in payload["data"]["messages"]}
+        self.assertIn("EngineStatus1", message_names)
+
+    def test_inspect_kcd_reports_kcd_format_and_kind(self) -> None:
+        exit_code, stdout, _ = run_cli("dbc", "inspect", str(FIXTURES / "sample.kcd"), "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["database"]["format"], "kcd")
+        self.assertEqual(payload["data"]["dbc_source"]["kind"], "kcd")
+        self.assertEqual(payload["data"]["database"]["message_count"], 2)
+
+    def test_inspect_sym_reports_sym_format_and_kind(self) -> None:
+        exit_code, stdout, _ = run_cli("dbc", "inspect", str(FIXTURES / "sample.sym"), "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["database"]["format"], "sym")
+        self.assertEqual(payload["data"]["dbc_source"]["kind"], "sym")
+
+    def test_inspect_dbc_still_reports_dbc_kind(self) -> None:
+        exit_code, stdout, _ = run_cli("dbc", "inspect", str(FIXTURES / "sample.dbc"), "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["database"]["format"], "dbc")
+        self.assertEqual(payload["data"]["dbc_source"]["kind"], "dbc")
+
+    def test_encode_against_kcd_matches_dbc_encoding(self) -> None:
+        signals = ["CoolantTemp=80", "OilTemp=90", "Load=50", "LampState=0"]
+        dbc_code, dbc_out, _ = run_cli(
+            "encode", "--dbc", str(FIXTURES / "sample.dbc"), "EngineStatus1", *signals, "--json"
+        )
+        kcd_code, kcd_out, _ = run_cli(
+            "encode", "--dbc", str(FIXTURES / "sample.kcd"), "EngineStatus1", *signals, "--json"
+        )
+        self.assertEqual(dbc_code, EXIT_OK)
+        self.assertEqual(kcd_code, EXIT_OK)
+        dbc_frame = json.loads(dbc_out)["data"]["frame"]["data"]
+        kcd_payload = json.loads(kcd_out)
+        self.assertEqual(kcd_payload["data"]["frame"]["data"], dbc_frame)
+        self.assertEqual(kcd_payload["data"]["dbc_source"]["kind"], "kcd")
+
+    def test_decode_against_kcd_matches_dbc_decoding(self) -> None:
+        capture = str(FIXTURES / "sample.candump")
+        dbc_code, dbc_out, _ = run_cli(
+            "decode", "--file", capture, "--dbc", str(FIXTURES / "sample.dbc"), "--json"
+        )
+        kcd_code, kcd_out, _ = run_cli(
+            "decode", "--file", capture, "--dbc", str(FIXTURES / "sample.kcd"), "--json"
+        )
+        self.assertEqual(dbc_code, EXIT_OK)
+        self.assertEqual(kcd_code, EXIT_OK)
+        dbc_matched = json.loads(dbc_out)["data"]["matched_messages"]
+        kcd_payload = json.loads(kcd_out)
+        self.assertEqual(kcd_payload["data"]["matched_messages"], dbc_matched)
+        self.assertEqual(kcd_payload["data"]["dbc_source"]["kind"], "kcd")
+
+
 class DbcConvertTests(unittest.TestCase):
     """Tests for `canarchy dbc convert` (#385)."""
 
