@@ -54,7 +54,7 @@ Fully implemented and tested:
 * `generate` — cangen-style frame generation (fixed, random, incrementing modes)
 * `gateway` — bridge frames between two interfaces (unidirectional and bidirectional)
 * `replay` — deterministic replay planning from candump files
-* `decode`, `encode` — DBC-backed signal decode and encode
+* `decode`, `encode` — database-backed signal decode and encode (DBC, ARXML, KCD, and SYM via cantools)
 * `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, `compare` — J1939 operator workflows across live, file-backed, and decoded views
 * `uds scan`, `trace`, `services` — UDS diagnostic workflows and service catalog, including initial transport-backed scan/trace heuristics
 * `re signals` — file-backed signal-candidate ranking across 4-bit, 8-bit, and 16-bit fields

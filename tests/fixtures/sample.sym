@@ -1,0 +1,30 @@
+FormatVersion=6.0 // Do not edit this line!
+Title="SYM Database"
+
+
+
+{SIGNALS}
+Sig="CoolantTemp" unsigned 8 /u:"degC" /o:-40 /max:210 /min:0
+Sig="OilTemp" unsigned 8 /u:"degC" /o:-40 /max:210 /min:0
+Sig="Load" unsigned 8 /u:"%" /f:0.4 /max:100 /min:0
+Sig="LampState" unsigned 8 /max:255 /min:0
+Sig="EngineSpeed" unsigned 16 /u:"rpm" /f:0.125 /max:8031.875 /min:0
+Sig="TorqueMode" unsigned 8 /max:255 /min:0
+
+{SENDRECEIVE}
+["EngineSpeed1"]
+ID=18F00431h
+Type=Extended
+Len=4
+Sig="EngineSpeed" 8
+Sig="TorqueMode" 24
+
+["EngineStatus1"]
+ID=18FEEE31h
+Type=Extended
+Len=4
+Sig="CoolantTemp" 0
+Sig="OilTemp" 8
+Sig="Load" 16
+Sig="LampState" 24
+

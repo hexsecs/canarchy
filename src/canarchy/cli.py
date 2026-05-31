@@ -3601,12 +3601,15 @@ def j1939_payload(
 
 
 def _build_dbc_source(resolution: Any) -> dict[str, Any]:
+    from canarchy.dbc_runtime import detect_database_format
+
     d = resolution.descriptor
     return {
         "provider": d.provider,
         "name": d.name,
         "version": d.version,
         "path": str(resolution.local_path),
+        "kind": detect_database_format(str(resolution.local_path)),
     }
 
 

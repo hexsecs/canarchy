@@ -202,6 +202,39 @@ class ProviderResolutionIntegrationTests(unittest.TestCase):
             load_runtime_database("/does/not/exist.dbc")
         self.assertEqual(ctx.exception.code, "DBC_NOT_FOUND")
 
+    def test_arxml_path_resolves_and_loads(self) -> None:
+        from canarchy.dbc_runtime import load_runtime_database
+
+        reset_registry()
+        db = load_runtime_database(str(FIXTURES / "sample.arxml"))
+        self.assertIsNotNone(db.get_message_by_name("EngineStatus1"))
+
+    def test_kcd_path_resolves_and_loads(self) -> None:
+        from canarchy.dbc_runtime import load_runtime_database
+
+        reset_registry()
+        db = load_runtime_database(str(FIXTURES / "sample.kcd"))
+        self.assertIsNotNone(db.get_message_by_name("EngineStatus1"))
+
+
+class DetectDatabaseFormatTests(unittest.TestCase):
+    """The suffix-based format detector underpins `format` / `kind` provenance."""
+
+    def test_detects_known_suffixes_case_insensitively(self) -> None:
+        from canarchy.dbc_runtime import detect_database_format
+
+        self.assertEqual(detect_database_format("a.dbc"), "dbc")
+        self.assertEqual(detect_database_format("a.arxml"), "arxml")
+        self.assertEqual(detect_database_format("a.kcd"), "kcd")
+        self.assertEqual(detect_database_format("a.sym"), "sym")
+        self.assertEqual(detect_database_format("/path/to/B.ARXML"), "arxml")
+
+    def test_unknown_suffix_falls_back_to_dbc(self) -> None:
+        from canarchy.dbc_runtime import detect_database_format
+
+        self.assertEqual(detect_database_format("mystery.txt"), "dbc")
+        self.assertEqual(detect_database_format("noext"), "dbc")
+
 
 class CacheTests(unittest.TestCase):
     def test_load_dbc_config_returns_defaults_when_no_config_file(self) -> None:

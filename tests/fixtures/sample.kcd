@@ -1,0 +1,28 @@
+<NetworkDefinition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://kayak.2codeornot2code.org/1.0" xsi:noNamespaceSchemaLocation="Definition.xsd">
+  <Document version="" />
+  <Node id="1" name="Vector__XXX" />
+  <Bus name="Bus">
+    <Message id="0x18FEEE31" name="EngineStatus1" length="4" format="extended">
+      <Signal name="CoolantTemp" offset="0" length="8">
+        <Value min="0" max="210" intercept="-40" unit="degC" />
+      </Signal>
+      <Signal name="OilTemp" offset="8" length="8">
+        <Value min="0" max="210" intercept="-40" unit="degC" />
+      </Signal>
+      <Signal name="Load" offset="16" length="8">
+        <Value min="0" max="100" slope="0.4" unit="%" />
+      </Signal>
+      <Signal name="LampState" offset="24" length="8">
+        <Value min="0" max="255" />
+      </Signal>
+    </Message>
+    <Message id="0x18F00431" name="EngineSpeed1" length="4" format="extended">
+      <Signal name="EngineSpeed" offset="8" length="16">
+        <Value min="0" max="8031.875" slope="0.125" unit="rpm" />
+      </Signal>
+      <Signal name="TorqueMode" offset="24" length="8">
+        <Value min="0" max="255" />
+      </Signal>
+    </Message>
+  </Bus>
+</NetworkDefinition>

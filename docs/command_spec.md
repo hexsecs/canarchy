@@ -33,7 +33,8 @@ Important current behavior:
 * the default `python-can` interface is `socketcan`; set `interface` in the config file or `CANARCHY_PYTHON_CAN_INTERFACE` to change it
 * the default CAN interface/channel is optional; set `default_interface` in the config file or `CANARCHY_DEFAULT_INTERFACE` to let single-interface commands such as `capture`, `send`, `generate`, `uds scan`, and live fuzz commands omit the interface argument
 * DBC-backed commands accept local paths and provider refs such as `opendbc:<name>` or `comma:<name>`
-* `decode`, `encode`, and `dbc inspect` include `data.dbc_source` in structured output so callers can see the provider, logical DBC name, pinned version, and resolved local path
+* database-backed commands (`decode`, `encode`, `dbc inspect`, `dbc convert`, …) also accept ARXML (`.arxml`), KCD (`.kcd`), and SYM (`.sym`) files in addition to DBC (`.dbc`); the format is selected by filename suffix through the cantools runtime, and the user-facing flag remains `--dbc`
+* `decode`, `encode`, and `dbc inspect` include `data.dbc_source` in structured output so callers can see the provider, logical DBC name, pinned version, resolved local path, and database `kind` (`dbc` / `arxml` / `kcd` / `sym`); `dbc inspect` additionally reports the same value as `data.database.format`
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
 * specialized text formatting exists for J1939 monitor and decode style output; other `--text` output is generic key/value rendering
 * file-backed analysis commands support standard timestamped candump log files with `.candump` and `.log` suffixes; selected commands also support `--file -` for candump text from stdin
@@ -321,6 +322,7 @@ canarchy dbc inspect tests/fixtures/sample.dbc --message EngineStatus1 --layout 
 Notes:
 
 * `<dbc>` accepts a local file path or a provider ref such as `opendbc:<name>` or `comma:<name>`
+* the database file may be DBC (`.dbc`), ARXML (`.arxml`), KCD (`.kcd`), or SYM (`.sym`); the format is detected by suffix and `data.database.format` / `data.dbc_source.kind` report which loader was used
 * structured output includes `dbc_source` provenance alongside the inspection payload
 * `--layout` adds cantools-rendered per-message `layout`, `signal_tree`, and `signal_choices` strings; text output renders those diagrams directly, while JSON/JSONL keep them as fields on each message payload
 
