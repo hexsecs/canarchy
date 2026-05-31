@@ -45,7 +45,7 @@ TOP_LEVEL_COMMANDS: list[str] = [
 # Group commands whose second token is a subcommand.
 SUBCOMMANDS: dict[str, list[str]] = {
     "config": ["show"],
-    "dbc": ["cache", "convert", "fetch", "inspect", "provider", "search", "signals"],
+    "dbc": ["cache", "convert", "fetch", "generate-c", "inspect", "provider", "search", "signals"],
     "dbc provider": ["list"],
     "dbc cache": ["list", "prune", "refresh"],
     "session": ["load", "save", "show"],
@@ -69,6 +69,16 @@ FLAGS: dict[str, list[str]] = {
     "config show": _OUTPUT,
     "dbc inspect": ["--message", "--signals-only", "--search", "--layout"] + _OUTPUT,
     "dbc convert": ["--to", "--out"] + _OUTPUT,
+    "dbc generate-c": [
+        "--out-dir",
+        "--database-name",
+        "--no-floating-point-numbers",
+        "--bit-fields",
+        "--use-float",
+        "--node",
+        "--use-round",
+    ]
+    + _OUTPUT,
     "dbc signals": ["--message", "--search"] + _OUTPUT,
     "decode": ["--dbc", "--file"] + _OUTPUT,
     "encode": ["--dbc"] + _OUTPUT,

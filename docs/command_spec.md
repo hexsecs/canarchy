@@ -349,6 +349,34 @@ Notes:
 * with `--out`, the converted database is written to the given path and the envelope reports `out`, `target_format`, `message_count`, and `signal_count`; without `--out`, the serialized `content` is returned in the envelope (and printed directly in `--text` mode)
 * structured errors cover unwritable output directories (`DBC_CONVERT_WRITE_FAILED`) and serialization failures where the target format cannot express a source feature (`DBC_CONVERT_FAILED`)
 
+### dbc generate-c
+
+Generate C source and header files from a database using the cantools C
+source generator with `pack`/`unpack` structs and helpers.
+
+```bash
+canarchy dbc generate-c <dbc> [--out-dir <dir>] [--database-name <name>]
+    [--no-floating-point-numbers] [--bit-fields] [--use-float] [--node <name>]
+    [--use-round] [--json|--jsonl|--text]
+```
+
+Examples:
+
+```bash
+canarchy dbc generate-c tests/fixtures/sample.dbc --out-dir ./out --json
+canarchy dbc generate-c opendbc:toyota_tnga_k_pt_generated --out-dir ./c_code --bit-fields --json
+```
+
+Notes:
+
+* `<dbc>` accepts a local file path or a provider ref such as `opendbc:<name>`; the source may be any format the cantools runtime can load
+* `--out-dir` specifies the output directory (default: current directory); it must already exist
+* `--database-name` sets the prefix used for all defines, data structures, and functions in the generated code (default: derived from the source filename stem)
+* four files are generated per database: `.h` header, `.c` source, `_fuzzer.c` fuzzer source, and `_fuzzer.mk` fuzzer makefile
+* the envelope returns `out_dir`, `database_name`, `files` (list of `{path, kind, size_bytes}`), and `file_count`
+* structured errors cover missing output directories (`DBC_GENERATE_C_DIR_MISSING`), write failures (`DBC_GENERATE_C_WRITE_FAILED`), and generation failures (`DBC_GENERATE_C_FAILED`)
+* MCP is not exposed — file generation is a developer action
+
 ### dbc provider list
 
 List registered DBC providers.

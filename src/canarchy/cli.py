@@ -28,6 +28,7 @@ from canarchy.dbc import (
     decode_frames,
     decode_j1939_spn,
     encode_message,
+    generate_c_source,
     inspect_database,
     lookup_j1939_spn_metadata,
 )
@@ -71,7 +72,7 @@ EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
 TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
-DBC_COMMANDS = {"decode", "encode", "dbc inspect", "dbc signals", "dbc convert"}
+DBC_COMMANDS = {"decode", "encode", "dbc inspect", "dbc signals", "dbc convert", "dbc generate-c"}
 DBC_PROVIDER_COMMANDS = {
     "dbc provider list",
     "dbc search",
@@ -593,6 +594,57 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_output_arguments(dbc_convert)
     dbc_convert.set_defaults(command="dbc convert")
+
+    dbc_generate_c = dbc_subparsers.add_parser(
+        "generate-c",
+        help="generate C source and header files from a database (via cantools)",
+    )
+    dbc_generate_c.add_argument("dbc", help="source database (path or provider ref)")
+    dbc_generate_c.add_argument(
+        "--out-dir",
+        dest="out_dir",
+        help="output directory (default: current directory)",
+    )
+    dbc_generate_c.add_argument(
+        "--database-name",
+        dest="database_name",
+        help="database name used as a prefix in the generated C code (default: derived from the source filename)",
+    )
+    dbc_generate_c.add_argument(
+        "--no-floating-point-numbers",
+        dest="floating_point_numbers",
+        action="store_false",
+        default=True,
+        help="disable floating point numbers in generated code",
+    )
+    dbc_generate_c.add_argument(
+        "--bit-fields",
+        dest="bit_fields",
+        action="store_true",
+        default=False,
+        help="generate bit fields in structs",
+    )
+    dbc_generate_c.add_argument(
+        "--use-float",
+        dest="use_float",
+        action="store_true",
+        default=False,
+        help="prefer float instead of double for floating point numbers",
+    )
+    dbc_generate_c.add_argument(
+        "--node",
+        dest="node_name",
+        help="generate packers only for the specified node (unpackers for all others)",
+    )
+    dbc_generate_c.add_argument(
+        "--use-round",
+        dest="use_round",
+        action="store_true",
+        default=False,
+        help="round to nearest integer instead of truncating when encoding",
+    )
+    add_output_arguments(dbc_generate_c)
+    dbc_generate_c.set_defaults(command="dbc generate-c")
 
     dbc_provider = dbc_subparsers.add_parser("provider", help="manage DBC providers")
     dbc_provider_subparsers = dbc_provider.add_subparsers(dest="dbc_provider_action", required=True)
@@ -3816,6 +3868,26 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         # No event is attached: for a conversion the envelope itself is the
         # payload. Emitting an event here would make --jsonl stream only the
         # event and drop the conversion result (content / out / counts).
+        return (data, [], [])
+    if args.command == "dbc generate-c":
+        result = generate_c_source(
+            dbc_path,
+            out_dir=args.out_dir,
+            database_name=args.database_name,
+            floating_point_numbers=args.floating_point_numbers,
+            bit_fields=args.bit_fields,
+            use_float=args.use_float,
+            node_name=args.node_name,
+            use_round=args.use_round,
+        )
+        data = {
+            "dbc": args.dbc,
+            "dbc_source": dbc_source,
+            "out_dir": result["out_dir"],
+            "database_name": result["database_name"],
+            "files": result["files"],
+            "file_count": result["file_count"],
+        }
         return (data, [], [])
     raise AssertionError(f"unsupported dbc command: {args.command}")
 
@@ -7118,6 +7190,17 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         else:
             content = result.data.get("content", "")
             print(content, end="" if content.endswith("\n") else "\n")
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "dbc generate-c":
+        files = result.data.get("files", [])
+        dbc_name = result.data.get("dbc", "")
+        out_dir = result.data.get("out_dir", ".")
+        print(f"generated C source from {dbc_name} in {out_dir}:")
+        for f in files:
+            print(f"  {f['kind']:20s} {f['path']} ({f['size_bytes']} bytes)")
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return
