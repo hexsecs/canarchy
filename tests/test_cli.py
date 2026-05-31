@@ -4864,9 +4864,7 @@ class DbcConvertTests(unittest.TestCase):
             self.assertTrue(out_path.exists())
 
             # Reload the converted database and assert message/signal parity.
-            reload_code, reload_stdout, _ = run_cli(
-                "dbc", "inspect", str(out_path), "--json"
-            )
+            reload_code, reload_stdout, _ = run_cli("dbc", "inspect", str(out_path), "--json")
             self.assertEqual(reload_code, EXIT_OK)
             reloaded = json.loads(reload_stdout)
             self.assertEqual(reloaded["data"]["database"]["message_count"], 2)
