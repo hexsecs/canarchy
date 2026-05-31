@@ -29,7 +29,7 @@ Operators often have a capture before they have the matching DBC on disk. CANarc
 | `REQ-DBCP-06` | Event-driven | When `dbc cache prune` is invoked, the system shall remove stale provider snapshot directories and return the removed paths. |
 | `REQ-DBCP-07` | Event-driven | When `dbc cache refresh` is invoked, the system shall refresh the selected provider catalog and return the refreshed provider name and DBC count. |
 | `REQ-DBCP-08` | Event-driven | When `decode`, `encode`, or `dbc inspect` is invoked with a provider ref such as `opendbc:<name>`, the system shall resolve that ref through the provider registry before loading the local DBC runtime file. |
-| `REQ-DBCP-09` | Event-driven | When a DBC-backed command resolves a local path or provider ref, the system shall attach `data.dbc_source` describing the provider, logical DBC name, pinned version, and resolved local path used for that command. |
+| `REQ-DBCP-09` | Event-driven | When a DBC-backed command resolves a local path or provider ref, the system shall attach `data.dbc_source` describing the provider, logical DBC name, pinned version, resolved local path, and database `kind` (the format detected from the file suffix: `dbc`, `arxml`, `kcd`, or `sym`) used for that command. |
 | `REQ-DBCP-10` | Optional feature | Where the `comma:<name>` alias is specified, the system shall normalize it to the `opendbc` provider before resolution. |
 | `REQ-DBCP-11` | Optional feature | Where `[dbc.providers.opendbc].auto_refresh = true` is configured and the provider cache is cold, the system shall refresh the provider manifest automatically before retrying resolution. |
 | `REQ-DBCP-12` | Unwanted behaviour | If a requested provider is not registered, the system shall return a structured error with code `DBC_PROVIDER_NOT_FOUND` and exit code 3. |
@@ -98,8 +98,9 @@ Fetch and DBC-backed command resolution include:
 * `name`
 * `version`
 * `path`
+* `kind`
 
-For local file refs, `provider` is `local` and `version` is `null`. For provider-backed refs, `version` is the pinned provider version or commit-derived identifier.
+For local file refs, `provider` is `local` and `version` is `null`. For provider-backed refs, `version` is the pinned provider version or commit-derived identifier. `kind` is the database format detected from the resolved file suffix — one of `dbc`, `arxml`, `kcd`, or `sym` (unknown suffixes fall back to `dbc`) — so downstream consumers can branch on the schema format independently of the provider.
 
 ## Output Contracts
 
