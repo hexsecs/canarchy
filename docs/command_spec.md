@@ -21,7 +21,7 @@ Implemented and verified in the current codebase:
 * initial text-mode `tui` shell over the shared command layer
 * UDS `scan`, `trace`, and `services`
 * `config show` for effective transport configuration inspection
-* `re signals`, `re counters`, `re entropy`, and `re correlate` for passive file-backed analysis
+* `re signals`, `re counters`, `re entropy`, `re correlate`, and `re anomalies` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
 * structured JSON and JSONL output
 * explicit error schema and exit codes
@@ -889,6 +889,24 @@ Notes:
 * reference files may be JSON arrays, named JSON objects with `name` and `samples`, or JSONL sample streams
 * each reference sample must include numeric `timestamp` and `value` fields
 * candidates report `pearson_r`, `spearman_r`, `sample_count`, and `lag_ms`, and are ranked by absolute Pearson correlation
+
+### re anomalies
+
+Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs.
+
+```bash
+canarchy re anomalies <file> [--baseline <ref>] [--dbc <ref>] [--z-threshold <z>] \
+    [--cv-max <cv>] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* this command is passive and file-backed; it honors the standard `--offset`, `--max-frames`, and `--seconds` window flags
+* with `--baseline`, per-ID timing statistics and the expected ID set are learned from the reference capture and the input is scored against them; without it, each ID is scored against its own statistics (self-consistency) and ID-presence anomalies are not emitted
+* anomalies carry `arbitration_id`, `kind` (`timing` / `unknown-id` / `dropped-id`), `score`, `z_score`, `sample_count`, `timestamp`, and a `rationale`, ranked by score
+* **only IDs judged cyclic are timing-checked, so event-based and event-periodic messages are not falsely flagged.** Classification is authoritative from the database when `--dbc` is supplied (a message's `cycle_time` / send type decides cyclic vs event); otherwise a robust coefficient of variation (scaled median-absolute-deviation over the median inter-frame gap) is compared against `--cv-max` (default 0.5)
+* timing statistics use the median and MAD rather than mean and standard deviation, so a minority of outlier gaps cannot inflate the spread and mask themselves
+* the payload also reports `mode`, `timing_source` (`dbc` / `observed`), `cyclic_ids`, `event_ids` (timing skipped), and a per-ID `classifications` list
 
 ### re entropy
 

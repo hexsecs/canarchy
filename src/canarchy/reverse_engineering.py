@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from math import isfinite, log2
 from pathlib import Path
-from statistics import StatisticsError, correlation
+from statistics import StatisticsError, correlation, median
 from typing import Any
 
 from canarchy.models import CanFrame
@@ -143,6 +143,29 @@ class CorrelationCandidate:
             "spearman_r": self.spearman_r,
             "sample_count": self.sample_count,
             "lag_ms": self.lag_ms,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class AnomalyCandidate:
+    arbitration_id: int
+    kind: str  # "timing" | "unknown-id" | "dropped-id"
+    score: float
+    z_score: float
+    sample_count: int
+    timestamp: float | None
+    rationale: str
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "arbitration_id": self.arbitration_id,
+            "arbitration_id_hex": f"0x{self.arbitration_id:X}",
+            "kind": self.kind,
+            "score": self.score,
+            "z_score": self.z_score,
+            "sample_count": self.sample_count,
+            "timestamp": self.timestamp,
+            "rationale": self.rationale,
         }
 
 
@@ -765,3 +788,238 @@ def score_dbc_candidates(
 
     results.sort(key=lambda x: (-x["score"], x["name"]))
     return results
+
+
+# --- Anomaly detection -----------------------------------------------------
+
+_ANOMALY_MIN_GAPS = 3
+_ANOMALY_DEFAULT_Z = 3.0
+# Robust coefficient of variation (scaled MAD over the median inter-frame gap)
+# above which an id is treated as event-driven rather than cyclic, so its
+# irregular timing is not flagged. Cyclic buses jitter well under this; event
+# traffic sits far above it.
+_ANOMALY_DEFAULT_CV_MAX = 0.5
+# When a DBC declares a cycle time but the capture lacks the jitter to estimate
+# a spread, allow deviations up to this fraction of the declared period.
+_ANOMALY_PERIOD_TOLERANCE = 0.1
+
+
+def _id_timestamps(frames: list[CanFrame]) -> dict[int, list[float]]:
+    """Group ordered timestamps per arbitration id, skipping remote/error frames."""
+    grouped: dict[int, list[float]] = defaultdict(list)
+    for frame in frames:
+        if frame.is_remote_frame or frame.is_error_frame:
+            continue
+        grouped[frame.arbitration_id].append(float(frame.timestamp))
+    for timestamps in grouped.values():
+        timestamps.sort()
+    return grouped
+
+
+def _inter_frame_gaps(timestamps: list[float]) -> list[float]:
+    return [b - a for a, b in zip(timestamps, timestamps[1:]) if b - a >= 0]
+
+
+def _robust_gap_statistics(gaps: list[float]) -> tuple[float, float]:
+    """Return (median, MAD-derived spread) of a gap list.
+
+    The median absolute deviation is scaled by 1.4826 so it approximates a
+    standard deviation for normally distributed jitter. Median and MAD are used
+    instead of mean and stdev because they are not corrupted by a minority of
+    outlier gaps: a single timing glitch in an otherwise cyclic stream cannot
+    inflate the spread and mask itself, nor push a cyclic id over the event gate.
+    """
+    center = median(gaps)
+    mad = median([abs(gap - center) for gap in gaps])
+    return center, 1.4826 * mad
+
+
+def _classify_cyclic(
+    arb_id: int,
+    ref_gaps: list[float],
+    dbc_timing: dict[int, dict[str, Any]] | None,
+    cv_max: float,
+) -> dict[str, Any]:
+    """Decide whether an id's timing should be checked, and how.
+
+    A DBC entry (cycle time / send type) is authoritative when present; otherwise
+    a robust coefficient of variation (scaled MAD over median) classifies the id.
+    Returns a record with ``cyclic`` (bool), ``source``
+    (``dbc`` | ``cv`` | ``insufficient-samples``), the expected gap ``center`` and
+    ``spread`` to score against, and the robust ``cv``.
+    """
+    record: dict[str, Any] = {
+        "arbitration_id": arb_id,
+        "arbitration_id_hex": f"0x{arb_id:X}",
+        "cyclic": False,
+        "source": None,
+        "cv": None,
+    }
+
+    center = spread = robust_cv = None
+    if len(ref_gaps) >= _ANOMALY_MIN_GAPS:
+        center, spread = _robust_gap_statistics(ref_gaps)
+        if center > 0:
+            robust_cv = spread / center
+            record["cv"] = round(robust_cv, 4)
+
+    entry = (dbc_timing or {}).get(arb_id)
+    if entry is not None:
+        send_type = (entry.get("send_type") or "").lower()
+        cycle_time_ms = entry.get("cycle_time_ms")
+        record["source"] = "dbc"
+        record["send_type"] = entry.get("send_type")
+        record["cycle_time_ms"] = cycle_time_ms
+        # An explicit non-cyclic send type, or the absence of any cycle time,
+        # marks the message as event-driven: skip timing analysis.
+        is_event = ("cyclic" not in send_type and send_type != "") or not cycle_time_ms
+        if is_event:
+            record["cyclic"] = False
+            return record
+        period = cycle_time_ms / 1000.0
+        # Score against the declared period; use the robust observed spread when
+        # meaningfully large, else floor it to a fixed fraction of the period.
+        period_spread = max(spread or 0.0, period * _ANOMALY_PERIOD_TOLERANCE)
+        record.update({"cyclic": True, "center": period, "spread": period_spread})
+        return record
+
+    # No DBC: fall back to the robust coefficient-of-variation guard.
+    if robust_cv is None:
+        record["source"] = "insufficient-samples"
+        return record
+    record["source"] = "cv"
+    if robust_cv > cv_max:
+        record["cyclic"] = False
+        return record
+    # Floor the spread to a fraction of the period so a near-perfectly regular
+    # baseline (MAD ~ 0, modulo float noise) still yields a sane finite z-score
+    # for an outlier rather than dividing by an effectively-zero spread.
+    scoring_spread = max(spread, center * _ANOMALY_PERIOD_TOLERANCE)
+    record.update({"cyclic": True, "center": center, "spread": scoring_spread})
+    return record
+
+
+def anomaly_candidates(
+    frames: list[CanFrame],
+    *,
+    baseline: list[CanFrame] | None = None,
+    z_threshold: float = _ANOMALY_DEFAULT_Z,
+    cv_max: float = _ANOMALY_DEFAULT_CV_MAX,
+    dbc_timing: dict[int, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs.
+
+    With ``baseline``, per-id gap statistics and the expected id set are learned
+    from the reference capture and the input is scored against them. Without a
+    baseline, the input is scored against its own learned statistics
+    (self-consistency), and id-presence anomalies are not emitted.
+
+    Only ids judged *cyclic* are timing-checked, so event-based and event-periodic
+    messages are not falsely flagged. Classification uses the DBC ``cycle_time`` /
+    send type when ``dbc_timing`` is supplied (authoritative), and otherwise the
+    observed coefficient of variation against ``cv_max``.
+    """
+    input_ts = _id_timestamps(frames)
+    baseline_ts = _id_timestamps(baseline) if baseline is not None else input_ts
+    has_baseline = baseline is not None
+
+    candidates: list[AnomalyCandidate] = []
+    classifications: list[dict[str, Any]] = []
+
+    # Timing anomalies: the single most-deviant inter-frame gap per id.
+    for arb_id, timestamps in sorted(input_ts.items()):
+        ref_gaps = _inter_frame_gaps(baseline_ts.get(arb_id, []))
+        classification = _classify_cyclic(arb_id, ref_gaps, dbc_timing, cv_max)
+        classifications.append(classification)
+        if not classification["cyclic"]:
+            continue
+        center = classification["center"]
+        spread = classification["spread"]
+        observed_gaps = _inter_frame_gaps(timestamps)
+        if not observed_gaps:
+            continue
+        # Locate the gap with the largest absolute z-score against the baseline.
+        worst_z = 0.0
+        worst_gap = 0.0
+        worst_index = 0
+        for index, gap in enumerate(observed_gaps):
+            z = (gap - center) / spread
+            if abs(z) > abs(worst_z):
+                worst_z, worst_gap, worst_index = z, gap, index
+        if abs(worst_z) < z_threshold:
+            continue
+        # The gap ends at the second timestamp of the pair.
+        timestamp = timestamps[worst_index + 1]
+        source_note = (
+            "declared cycle time" if classification["source"] == "dbc" else "baseline median"
+        )
+        candidates.append(
+            AnomalyCandidate(
+                arbitration_id=arb_id,
+                kind="timing",
+                score=round(abs(worst_z), 3),
+                z_score=round(worst_z, 3),
+                sample_count=len(observed_gaps),
+                timestamp=timestamp,
+                rationale=(
+                    f"inter-frame gap {round(worst_gap, 6)}s deviates "
+                    f"{round(abs(worst_z), 2)}σ from {source_note} {round(center, 6)}s"
+                ),
+            )
+        )
+
+    # Presence anomalies only make sense against a separate baseline.
+    if has_baseline:
+        baseline_ids = set(baseline_ts)
+        input_ids = set(input_ts)
+        for arb_id in sorted(input_ids - baseline_ids):
+            count = len(input_ts[arb_id])
+            candidates.append(
+                AnomalyCandidate(
+                    arbitration_id=arb_id,
+                    kind="unknown-id",
+                    score=float(count),
+                    z_score=0.0,
+                    sample_count=count,
+                    timestamp=input_ts[arb_id][0],
+                    rationale=f"arbitration id absent from baseline ({count} frames observed)",
+                )
+            )
+        for arb_id in sorted(baseline_ids - input_ids):
+            count = len(baseline_ts[arb_id])
+            candidates.append(
+                AnomalyCandidate(
+                    arbitration_id=arb_id,
+                    kind="dropped-id",
+                    score=float(count),
+                    z_score=0.0,
+                    sample_count=0,
+                    timestamp=None,
+                    rationale=f"baseline id missing from input ({count} baseline frames)",
+                )
+            )
+
+    candidates.sort(
+        key=lambda candidate: (
+            -candidate.score,
+            candidate.kind,
+            candidate.arbitration_id,
+        )
+    )
+    cyclic_ids = sorted(c["arbitration_id"] for c in classifications if c["cyclic"])
+    event_ids = sorted(
+        c["arbitration_id"]
+        for c in classifications
+        if not c["cyclic"] and c["source"] != "insufficient-samples"
+    )
+    return {
+        "candidate_count": len(candidates),
+        "candidates": [candidate.to_payload() for candidate in candidates],
+        "mode": "baseline" if has_baseline else "self-consistency",
+        "z_threshold": z_threshold,
+        "cv_max": cv_max,
+        "timing_source": "dbc" if dbc_timing else "observed",
+        "cyclic_ids": cyclic_ids,
+        "event_ids": event_ids,
+        "classifications": classifications,
+    }

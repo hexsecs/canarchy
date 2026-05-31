@@ -120,6 +120,7 @@ RE_COMMANDS = {
     "re counters",
     "re entropy",
     "re correlate",
+    "re anomalies",
     "re match-dbc",
     "re shortlist-dbc",
 }
@@ -1024,6 +1025,37 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_output_arguments(re_correlate)
     re_correlate.set_defaults(command="re correlate")
+
+    re_anomalies = re_subparsers.add_parser(
+        "anomalies",
+        help="flag inter-frame-timing outliers and unexpected arbitration IDs",
+    )
+    re_anomalies.add_argument("file")
+    re_anomalies.add_argument(
+        "--baseline",
+        help="reference capture to learn expected timing and ID coverage from",
+    )
+    re_anomalies.add_argument(
+        "--dbc",
+        help="database (DBC/ARXML/KCD/SYM or provider ref) whose cycle time and send "
+        "type classify which messages are cyclic; authoritative over the CV guard",
+    )
+    re_anomalies.add_argument(
+        "--z-threshold",
+        type=float,
+        default=3.0,
+        help="minimum absolute z-score to flag a timing anomaly (default: 3.0)",
+    )
+    re_anomalies.add_argument(
+        "--cv-max",
+        type=float,
+        default=0.5,
+        help="max coefficient of variation for an ID to be treated as cyclic when "
+        "no DBC is supplied; higher-variance IDs are treated as event-based (default: 0.5)",
+    )
+    _add_file_analysis_arguments(re_anomalies)
+    add_output_arguments(re_anomalies)
+    re_anomalies.set_defaults(command="re anomalies")
 
     re_match_dbc = re_subparsers.add_parser(
         "match-dbc", help="rank candidate DBCs against a capture"
@@ -5506,6 +5538,52 @@ def reverse_engineering_payload(
             [],
             corr_warnings,
         )
+    if args.command == "re anomalies":
+        from canarchy.reverse_engineering import anomaly_candidates
+
+        frames = transport.frames_from_file(
+            args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
+        )
+        baseline_frames = None
+        if getattr(args, "baseline", None):
+            baseline_frames = transport.frames_from_file(args.baseline)
+        dbc_timing = None
+        if getattr(args, "dbc", None):
+            from canarchy.dbc import database_timing_map
+
+            dbc_timing = database_timing_map(args.dbc)
+        analysis = anomaly_candidates(
+            frames,
+            baseline=baseline_frames,
+            z_threshold=args.z_threshold,
+            cv_max=args.cv_max,
+            dbc_timing=dbc_timing,
+        )
+        anomaly_warnings: list[str] = []
+        if analysis["candidate_count"] == 0:
+            anomaly_warnings.append(
+                "No timing or arbitration-id anomalies met the current threshold."
+            )
+        return (
+            {
+                "mode": analysis["mode"],
+                "file": args.file,
+                "baseline": getattr(args, "baseline", None),
+                "dbc": getattr(args, "dbc", None),
+                "z_threshold": analysis["z_threshold"],
+                "cv_max": analysis["cv_max"],
+                "timing_source": analysis["timing_source"],
+                "analysis": "anomalies",
+                "candidate_count": analysis["candidate_count"],
+                "candidates": analysis["candidates"],
+                "cyclic_ids": analysis["cyclic_ids"],
+                "event_ids": analysis["event_ids"],
+                "classifications": analysis["classifications"],
+                "implementation": "file-backed anomaly detection",
+            },
+            [],
+            anomaly_warnings,
+        )
     raise AssertionError(f"unsupported reverse-engineering command: {args.command}")
 
 
@@ -6134,6 +6212,38 @@ def format_re_table(result: CommandResult) -> list[str]:
                 f"spearman_r={candidate['spearman_r']} "
                 f"samples={candidate['sample_count']} "
                 f"lag_ms={candidate['lag_ms']}"
+            )
+        return lines
+
+    if result.command == "re anomalies":
+        lines.append(f"file: {result.data.get('file')}")
+        if result.data.get("baseline"):
+            lines.append(f"baseline: {result.data['baseline']}")
+        if result.data.get("dbc"):
+            lines.append(f"dbc: {result.data['dbc']}")
+        lines.append(f"mode: {result.data.get('mode')}")
+        lines.append(f"timing_source: {result.data.get('timing_source')}")
+        event_ids = result.data.get("event_ids", [])
+        if event_ids:
+            lines.append(
+                "event_ids (timing skipped): " + ", ".join(f"0x{arb_id:X}" for arb_id in event_ids)
+            )
+        lines.append(f"candidate_count: {result.data.get('candidate_count', 0)}")
+        lines.append("anomalies:")
+        candidates = result.data.get("candidates", [])
+        if not candidates:
+            lines.append("- no anomalies detected")
+            return lines
+        for candidate in candidates:
+            lines.append(
+                "- "
+                f"id={candidate['arbitration_id_hex']} "
+                f"kind={candidate['kind']} "
+                f"score={candidate['score']} "
+                f"z={candidate['z_score']} "
+                f"samples={candidate['sample_count']} "
+                f"ts={candidate['timestamp']} "
+                f"why={candidate['rationale']}"
             )
         return lines
 

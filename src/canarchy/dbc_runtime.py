@@ -210,6 +210,24 @@ def convert_database_runtime(
     return content, written, message_count, signal_count
 
 
+def database_timing_map_runtime(dbc_path: str) -> dict[int, dict[str, Any]]:
+    """Return per-frame-id timing metadata (cycle time and send type) from a database.
+
+    Keys are integer arbitration ids; values carry ``cycle_time_ms`` (the
+    cantools cycle time in milliseconds, or ``None``) and ``send_type`` (the raw
+    send-type string where the database provides one, else ``None``). Used by
+    `re anomalies` to restrict timing checks to messages declared cyclic.
+    """
+    database = load_runtime_database(dbc_path)
+    timing: dict[int, dict[str, Any]] = {}
+    for message in database.messages:
+        timing[int(message.frame_id)] = {
+            "cycle_time_ms": getattr(message, "cycle_time", None),
+            "send_type": getattr(message, "send_type", None),
+        }
+    return timing
+
+
 def decode_frames_runtime(frames: list[CanFrame], dbc_path: str) -> list[dict[str, Any]]:
     database = load_runtime_database(dbc_path)
     events: list[dict[str, Any]] = []

@@ -20,7 +20,7 @@ Operators analysing unknown traffic need repeatable helpers that summarise likel
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| `REQ-RE-01` | Ubiquitous | The system shall provide `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, and `re shortlist-dbc` commands over capture files. |
+| `REQ-RE-01` | Ubiquitous | The system shall provide `re signals`, `re counters`, `re entropy`, `re correlate`, `re anomalies`, `re match-dbc`, and `re shortlist-dbc` commands over capture files. |
 | `REQ-RE-02` | Ubiquitous | Each reverse-engineering command shall operate passively on recorded traffic and shall not transmit frames. |
 | `REQ-RE-03` | Event-driven | When `re signals <file>` is invoked, the system shall return candidate field boundaries with supporting rationale and confidence metadata. |
 | `REQ-RE-04` | Event-driven | When `re counters <file>` is invoked, the system shall return candidate fields that exhibit monotonic incrementing behaviour, including rollover detection and monotonicity evidence. |
@@ -32,6 +32,10 @@ Operators analysing unknown traffic need repeatable helpers that summarise likel
 | `REQ-RE-10` | Unwanted behaviour | If the reference file is missing, malformed, or does not match the required timestamped numeric sample schema, the system shall return a structured error with code `INVALID_REFERENCE_FILE` and exit code 1. |
 | `REQ-RE-11` | Event-driven | When `re match-dbc <capture>` is invoked, the system shall rank candidate DBCs by comparing provider-catalog message IDs against the capture's observed arbitration IDs. |
 | `REQ-RE-12` | Event-driven | When `re shortlist-dbc <capture> --make <brand>` is invoked, the system shall pre-filter provider-catalog candidates by make before ranking them against the capture. |
+| `REQ-RE-13` | Event-driven | When `re anomalies <file>` is invoked, the system shall return ranked anomalies — inter-frame-timing outliers and, against a baseline, unexpected (`unknown-id`) and missing (`dropped-id`) arbitration IDs — each carrying arbitration id, kind, score, z-score, sample count, timestamp, and rationale. |
+| `REQ-RE-14` | Event-driven | When `re anomalies <file> --baseline <ref>` is invoked, the system shall learn per-id timing statistics and the expected id set from the baseline; without a baseline it shall score each id against its own statistics and shall not emit id-presence anomalies. |
+| `REQ-RE-15` | Ubiquitous | `re anomalies` shall apply timing-outlier analysis only to ids judged cyclic, classifying cyclic vs event-driven from the database `cycle_time` / send type when a `--dbc` is supplied (authoritative) and otherwise from a robust coefficient of variation compared against `--cv-max`, so that event-based and event-periodic messages are not falsely flagged. |
+| `REQ-RE-16` | Ubiquitous | `re anomalies` shall derive timing spread from robust statistics (median and median-absolute-deviation) so that a minority of outlier gaps cannot inflate the spread and mask themselves. |
 
 ## Command Surface
 
@@ -40,6 +44,7 @@ canarchy re signals <file> [--json] [--jsonl] [--text]
 canarchy re counters <file> [--json] [--jsonl] [--text]
 canarchy re entropy <file> [--json] [--jsonl] [--text]
 canarchy re correlate <file> --reference <file> [--json] [--jsonl] [--text]
+canarchy re anomalies <file> [--baseline <ref>] [--dbc <ref>] [--z-threshold <z>] [--cv-max <cv>] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json] [--jsonl] [--text]
 canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text]
 canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json] [--jsonl] [--text]
 ```
@@ -184,6 +189,35 @@ Only candidates with at least 10 overlapping timestamp samples are included in t
 * `re correlate` is implemented as a deterministic file-backed helper
 * reference series values are linearly interpolated to the CAN frame timestamps before correlation is computed
 * the lag search tries lag=0 first and iterates outward, so lag=0 wins when multiple lags produce equal correlation
+
+### `re anomalies`
+
+`re anomalies` is a deterministic file-backed helper. Each anomaly candidate includes:
+
+* `arbitration_id` and `arbitration_id_hex`
+* `kind` — one of `timing`, `unknown-id`, `dropped-id`
+* `score` — ranking key (absolute z-score for timing; observed frame count for id-presence)
+* `z_score` — signed deviation from the expected gap (0 for id-presence anomalies)
+* `sample_count`, `timestamp`, and a human-readable `rationale`
+
+The payload also reports `mode` (`baseline` / `self-consistency`), `z_threshold`, `cv_max`,
+`timing_source` (`dbc` / `observed`), `cyclic_ids`, `event_ids`, and a per-id `classifications`
+list (each with `cyclic`, `source`, and the robust `cv`).
+
+#### Classification and statistics
+
+* An id is timing-checked only when classified **cyclic**. With `--dbc`, the database
+  `cycle_time` and send type are authoritative: a non-cyclic send type or an absent cycle
+  time marks the message event-driven and excludes it from timing analysis. Without a DBC,
+  the robust coefficient of variation (scaled MAD over the median inter-frame gap) is compared
+  against `--cv-max` (default 0.5).
+* Timing center and spread use the **median** and **median absolute deviation** (scaled by
+  1.4826), so a minority of outlier gaps cannot inflate the spread and hide themselves. The
+  spread is floored to a fraction of the period so a near-perfectly regular stream still yields
+  a finite z-score for an outlier.
+* With `--baseline`, statistics and the expected id set come from the reference capture;
+  without it, each id is scored against its own statistics (self-consistency) and no
+  id-presence anomalies are emitted.
 
 ### `re match-dbc`
 

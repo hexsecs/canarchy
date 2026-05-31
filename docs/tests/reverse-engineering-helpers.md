@@ -38,6 +38,10 @@ Define the expected coverage for the reverse-engineering helper family so shippe
 | `REQ-RE-10` | `TEST-CORR-04` |
 | `REQ-RE-11` | `TEST-RE-04`, `TEST-RE-05`, `TEST-RE-08`, `TEST-RE-09` |
 | `REQ-RE-12` | `TEST-RE-05` |
+| `REQ-RE-13` | `TEST-RE-12`, `TEST-RE-13` |
+| `REQ-RE-14` | `TEST-RE-12`, `TEST-RE-13` |
+| `REQ-RE-15` | `TEST-RE-14`, `TEST-RE-15` |
+| `REQ-RE-16` | `TEST-RE-13` |
 
 ## Representative Test Cases
 
@@ -183,6 +187,63 @@ And    no candidates shall be presented as authoritative facts
 
 ---
 
+### `TEST-RE-12` — Baseline-driven anomaly detection
+
+```gherkin
+Given  an input capture and a separate baseline capture are available
+And    the input has a cyclic id with a gross timing glitch, a new id, and a dropped id
+When   the operator runs `canarchy re anomalies <input> --baseline <baseline> --json`
+Then   the result mode shall be "baseline"
+And    the candidates shall include a `timing` anomaly for the glitched id with |z| ≥ the threshold
+And    the candidates shall include an `unknown-id` for the new id and a `dropped-id` for the missing id
+```
+
+**Fixture:** `anomaly_input.candump`, `anomaly_baseline.candump`.
+
+---
+
+### `TEST-RE-13` — Self-consistency anomaly detection resists outlier masking
+
+```gherkin
+Given  an input capture whose cyclic id contains a single large timing glitch
+When   the operator runs `canarchy re anomalies <input> --json` (no baseline)
+Then   the result mode shall be "self-consistency"
+And    the glitch shall be flagged as a `timing` anomaly (median/MAD statistics prevent self-masking)
+And    no `unknown-id` or `dropped-id` anomalies shall be emitted
+```
+
+**Fixture:** `anomaly_input.candump`.
+
+---
+
+### `TEST-RE-14` — Event traffic is not falsely flagged (CV guard)
+
+```gherkin
+Given  a capture mixing a cyclic id with an event-based id (bursts then long silences)
+When   the operator runs `canarchy re anomalies <capture> --json`
+Then   the event id shall appear in `event_ids` and not produce any timing anomaly
+And    the cyclic id shall appear in `cyclic_ids`
+```
+
+**Fixture:** `anomaly_event_mix.candump`.
+
+---
+
+### `TEST-RE-15` — DBC send type overrides timing classification
+
+```gherkin
+Given  a capture where an event id happens to look periodic
+And    a DBC marks that id with a non-cyclic send type
+When   the operator runs `canarchy re anomalies <capture> --dbc <dbc> --json`
+Then   `timing_source` shall be "dbc"
+And    the event id shall be classified as event and excluded from timing analysis
+And    a cyclic id declared in the DBC shall still be timing-checked
+```
+
+**Fixture:** `anomaly_dbc_capture.candump`, `anomaly_timing.dbc`.
+
+---
+
 ### `TEST-CORR-01` — Correlation candidate analysis (happy path)
 
 ```gherkin
@@ -308,6 +369,7 @@ Fixtures should include:
 * captures sufficient for DBC-candidate ranking against mocked or cached provider catalogs
 * malformed and low-sample fixtures
 * a capture with a linearly-varying byte field and a matching reference series for correlation tests
+* anomaly fixtures: an input/baseline pair with timing glitches and id-presence differences (`anomaly_input.candump`, `anomaly_baseline.candump`), an event-traffic mix (`anomaly_event_mix.candump`), and a DBC-classification pair (`anomaly_dbc_capture.candump`, `anomaly_timing.dbc`)
 
 Current implementation note:
 

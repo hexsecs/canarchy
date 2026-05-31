@@ -70,6 +70,7 @@ _EXPECTED_TOOLS = {
     "re_correlate",
     "re_counters",
     "re_entropy",
+    "re_anomalies",
     "re_match_dbc",
     "re_shortlist_dbc",
     "fuzz_payload",
@@ -763,6 +764,50 @@ def test_build_argv_skills_tools():
 def test_build_argv_re_signals():
     argv = _build_argv("re_signals", {"file": "trace.candump"})
     assert argv == ["re", "signals", "trace.candump", "--json"]
+
+
+def test_build_argv_re_anomalies_minimal():
+    argv = _build_argv("re_anomalies", {"file": "trace.candump"})
+    assert argv == ["re", "anomalies", "trace.candump", "--json"]
+
+
+def test_build_argv_re_anomalies_with_baseline_and_dbc():
+    argv = _build_argv(
+        "re_anomalies",
+        {
+            "file": "input.candump",
+            "baseline": "ref.candump",
+            "dbc": "bus.dbc",
+            "z_threshold": 4.0,
+            "cv_max": 0.3,
+            "max_frames": 1000,
+        },
+    )
+    assert argv == [
+        "re",
+        "anomalies",
+        "input.candump",
+        "--baseline",
+        "ref.candump",
+        "--dbc",
+        "bus.dbc",
+        "--z-threshold",
+        "4.0",
+        "--cv-max",
+        "0.3",
+        "--max-frames",
+        "1000",
+        "--json",
+    ]
+
+
+def test_re_anomalies_schema_exposes_baseline_and_dbc():
+    tools_by_name = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    props = tools_by_name["re_anomalies"].inputSchema["properties"]
+    assert "baseline" in props
+    assert "dbc" in props
+    assert props["z_threshold"]["default"] == 3.0
+    assert tools_by_name["re_anomalies"].inputSchema["required"] == ["file"]
 
 
 # --- TEST-MCP-13: _build_argv raises for unknown tool ---------------------

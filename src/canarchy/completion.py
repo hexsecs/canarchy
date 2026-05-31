@@ -54,7 +54,7 @@ SUBCOMMANDS: dict[str, list[str]] = {
     "skills provider": ["list"],
     "skills cache": ["list", "refresh"],
     "uds": ["scan", "services", "trace"],
-    "re": ["correlate", "counters", "entropy", "signals"],
+    "re": ["anomalies", "correlate", "counters", "entropy", "signals"],
 }
 
 # Output format flags shared by every command.
@@ -101,6 +101,16 @@ FLAGS: dict[str, list[str]] = {
     "j1939 spn": ["--dbc", "--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 summary": ["--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
     "j1939 tp": ["--file"] + _J1939_FILE_BOUNDS + _OUTPUT,
+    "re anomalies": [
+        "--baseline",
+        "--dbc",
+        "--z-threshold",
+        "--cv-max",
+        "--offset",
+        "--max-frames",
+        "--seconds",
+    ]
+    + _OUTPUT,
     "re correlate": _OUTPUT,
     "re counters": _OUTPUT,
     "re entropy": _OUTPUT,
