@@ -6,6 +6,80 @@ This guide walks through the fastest way to see CANarchy produce familiar `candu
 
 CANarchy targets Python 3.12 or newer. Pick the install path that matches your use case.
 
+### Windows 11 quickstart
+
+Use **Windows Terminal with PowerShell 7** when possible. The commands below also work in Windows PowerShell 5.1 unless noted. `cmd.exe` is usable for CANarchy commands, but PowerShell is clearer for environment variables and JSON output.
+
+1. Install Python 3.12 or newer from [python.org](https://www.python.org/downloads/windows/) or with `winget`:
+
+   ```powershell
+   winget install Python.Python.3.12
+   py -3.12 --version
+   ```
+
+2. Install `pipx`, then make sure its script directory is on `PATH`:
+
+   ```powershell
+   py -3.12 -m pip install --user pipx
+   py -3.12 -m pipx ensurepath
+   ```
+
+   Open a new terminal after `ensurepath` if `pipx` is not found immediately.
+
+3. Install CANarchy from PyPI and run the offline health check:
+
+   ```powershell
+   pipx install canarchy
+   canarchy --version
+   canarchy doctor --text
+   ```
+
+   `canarchy doctor` should print a normal health-check table on Windows. Warnings about missing hardware-specific drivers or an unpopulated DBC cache are expected until you configure those workflows.
+
+4. Run the deterministic no-hardware smoke test:
+
+   ```powershell
+   $env:CANARCHY_TRANSPORT_BACKEND = "scaffold"
+   canarchy capture can0 --jsonl
+   ```
+
+   In `cmd.exe`, use this environment-variable syntax instead:
+
+   ```bat
+   set CANARCHY_TRANSPORT_BACKEND=scaffold
+   canarchy capture can0 --jsonl
+   ```
+
+5. For live CAN hardware, install the vendor driver first, then select the matching `python-can` interface type. Common Windows paths are:
+
+   | Adapter family | Driver pointer | CANarchy interface type | Example channel |
+   |---|---|---|---|
+   | Vector VN/VX | [Vector Driver Setup](https://www.vector.com/int/en/products/products-a-z/libraries-drivers/vector-driver-setup/) | `vector` | `0` |
+   | PEAK PCAN-USB/PCIe | [PEAK-System drivers](https://www.peak-system.com/Drivers.523.0.html?&L=1) | `pcan` | `PCAN_USBBUS1` |
+
+   Example PCAN session configuration:
+
+   ```powershell
+   $env:CANARCHY_PYTHON_CAN_INTERFACE = "pcan"
+   canarchy config show
+   canarchy capture PCAN_USBBUS1 --candump
+   ```
+
+   Example Vector session configuration:
+
+   ```powershell
+   $env:CANARCHY_PYTHON_CAN_INTERFACE = "vector"
+   canarchy config show
+   canarchy capture 0 --candump
+   ```
+
+Known Windows limitations:
+
+* SocketCAN and `vcan` are Linux-only; use vendor hardware backends, `udp_multicast`, or `scaffold` on Windows.
+* `canarchy completion` currently emits `bash`, `zsh`, and `fish` scripts, not PowerShell completion.
+* The `virtual` python-can interface is same-process only. Use `udp_multicast` for no-hardware tests that need separate terminals.
+* Live capture/transmit depends on vendor drivers, adapter firmware, and channel names exposed by the driver package.
+
 ### From PyPI (recommended for users)
 
 ```bash

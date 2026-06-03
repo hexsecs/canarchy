@@ -113,6 +113,7 @@ nav:
           - Gateway Command: design/gateway-command.md
           - Export Command: design/export-command.md
           - Config Show Command: design/config-show-command.md
+          - Standalone ISO-TP Utility Commands: design/isotp-utility-commands.md
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
           - J1939 Monitor Command: design/j1939-monitor-command.md
           - Scapy Diagnostic Integration: design/scapy-diagnostic-integration.md
@@ -139,6 +140,7 @@ nav:
           - Gateway Command: tests/gateway-command.md
           - Export Command: tests/export-command.md
           - Config Show Command: tests/config-show-command.md
+          - Standalone ISO-TP Utility Commands: tests/isotp-utility-commands.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
           - J1939 Monitor Command: tests/j1939-monitor-command.md
           - Scapy Diagnostic Integration: tests/scapy-diagnostic-integration.md

@@ -6443,5 +6443,92 @@ class McpInstallTests(unittest.TestCase):
             self.assertEqual(written["mcpServers"]["canarchy"]["command"], "/opt/venv/bin/canarchy")
 
 
+class PluginsCliTests(unittest.TestCase):
+    def _registry_with_test_plugin(self):
+        from canarchy.plugins import CANARCHY_API_VERSION, PluginRegistry, ProcessorResult
+
+        class TestProcessor:
+            name = "test-proc"
+            api_version = CANARCHY_API_VERSION
+
+            def process(self, frames: list[CanFrame], **kwargs):
+                return ProcessorResult(candidates=[], metadata={})
+
+        registry = PluginRegistry()
+        registry.register_processor(
+            TestProcessor(), source_distribution="test-dist", version="1.2.3"
+        )
+        return registry
+
+    def test_plugins_list_json_reports_registered_plugin(self):
+        registry = self._registry_with_test_plugin()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("pathlib.Path.home", return_value=Path(tmp)),
+        ):
+            with patch("canarchy.plugins._registry", registry):
+                exit_code, stdout, stderr = run_cli("plugins", "list", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        plugin = payload["data"]["plugins"][0]
+        self.assertEqual(plugin["name"], "test-proc")
+        self.assertEqual(plugin["kind"], "processor")
+        self.assertEqual(plugin["version"], "1.2.3")
+        self.assertTrue(plugin["enabled"])
+
+    def test_plugins_info_json_includes_configured_options(self):
+        registry = self._registry_with_test_plugin()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("pathlib.Path.home", return_value=Path(tmp)),
+        ):
+            config_dir = Path(tmp) / ".canarchy"
+            config_dir.mkdir()
+            (config_dir / "config.toml").write_text(
+                '[plugins."test-proc"]\nenabled = false\nthreshold = "high"\n',
+                encoding="utf-8",
+            )
+            with patch("canarchy.plugins._registry", registry):
+                exit_code, stdout, _ = run_cli("plugins", "info", "test-proc", "--json")
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["data"]["enabled"])
+        self.assertEqual(payload["data"]["configured_options"], {"threshold": "high"})
+
+    def test_plugins_disable_and_enable_persist_toggle(self):
+        registry = self._registry_with_test_plugin()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("pathlib.Path.home", return_value=Path(tmp)),
+        ):
+            with patch("canarchy.plugins._registry", registry):
+                disable_code, disable_stdout, _ = run_cli(
+                    "plugins", "disable", "test-proc", "--json"
+                )
+                enable_code, enable_stdout, _ = run_cli("plugins", "enable", "test-proc", "--json")
+            config_text = (Path(tmp) / ".canarchy" / "config.toml").read_text(encoding="utf-8")
+
+        self.assertEqual(disable_code, EXIT_OK)
+        self.assertFalse(json.loads(disable_stdout)["data"]["enabled"])
+        self.assertEqual(enable_code, EXIT_OK)
+        self.assertTrue(json.loads(enable_stdout)["data"]["enabled"])
+        self.assertIn("enabled = true", config_text)
+
+    def test_plugins_info_unknown_returns_plugin_not_found(self):
+        registry = self._registry_with_test_plugin()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("pathlib.Path.home", return_value=Path(tmp)),
+        ):
+            with patch("canarchy.plugins._registry", registry):
+                exit_code, stdout, _ = run_cli("plugins", "info", "missing", "--json")
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "PLUGIN_NOT_FOUND")
+
+
 if __name__ == "__main__":
     unittest.main()

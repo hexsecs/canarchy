@@ -78,6 +78,8 @@ _EXPECTED_TOOLS = {
     "fuzz_arbitration_id",
     "fuzz_signal",
     "fuzz_spn",
+    "plugins_list",
+    "plugins_info",
 }
 
 
@@ -114,6 +116,8 @@ _MCP_EXCLUDED_COMMANDS = {
     "completion",
     "datasets stream",
     "dbc generate-c",  # file generation is a developer action, not an agent tool call
+    "plugins enable",  # writes user config; kept CLI-only
+    "plugins disable",  # writes user config; kept CLI-only
 }
 
 # CLI commands whose MCP coverage is split across multiple tools, or whose
@@ -202,6 +206,24 @@ def test_call_tool_doctor_returns_checks():
         "python_version",
         "python_can",
     }
+
+
+def test_call_tool_plugins_list():
+    results = asyncio.run(handle_call_tool("plugins_list", {}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "plugins list"
+    assert "plugins" in payload["data"]
+
+
+def test_build_argv_plugins_info():
+    assert _build_argv("plugins_info", {"name": "signal-analysis"}) == [
+        "plugins",
+        "info",
+        "signal-analysis",
+        "--json",
+    ]
 
 
 # --- TEST-MCP-06: uds_services returns catalogue ---------------------------

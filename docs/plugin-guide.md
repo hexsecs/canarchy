@@ -95,7 +95,14 @@ uv pip install -e .
 ```
 
 CANarchy discovers and registers the plugin the next time `get_registry()` is called (on first
-command execution).
+command execution). Operators can inspect and toggle discovered plugins from the CLI:
+
+```bash
+canarchy plugins list --json
+canarchy plugins info repeating-id-detector --json
+canarchy plugins disable repeating-id-detector --json
+canarchy plugins enable repeating-id-detector --json
+```
 
 ## Entry Point Groups
 
@@ -107,7 +114,14 @@ command execution).
 
 ## Local Verification
 
-To confirm your plugin is registered before distributing it:
+To confirm your plugin is registered before distributing it, prefer the CLI:
+
+```bash
+canarchy plugins list --json
+canarchy plugins info repeating-id-detector --json
+```
+
+For direct registry tests, use Python:
 
 ```python
 from canarchy.plugins import get_registry, reset_registry
