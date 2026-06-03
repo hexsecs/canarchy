@@ -4951,7 +4951,13 @@ def plot_payload(
         raise CommandError(
             command=args.command,
             exit_code=EXIT_USER_ERROR,
-            errors=[ErrorDetail(code="PLOT_ERROR", message=str(exc))],
+            errors=[
+                ErrorDetail(
+                    code="PLOT_ERROR",
+                    message=str(exc),
+                    hint="Check that the capture file and DBC are valid and that the signal names match the DBC.",
+                )
+            ],
         )
 
     empty_signals = [s for s in args.signals if not series.get(s)]
