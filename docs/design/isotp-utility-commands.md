@@ -24,7 +24,7 @@ CAN captures often contain diagnostic or vendor-specific ISO-TP exchanges that a
 |----|------|-------------|
 | `REQ-ISOTP-01` | Ubiquitous | The system shall provide an `isotp` command group with `reassemble` and `send` subcommands. |
 | `REQ-ISOTP-02` | Event-driven | When `isotp reassemble --file <capture>` is invoked, the system shall read CAN frames from the capture and emit reassembled ISO-TP messages with source metadata. |
-| `REQ-ISOTP-03` | Optional feature | Where `--source <id>` is specified for `isotp reassemble`, the system shall include only ISO-TP frames whose arbitration ID matches the source ID. |
+| `REQ-ISOTP-03` | Optional feature | Where `--source <id>` is specified for `isotp reassemble`, the system shall emit only ISO-TP data messages whose arbitration ID matches the source ID while still inspecting related reverse-direction flow-control frames for metadata. |
 | `REQ-ISOTP-04` | Optional feature | Where `--target <id>` is specified for `isotp reassemble`, the system shall use target ID metadata to classify request/response direction and flow-control relationships. |
 | `REQ-ISOTP-05` | Event-driven | When a complete single-frame or multi-frame ISO-TP message is observed, the system shall emit exactly one `isotp_message` event with `complete` equal to `true`. |
 | `REQ-ISOTP-06` | Unwanted behaviour | If a multi-frame ISO-TP message is truncated, out of order, or interrupted by a new first frame on the same arbitration ID, the system shall emit an `isotp_message` event with `complete` equal to `false` and preserve the partial payload bytes observed before the error. |
@@ -33,7 +33,7 @@ CAN captures often contain diagnostic or vendor-specific ISO-TP exchanges that a
 | `REQ-ISOTP-09` | Event-driven | When `isotp send <interface> --source <id> --target <id> --data <hex>` is invoked, the system shall segment the payload as needed and transmit the ISO-TP frame sequence on the target interface. |
 | `REQ-ISOTP-10` | Optional feature | Where `--dry-run` is specified for `isotp send`, the system shall return the planned frame sequence without opening a transport. |
 | `REQ-ISOTP-11` | State-driven | While `isotp send` is running without `--dry-run`, the system shall enforce active-transmit safety controls before any CAN frame is transmitted. |
-| `REQ-ISOTP-12` | Unwanted behaviour | If `isotp send` does not receive required flow-control permission before a consecutive-frame timeout, the system shall return a structured error with code `ISOTP_FLOW_CONTROL_TIMEOUT`. |
+| `REQ-ISOTP-12` | Unwanted behaviour | If live `isotp send` segments a multi-frame payload and does not receive required flow-control permission before a consecutive-frame timeout, the system shall return a structured error with code `ISOTP_FLOW_CONTROL_TIMEOUT`. |
 | `REQ-ISOTP-13` | Ubiquitous | The system shall honor the canonical CANarchy envelope for `--json`, one event per line for `--jsonl`, and protocol-aware summaries for `--text`. |
 | `REQ-ISOTP-14` | Ubiquitous | The system shall reuse the existing ISO-TP reassembly helpers proven by UDS workflows and avoid duplicating reassembly logic in CLI handlers. |
 
@@ -56,7 +56,7 @@ canarchy isotp send <interface> --source <id> --target <id> --data <hex>
 In scope:
 
 * file-backed ISO-TP reassembly from candump and any capture formats already supported by file-backed analysis commands
-* source-ID filtering and target-ID metadata for request/response pairing
+* source-ID filtering for emitted data messages, while preserving related reverse-direction flow-control frames for metadata when target metadata is available
 * single-frame and multi-frame message reconstruction
 * incomplete-message reporting for malformed or truncated sequences
 * flow-control metadata observed in captures
@@ -89,7 +89,7 @@ Out of scope:
 | `timestamp_start` | Timestamp of the first data-bearing frame, or null |
 | `timestamp_end` | Timestamp of the last related frame, or null |
 
-`isotp send --dry-run` returns a `frames` array with CAN frame payloads in send order. Active sends return the same planned frames plus `mode`, `interface`, `source_id`, `target_id`, `payload`, `frame_count`, and active-transmit event metadata.
+`isotp send --dry-run` returns a `frames` array with CAN frame payloads in send order. Active single-frame sends transmit one CAN frame after active-transmit preflight. Active multi-frame sends transmit the first frame, wait for a flow-control frame from `target_id`, and only then transmit consecutive frames according to the observed flow-control status, block size, and separation-time metadata supported by the first implementation slice. Active sends return the same planned frames plus `mode`, `interface`, `source_id`, `target_id`, `payload`, `frame_count`, and active-transmit event metadata.
 
 ## Output Contracts
 
@@ -147,11 +147,10 @@ Malformed sequences found during passive reassembly should be represented as inc
 
 ## Active-Transmit Safety
 
-`isotp send` shall be added to `ACTIVE_TRANSMIT_COMMANDS` when implemented. Live mode requires the same preflight warning, configurable `--ack-active` enforcement, and MCP-side safety posture as other active transmitters. `--dry-run` is the safe default expected for any future MCP mirror and must not open a transport.
+`isotp send` shall be added to `ACTIVE_TRANSMIT_COMMANDS` when implemented. Live mode requires the same preflight warning, configurable `--ack-active` enforcement, and MCP-side safety posture as other active transmitters. `--dry-run` is the safe default expected for any future MCP mirror and must not open a transport. Live multi-frame sends shall wait for observed flow-control permission by default; an assumed-flow-control lab mode is not part of the initial command contract.
 
 ## Deferred Decisions
 
-* Whether `isotp send` should wait for observed flow-control frames by default or offer an explicit `--assume-flow-control` dry lab mode.
 * Whether extended, mixed, or normal-fixed addressing should be represented as flags or profile names.
 * Whether CAN FD ISO-TP segmentation should be introduced with a `--can-fd` flag and configurable data length.
 * Whether standalone ISO-TP utilities should be exposed through MCP in the first implementation slice or deferred until active-send behavior is stable.

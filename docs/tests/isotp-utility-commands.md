@@ -57,13 +57,15 @@ And    each complete event shall include payload hex, payload length, frame coun
 
 ---
 
-### TEST-ISOTP-03 — Source filter limits reassembly
+### TEST-ISOTP-03 — Source filter limits emitted messages but preserves flow-control metadata
 
 ```gherkin
 Given  an ISO-TP fixture contains messages on arbitration IDs `0x7E0` and `0x7E8`
+And    a multi-frame `0x7E8` message has a reverse-direction flow-control frame on `0x7E0`
 When   the operator runs `canarchy isotp reassemble --file tests/fixtures/isotp_sample.candump --source 0x7E8 --json`
 Then   the system shall emit only messages whose `source_id` is `0x7E8`
 And    no `0x7E0` message shall appear in `data.messages`
+And    the `0x7E8` message shall still include the related `0x7E0` flow-control frame in `flow_control_count`
 ```
 
 **Fixture:** `tests/fixtures/isotp_sample.candump`.
