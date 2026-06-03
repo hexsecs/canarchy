@@ -181,6 +181,33 @@ interface = "virtual"
 
 The `virtual` interface only delivers frames within the same Python process. Use `udp_multicast` if you need cross-process visibility.
 
+### Windows hardware adapters
+
+On Windows, install the vendor driver before opening a live CAN channel. CANarchy delegates live bus access to `python-can`, so the configured `interface` value must match the vendor backend and the command argument must match the vendor channel name.
+
+| Adapter family | Driver pointer | Interface type | Typical channel |
+|---|---|---|---|
+| Vector VN/VX | [Vector Driver Setup](https://www.vector.com/int/en/products/products-a-z/libraries-drivers/vector-driver-setup/) | `vector` | `0` |
+| PEAK PCAN-USB/PCIe | [PEAK-System drivers](https://www.peak-system.com/Drivers.523.0.html?&L=1) | `pcan` | `PCAN_USBBUS1` |
+
+PowerShell example for PCAN-USB:
+
+```powershell
+$env:CANARCHY_PYTHON_CAN_INTERFACE = "pcan"
+canarchy config show
+canarchy capture PCAN_USBBUS1 --candump
+```
+
+PowerShell example for Vector:
+
+```powershell
+$env:CANARCHY_PYTHON_CAN_INTERFACE = "vector"
+canarchy config show
+canarchy capture 0 --candump
+```
+
+SocketCAN and `vcan` are Linux-only. For Windows no-hardware tests across terminals, prefer `udp_multicast`; for deterministic offline smoke tests and CI, prefer `CANARCHY_TRANSPORT_BACKEND=scaffold`.
+
 ---
 
 ## Verifying Your Configuration
