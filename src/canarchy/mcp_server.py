@@ -1497,7 +1497,7 @@ _TOOLS: list[types.Tool] = [
                 "signals": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Signal names to plot (e.g. [\"EngineSpeed\", \"TorqueMode\"])",
+                    "description": 'Signal names to plot (e.g. ["EngineSpeed", "TorqueMode"])',
                 },
                 "out": {"type": "string", "description": "Output file path (e.g. /tmp/plot.png)"},
                 "format": {
