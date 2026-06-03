@@ -88,6 +88,12 @@ SKILLS_COMMANDS = {
     "skills cache list",
     "skills cache refresh",
 }
+PLUGINS_COMMANDS = {
+    "plugins list",
+    "plugins info",
+    "plugins enable",
+    "plugins disable",
+}
 DATASETS_COMMANDS = {
     "datasets provider list",
     "datasets search",
@@ -151,6 +157,7 @@ IMPLEMENTED_COMMANDS = (
     | DBC_COMMANDS
     | DBC_PROVIDER_COMMANDS
     | SKILLS_COMMANDS
+    | PLUGINS_COMMANDS
     | DATASETS_COMMANDS
     | J1939_COMMANDS
     | SESSION_COMMANDS
@@ -731,6 +738,28 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_output_arguments(skills_cache_refresh)
     skills_cache_refresh.set_defaults(command="skills cache refresh")
+
+    plugins = subparsers.add_parser("plugins", help="inspect and toggle Python entry-point plugins")
+    plugins_subparsers = plugins.add_subparsers(dest="plugins_action", required=True)
+
+    plugins_list = plugins_subparsers.add_parser("list", help="list discovered plugins")
+    add_output_arguments(plugins_list)
+    plugins_list.set_defaults(command="plugins list")
+
+    plugins_info = plugins_subparsers.add_parser("info", help="show plugin metadata")
+    plugins_info.add_argument("name", help="registered plugin name")
+    add_output_arguments(plugins_info)
+    plugins_info.set_defaults(command="plugins info")
+
+    plugins_enable = plugins_subparsers.add_parser("enable", help="enable a plugin in config")
+    plugins_enable.add_argument("name", help="registered plugin name")
+    add_output_arguments(plugins_enable)
+    plugins_enable.set_defaults(command="plugins enable")
+
+    plugins_disable = plugins_subparsers.add_parser("disable", help="disable a plugin in config")
+    plugins_disable.add_argument("name", help="registered plugin name")
+    add_output_arguments(plugins_disable)
+    plugins_disable.set_defaults(command="plugins disable")
 
     datasets = subparsers.add_parser("datasets", help="discover and inspect public CAN datasets")
     datasets_subparsers = datasets.add_subparsers(dest="datasets_action", required=True)
@@ -4050,6 +4079,196 @@ def skills_payload(
     raise AssertionError(f"unsupported skills command: {args.command}")
 
 
+def _plugin_config_path() -> Path:
+    return Path.home() / ".canarchy" / "config.toml"
+
+
+def _load_plugin_config() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """Return the full config and normalized ``[plugins.<name>]`` tables."""
+    import tomllib
+
+    config_path = _plugin_config_path()
+    if not config_path.exists():
+        return {}, {}
+    try:
+        with config_path.open("rb") as handle:
+            raw = tomllib.load(handle)
+    except Exception as exc:
+        raise CommandError(
+            command="plugins",
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="PLUGIN_CONFIG_INVALID",
+                    message=f"Could not parse `{config_path}` as TOML: {exc}.",
+                    hint="Repair ~/.canarchy/config.toml before toggling plugins.",
+                )
+            ],
+        ) from exc
+    plugins = raw.get("plugins", {})
+    if not isinstance(plugins, dict):
+        plugins = {}
+    plugin_tables = {
+        name: value
+        for name, value in plugins.items()
+        if isinstance(name, str) and isinstance(value, dict)
+    }
+    return raw, plugin_tables
+
+
+def _plugin_enabled(plugin_name: str, plugin_tables: dict[str, dict[str, Any]]) -> bool:
+    enabled = plugin_tables.get(plugin_name, {}).get("enabled")
+    return bool(enabled) if isinstance(enabled, bool) else True
+
+
+def _toml_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return str(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml_scalar(item) for item in value) + "]"
+    return json.dumps(str(value))
+
+
+def _toml_table_name(parts: Sequence[str]) -> str:
+    return ".".join(json.dumps(part) if not part.replace("_", "").isalnum() else part for part in parts)
+
+
+def _render_toml_table(table: dict[str, Any], prefix: tuple[str, ...] = ()) -> list[str]:
+    lines: list[str] = []
+    scalars = {key: value for key, value in table.items() if not isinstance(value, dict)}
+    children = {key: value for key, value in table.items() if isinstance(value, dict)}
+    if prefix:
+        lines.append(f"[{_toml_table_name(prefix)}]")
+    for key in sorted(scalars):
+        lines.append(f"{key} = {_toml_scalar(scalars[key])}")
+    for key in sorted(children):
+        if lines and lines[-1] != "":
+            lines.append("")
+        lines.extend(_render_toml_table(children[key], (*prefix, key)))
+    return lines
+
+
+def _write_plugin_enabled(name: str, enabled: bool) -> Path:
+    config, _ = _load_plugin_config()
+    plugins = config.setdefault("plugins", {})
+    if not isinstance(plugins, dict):
+        plugins = {}
+        config["plugins"] = plugins
+    plugin_table = plugins.setdefault(name, {})
+    if not isinstance(plugin_table, dict):
+        plugin_table = {}
+        plugins[name] = plugin_table
+    plugin_table["enabled"] = enabled
+
+    config_path = _plugin_config_path()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        rendered = "\n".join(_render_toml_table(config)).rstrip() + "\n"
+        config_path.write_text(rendered, encoding="utf-8")
+    except OSError as exc:
+        raise CommandError(
+            command="plugins enable" if enabled else "plugins disable",
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="PLUGIN_CONFIG_WRITE_FAILED",
+                    message=f"Could not write `{config_path}`: {exc}.",
+                    hint="Check permissions on ~/.canarchy/config.toml.",
+                )
+            ],
+        ) from exc
+    return config_path
+
+
+def _plugin_entries_with_config() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    from canarchy.plugins import get_registry
+
+    _, plugin_tables = _load_plugin_config()
+    entries = []
+    for entry in get_registry().list_plugins():
+        configured = dict(plugin_tables.get(entry["name"], {}))
+        entry = dict(entry)
+        entry["enabled"] = _plugin_enabled(entry["name"], plugin_tables)
+        entry["configured_options"] = {
+            key: value for key, value in configured.items() if key != "enabled"
+        }
+        entries.append(entry)
+    return entries, plugin_tables
+
+
+def plugins_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    entries, plugin_tables = _plugin_entries_with_config()
+    config_path = _plugin_config_path()
+    if args.command == "plugins list":
+        return (
+            {
+                "mode": "passive",
+                "plugin_count": len(entries),
+                "plugins": entries,
+                "config_file": str(config_path),
+                "config_file_found": config_path.exists(),
+            },
+            [],
+            [],
+        )
+
+    matches = [entry for entry in entries if entry["name"] == args.name]
+    if not matches:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="PLUGIN_NOT_FOUND",
+                    message=f"Plugin '{args.name}' is not registered.",
+                    hint="Run `canarchy plugins list --json` to inspect discovered plugins.",
+                )
+            ],
+        )
+
+    configured_options = {
+        key: value for key, value in plugin_tables.get(args.name, {}).items() if key != "enabled"
+    }
+    if args.command == "plugins info":
+        return (
+            {
+                "mode": "passive",
+                "name": args.name,
+                "match_count": len(matches),
+                "plugins": matches,
+                "enabled": _plugin_enabled(args.name, plugin_tables),
+                "configured_options": configured_options,
+                "config_file": str(config_path),
+                "config_file_found": config_path.exists(),
+            },
+            [],
+            [],
+        )
+
+    if args.command in {"plugins enable", "plugins disable"}:
+        enabled = args.command == "plugins enable"
+        written_path = _write_plugin_enabled(args.name, enabled)
+        for match in matches:
+            match["enabled"] = enabled
+        return (
+            {
+                "mode": "passive",
+                "name": args.name,
+                "enabled": enabled,
+                "persisted": True,
+                "config_file": str(written_path),
+                "plugins": matches,
+            },
+            [],
+            [],
+        )
+    raise AssertionError(f"unsupported plugins command: {args.command}")
+
+
 def datasets_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -5767,6 +5986,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(skills_data)
         data["events"] = skills_events
         warnings.extend(skills_warnings)
+    elif args.command in PLUGINS_COMMANDS:
+        plugins_data, plugins_events, plugins_warnings = plugins_payload(args)
+        data.update(plugins_data)
+        data["events"] = plugins_events
+        warnings.extend(plugins_warnings)
     elif args.command in DATASETS_COMMANDS:
         datasets_data, datasets_events, datasets_warnings = datasets_payload(args)
         data.update(datasets_data)
@@ -6566,6 +6790,42 @@ def format_skills_table(result: CommandResult) -> list[str]:
     return lines
 
 
+def format_plugins_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    if result.command == "plugins list":
+        lines.append(f"plugins: {result.data.get('plugin_count', 0)}")
+        for plugin in result.data.get("plugins", []):
+            enabled = "enabled" if plugin.get("enabled", True) else "disabled"
+            version = plugin.get("version") or "unknown"
+            source = plugin.get("source_distribution") or "unknown"
+            lines.append(
+                f"  {plugin['name']}  kind={plugin['kind']}  version={version}  {enabled}  source={source}"
+            )
+        return lines
+
+    if result.command == "plugins info":
+        lines.append(f"name: {result.data.get('name', '')}")
+        lines.append(f"enabled: {result.data.get('enabled', True)}")
+        lines.append(f"matches: {result.data.get('match_count', 0)}")
+        lines.append("metadata:")
+        for plugin in result.data.get("plugins", []):
+            lines.append(
+                f"  kind={plugin['kind']} api_version={plugin['api_version']} "
+                f"version={plugin.get('version') or 'unknown'} "
+                f"source={plugin.get('source_distribution') or 'unknown'}"
+            )
+            if plugin.get("entry_point_group"):
+                lines.append(f"    entry_point_group={plugin['entry_point_group']}")
+        options = result.data.get("configured_options", {})
+        lines.append(f"configured_options: {options if options else '{}'}")
+        return lines
+
+    lines.append(f"name: {result.data.get('name', '')}")
+    lines.append(f"enabled: {result.data.get('enabled')}")
+    lines.append(f"config_file: {result.data.get('config_file', '')}")
+    return lines
+
+
 def format_dataset_inspect(result: CommandResult) -> list[str]:
     """Format human-readable output for datasets inspect."""
     data = result.data
@@ -7214,6 +7474,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "text" and result.ok and result.command in SKILLS_COMMANDS:
         for line in format_skills_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command in PLUGINS_COMMANDS:
+        for line in format_plugins_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

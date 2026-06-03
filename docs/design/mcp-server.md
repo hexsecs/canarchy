@@ -140,8 +140,9 @@ landing here.
 | Datasets provider/cache/fetch/search/inspect/convert | Metadata and local conversion workflows return bounded JSON envelopes. |
 | `datasets replay --dry-run` (`datasets_replay_plan`) and `--list-files` (`datasets_replay_files`) | Safe planning and manifest inspection do not open or stream remote frame data. |
 | Skills provider/cache/search/fetch | Non-interactive provider workflows with canonical JSON envelopes. |
+| Plugin inspection (`plugins list`, `plugins info`) | Read-only discovery and metadata inspection with bounded JSON envelopes. |
 | J1939 analysis (`j1939 decode/pgn/spn/tp sessions/tp compare/dm1/faults/summary/inventory/compare/monitor`) | File-backed analysis commands are safe, bounded, and deterministic. |
-| Reverse-engineering helpers (`re signals/counters/entropy/correlate/match-dbc/shortlist-dbc`) | File-backed analysis commands are safe and deterministic. |
+| Reverse-engineering helpers (`re signals/counters/entropy/correlate/anomalies/match-dbc/shortlist-dbc`) | File-backed analysis commands are safe and deterministic. |
 | Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`) | Bounded, non-interactive envelopes. |
 
 ### Excluded
@@ -151,21 +152,19 @@ landing here.
 | `shell`, `tui` | Interactive front ends with no one-shot RPC equivalent. |
 | `mcp serve` | The server itself; not a tool it would expose. |
 | `mcp install` | Writes a client config file — a user action, like `plugins enable/disable`, kept off the agent surface. |
+| `plugins enable`, `plugins disable` | Write user plugin configuration under `~/.canarchy/config.toml`; kept CLI-only. |
 | `dbc generate-c` | Generates C source/header files to disk — a developer action, not an agent tool call. |
 | `completion` | Emits a raw shell script, not a JSON envelope. |
 | `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
 
 ### Deferred (not yet implemented)
 
-| Planned CLI surface | Notes |
-|---------------------|-------|
-| `plugins list` / `plugins info` (#317) | Add MCP mirrors when the plugins CLI lands; `plugins enable/disable` stay CLI-only. |
-| `re anomalies` (#321) | Add an MCP mirror with the other file-backed `re` tools when the command lands. |
+There are no deferred implemented CLI commands in the current MCP matrix.
 
 As of this audit, every implemented command that should have MCP coverage
-does; `dbc generate-c` is the most recent addition and is intentionally
-excluded (file generation is a developer action). There are no missing
-mirrors, orphan tools, or ungated active-transmit MCP tools.
+does; plugin toggles and `dbc generate-c` are intentionally excluded because
+they write user/developer files. There are no missing mirrors, orphan tools,
+or ungated active-transmit MCP tools.
 
 ## Response Envelope
 

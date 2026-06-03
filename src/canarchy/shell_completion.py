@@ -34,6 +34,7 @@ SUBCOMMANDS: list[tuple[str, str]] = [
     ("encode", "DBC-backed signal encode"),
     ("dbc", "DBC provider workflows"),
     ("skills", "CANarchy skill discovery and cache"),
+    ("plugins", "Python entry-point plugin workflows"),
     ("datasets", "dataset provider workflows"),
     ("export", "export structured artifacts"),
     ("session", "save and restore CANarchy session context"),

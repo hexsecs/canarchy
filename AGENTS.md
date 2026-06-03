@@ -441,6 +441,11 @@ canarchy
     fetch
     cache list
     cache refresh
+  plugins
+    list
+    info
+    enable
+    disable
   datasets
     provider list
     search
@@ -481,7 +486,9 @@ canarchy
 
 This tree is a starting point, not a lock.
 
-Active-transmit MCP tools (`send`, `generate`, `gateway`, `replay`, `sequence_replay`, and `fuzz payload|replay|arbitration-id|signal|spn`) are behind the active-transmit safety model — mandatory `ack_active=true` with `dry_run` defaulting to true. The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred) is maintained in `docs/design/mcp-server.md`, and `tests/test_mcp.py` enforces that every implemented command is either exposed or a documented exclusion (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`).
+Active-transmit MCP tools (`send`, `generate`, `gateway`, `replay`, `sequence_replay`, and `fuzz payload|replay|arbitration-id|signal|spn`) are behind the active-transmit safety model — mandatory `ack_active=true` with `dry_run` defaulting to true. The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred) is maintained in `docs/design/mcp-server.md`, and `tests/test_mcp.py` enforces that every implemented command is either exposed or a documented exclusion (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`, `plugins enable`, `plugins disable`).
+
+For plugin automation, agents can use MCP `plugins_list` / `plugins_info` or CLI `canarchy plugins list|info --json` to inspect discovered Python entry-point plugins. Plugin toggles are user configuration actions; use CLI `canarchy plugins enable|disable <name>` only when explicitly requested by the operator.
 
 For dataset automation, agents should prefer MCP dataset tools when available, or explicit CLI JSON output otherwise. `datasets_search` / `datasets search --json` and `datasets_inspect` / `datasets inspect --json` include stable machine fields: `ref`, `is_replayable`, `is_index`, `default_replay_file`, `download_url_available`, and `source_type`. `datasets_fetch` distinguishes curated indexes from normal dataset entries with `is_index`, `index_instructions`, and `download_instructions`. Use MCP `datasets_replay_plan` or CLI `datasets replay --dry-run --json` for safe replay preflight; use `datasets replay --list-files --json` to choose a replay file and `--file <id-or-name>` to select it. Use `--max-frames` or `--max-seconds` to bound replay. For `catalog:comma-car-segments`, use `--platform <name>` to filter dynamic HuggingFace segment manifests and `--limit <n>` to bound file listings before selecting a segment. Use `datasets stream --max-frames <n>` to bound local downloaded dataset-file streaming; `--chunk-size` controls JSONL provenance chunk metadata and is not a frame limit. `comma-rlog` streaming requires optional openpilot LogReader support (`uv pip install git+https://github.com/commaai/openpilot.git` on Python 3.12.x) and otherwise returns `COMMA_RLOG_SUPPORT_UNAVAILABLE`. Actual dataset frame streaming remains CLI-only. Curated index entries that cannot be replayed return `DATASET_INDEX_NOT_REPLAYABLE`.
 

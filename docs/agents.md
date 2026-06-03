@@ -132,6 +132,8 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `skills_fetch` | `canarchy skills fetch` |
 | `skills_cache_list` | `canarchy skills cache list` |
 | `skills_cache_refresh` | `canarchy skills cache refresh` |
+| `plugins_list` | `canarchy plugins list` |
+| `plugins_info` | `canarchy plugins info` |
 
 | `fuzz_payload` | `canarchy fuzz payload` |
 | `fuzz_replay` | `canarchy fuzz replay` |
@@ -145,6 +147,7 @@ Current exclusions:
 * interactive or service commands such as `shell`, `tui`, `mcp serve`, and `mcp install`
 * `completion`, which emits a raw shell script rather than a JSON envelope
 * `dbc generate-c`, which generates C source/header files to disk and is a developer action
+* `plugins enable` and `plugins disable`, which write user plugin configuration
 
 The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred, with rationale) lives in [`docs/design/mcp-server.md`](design/mcp-server.md#mcp-coverage-decisions); a test guard (`test_every_cli_command_is_exposed_or_documented`) fails the build if a new command drifts out of coverage.
 

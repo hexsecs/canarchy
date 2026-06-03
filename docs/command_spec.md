@@ -23,6 +23,7 @@ Implemented and verified in the current codebase:
 * `config show` for effective transport configuration inspection
 * `re signals`, `re counters`, `re entropy`, `re correlate`, and `re anomalies` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
+* `plugins list`, `plugins info`, `plugins enable`, and `plugins disable` for Python entry-point plugin inspection and toggles
 * structured JSON and JSONL output
 * explicit error schema and exit codes
 
@@ -501,8 +502,42 @@ Notes:
 
 * the first provider implementation is GitHub-backed and consumes `.skill.yaml` manifests that follow the CANarchy skill manifest schema
 * `skills fetch` returns both the cached manifest path and the cached skill entry path
-* skills provider/cache commands are currently CLI-only and are not exposed as MCP tools, resources, or prompts in phase 1
+* skills provider/cache commands are mirrored by MCP tools for search/fetch/cache workflows, but skills themselves are workflow descriptors rather than MCP prompts or resources
 * agents should use skills as workflow descriptors: search, fetch, inspect compatibility/provenance, then run referenced CANarchy commands explicitly
+
+### plugins list
+
+List registered Python entry-point plugins and built-in plugins.
+
+```bash
+canarchy plugins list [--json|--jsonl|--text]
+```
+
+Output includes each plugin's `name`, `kind` (`processor`, `sink`, or `input`), `api_version`, package `version`, `source_distribution`, `entry_point_group`, `enabled`, and `configured_options` fields.
+
+### plugins info
+
+Show metadata and configured options for a registered plugin name.
+
+```bash
+canarchy plugins info <name> [--json|--jsonl|--text]
+```
+
+If the same name is registered in more than one plugin namespace, `data.plugins` contains each matching entry and `data.match_count` reports the count.
+
+### plugins enable / disable
+
+Persist a plugin toggle in `~/.canarchy/config.toml` under `[plugins."<name>"].enabled`.
+
+```bash
+canarchy plugins enable <name> [--json|--jsonl|--text]
+canarchy plugins disable <name> [--json|--jsonl|--text]
+```
+
+Notes:
+
+* enable/disable requires the plugin to be discovered by the current environment; unknown names return `PLUGIN_NOT_FOUND`
+* `plugins_list` and `plugins_info` are mirrored by MCP tools; enable/disable is intentionally CLI-only because it writes user config
 
 ### datasets provider list
 

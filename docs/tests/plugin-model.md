@@ -33,6 +33,11 @@
 | `REQ-PLUGIN-17` | `re entropy` CLI command routes through registry and returns valid output | `TEST-PLUGIN-17` |
 | `REQ-PLUGIN-18` | Third-party processor registered manually is discoverable and callable | `TEST-PLUGIN-18` |
 | `REQ-PLUGIN-19` | `ProcessorResult` warnings list is present even when empty | `TEST-PLUGIN-19` |
+| `REQ-PLUGIN-20` | `plugins list` returns registered plugin metadata in the canonical envelope | `TEST-PLUGIN-20` |
+| `REQ-PLUGIN-21` | `plugins info <name>` returns metadata and configured options | `TEST-PLUGIN-21` |
+| `REQ-PLUGIN-22` | `plugins enable/disable <name>` persists `[plugins."<name>"].enabled` | `TEST-PLUGIN-22` |
+| `REQ-PLUGIN-23` | Unknown plugin names return `PLUGIN_NOT_FOUND` | `TEST-PLUGIN-23` |
+| `REQ-PLUGIN-24` | MCP exposes read-only plugin list/info tools only | `TEST-PLUGIN-24` |
 
 ---
 
@@ -246,3 +251,72 @@ Given  any processor producing no warnings
 When   process() is called and result.warnings is inspected
 Then   result.warnings shall be an empty list, not None
 ```
+
+---
+
+### TEST-PLUGIN-20 — plugins list returns registered plugin metadata
+
+```gherkin
+Given  a test processor is registered in the plugin registry
+When   canarchy plugins list --json is run
+Then   exit code shall be 0
+And    output['ok'] shall be True
+And    output['data']['plugins'] shall include name, kind, version, source_distribution, and enabled
+```
+
+**Fixture:** in-memory test plugin registry
+
+---
+
+### TEST-PLUGIN-21 — plugins info returns configured options
+
+```gherkin
+Given  a test processor is registered in the plugin registry
+And    ~/.canarchy/config.toml contains [plugins."test-proc"] options
+When   canarchy plugins info test-proc --json is run
+Then   output['data']['enabled'] shall reflect the configured toggle
+And    output['data']['configured_options'] shall include non-enabled plugin options
+```
+
+**Fixture:** temporary HOME with config.toml
+
+---
+
+### TEST-PLUGIN-22 — plugins enable and disable persist the toggle
+
+```gherkin
+Given  a test processor is registered in the plugin registry
+And    HOME points at a temporary directory
+When   canarchy plugins disable test-proc --json is run
+And    canarchy plugins enable test-proc --json is run
+Then   ~/.canarchy/config.toml shall contain enabled = true for test-proc
+And    both command envelopes shall report persisted = True
+```
+
+**Fixture:** temporary HOME with in-memory test plugin registry
+
+---
+
+### TEST-PLUGIN-23 — unknown plugin names return PLUGIN_NOT_FOUND
+
+```gherkin
+Given  a test processor is registered in the plugin registry
+When   canarchy plugins info missing --json is run
+Then   exit code shall be 1
+And    output['errors'][0]['code'] shall equal 'PLUGIN_NOT_FOUND'
+```
+
+**Fixture:** in-memory test plugin registry
+
+---
+
+### TEST-PLUGIN-24 — MCP exposes read-only plugin tools
+
+```gherkin
+Given  the MCP server tool catalogue is loaded
+When   the tool names are inspected
+Then   plugins_list and plugins_info shall be present
+And    plugins enable and plugins disable shall be documented MCP exclusions
+```
+
+**Fixture:** MCP tool catalogue

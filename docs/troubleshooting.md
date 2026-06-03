@@ -489,8 +489,7 @@ would have done.
 Symptom — a plugin name referenced in `~/.canarchy/config.toml` is not
 registered.
 
-Recovery — `canarchy plugins list --json` (once the CLI surface lands;
-see the project roadmap).
+Recovery — run `canarchy plugins list --json` to inspect discovered plugin names.
 
 ### `PLUGIN_DUPLICATE`
 

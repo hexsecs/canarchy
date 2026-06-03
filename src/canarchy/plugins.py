@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import importlib.metadata
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Iterator, Protocol, runtime_checkable
 
+from canarchy import __version__
 from canarchy.models import CanFrame
 
 CANARCHY_API_VERSION = "1"
@@ -28,6 +29,18 @@ class ProcessorResult:
     candidates: list[dict[str, Any]]
     metadata: dict[str, Any]
     warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class PluginMetadata:
+    """Inspectable metadata for a registered plugin."""
+
+    name: str
+    kind: str
+    api_version: str
+    version: str | None = None
+    source_distribution: str | None = None
+    entry_point_group: str | None = None
 
 
 @runtime_checkable
@@ -71,10 +84,18 @@ class PluginRegistry:
         self._processors: dict[str, ProcessorPlugin] = {}
         self._sinks: dict[str, SinkPlugin] = {}
         self._input_adapters: dict[str, InputAdapterPlugin] = {}
+        self._metadata: dict[tuple[str, str], PluginMetadata] = {}
 
     # --- registration ---
 
-    def register_processor(self, plugin: ProcessorPlugin) -> None:
+    def register_processor(
+        self,
+        plugin: ProcessorPlugin,
+        *,
+        source_distribution: str | None = None,
+        version: str | None = None,
+        entry_point_group: str | None = None,
+    ) -> None:
         """Register a processor plugin. Raises PluginError on invalid interface, version mismatch, or duplicate name."""
         name = _require_interface(plugin, ProcessorPlugin, "process(frames, **kwargs)")
         _require_api_version(plugin.api_version, name)
@@ -85,8 +106,23 @@ class PluginRegistry:
                 hint="Use a unique name or unregister the existing processor first.",
             )
         self._processors[name] = plugin
+        self._metadata[("processor", name)] = PluginMetadata(
+            name=name,
+            kind="processor",
+            api_version=plugin.api_version,
+            version=version,
+            source_distribution=source_distribution,
+            entry_point_group=entry_point_group,
+        )
 
-    def register_sink(self, plugin: SinkPlugin) -> None:
+    def register_sink(
+        self,
+        plugin: SinkPlugin,
+        *,
+        source_distribution: str | None = None,
+        version: str | None = None,
+        entry_point_group: str | None = None,
+    ) -> None:
         """Register a sink plugin. Raises PluginError on invalid interface, version mismatch, or duplicate name."""
         name = _require_interface(plugin, SinkPlugin, "supported_formats and write()")
         _require_api_version(plugin.api_version, name)
@@ -97,8 +133,23 @@ class PluginRegistry:
                 hint="Use a unique name or unregister the existing sink first.",
             )
         self._sinks[name] = plugin
+        self._metadata[("sink", name)] = PluginMetadata(
+            name=name,
+            kind="sink",
+            api_version=plugin.api_version,
+            version=version,
+            source_distribution=source_distribution,
+            entry_point_group=entry_point_group,
+        )
 
-    def register_input_adapter(self, plugin: InputAdapterPlugin) -> None:
+    def register_input_adapter(
+        self,
+        plugin: InputAdapterPlugin,
+        *,
+        source_distribution: str | None = None,
+        version: str | None = None,
+        entry_point_group: str | None = None,
+    ) -> None:
         """Register an input adapter plugin. Raises PluginError on invalid interface, version mismatch, or duplicate name."""
         name = _require_interface(plugin, InputAdapterPlugin, "supported_extensions and read()")
         _require_api_version(plugin.api_version, name)
@@ -109,6 +160,14 @@ class PluginRegistry:
                 hint="Use a unique name or unregister the existing adapter first.",
             )
         self._input_adapters[name] = plugin
+        self._metadata[("input", name)] = PluginMetadata(
+            name=name,
+            kind="input",
+            api_version=plugin.api_version,
+            version=version,
+            source_distribution=source_distribution,
+            entry_point_group=entry_point_group,
+        )
 
     # --- lookup ---
 
@@ -124,23 +183,34 @@ class PluginRegistry:
     # --- inspection ---
 
     def list_processors(self) -> list[dict[str, Any]]:
-        return [{"name": p.name, "api_version": p.api_version} for p in self._processors.values()]
+        return [asdict(self._metadata[("processor", p.name)]) for p in self._processors.values()]
 
     def list_sinks(self) -> list[dict[str, Any]]:
         return [
-            {"name": s.name, "api_version": s.api_version, "supported_formats": s.supported_formats}
+            {
+                **asdict(self._metadata[("sink", s.name)]),
+                "supported_formats": s.supported_formats,
+            }
             for s in self._sinks.values()
         ]
 
     def list_input_adapters(self) -> list[dict[str, Any]]:
         return [
             {
-                "name": a.name,
-                "api_version": a.api_version,
+                **asdict(self._metadata[("input", a.name)]),
                 "supported_extensions": a.supported_extensions,
             }
             for a in self._input_adapters.values()
         ]
+
+    def list_plugins(self) -> list[dict[str, Any]]:
+        """Return all registered plugins in deterministic name/kind order."""
+        entries = [asdict(metadata) for metadata in self._metadata.values()]
+        return sorted(entries, key=lambda entry: (entry["name"], entry["kind"]))
+
+    def plugin_info(self, name: str) -> list[dict[str, Any]]:
+        """Return all registered plugin entries matching ``name`` across namespaces."""
+        return [entry for entry in self.list_plugins() if entry["name"] == name]
 
 
 def _require_interface(plugin: Any, protocol: type, required: str) -> str:
@@ -198,9 +268,15 @@ def _build_default_registry() -> PluginRegistry:
         SignalAnalysisProcessor,
     )
 
-    registry.register_processor(CounterCandidateProcessor())
-    registry.register_processor(EntropyCandidateProcessor())
-    registry.register_processor(SignalAnalysisProcessor())
+    registry.register_processor(
+        CounterCandidateProcessor(), source_distribution="canarchy", version=__version__
+    )
+    registry.register_processor(
+        EntropyCandidateProcessor(), source_distribution="canarchy", version=__version__
+    )
+    registry.register_processor(
+        SignalAnalysisProcessor(), source_distribution="canarchy", version=__version__
+    )
 
     _load_entry_point_plugins(registry)
     return registry
@@ -221,7 +297,15 @@ def _load_entry_point_plugins(registry: PluginRegistry) -> None:
         for ep in eps:
             try:
                 plugin_cls = ep.load()
-                register_fn(plugin_cls())
+                dist = getattr(ep, "dist", None)
+                source_distribution = getattr(dist, "name", None)
+                version = getattr(dist, "version", None)
+                register_fn(
+                    plugin_cls(),
+                    source_distribution=source_distribution,
+                    version=version,
+                    entry_point_group=group,
+                )
             except Exception as exc:
                 warnings.warn(
                     f"Failed to load plugin '{ep.name}' from group '{group}': {exc}",
