@@ -1486,6 +1486,41 @@ _TOOLS: list[types.Tool] = [
             "required": ["name"],
         },
     ),
+    types.Tool(
+        name="plot",
+        description="Plot decoded signal time-series from a capture file. Requires canarchy[plot] (matplotlib/plotly). Returns the output file path and data-point counts.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump or PCAP capture file"},
+                "dbc": {"type": "string", "description": "Path to DBC file for signal decoding"},
+                "signals": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": 'Signal names to plot (e.g. ["EngineSpeed", "TorqueMode"])',
+                },
+                "out": {"type": "string", "description": "Output file path (e.g. /tmp/plot.png)"},
+                "format": {
+                    "type": "string",
+                    "enum": ["png", "svg", "html"],
+                    "description": "Output format (default: png)",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
+            },
+            "required": ["file", "dbc", "signals", "out"],
+        },
+    ),
 ]
 
 _TOOL_NAMES: frozenset[str] = frozenset(tool.name for tool in _TOOLS)
@@ -2029,6 +2064,20 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return ["plugins", "list", "--json"]
         case "plugins_info":
             return ["plugins", "info", a["name"], "--json"]
+        case "plot":
+            argv = ["plot", "--dbc", a["dbc"], "--out", a["out"]]
+            for sig in a.get("signals", []):
+                argv += ["--signal", sig]
+            if a.get("format"):
+                argv += ["--format", a["format"]]
+            if a.get("offset") is not None:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            argv += ["--file", a["file"]]
+            return argv + ["--json"]
         case _:
             raise ValueError(f"Unknown tool: {tool_name!r}")
 

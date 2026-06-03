@@ -1,0 +1,11 @@
+[project]
+name = "canarchy-sqlite-sink"
+version = "0.1.0"
+dependencies = ["canarchy>=0.8"]
+
+[project.entry-points."canarchy.sinks"]
+sqlite-sink = "contrib.plugins.sqlite_sink.plugin:SqliteSinkPlugin"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
