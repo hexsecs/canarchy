@@ -6011,6 +6011,26 @@ class DoctorCommandTests(unittest.TestCase):
         self.assertIn("hardware was not opened", check["detail"])
         import_mock.assert_any_call("can.interfaces.kvaser", fromlist=["*"])
 
+    def test_doctor_backend_checks_ignore_invalid_capture_tuning(self) -> None:
+        from canarchy import doctor as doctor_module
+
+        with patch.dict(
+            os.environ,
+            {
+                "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+                "CANARCHY_CAPTURE_LIMIT": "not-an-int",
+                "CANARCHY_CAPTURE_TIMEOUT": "not-a-float",
+            },
+            clear=False,
+        ):
+            transport_check = doctor_module._check_transport_backend()
+            dependency_check = doctor_module._check_python_can_interface_dependency()
+
+        self.assertEqual(transport_check["status"], "ok")
+        self.assertIn("scaffold", transport_check["detail"])
+        self.assertEqual(dependency_check["status"], "ok")
+        self.assertIn("not applicable", dependency_check["detail"])
+
     def test_doctor_warns_when_opendbc_cache_absent(self) -> None:
         from canarchy import dbc_cache, doctor as doctor_module
 

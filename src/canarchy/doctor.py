@@ -11,12 +11,13 @@ local environment, dependencies, configuration, and cache state.
 from __future__ import annotations
 
 import sys
+import os
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from canarchy import __version__
-from canarchy.transport import transport_backend_config
+from canarchy.transport import _load_user_config
 
 CheckPayload = dict[str, Any]
 
@@ -54,6 +55,19 @@ PYTHON_CAN_INTERFACE_MODULES = {
         "Install python-can's CANalyst-II support dependencies and confirm python-can can import `can.interfaces.canalystii`.",
     ),
 }
+
+
+def _transport_backend_identity() -> tuple[str, str]:
+    """Return backend/interface without parsing unrelated transport settings."""
+
+    file_config = _load_user_config()
+
+    def _get(env_key: str, default: str) -> str:
+        return os.environ.get(env_key) or file_config.get(env_key) or default
+
+    backend = _get("CANARCHY_TRANSPORT_BACKEND", "python-can").strip().lower() or "python-can"
+    interface = _get("CANARCHY_PYTHON_CAN_INTERFACE", "socketcan").strip().lower() or "socketcan"
+    return backend, interface
 
 
 # ---------------------------------------------------------------------------
@@ -99,8 +113,7 @@ def _check_python_can() -> CheckPayload:
 
 
 def _check_transport_backend() -> CheckPayload:
-    config = transport_backend_config()
-    backend = config.backend
+    backend, interface = _transport_backend_identity()
     if backend == "scaffold":
         return _ok("transport_backend", "scaffold (deterministic offline)")
     if backend == "python-can":
@@ -112,7 +125,6 @@ def _check_transport_backend() -> CheckPayload:
                 "configured as python-can but the library is not importable",
                 "Install python-can or set CANARCHY_TRANSPORT_BACKEND=scaffold for offline use.",
             )
-        interface = config.python_can_interface
         return _ok("transport_backend", f"python-can interface={interface}")
     return _warn(
         "transport_backend",
@@ -122,14 +134,13 @@ def _check_transport_backend() -> CheckPayload:
 
 
 def _check_python_can_interface_dependency() -> CheckPayload:
-    config = transport_backend_config()
-    if config.backend != "python-can":
+    backend, interface = _transport_backend_identity()
+    if backend != "python-can":
         return _ok(
             "python_can_interface_dependency",
-            f"not applicable for backend={config.backend}",
+            f"not applicable for backend={backend}",
         )
 
-    interface = config.python_can_interface
     module_info = PYTHON_CAN_INTERFACE_MODULES.get(interface)
     if module_info is None:
         return _ok(
