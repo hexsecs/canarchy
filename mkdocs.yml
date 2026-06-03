@@ -91,6 +91,9 @@ nav:
       - Stream commaCarSegments CAN data: cookbook/stream-comma-car-segments.md
       - Wire CANarchy into Claude Desktop or Claude Code: cookbook/mcp-claude-integration.md
       - Build a virtual CAN loop for offline testing: cookbook/virtual-can-loop.md
+      - Verify a PCAN interface in 30 seconds: cookbook/verify-pcan-interface.md
+      - Verify a Vector interface in 30 seconds: cookbook/verify-vector-interface.md
+      - Verify a Kvaser interface in 30 seconds: cookbook/verify-kvaser-interface.md
       - Compare two captures for DM1 fault diffs: cookbook/compare-dm1-faults.md
   - Developers:
       - Architecture: architecture.md

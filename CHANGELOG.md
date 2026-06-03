@@ -61,6 +61,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
+* Documented python-can hardware backend configuration and validation for PCAN, Vector, Kvaser, and related vendor interfaces (#329). `docs/backends.md` now distinguishes python-can interface type from CAN channel, lists driver/runtime requirements and caveats, and links to short PCAN/Vector/Kvaser live verification recipes. `canarchy doctor` now includes an offline configured-interface import check that gives vendor dependency hints without opening hardware.
 * Added design and test specs for planned standalone ISO-TP utility commands (`canarchy isotp reassemble` and `canarchy isotp send`), including CLI shape, JSON/JSONL/text contracts, structured ISO-TP error codes, active-transmit safety implications, fixture expectations, and requirement-to-test traceability. Updated the feature matrix protocol-breadth notes. Refs #328.
 * Corrected the Tesla `DI_torque2` vehicle-speed fuzzing cookbook recipe so the checksum caveat no longer references an unsupported checksum-repair flag on the current CLI surface. Closes #365.
 * Added a cookbook recipe for the Tesla `DI_torque2` vehicle-speed fuzzing workflow. The recipe shows how to fetch and inspect `opendbc:tesla_can`, identify the `DI_vehicleSpeed` field on arbitration ID `0x118`, run dry-run and active fuzz passes through the configured default interface, and account for Tesla checksum limitations before ECU acceptance testing. Closes #363.

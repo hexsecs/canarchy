@@ -197,7 +197,7 @@ Examples:
 * `canarchy uds scan can0 --json`
 * `canarchy replay --file drive.log --rate 0.5`
 
-Single-interface transport commands may resolve their CAN interface from user config when the command-line value is omitted. The explicit command-line interface always has the highest precedence; use `[transport].default_interface` in `~/.canarchy/config.toml` or `CANARCHY_DEFAULT_INTERFACE` for the fallback channel. This is separate from `[transport].interface`, which selects the python-can backend type such as `socketcan` or `udp_multicast`.
+Single-interface transport commands may resolve their CAN interface from user config when the command-line value is omitted. The explicit command-line interface always has the highest precedence; use `[transport].default_interface` in `~/.canarchy/config.toml` or `CANARCHY_DEFAULT_INTERFACE` for the fallback channel. This is separate from `[transport].interface`, which selects the python-can backend type such as `socketcan`, `udp_multicast`, `pcan`, `vector`, or `kvaser`. Use `canarchy doctor` for offline configured-backend dependency hints; live hardware access still requires operator-run validation against the adapter and bus.
 
 ### REPL
 

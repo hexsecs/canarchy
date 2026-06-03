@@ -46,7 +46,7 @@ The workflow matrix above is useful for operator-facing comparison, but several 
 
 | Engineering Strength | CANarchy | can-utils | python-can | cantools | SavvyCAN | Caring Caribou | TruckDevil | CanCat | BUSMASTER | udsoncan |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Hardware / backend breadth | Partial | Partial | Yes | No | Partial | Partial | Partial | Partial | Yes | No |
+| Hardware / backend breadth | Yes | Partial | Yes | No | Partial | Partial | Partial | Partial | Yes | No |
 | Database format breadth beyond DBC | Yes | No | No | Yes | Partial | No | No | No | Partial | No |
 | Plotting / visualization depth | No | No | No | Yes | Yes | No | No | No | Partial | No |
 | Code generation | No | No | No | Yes | No | No | No | No | No | No |
@@ -85,6 +85,7 @@ Legend:
 The workflow matrix does not fully capture several important reasons someone might choose another tool alongside CANarchy:
 
 * `python-can` excels at hardware abstraction, interface coverage, and embedded Python integration.
+* CANarchy exposes python-can-backed hardware breadth through documented `socketcan`, `virtual`, `udp_multicast`, PCAN, Vector, Kvaser, IXXAT, CANalyst-II, NI, Intrepid, and remote backend configuration. `canarchy doctor` validates configured vendor backend imports offline; live adapter and bus validation remains an operator-run cookbook step.
 * `cantools` excels at database-heavy engineering: multiple schema formats, inspection, plotting, monitor workflows, and C code generation.
 * CANarchy now reads and writes the full cantools database set — `decode`, `encode`, `dbc inspect`, `dbc convert`, and `dbc generate-c` accept DBC, ARXML, KCD, and SYM by filename suffix (#320), and `dbc convert` serializes back out to DBC / KCD / SYM (#385) while `dbc generate-c` emits C source/header/fuzzer files via the cantools C source generator (#386) — alongside provider-backed DBC discovery, `dbc inspect --search`, cantools-backed `dbc inspect --layout` bit diagrams / signal trees / choice tables, and initial reverse-engineering DBC matching. It is still earlier in depth than mature database-centric or visual RE tools.
 * CANarchy's passive reverse-engineering helpers cover signal-candidate inference (`re signals`), counter detection (`re counters`), byte-entropy ranking (`re entropy`), reference-series correlation (`re correlate`), provider-backed DBC matching (`re match-dbc` / `re shortlist-dbc`), and timing/ID anomaly detection (`re anomalies` — robust median/MAD timing outliers plus unknown/dropped-id flags, with cyclic-vs-event classification from the DBC `cycle_time` / send type or a coefficient-of-variation guard so event traffic is not falsely flagged).
