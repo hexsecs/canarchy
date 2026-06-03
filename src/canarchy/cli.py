@@ -130,6 +130,7 @@ RE_COMMANDS = {
     "re anomalies",
     "re match-dbc",
     "re shortlist-dbc",
+    "re corpus",
 }
 ACTIVE_TRANSMIT_COMMANDS = {
     "send",
@@ -1166,6 +1167,45 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_output_arguments(re_shortlist_dbc)
     re_shortlist_dbc.set_defaults(command="re shortlist-dbc")
+
+    re_corpus = re_subparsers.add_parser(
+        "corpus",
+        help="cross-capture corpus analysis: ID coverage, cycle-time drift, signal stability",
+    )
+    re_corpus.add_argument(
+        "files",
+        nargs="*",
+        metavar="FILE",
+        help="candump or PCAP capture files to analyse",
+    )
+    re_corpus.add_argument(
+        "--corpus-glob",
+        metavar="PATTERN",
+        help="shell glob pattern to expand into capture files (e.g. 'captures/*.candump')",
+    )
+    re_corpus.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        metavar="N",
+        help="skip the first N frames from each capture file",
+    )
+    re_corpus.add_argument(
+        "--max-frames",
+        type=int,
+        default=None,
+        metavar="N",
+        help="limit analysis to the first N frames per capture",
+    )
+    re_corpus.add_argument(
+        "--seconds",
+        type=float,
+        default=None,
+        metavar="T",
+        help="limit analysis to the first T seconds of each capture",
+    )
+    add_output_arguments(re_corpus)
+    re_corpus.set_defaults(command="re corpus")
 
     plot_parser = subparsers.add_parser(
         "plot", help="plot decoded signal time-series from a capture"
@@ -5965,6 +6005,38 @@ def reverse_engineering_payload(
             [],
             anomaly_warnings,
         )
+    if args.command == "re corpus":
+        import glob as _glob
+
+        from canarchy.corpus import corpus_analysis
+
+        files: list[str] = list(getattr(args, "files", []) or [])
+        if getattr(args, "corpus_glob", None):
+            files += sorted(_glob.glob(args.corpus_glob))
+        if not files:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="CORPUS_NO_FILES",
+                        message="No capture files specified.",
+                        hint="Pass capture file paths as positional arguments or use --corpus-glob.",
+                    )
+                ],
+            )
+        result = corpus_analysis(
+            files,
+            offset=getattr(args, "offset", 0) or 0,
+            max_frames=getattr(args, "max_frames", None),
+            seconds=getattr(args, "seconds", None),
+        )
+        corpus_warnings: list[str] = []
+        if result["capture_count"] < 2:
+            corpus_warnings.append(
+                "Corpus analysis is most useful with 2+ captures; cycle-time drift will not be computed."
+            )
+        return (result, [], corpus_warnings)
     raise AssertionError(f"unsupported reverse-engineering command: {args.command}")
 
 
@@ -6581,6 +6653,26 @@ def format_uds_table(result: CommandResult) -> list[str]:
 
 def format_re_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
+
+    if result.command == "re corpus":
+        data = result.data
+        lines.append(f"captures: {data.get('capture_count', 0)}")
+        lines.append(f"total_frames: {data.get('total_frames', 0)}")
+        summary = data.get("summary", {})
+        lines.append(f"unique_ids: {summary.get('unique_ids', 0)}")
+        lines.append(f"stable_ids: {summary.get('stable_ids', 0)}")
+        lines.append(f"drifting_ids: {summary.get('drifting_ids', 0)}")
+        lines.append(f"new_ids: {summary.get('new_ids', 0)}")
+        changes = data.get("id_set_changes", {})
+        sometimes = changes.get("sometimes_present", [])
+        only_one = changes.get("only_in_one", [])
+        if sometimes or only_one:
+            lines.append("id_set_changes:")
+            for arb_id in sorted(sometimes):
+                lines.append(f"  0x{arb_id:03X}  sometimes-present")
+            for arb_id in sorted(only_one):
+                lines.append(f"  0x{arb_id:03X}  only-in-one")
+        return lines
 
     if result.command == "re correlate":
         lines.append(f"file: {result.data.get('file')}")

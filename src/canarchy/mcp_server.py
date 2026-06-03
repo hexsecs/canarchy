@@ -1227,6 +1227,33 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="re_corpus",
+        description="Cross-capture corpus analysis: per-ID coverage matrix, cycle-time drift, and signal stability across multiple candump/PCAP captures.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Paths to candump or PCAP capture files",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from each capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames per capture",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of each capture",
+                },
+            },
+            "required": ["files"],
+        },
+    ),
+    types.Tool(
         name="fuzz_payload",
         description=(
             "Active-transmit payload fuzzing gated by docs/design/active-transmit-safety.md. "
@@ -1949,6 +1976,15 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--provider", a["provider"]]
             if "limit" in a:
                 argv += ["--limit", str(a["limit"])]
+            return argv + ["--json"]
+        case "re_corpus":
+            argv = ["re", "corpus"] + a["files"]
+            if a.get("offset") is not None:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "fuzz_payload":
             argv = ["fuzz", "payload"]
