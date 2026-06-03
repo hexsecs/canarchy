@@ -55,7 +55,7 @@ The workflow matrix above is useful for operator-facing comparison, but several 
 | Protocol breadth beyond raw CAN | Partial | Yes | Partial | Partial | Partial | Yes | Partial | Yes | Yes | No |
 | Session / bookmark / saved analysis workflow | Partial | No | Partial | No | Partial | Partial | Partial | Yes | Yes | No |
 | Embedded-library ergonomics | No | No | Yes | Yes | No | No | No | Partial | No | Yes |
-| Windows-first usability | Partial | No | Yes | Yes | Partial | Partial | Partial | Partial | Yes | Yes |
+| Windows-first usability | Yes | No | Yes | Yes | Partial | Partial | Partial | Partial | Yes | Yes |
 
 ## Documentation Quality
 
