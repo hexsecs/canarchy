@@ -10,24 +10,6 @@ from canarchy.models import CanFrame
 from canarchy.transport import LocalTransport
 
 
-def _apply_bounds(
-    frames: list[CanFrame],
-    offset: int,
-    max_frames: int | None,
-    seconds: float | None,
-) -> list[CanFrame]:
-    result = frames[offset:]
-    if not result:
-        return result
-    if seconds is not None:
-        start = result[0].timestamp
-        if start is not None:
-            result = [f for f in result if f.timestamp is None or f.timestamp - start <= seconds]
-    if max_frames is not None:
-        result = result[:max_frames]
-    return result
-
-
 def _mean_gap_ms(timestamps: list[float]) -> float | None:
     if len(timestamps) < 2:
         return None
@@ -95,8 +77,9 @@ def corpus_analysis(
     total_frames = 0
 
     for path in capture_files:
-        raw = transport.frames_from_file(path)
-        bounded = _apply_bounds(raw, offset, max_frames, seconds)
+        bounded = transport.frames_from_file(
+            path, offset=offset, max_frames=max_frames, seconds=seconds
+        )
         id_map: dict[int, list[CanFrame]] = defaultdict(list)
         for frame in bounded:
             if not frame.is_remote_frame and not frame.is_error_frame:

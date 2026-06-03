@@ -159,6 +159,36 @@ class CorpusCliTests(unittest.TestCase):
             f"Expected a '2+' warning but got: {warnings}",
         )
 
+    def test_re_corpus_negative_offset_rejected(self) -> None:
+        code, out, _ = run_cli(
+            "re", "corpus", str(FIXTURES / "complex.candump"), "--offset", "-1", "--json"
+        )
+        self.assertNotEqual(code, 0)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        error_codes = [e["code"] for e in data.get("errors", [])]
+        self.assertIn("INVALID_ANALYSIS_OFFSET", error_codes)
+
+    def test_re_corpus_negative_max_frames_rejected(self) -> None:
+        code, out, _ = run_cli(
+            "re", "corpus", str(FIXTURES / "complex.candump"), "--max-frames", "-5", "--json"
+        )
+        self.assertNotEqual(code, 0)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        error_codes = [e["code"] for e in data.get("errors", [])]
+        self.assertIn("INVALID_MAX_FRAMES", error_codes)
+
+    def test_re_corpus_negative_seconds_rejected(self) -> None:
+        code, out, _ = run_cli(
+            "re", "corpus", str(FIXTURES / "complex.candump"), "--seconds", "-1", "--json"
+        )
+        self.assertNotEqual(code, 0)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        error_codes = [e["code"] for e in data.get("errors", [])]
+        self.assertIn("INVALID_ANALYSIS_SECONDS", error_codes)
+
 
 if __name__ == "__main__":
     unittest.main()

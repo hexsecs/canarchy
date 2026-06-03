@@ -6025,11 +6025,50 @@ def reverse_engineering_payload(
                     )
                 ],
             )
+        offset = getattr(args, "offset", 0) or 0
+        max_frames = getattr(args, "max_frames", None)
+        seconds = getattr(args, "seconds", None)
+        if offset < 0:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_ANALYSIS_OFFSET",
+                        message="Frame offset must be zero or greater.",
+                        hint="Pass a non-negative integer to --offset.",
+                    )
+                ],
+            )
+        if max_frames is not None and max_frames < 1:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_MAX_FRAMES",
+                        message="Maximum frame bound must be at least 1.",
+                        hint="Pass a positive integer to --max-frames.",
+                    )
+                ],
+            )
+        if seconds is not None and seconds < 0:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_ANALYSIS_SECONDS",
+                        message="Analysis time bound must be zero or greater.",
+                        hint="Pass a non-negative value to --seconds.",
+                    )
+                ],
+            )
         result = corpus_analysis(
             files,
-            offset=getattr(args, "offset", 0) or 0,
-            max_frames=getattr(args, "max_frames", None),
-            seconds=getattr(args, "seconds", None),
+            offset=offset,
+            max_frames=max_frames,
+            seconds=seconds,
         )
         corpus_warnings: list[str] = []
         if result["capture_count"] < 2:
