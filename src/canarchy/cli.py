@@ -167,7 +167,7 @@ IMPLEMENTED_COMMANDS = (
     | RE_COMMANDS
     | FUZZ_COMMANDS
     | SEQUENCE_COMMANDS
-    | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export"}
+    | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export", "plot"}
 )
 
 
@@ -1166,6 +1166,31 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_output_arguments(re_shortlist_dbc)
     re_shortlist_dbc.set_defaults(command="re shortlist-dbc")
+
+    plot_parser = subparsers.add_parser(
+        "plot", help="plot decoded signal time-series from a capture"
+    )
+    plot_parser.add_argument(
+        "--signal",
+        dest="signals",
+        action="append",
+        required=True,
+        metavar="SIGNAL",
+        help="signal name to plot (repeat for multiple signals)",
+    )
+    _add_file_analysis_arguments(plot_parser)
+    plot_parser.add_argument("--file", required=True, help="capture file path")
+    plot_parser.add_argument("--dbc", required=True, help="path to DBC file")
+    plot_parser.add_argument("--out", required=True, help="output file path")
+    plot_parser.add_argument(
+        "--format",
+        dest="plot_format",
+        choices=["png", "svg", "html"],
+        default="png",
+        help="output format (default: png)",
+    )
+    add_output_arguments(plot_parser)
+    plot_parser.set_defaults(command="plot")
 
     fuzz = subparsers.add_parser(
         "fuzz",
@@ -4889,6 +4914,63 @@ def export_payload(
     )
 
 
+def plot_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.plot import PlotDependencyError, decode_signal_series, plot_signals
+
+    try:
+        series = decode_signal_series(
+            args.file,
+            args.dbc,
+            args.signals,
+            offset=getattr(args, "offset", 0) or 0,
+            max_frames=getattr(args, "max_frames", None),
+            seconds=getattr(args, "seconds", None),
+        )
+        stats = plot_signals(
+            series,
+            output_path=args.out,
+            output_format=args.plot_format,
+            title=f"CANarchy: {', '.join(args.signals)}",
+        )
+    except PlotDependencyError as exc:
+        dep = exc.dependency
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="PLOT_DEPENDENCY_MISSING",
+                    message=f"{dep} is required for this output format.",
+                    hint="Install it with: pip install canarchy[plot]",
+                )
+            ],
+        )
+    except Exception as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code="PLOT_ERROR", message=str(exc))],
+        )
+
+    empty_signals = [s for s in args.signals if not series.get(s)]
+    warnings = [f"No data found for signal '{s}' in capture." for s in empty_signals]
+
+    return (
+        {
+            "file": args.file,
+            "dbc": args.dbc,
+            "signals": args.signals,
+            "out": args.out,
+            "format": args.plot_format,
+            **stats,
+        },
+        [],
+        warnings,
+    )
+
+
 def _parse_fuzz_hex_id(value: str, *, command: str) -> int:
     """Parse a hex CAN ID flag, raising a structured error on failure."""
     try:
@@ -6018,6 +6100,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(gateway_data)
         data["events"] = gateway_events
         warnings.extend(gateway_warnings)
+    elif args.command == "plot":
+        plot_data, plot_events, plot_warnings = plot_payload(args)
+        data.update(plot_data)
+        data["events"] = plot_events
+        warnings.extend(plot_warnings)
     elif args.command in J1939_COMMANDS:
         protocol_data, protocol_events, protocol_warnings = j1939_payload(args)
         data.update(protocol_data)
@@ -7587,6 +7674,19 @@ def emit_result(result: CommandResult, output_format: str) -> None:
             hint = check.get("hint")
             if hint:
                 print(f"           hint: {hint}")
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "plot":
+        print(f"command: {result.command}")
+        print(f"file: {result.data.get('file', '')}")
+        print(f"dbc: {result.data.get('dbc', '')}")
+        print(f"signals: {', '.join(result.data.get('signals', []))}")
+        print(f"out: {result.data.get('out', '')}")
+        print(f"format: {result.data.get('format', '')}")
+        print(f"signals_plotted: {result.data.get('signals_plotted', 0)}")
+        print(f"data_points: {result.data.get('data_points', 0)}")
         for warning in payload["warnings"]:
             print(f"warning: {warning}")
         return

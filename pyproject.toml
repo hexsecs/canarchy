@@ -43,6 +43,10 @@ scapy = [
 fuzz = [
     "atheris>=2.3.0",
 ]
+plot = [
+    "matplotlib>=3.7",
+    "plotly>=5.0",
+]
 
 [dependency-groups]
 dev = [
