@@ -4132,7 +4132,9 @@ def _toml_scalar(value: Any) -> str:
 
 
 def _toml_table_name(parts: Sequence[str]) -> str:
-    return ".".join(json.dumps(part) if not part.replace("_", "").isalnum() else part for part in parts)
+    return ".".join(
+        json.dumps(part) if not part.replace("_", "").isalnum() else part for part in parts
+    )
 
 
 def _render_toml_table(table: dict[str, Any], prefix: tuple[str, ...] = ()) -> list[str]:

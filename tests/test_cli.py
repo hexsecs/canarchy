@@ -6394,7 +6394,10 @@ class PluginsCliTests(unittest.TestCase):
 
     def test_plugins_list_json_reports_registered_plugin(self):
         registry = self._registry_with_test_plugin()
-        with tempfile.TemporaryDirectory() as tmp, patch("pathlib.Path.home", return_value=Path(tmp)):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("pathlib.Path.home", return_value=Path(tmp)),
+        ):
             with patch("canarchy.plugins._registry", registry):
                 exit_code, stdout, stderr = run_cli("plugins", "list", "--json")
 
@@ -6409,7 +6412,10 @@ class PluginsCliTests(unittest.TestCase):
 
     def test_plugins_info_json_includes_configured_options(self):
         registry = self._registry_with_test_plugin()
-        with tempfile.TemporaryDirectory() as tmp, patch("pathlib.Path.home", return_value=Path(tmp)):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("pathlib.Path.home", return_value=Path(tmp)),
+        ):
             config_dir = Path(tmp) / ".canarchy"
             config_dir.mkdir()
             (config_dir / "config.toml").write_text(
@@ -6426,7 +6432,10 @@ class PluginsCliTests(unittest.TestCase):
 
     def test_plugins_disable_and_enable_persist_toggle(self):
         registry = self._registry_with_test_plugin()
-        with tempfile.TemporaryDirectory() as tmp, patch("pathlib.Path.home", return_value=Path(tmp)):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("pathlib.Path.home", return_value=Path(tmp)),
+        ):
             with patch("canarchy.plugins._registry", registry):
                 disable_code, disable_stdout, _ = run_cli(
                     "plugins", "disable", "test-proc", "--json"
@@ -6442,7 +6451,10 @@ class PluginsCliTests(unittest.TestCase):
 
     def test_plugins_info_unknown_returns_plugin_not_found(self):
         registry = self._registry_with_test_plugin()
-        with tempfile.TemporaryDirectory() as tmp, patch("pathlib.Path.home", return_value=Path(tmp)):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("pathlib.Path.home", return_value=Path(tmp)),
+        ):
             with patch("canarchy.plugins._registry", registry):
                 exit_code, stdout, _ = run_cli("plugins", "info", "missing", "--json")
 
