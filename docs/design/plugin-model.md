@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented (Phase 1–4) |
+| Status | Implemented (Phase 1–5) |
 | Test spec | `docs/tests/plugin-model.md` |
-| Implementation | `src/canarchy/plugins.py`, `src/canarchy/re_processors.py` |
+| Implementation | `src/canarchy/plugins.py`, `src/canarchy/re_processors.py`, `src/canarchy/cli.py` |
 | Author guide | `docs/plugin-guide.md` |
 
 ---
@@ -29,6 +29,37 @@ entry points, following the same lazy-singleton registry pattern already used by
 3. Plugin loading must not break startup when a plugin is absent, broken, or incompatible.
 4. The registry pattern follows the existing DBC provider model: lazy singleton, reset-able in tests, config-driven.
 5. Phase 1 covers three extension points. Command registration is deferred to a later phase.
+
+---
+
+## Requirements
+
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-PLUGIN-01` | Ubiquitous | The system shall build the default plugin registry with the built-in reverse-engineering processors registered. |
+| `REQ-PLUGIN-02` | Ubiquitous | The system shall return registered plugins by exact name within their namespace. |
+| `REQ-PLUGIN-03` | Ubiquitous | The system shall return no plugin when a namespace lookup uses an unknown name. |
+| `REQ-PLUGIN-04` | Unwanted behaviour | If a duplicate plugin name is registered in the same namespace, the system shall raise `PLUGIN_DUPLICATE`. |
+| `REQ-PLUGIN-05` | Unwanted behaviour | If a plugin declares an incompatible API version, the system shall raise `PLUGIN_INCOMPATIBLE`. |
+| `REQ-PLUGIN-06` | Unwanted behaviour | If a plugin object does not satisfy its protocol, the system shall raise `PLUGIN_INVALID`. |
+| `REQ-PLUGIN-07` | Event-driven | When `reset_registry()` is called, the system shall rebuild the default registry on the next `get_registry()` call. |
+| `REQ-PLUGIN-08` | Ubiquitous | The system shall expose registered plugin metadata including name, kind, API version, source distribution, package version, and entry-point group. |
+| `REQ-PLUGIN-09` | Ubiquitous | The system shall list empty sink and input-adapter namespaces when no plugins are registered in those namespaces. |
+| `REQ-PLUGIN-10` | Unwanted behaviour | If a duplicate sink name is registered, the system shall raise `PLUGIN_DUPLICATE`. |
+| `REQ-PLUGIN-11` | Unwanted behaviour | If a duplicate input-adapter name is registered, the system shall raise `PLUGIN_DUPLICATE`. |
+| `REQ-PLUGIN-12` | Ubiquitous | The system shall route the built-in counter candidate processor through the plugin registry. |
+| `REQ-PLUGIN-13` | Ubiquitous | The system shall route the built-in entropy candidate processor through the plugin registry. |
+| `REQ-PLUGIN-14` | Ubiquitous | The system shall route the built-in signal analysis processor through the plugin registry. |
+| `REQ-PLUGIN-15` | Ubiquitous | The system shall expose `re signals` through the canonical command envelope while using the registry-backed processor. |
+| `REQ-PLUGIN-16` | Ubiquitous | The system shall expose `re counters` through the canonical command envelope while using the registry-backed processor. |
+| `REQ-PLUGIN-17` | Ubiquitous | The system shall expose `re entropy` through the canonical command envelope while using the registry-backed processor. |
+| `REQ-PLUGIN-18` | Ubiquitous | The system shall allow manually registered third-party processors to be discovered and invoked in tests. |
+| `REQ-PLUGIN-19` | Ubiquitous | The system shall preserve `ProcessorResult.warnings` as a list even when no warnings are present. |
+| `REQ-PLUGIN-20` | Ubiquitous | The system shall expose `canarchy plugins list` with canonical `--json`, `--jsonl`, and `--text` output. |
+| `REQ-PLUGIN-21` | Ubiquitous | The system shall expose `canarchy plugins info <name>` with metadata, enabled state, source distribution, and configured options. |
+| `REQ-PLUGIN-22` | Event-driven | When `canarchy plugins enable <name>` or `canarchy plugins disable <name>` is run for a discovered plugin, the system shall persist `[plugins."<name>"].enabled` in `~/.canarchy/config.toml`. |
+| `REQ-PLUGIN-23` | Unwanted behaviour | If a plugin command names an undiscovered plugin, the system shall return `PLUGIN_NOT_FOUND` in the canonical envelope. |
+| `REQ-PLUGIN-24` | Optional feature | Where MCP is used, the system shall expose read-only `plugins_list` and `plugins_info` tools while keeping plugin enable/disable CLI-only. |
 
 ---
 
@@ -134,6 +165,36 @@ reset_registry() # resets to None (tests only)
 
 `_build_default_registry()` registers all built-in plugins then calls `_load_entry_point_plugins()`.
 
+The registry also records inspectable metadata for each registered plugin. Built-in plugins report
+`source_distribution="canarchy"`; entry-point plugins report the Python distribution name/version
+when `importlib.metadata` exposes it.
+
+---
+
+## CLI And MCP Surface
+
+The CLI exposes plugin inspection and toggles through a dedicated command tree:
+
+```text
+canarchy plugins list [--json|--jsonl|--text]
+canarchy plugins info <name> [--json|--jsonl|--text]
+canarchy plugins enable <name> [--json|--jsonl|--text]
+canarchy plugins disable <name> [--json|--jsonl|--text]
+```
+
+`plugins list` returns all discovered plugins with `name`, `kind`, `api_version`, `version`,
+`source_distribution`, `entry_point_group`, `enabled`, and `configured_options` fields.
+
+`plugins info` returns all namespace matches for a name plus the configured options from
+`~/.canarchy/config.toml` under `[plugins."<name>"]`.
+
+`plugins enable` and `plugins disable` write `[plugins."<name>"].enabled = true|false`. These
+commands require the plugin to be discovered in the current Python environment and return
+`PLUGIN_NOT_FOUND` for unknown names.
+
+MCP mirrors only the read-only operations as `plugins_list` and `plugins_info`. Toggle commands are
+kept CLI-only because they write user configuration.
+
 ---
 
 ## Discovery: Entry Points
@@ -188,5 +249,4 @@ are unchanged.
 ## Future Work
 
 - Command registration extension point so plugins can add new top-level commands
-- Config-driven enable/disable per plugin (mirrors the DBC provider pattern)
 - Plugin author verification / signing for security-sensitive deployments
