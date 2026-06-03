@@ -23,7 +23,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
-* Added a Windows-first install and quickstart path covering PowerShell/CMD syntax, `pipx install canarchy`, `canarchy doctor`, no-hardware scaffold validation, Vector/PCAN driver pointers, and current Windows limitations. Added Windows CI coverage for the network-independent test suite and updated the feature matrix Windows usability row. Closes #330.
+* Added a Windows-first install and quickstart path covering PowerShell/CMD syntax, `pipx install canarchy`, `canarchy doctor`, no-hardware scaffold validation, Vector/PCAN driver pointers, and current Windows limitations. Added Windows CI smoke coverage for the install and core CLI path, and updated the feature matrix Windows usability row. Closes #330.
 
 ## [0.8.0] - 2026-05-29
 

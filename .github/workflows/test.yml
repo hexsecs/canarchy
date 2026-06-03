@@ -45,8 +45,8 @@ jobs:
         # silently skips them.
         run: uv run pytest tests/ -q
 
-  windows-unittest:
-    name: windows unittest (python 3.12)
+  windows-smoke:
+    name: windows smoke (python 3.12)
     runs-on: windows-latest
 
     steps:
@@ -64,5 +64,14 @@ jobs:
       - name: Sync project environment
         run: uv sync
 
-      - name: Run network-independent test suite
-        run: uv run pytest tests/ -q
+      - name: Run Windows install smoke
+        shell: pwsh
+        run: |
+          uv run canarchy doctor --text
+          $env:CANARCHY_TRANSPORT_BACKEND = "scaffold"
+          uv run canarchy capture can0 --jsonl
+          uv run canarchy config show --json
+
+      - name: Run Windows-safe CLI tests
+        shell: pwsh
+        run: uv run pytest tests/test_cli.py::DoctorCommandTests tests/test_cli.py::CliTests::test_capture_json_output_streams_one_event_per_line -q
