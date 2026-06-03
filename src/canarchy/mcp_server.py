@@ -782,7 +782,8 @@ _TOOLS: list[types.Tool] = [
         name="doctor",
         description=(
             "Run local environment health checks (Python version, python-can, "
-            "transport backend, config file, cache directories, opendbc cache, "
+            "transport backend, python-can interface dependency, config file, "
+            "cache directories, opendbc cache, "
             "MCP server, package/source version drift) and return the canonical "
             "envelope. No network or live bus access."
         ),

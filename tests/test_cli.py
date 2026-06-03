@@ -5891,6 +5891,7 @@ class DoctorCommandTests(unittest.TestCase):
         "python_version",
         "python_can",
         "transport_backend",
+        "python_can_interface_dependency",
         "config_file",
         "cache_dirs",
         "opendbc_cache",
@@ -5962,6 +5963,53 @@ class DoctorCommandTests(unittest.TestCase):
             check = doctor_module._check_python_can()
         self.assertEqual(check["status"], "fail")
         self.assertIn("simulated", check["detail"])
+
+    def test_doctor_warns_when_configured_hardware_backend_module_missing(self) -> None:
+        import builtins as _builtins
+        from canarchy import doctor as doctor_module
+
+        original_import = _builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "can.interfaces.pcan":
+                raise ImportError("simulated pcan missing")
+            return original_import(name, *args, **kwargs)
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                    "CANARCHY_PYTHON_CAN_INTERFACE": "pcan",
+                },
+                clear=False,
+            ),
+            patch.object(_builtins, "__import__", side_effect=fake_import),
+        ):
+            check = doctor_module._check_python_can_interface_dependency()
+        self.assertEqual(check["status"], "warn")
+        self.assertIn("pcan", check["detail"])
+        self.assertIn("PEAK PCAN", check["hint"])
+
+    def test_doctor_hardware_backend_module_check_does_not_open_hardware(self) -> None:
+        import builtins as _builtins
+        from canarchy import doctor as doctor_module
+
+        with patch.dict(
+            os.environ,
+            {
+                "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                "CANARCHY_PYTHON_CAN_INTERFACE": "kvaser",
+            },
+            clear=False,
+        ):
+            with patch.object(_builtins, "__import__") as import_mock:
+                import_mock.return_value = object()
+                check = doctor_module._check_python_can_interface_dependency()
+
+        self.assertEqual(check["status"], "ok")
+        self.assertIn("hardware was not opened", check["detail"])
+        import_mock.assert_any_call("can.interfaces.kvaser", fromlist=["*"])
 
     def test_doctor_warns_when_opendbc_cache_absent(self) -> None:
         from canarchy import dbc_cache, doctor as doctor_module

@@ -38,7 +38,8 @@
 # Default CAN interface/channel for commands that accept one CAN interface.
 # This is separate from the python-can interface type above. For SocketCAN,
 # common values are can0 or vcan0; for udp_multicast, this may be the multicast
-# group such as 239.0.0.1.
+# group such as 239.0.0.1. For hardware vendor backends, examples include
+# PCAN_USBBUS1 for pcan and 0 for vector or kvaser; see docs/backends.md.
 #
 # Environment override: CANARCHY_DEFAULT_INTERFACE
 

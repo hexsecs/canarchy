@@ -21,7 +21,7 @@ canarchy --version
 canarchy doctor --text
 ```
 
-`canarchy doctor` runs eight offline health checks (Python, `python-can`, transport backend, caches, config file, MCP server) — every check green means the environment is ready.
+`canarchy doctor` runs offline health checks (Python, `python-can`, transport backend, configured python-can vendor interface imports, caches, config file, MCP server) — every check green means the software environment is ready.
 
 ### From source (development)
 
@@ -81,13 +81,15 @@ A fully commented sample configuration file is available at [`docs/examples/conf
 
 ### Check the local environment
 
-`canarchy doctor` runs a battery of fast, offline health checks (Python version, `python-can` import, transport backend, cache writability, opendbc cache, MCP server, config file). Run it before reporting bugs:
+`canarchy doctor` runs a battery of fast, offline health checks (Python version, `python-can` import, transport backend, configured python-can vendor interface imports, cache writability, opendbc cache, MCP server, config file). Run it before reporting bugs:
 
 ```bash
 canarchy doctor --text
 ```
 
 Each check shows `[OK]`, `[WARN]`, or `[FAIL]` and includes a copy-pasteable remediation hint for non-ok results.
+
+For hardware backends such as PCAN, Vector, and Kvaser, `doctor` checks software dependencies only. Use the [Backends & Interfaces](backends.md) page and the cookbook verification recipes for live adapter validation.
 
 ### Install shell completion
 

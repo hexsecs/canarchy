@@ -10,15 +10,50 @@ local environment, dependencies, configuration, and cache state.
 
 from __future__ import annotations
 
-import os
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from canarchy import __version__
+from canarchy.transport import transport_backend_config
 
 CheckPayload = dict[str, Any]
+
+PYTHON_CAN_INTERFACE_MODULES = {
+    "pcan": (
+        "can.interfaces.pcan",
+        "Install the PEAK PCAN driver/API for your OS and confirm python-can can import `can.interfaces.pcan`.",
+    ),
+    "vector": (
+        "can.interfaces.vector",
+        "Install the Vector XL Driver Library and confirm python-can can import `can.interfaces.vector`.",
+    ),
+    "kvaser": (
+        "can.interfaces.kvaser",
+        "Install the Kvaser CANlib SDK/runtime and confirm python-can can import `can.interfaces.kvaser`.",
+    ),
+    "ixxat": (
+        "can.interfaces.ixxat",
+        "Install the HMS IXXAT VCI driver/runtime and confirm python-can can import `can.interfaces.ixxat`.",
+    ),
+    "neovi": (
+        "can.interfaces.ics_neovi",
+        "Install the Intrepid Control Systems driver/runtime and confirm python-can can import `can.interfaces.ics_neovi`.",
+    ),
+    "nican": (
+        "can.interfaces.nican",
+        "Install the NI-CAN runtime and confirm python-can can import `can.interfaces.nican`.",
+    ),
+    "nixnet": (
+        "can.interfaces.nixnet",
+        "Install the NI-XNET runtime and confirm python-can can import `can.interfaces.nixnet`.",
+    ),
+    "canalystii": (
+        "can.interfaces.canalystii",
+        "Install python-can's CANalyst-II support dependencies and confirm python-can can import `can.interfaces.canalystii`.",
+    ),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +99,8 @@ def _check_python_can() -> CheckPayload:
 
 
 def _check_transport_backend() -> CheckPayload:
-    backend = (os.environ.get("CANARCHY_TRANSPORT_BACKEND") or "python-can").strip().lower()
+    config = transport_backend_config()
+    backend = config.backend
     if backend == "scaffold":
         return _ok("transport_backend", "scaffold (deterministic offline)")
     if backend == "python-can":
@@ -76,12 +112,43 @@ def _check_transport_backend() -> CheckPayload:
                 "configured as python-can but the library is not importable",
                 "Install python-can or set CANARCHY_TRANSPORT_BACKEND=scaffold for offline use.",
             )
-        interface = os.environ.get("CANARCHY_PYTHON_CAN_INTERFACE", "<unset>")
+        interface = config.python_can_interface
         return _ok("transport_backend", f"python-can interface={interface}")
     return _warn(
         "transport_backend",
         f"unknown backend '{backend}'",
         "Set CANARCHY_TRANSPORT_BACKEND to 'python-can' or 'scaffold'.",
+    )
+
+
+def _check_python_can_interface_dependency() -> CheckPayload:
+    config = transport_backend_config()
+    if config.backend != "python-can":
+        return _ok(
+            "python_can_interface_dependency",
+            f"not applicable for backend={config.backend}",
+        )
+
+    interface = config.python_can_interface
+    module_info = PYTHON_CAN_INTERFACE_MODULES.get(interface)
+    if module_info is None:
+        return _ok(
+            "python_can_interface_dependency",
+            f"no optional vendor dependency check for python-can interface={interface}",
+        )
+
+    module_name, hint = module_info
+    try:
+        __import__(module_name, fromlist=["*"])
+    except ImportError as exc:
+        return _warn(
+            "python_can_interface_dependency",
+            f"configured python-can interface={interface} but {module_name} is not importable: {exc}",
+            hint,
+        )
+    return _ok(
+        "python_can_interface_dependency",
+        f"{module_name} importable for interface={interface}; hardware was not opened",
     )
 
 
@@ -263,6 +330,7 @@ def doctor_payload() -> dict[str, Any]:
         _check_python_version(),
         _check_python_can(),
         _check_transport_backend(),
+        _check_python_can_interface_dependency(),
         _check_config_file(),
         _check_cache_dirs(),
         _check_opendbc_cache(),

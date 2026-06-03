@@ -90,31 +90,34 @@ canarchy capture PCAN_USBBUS1
 
 ## Supported Interface Types
 
-The table below covers the most commonly used python-can interface types. CANarchy passes the `interface` value directly to `python_can.Bus()` — any interface that python-can supports will work.
+The table below covers common python-can interface types. CANarchy passes the configured `interface` value to `python_can.Bus(channel=<channel>, interface=<interface>)`, so the live hardware capability comes from python-can and the vendor driver/runtime installed on the host.
 
-| Interface name | Hardware / use case | OS |
-|---|---|---|
-| `socketcan` | Linux SocketCAN — real hardware (PEAK, Kvaser, etc. with socketcan driver), `vcan` virtual interfaces, and `slcan` serial adapters | Linux |
-| `virtual` | python-can in-process virtual bus — frames only visible within the same process | Any |
-| `udp_multicast` | UDP multicast virtual bus — frames visible across processes and hosts on a LAN; no hardware needed | Any |
-| `kvaser` | Kvaser USB/PCIe adapters (requires Kvaser drivers) | Windows, Linux |
-| `pcan` | PEAK PCAN-USB and PCAN-PCIe adapters (requires PEAK drivers) | Windows, Linux, macOS |
-| `ixxat` | HMS IXXAT adapters | Windows |
-| `vector` | Vector VN-series hardware (requires Vector XL driver) | Windows |
-| `slcan` | Serial-line CAN — adapters that speak ASCII CAN over USB/UART (e.g. CANable, Canable Pro) | Any |
-| `cantact` | CANtact / candleLight USB devices | Any |
-| `gs_usb` | Geschwister Schneider / candleLight USB devices (kernel driver) | Linux |
-| `canalystii` | USB-CAN Analyzer II adapters | Any |
-| `usb2can` | 8devices USB2CAN | Linux |
-| `neovi` | Intrepid Control Systems neoVI hardware | Windows |
-| `nican` | National Instruments NI-CAN | Windows |
-| `nixnet` | NI-XNET | Windows |
-| `remote` | python-can remote server over TCP | Any |
+| Interface name | Hardware / use case | OS | Driver or dependency | Example channel |
+|---|---|---|---|---|
+| `socketcan` | Linux SocketCAN — real hardware through kernel drivers, `vcan` virtual interfaces, and many USB adapters | Linux | Kernel SocketCAN support plus device driver | `can0`, `vcan0` |
+| `virtual` | python-can in-process virtual bus | Any | `python-can` only | `canarchy-test` |
+| `udp_multicast` | UDP multicast virtual bus visible across processes and hosts | Any | `python-can` only; multicast routing/firewall must allow traffic | `239.0.0.1` |
+| `pcan` | PEAK PCAN-USB and PCAN-PCIe adapters | Windows, Linux, macOS | PEAK PCAN driver/API | `PCAN_USBBUS1` |
+| `vector` | Vector VN/VX-series hardware | Windows | Vector XL Driver Library | `0`, `1`, or configured application channel |
+| `kvaser` | Kvaser USB/PCIe adapters | Windows, Linux | Kvaser CANlib SDK/runtime | `0`, `1`, or channel name |
+| `ixxat` | HMS IXXAT adapters | Windows | IXXAT VCI driver/runtime | adapter-specific channel |
+| `slcan` | Serial-line CAN adapters using ASCII CAN over USB/UART | Any | Serial device access; often `python-can` plus OS serial permissions | `/dev/ttyACM0`, `COM3` |
+| `cantact` | CANtact / candleLight USB devices | Any | libusb / candleLight support per OS | device-specific channel |
+| `gs_usb` | Geschwister Schneider / candleLight USB devices through kernel driver | Linux | Linux `gs_usb` kernel driver | `can0` or USB channel |
+| `canalystii` | USB-CAN Analyzer II adapters | Any | python-can CANalyst-II dependencies and vendor library where required | `0` |
+| `usb2can` | 8devices USB2CAN | Linux | Kernel driver / SocketCAN-compatible setup | `can0` |
+| `neovi` | Intrepid Control Systems neoVI hardware | Windows | Intrepid driver/runtime | device-specific channel |
+| `nican` | National Instruments NI-CAN | Windows | NI-CAN runtime | `CAN0` |
+| `nixnet` | National Instruments NI-XNET | Windows | NI-XNET runtime | interface alias |
+| `remote` | python-can remote server over TCP | Any | Reachable python-can remote server | server endpoint |
 
 !!! note "Full and up-to-date list"
     The canonical reference for all supported interfaces, per-interface configuration options, and required driver packages is the
     [python-can documentation — Interfaces](https://python-can.readthedocs.io/en/stable/interfaces.html).
-    CANarchy does not restrict which interfaces are available — anything python-can supports can be used.
+    CANarchy does not restrict which interfaces are available. If python-can supports an interface and its runtime is installed, configure the python-can interface name with `[transport].interface` or `CANARCHY_PYTHON_CAN_INTERFACE` and pass the channel as the command interface.
+
+!!! warning "Validation scope"
+    `canarchy doctor` is intentionally offline. For configured vendor interfaces such as `pcan`, `vector`, `kvaser`, `ixxat`, `neovi`, `nican`, `nixnet`, and `canalystii`, it checks whether the corresponding python-can interface module is importable and gives a driver/runtime hint when it is not. It does not open a device, claim a CAN transceiver is wired correctly, or validate bus traffic. Use the cookbook recipes below for live lab verification.
 
 ---
 
@@ -159,17 +162,73 @@ canarchy capture 239.0.0.1 --candump
 canarchy send 239.0.0.1 0x123 DEADBEEF
 ```
 
-### PCAN-USB on Linux
+### PCAN-USB / PCAN-PCIe
 
 ```toml
 [transport]
 backend = "python-can"
 interface = "pcan"
+default_interface = "PCAN_USBBUS1"
 ```
 
 ```bash
-canarchy capture PCAN_USBBUS1
+canarchy doctor --text
+canarchy capture PCAN_USBBUS1 --candump
 ```
+
+Install the PEAK PCAN driver/API for the host OS first. On Linux, SocketCAN may also expose PEAK devices as `can0`; use `socketcan` instead of `pcan` if you intentionally choose the kernel SocketCAN path.
+
+### Vector VN/VX hardware
+
+```toml
+[transport]
+backend = "python-can"
+interface = "vector"
+default_interface = "0"
+```
+
+```bash
+canarchy doctor --text
+canarchy capture 0 --candump
+```
+
+Install the Vector XL Driver Library and configure the application/channel mapping with Vector tooling before opening the bus. Vector hardware access is normally Windows-first.
+
+### Kvaser USB / PCIe hardware
+
+```toml
+[transport]
+backend = "python-can"
+interface = "kvaser"
+default_interface = "0"
+```
+
+```bash
+canarchy doctor --text
+canarchy capture 0 --candump
+```
+
+Install Kvaser CANlib before using the `kvaser` backend. On Linux, some Kvaser devices can also be exposed through SocketCAN; choose `socketcan` when you want to use the kernel `can0` path.
+
+### IXXAT, neoVI, NI-CAN, NI-XNET, and other vendor backends
+
+Configure the python-can interface name and vendor-specific channel exactly as python-can documents it. Examples:
+
+```toml
+[transport]
+backend = "python-can"
+interface = "ixxat"      # or neovi, nican, nixnet, canalystii
+default_interface = "0"  # replace with the vendor channel name
+```
+
+Then run:
+
+```bash
+canarchy doctor --text
+canarchy capture --candump
+```
+
+`doctor` can catch missing importable python-can interface modules for several vendor backends, but the authoritative hardware setup remains the vendor driver documentation plus python-can's interface page.
 
 ### Virtual (same-process only)
 
@@ -187,6 +246,7 @@ The `virtual` interface only delivers frames within the same Python process. Use
 
 ```bash
 canarchy config show
+canarchy doctor --text
 ```
 
 Output shows each value and its source (`[env]`, `[file]`, or `[default]`):
@@ -205,3 +265,11 @@ Use `--json` for scripted inspection:
 ```bash
 canarchy config show --json | jq .data.backend
 ```
+
+`config show` reports the effective configuration and source of each value. `doctor` adds offline dependency checks, including a vendor-backend import check when `[transport].interface` is set to a supported hardware backend. A successful `doctor` result means the configured software stack is importable, not that hardware was opened.
+
+For short live verification flows, see:
+
+* [Verify a PCAN interface in 30 seconds](cookbook/verify-pcan-interface.md)
+* [Verify a Vector interface in 30 seconds](cookbook/verify-vector-interface.md)
+* [Verify a Kvaser interface in 30 seconds](cookbook/verify-kvaser-interface.md)
