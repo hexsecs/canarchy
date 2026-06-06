@@ -24,6 +24,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Documentation
 
+* Rewrote `docs/plugin-guide.md` into two end-to-end walkthroughs (#318): (1) a custom `ProcessorPlugin` (`RepeatingIDDetector`) covering project layout, plugin code, `pyproject.toml` entry-point declaration, install, verification via `canarchy plugins list/info/enable/disable`, and a 4-test pytest suite; (2) a custom `SinkPlugin` walking through the reference `contrib/plugins/sqlite_sink/` implementation with the same structure, including a test that asserts frame events land in a temporary SQLite file. Added `plugin-guide.md` to the MkDocs nav so it appears in the rendered User Guide. Closes #318.
 * Added a Windows-first install and quickstart path covering PowerShell/CMD syntax, `pipx install canarchy`, `canarchy doctor`, no-hardware scaffold validation, Vector/PCAN driver pointers, and current Windows limitations. Added Windows CI smoke coverage for the install and core CLI path, and updated the feature matrix Windows usability row. Closes #330.
 
 ## [0.8.0] - 2026-05-29
