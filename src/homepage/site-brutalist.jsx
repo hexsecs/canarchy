@@ -282,7 +282,7 @@ function BrutFeatures({ viewport }) {
   const items = [
     { n: '01', t: 'STREAM', d: 'JSONL events. Stable schema. Pipe to grep, jq, duckdb, or your agent. The CLI *is* the API.' },
     { n: '02', t: 'J1939',  d: 'Heavy vehicles are not an afterthought. PGNs, TP reassembly, address claim — first-class.' },
-    { n: '03', t: 'UDS',    d: 'Discover services. Trace transactions. Safety guards refuse active commands on moving vehicles.' },
+    { n: '03', t: 'UDS',    d: 'Discover services. Trace transactions. Every active command is gated behind --ack-active, --dry-run, and a typed YES.' },
     { n: '04', t: 'DBC',    d: 'Provider-backed discovery. Local cache. Reverse-engineering matchers when you only have frames.' },
     { n: '05', t: 'GATEWAY',d: 'Bridge buses. Rewrite frames in flight. Replay captures with real timing or compressed.' },
     { n: '06', t: 'AGENT',  d: 'Deterministic subcommands. MCP server. Build loops with Claude, Cursor, or anything that can shell out.' },
@@ -385,26 +385,26 @@ function BrutCommand({ viewport }) {
 
 function BrutMCP({ viewport }) {
   const tools = [
-    { name: 'canarchy.capture',       args: 'iface, duration, decode',     ret: 'stream<Event>' },
-    { name: 'canarchy.decode',        args: 'frames[], dbc?',              ret: 'stream<Event>' },
-    { name: 'canarchy.filter',        args: 'pgn?, sa?, name?',            ret: 'stream<Event>' },
-    { name: 'canarchy.replay',        args: 'path, speed, loop',           ret: 'stream<Event>' },
-    { name: 'canarchy.diff',          args: 'a.jsonl, b.jsonl, by[]',      ret: 'stream<Delta>' },
-    { name: 'canarchy.uds.scan',      args: 'target_sa, services[]',       ret: 'stream<UdsResult>' },
-    { name: 'canarchy.dbc.search',    args: 'query, providers[]',          ret: 'Bundle[]' },
-    { name: 'canarchy.gateway',       args: 'src, dst, rewrite',           ret: 'stream<Event>' },
-    { name: 'canarchy.generate',      args: 'dbc, signals{}',              ret: 'stream<Frame>' },
+    { name: 'capture',       args: 'interface, duration, decode',  ret: 'stream<Event>' },
+    { name: 'decode',        args: 'file, dbc?',                   ret: 'stream<Event>' },
+    { name: 'filter',        args: 'expression, file',             ret: 'stream<Event>' },
+    { name: 'replay',        args: 'file, rate, interface?',       ret: 'stream<Event>' },
+    { name: 'j1939_dm1',     args: 'file, source_address?',        ret: 'stream<Event>' },
+    { name: 'uds_scan',      args: 'target_sa, services[]',        ret: 'stream<Event>' },
+    { name: 'dbc_inspect',   args: 'dbc, search?, layout?',        ret: 'Bundle' },
+    { name: 'gateway',       args: 'src, dst, ack_active',         ret: 'stream<Event>' },
+    { name: 'simulate',      args: 'profile, rate?, ack_active',   ret: 'stream<Event>' },
   ];
 
   const transcript = [
     { k: 'user', who: 'USER',   t: 'Audit the truck on can0 for 10s and flag anything that looks like an unsolicited diagnostic session.' },
-    { k: 'thought', t: '↳ agent decides to capture, then filter UDS, then compare against a lane-stop guard' },
-    { k: 'call', fn: 'canarchy.capture', body: '{ "iface": "can0", "duration_s": 10, "decode": "j1939" }' },
-    { k: 'ret',  body: '{"type":"event.stream.start","schema":"canarchy/v1"} … 428 events' },
-    { k: 'call', fn: 'canarchy.filter',  body: '{ "from": "$last", "name": ["UDS.*"] }' },
+    { k: 'thought', t: '↳ agent decides to capture, then filter UDS, then weigh whether a probe is warranted' },
+    { k: 'call', fn: 'capture', body: '{ "interface": "can0", "duration": 10, "decode": "j1939" }' },
+    { k: 'ret',  body: '{"command":"capture","ok":true,"data":{...}} … 428 events' },
+    { k: 'call', fn: 'filter',  body: '{ "expression": "name~=UDS.*", "file": "$last" }' },
     { k: 'ret',  body: '3 matching events — all sa=0x27' },
-    { k: 'call', fn: 'canarchy.uds.scan', body: '{ "target_sa": "0x27", "services": ["0x10","0x27"], "arm": false }' },
-    { k: 'ret',  body: 'dry-run: 2 services would be probed · pass --arm to execute' },
+    { k: 'call', fn: 'uds_scan', body: '{ "target_sa": "0x27", "services": ["0x10","0x27"], "ack_active": true, "dry_run": true }' },
+    { k: 'ret',  body: 'dry-run: 2 services would be probed · set dry_run=false and reply YES to execute' },
     { k: 'asst', who: 'AGENT',  t: 'Flagged 3 uds.session.request from sa=0x27. Stayed in dry-run — no frames written. JSONL saved to run-0427.jsonl.' },
   ];
 
@@ -430,7 +430,7 @@ function BrutMCP({ viewport }) {
           fontFamily: bMono, fontSize: viewport.isCompactMobile ? 10 : 11, fontWeight: 700, letterSpacing: 2,
           border: `4px solid ${bColors.bg}`, transform: viewport.isMobile ? 'none' : 'rotate(2deg)',
         }}>
-          9 TOOLS · 1 SCHEMA · 0 GLUE CODE
+          ALL TOOLS · ONE SCHEMA · ZERO GLUE CODE
         </div>
       </div>
 
@@ -462,7 +462,7 @@ function BrutMCP({ viewport }) {
             borderBottom: `4px solid ${bColors.ink}`,
             overflowWrap: 'anywhere',
           }}>
-            TOOL CATALOG · canarchy.* (9 tools, all stream)
+            TOOL CATALOG · canarchy MCP (showing 9 of the full surface)
           </div>
           <div style={{ fontFamily: bMono, fontSize: viewport.isCompactMobile ? 12 : 13, lineHeight: 1.75 }}>
             {tools.map((t, i) => (
@@ -549,7 +549,7 @@ function BrutMCP({ viewport }) {
         {[
           { h: 'DETERMINISTIC', d: 'Same inputs in, same JSONL out. Agents can loop without drift.' },
           { h: 'STREAMING', d: 'Tools return event streams. No 10k-token blobs, no truncation.' },
-          { h: 'DRY-RUN BY DEFAULT', d: 'Active commands require an explicit --arm. Guard framework (speed / ignition / session) is on the roadmap.', planned: true },
+          { h: 'DRY-RUN BY DEFAULT', d: 'Active commands require explicit --ack-active plus a typed YES. Guard framework (speed / ignition / session, marked PLANNED in the MCP catalog above) is on the roadmap.' },
         ].map((b, i) => (
           <div key={b.h} style={{
             background: i === 1 ? bColors.yellow : bColors.bg,
