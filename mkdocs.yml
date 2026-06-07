@@ -74,6 +74,7 @@ nav:
       - CAN Tool Feature Matrix: feature-matrix.md
       - Security Use Cases With Agents: security-use-cases.md
       - Troubleshooting: troubleshooting.md
+      - Plugin Author Guide: plugin-guide.md
   - Tutorials:
       - Overview: tutorials/index.md
       - Stream CAN Data from CANdid: tutorials/stream_candid_dataset.md
