@@ -35,7 +35,11 @@ def _profiles() -> dict[str, dict[str, Any]]:
     return json.loads(text)
 
 
-PROFILE_NAMES: tuple[str, ...] = ("heavy-truck", "passenger-car")
+def _profile_names() -> tuple[str, ...]:
+    return tuple(sorted(_profiles()))
+
+
+PROFILE_NAMES: tuple[str, ...] = _profile_names()
 
 
 def load_profile(name: str) -> dict[str, Any]:
