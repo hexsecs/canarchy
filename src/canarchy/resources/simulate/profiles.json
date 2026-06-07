@@ -1,0 +1,151 @@
+{
+  "heavy-truck": {
+    "description": "Class-8 tractor with J1939 engine, transmission, and brake traffic plus an occasional DM1 fault burst.",
+    "classic_frames": [
+      {
+        "name": "instrument-cluster-heartbeat",
+        "arbitration_id": "0x0C0",
+        "extended": false,
+        "dlc": 8,
+        "weight": 4,
+        "data_pattern": "counter"
+      },
+      {
+        "name": "body-controller-status",
+        "arbitration_id": "0x18A",
+        "extended": false,
+        "dlc": 8,
+        "weight": 3,
+        "data_pattern": "random"
+      }
+    ],
+    "j1939_messages": [
+      {
+        "name": "EEC1",
+        "pgn": 61444,
+        "priority": 3,
+        "source_address": 0,
+        "dlc": 8,
+        "weight": 12,
+        "data_pattern": "counter"
+      },
+      {
+        "name": "ET1",
+        "pgn": 65262,
+        "priority": 6,
+        "source_address": 0,
+        "dlc": 8,
+        "weight": 5,
+        "data_pattern": "slow-drift"
+      },
+      {
+        "name": "CCVS",
+        "pgn": 65265,
+        "priority": 6,
+        "source_address": 11,
+        "dlc": 8,
+        "weight": 8,
+        "data_pattern": "slow-drift"
+      },
+      {
+        "name": "TC1",
+        "pgn": 256,
+        "priority": 3,
+        "source_address": 3,
+        "dlc": 8,
+        "weight": 6,
+        "data_pattern": "counter"
+      },
+      {
+        "name": "EBC1",
+        "pgn": 61441,
+        "priority": 6,
+        "source_address": 11,
+        "dlc": 8,
+        "weight": 4,
+        "data_pattern": "random"
+      }
+    ],
+    "dm1": {
+      "weight": 1,
+      "source_address": 0,
+      "lamp_status": "amber_warning",
+      "fault_codes": [
+        {"spn": 110, "fmi": 16, "occurrence_count": 3}
+      ]
+    }
+  },
+  "passenger-car": {
+    "description": "Light-duty vehicle with dense proprietary CAN traffic and a thin slice of J1939-style telemetry plus rare DM1 events.",
+    "classic_frames": [
+      {
+        "name": "engine-rpm-throttle",
+        "arbitration_id": "0x0AA",
+        "extended": false,
+        "dlc": 8,
+        "weight": 14,
+        "data_pattern": "counter"
+      },
+      {
+        "name": "wheel-speed",
+        "arbitration_id": "0x0B4",
+        "extended": false,
+        "dlc": 8,
+        "weight": 12,
+        "data_pattern": "slow-drift"
+      },
+      {
+        "name": "steering-angle",
+        "arbitration_id": "0x0C6",
+        "extended": false,
+        "dlc": 8,
+        "weight": 10,
+        "data_pattern": "slow-drift"
+      },
+      {
+        "name": "body-control-module",
+        "arbitration_id": "0x1A0",
+        "extended": false,
+        "dlc": 8,
+        "weight": 6,
+        "data_pattern": "random"
+      },
+      {
+        "name": "climate-control",
+        "arbitration_id": "0x3D2",
+        "extended": false,
+        "dlc": 6,
+        "weight": 3,
+        "data_pattern": "random"
+      }
+    ],
+    "j1939_messages": [
+      {
+        "name": "EEC1",
+        "pgn": 61444,
+        "priority": 3,
+        "source_address": 0,
+        "dlc": 8,
+        "weight": 4,
+        "data_pattern": "counter"
+      },
+      {
+        "name": "CCVS",
+        "pgn": 65265,
+        "priority": 6,
+        "source_address": 11,
+        "dlc": 8,
+        "weight": 3,
+        "data_pattern": "slow-drift"
+      }
+    ],
+    "dm1": {
+      "weight": 1,
+      "source_address": 0,
+      "lamp_status": "mil",
+      "fault_codes": [
+        {"spn": 84, "fmi": 2, "occurrence_count": 1}
+      ]
+    }
+  }
+}
