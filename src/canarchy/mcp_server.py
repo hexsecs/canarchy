@@ -15,6 +15,7 @@ from mcp.server.models import InitializationOptions
 
 from canarchy import __version__
 from canarchy.cli import execute_command
+from canarchy.simulate import PROFILE_NAMES
 
 _SERVER_NAME = "canarchy"
 _SERVER_VERSION = __version__
@@ -122,6 +123,53 @@ _TOOLS: list[types.Tool] = [
                 },
             },
             "required": ["ack_active"],
+        },
+    ),
+    types.Tool(
+        name="simulate",
+        description=(
+            "Simulate realistic CAN/J1939 traffic from a data-driven vehicle profile. "
+            "Mandatory `ack_active=true`; `dry_run` defaults to true."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "profile": {
+                    "type": "string",
+                    "enum": list(PROFILE_NAMES),
+                    "description": "Vehicle traffic profile to emit",
+                },
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name; omit to use configured default",
+                },
+                "rate": {
+                    "type": "number",
+                    "description": "Frame emission rate in Hz",
+                    "default": 50.0,
+                },
+                "duration": {
+                    "type": "number",
+                    "description": "Simulation duration in seconds",
+                    "default": 10.0,
+                },
+                "seed": {
+                    "type": "integer",
+                    "description": "Random seed for deterministic output",
+                    "default": 0,
+                },
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory acknowledgement for active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Plan without transmitting (default: true for MCP)",
+                    "default": True,
+                },
+            },
+            "required": ["profile", "ack_active"],
         },
     ),
     types.Tool(
@@ -1593,6 +1641,22 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("dry_run", True):
                 argv += ["--dry-run"]
             return argv + ["--json"]
+        case "simulate":
+            argv = ["simulate"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            argv += ["--profile", a["profile"]]
+            if "rate" in a:
+                argv += ["--rate", str(a["rate"])]
+            if "duration" in a:
+                argv += ["--duration", str(a["duration"])]
+            if "seed" in a:
+                argv += ["--seed", str(a["seed"])]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
+            return argv + ["--json"]
         case "gateway":
             argv = ["gateway", a["src"], a["dst"]]
             if a.get("src_backend"):
@@ -2127,6 +2191,7 @@ _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
     {
         "send",
         "generate",
+        "simulate",
         "gateway",
         "fuzz_payload",
         "fuzz_replay",

@@ -22,6 +22,7 @@ _EXPECTED_TOOLS = {
     "capture",
     "send",
     "generate",
+    "simulate",
     "gateway",
     "replay",
     "filter",
@@ -663,6 +664,30 @@ def test_build_argv_generate_with_options():
     assert argv[-1] == "--json"
 
 
+def test_build_argv_simulate_with_options():
+    argv = _build_argv(
+        "simulate",
+        {
+            "profile": "heavy-truck",
+            "interface": "vcan0",
+            "rate": 10,
+            "duration": 1,
+            "seed": 3,
+            "ack_active": True,
+        },
+    )
+    assert "simulate" in argv
+    assert "vcan0" in argv
+    assert "--profile" in argv
+    assert "heavy-truck" in argv
+    assert "--rate" in argv
+    assert "--duration" in argv
+    assert "--seed" in argv
+    assert "--ack-active" in argv
+    assert "--dry-run" in argv
+    assert argv[-1] == "--json"
+
+
 def test_build_argv_datasets_search_with_options():
     argv = _build_argv("datasets_search", {"query": "j1939", "provider": "catalog", "limit": 5})
     assert argv == [
@@ -1099,6 +1124,48 @@ def test_generate_with_ack_active_defaults_to_dry_run():
     assert payload["data"]["frame_count"] == 1
 
 
+def test_simulate_without_ack_active_returns_structured_error():
+    results = asyncio.run(
+        handle_call_tool("simulate", {"profile": "heavy-truck", "interface": "vcan0"})
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_simulate_ack_active_false_returns_structured_error():
+    results = asyncio.run(
+        handle_call_tool(
+            "simulate", {"profile": "heavy-truck", "interface": "vcan0", "ack_active": False}
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
+
+
+def test_simulate_with_ack_active_defaults_to_dry_run():
+    results = asyncio.run(
+        handle_call_tool(
+            "simulate",
+            {
+                "profile": "passenger-car",
+                "interface": "vcan0",
+                "rate": 10,
+                "duration": 1,
+                "seed": 3,
+                "ack_active": True,
+            },
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["mode"] == "dry_run"
+    assert payload["data"]["profile"] == "passenger-car"
+    assert payload["data"]["frame_count"] == 10
+
+
 def test_gateway_without_ack_active_returns_structured_error():
     results = asyncio.run(handle_call_tool("gateway", {"src": "can0", "dst": "can1"}))
     payload = json.loads(results[0].text)
@@ -1128,7 +1195,7 @@ def test_gateway_with_ack_active_defaults_to_dry_run():
 
 def test_send_generate_gateway_schemas_require_ack_and_default_dry_run():
     tools_by_name = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
-    for tool_name in ("send", "generate", "gateway"):
+    for tool_name in ("send", "generate", "simulate", "gateway"):
         schema = tools_by_name[tool_name].inputSchema
         props = schema["properties"]
         assert "ack_active" in schema.get("required", [])

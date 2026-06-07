@@ -4402,6 +4402,222 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_GAP")
 
+    @patch("canarchy.transport.time.sleep")
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_simulate_dry_run_plans_frames_without_sending(self, _mock_cfg, mock_sleep) -> None:
+        with patch.object(
+            LocalTransport,
+            "generate_events",
+            side_effect=AssertionError("generate_events must not be called in dry-run"),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                "simulate",
+                "vcan0",
+                "--profile",
+                "heavy-truck",
+                "--rate",
+                "10",
+                "--duration",
+                "1",
+                "--seed",
+                "1",
+                "--dry-run",
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        mock_sleep.assert_not_called()
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertTrue(payload["data"]["dry_run"])
+        self.assertEqual(payload["data"]["profile"], "heavy-truck")
+        self.assertEqual(payload["data"]["frame_count"], 10)
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 10)
+        self.assertEqual(frame_events[0]["payload"]["frame"]["interface"], "vcan0")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_simulate_dry_run_is_deterministic_with_seed(self, _mock_cfg) -> None:
+        def run_once():
+            exit_code, stdout, _stderr = run_cli(
+                "simulate",
+                "--profile",
+                "passenger-car",
+                "--rate",
+                "20",
+                "--duration",
+                "1",
+                "--seed",
+                "7",
+                "--dry-run",
+                "--json",
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            payload = json.loads(stdout)
+            return [
+                (event["payload"]["frame"]["arbitration_id"], event["payload"]["frame"]["data"])
+                for event in payload["data"]["events"]
+                if event["event_type"] == "frame"
+            ]
+
+        first = run_once()
+        second = run_once()
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 20)
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_simulate_frame_mix_includes_classic_j1939_and_dm1(self, _mock_cfg) -> None:
+        from canarchy.j1939 import DM1_PGN, decompose_arbitration_id
+
+        exit_code, stdout, _stderr = run_cli(
+            "simulate",
+            "vcan0",
+            "--profile",
+            "heavy-truck",
+            "--rate",
+            "50",
+            "--duration",
+            "5",
+            "--seed",
+            "3",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        frames = [
+            event["payload"]["frame"]
+            for event in payload["data"]["events"]
+            if event["event_type"] == "frame"
+        ]
+        self.assertEqual(len(frames), 250)
+
+        classic_ids = {0x0C0, 0x18A}
+        pgns = set()
+        saw_dm1 = False
+        for frame in frames:
+            if frame["is_extended_id"]:
+                identifier = decompose_arbitration_id(frame["arbitration_id"])
+                pgns.add(identifier.pgn)
+                if identifier.pgn == DM1_PGN:
+                    saw_dm1 = True
+            else:
+                self.assertIn(frame["arbitration_id"], classic_ids)
+
+        self.assertTrue(pgns & {61444, 65262, 65265, 256, 61441})
+        self.assertTrue(saw_dm1)
+
+    @patch("canarchy.transport.time.sleep")
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_simulate_active_mode_returns_frame_events(self, _mock_cfg, _mock_sleep) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "simulate",
+            "vcan0",
+            "--profile",
+            "passenger-car",
+            "--rate",
+            "10",
+            "--duration",
+            "1",
+            "--seed",
+            "5",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("warning: `simulate` will transmit `passenger-car` profile traffic", stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["frame_count"], 10)
+        alert_event = payload["data"]["events"][0]
+        self.assertEqual(alert_event["event_type"], "alert")
+        self.assertEqual(alert_event["payload"]["code"], "ACTIVE_TRANSMIT")
+        frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 10)
+
+    @patch("canarchy.transport.time.sleep")
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_simulate_text_output_is_pretty_printed(self, _mock_cfg, _mock_sleep) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "simulate",
+            "vcan0",
+            "--profile",
+            "heavy-truck",
+            "--rate",
+            "5",
+            "--duration",
+            "1",
+            "--seed",
+            "0",
+            "--text",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("command: simulate", stdout)
+        self.assertIn("interface: vcan0", stdout)
+        self.assertIn("profile: heavy-truck", stdout)
+        self.assertIn("frames: 5", stdout)
+        self.assertIn("vcan0", stdout)
+
+    def test_simulate_unknown_profile_rejected_by_argument_parser(self) -> None:
+        exit_code, stdout, stderr = run_cli("simulate", "--profile", "nonexistent", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_ARGUMENTS")
+        self.assertIn("invalid choice: 'nonexistent'", payload["errors"][0]["message"])
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_simulate_invalid_rate_returns_transport_error(self, _mock_cfg) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "simulate",
+            "vcan0",
+            "--profile",
+            "heavy-truck",
+            "--rate",
+            "0",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "SIMULATE_INVALID_RATE")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_simulate_invalid_duration_returns_transport_error(self, _mock_cfg) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "simulate",
+            "vcan0",
+            "--profile",
+            "heavy-truck",
+            "--duration",
+            "-1",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "SIMULATE_INVALID_DURATION")
+
     def test_transport_error_returns_backend_exit_code(self) -> None:
         exit_code, stdout, stderr = run_cli("capture", "offline0", "--json")
         self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)

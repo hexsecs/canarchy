@@ -53,6 +53,7 @@ from canarchy.reverse_engineering import (
 )
 from canarchy.session import SessionError, SessionStore, build_session_context
 from canarchy.shell_completion import SUPPORTED_SHELLS, render_completion
+from canarchy.simulate import PROFILE_NAMES, simulate_frames
 from canarchy.skills import SkillError
 from canarchy.transport import (
     LocalTransport,
@@ -71,7 +72,7 @@ EXIT_USER_ERROR = 1
 EXIT_TRANSPORT_ERROR = 2
 EXIT_DECODE_ERROR = 3
 EXIT_PARTIAL_SUCCESS = 4
-TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "capture-info"}
+TRANSPORT_COMMANDS = {"capture", "send", "filter", "stats", "generate", "simulate", "capture-info"}
 DBC_COMMANDS = {"decode", "encode", "dbc inspect", "dbc signals", "dbc convert", "dbc generate-c"}
 DBC_PROVIDER_COMMANDS = {
     "dbc provider list",
@@ -135,6 +136,7 @@ RE_COMMANDS = {
 ACTIVE_TRANSMIT_COMMANDS = {
     "send",
     "generate",
+    "simulate",
     "gateway",
     "uds scan",
     "fuzz payload",
@@ -433,6 +435,37 @@ def build_parser() -> CanarchyArgumentParser:
     add_active_ack_argument(generate)
     add_output_arguments(generate)
     generate.set_defaults(command="generate")
+
+    simulate = subparsers.add_parser(
+        "simulate", help="simulate realistic CAN/J1939 traffic from a vehicle profile"
+    )
+    simulate.add_argument("interface", nargs="?")
+    simulate.add_argument(
+        "--profile",
+        required=True,
+        choices=list(PROFILE_NAMES),
+        help="vehicle traffic profile to emit",
+    )
+    simulate.add_argument(
+        "--rate", type=float, default=50.0, help="frame emission rate in Hz (default: 50)"
+    )
+    simulate.add_argument(
+        "--duration",
+        type=float,
+        default=10.0,
+        help="simulation duration in seconds (default: 10)",
+    )
+    simulate.add_argument(
+        "--seed", type=int, default=0, help="random seed for deterministic output (default: 0)"
+    )
+    simulate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="plan simulated frames without transmitting",
+    )
+    add_active_ack_argument(simulate)
+    add_output_arguments(simulate)
+    simulate.set_defaults(command="simulate")
 
     gateway = subparsers.add_parser("gateway", help="bridge frames between CAN interfaces")
     gateway.add_argument("src")
@@ -1551,6 +1584,11 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `generate` will transmit generated frames on interface `{args.interface}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command == "simulate":
+        return (
+            f"warning: `simulate` will transmit `{args.profile}` profile traffic on interface "
+            f"`{args.interface}`; use intentionally on a controlled bus."
+        )
     if args.command == "uds scan":
         return (
             f"warning: `uds scan` will transmit diagnostic requests on interface `{args.interface}`; "
@@ -1586,6 +1624,8 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return f"confirm: type YES to send on `{args.interface}`: "
     if args.command == "generate":
         return f"confirm: type YES to generate frames on `{args.interface}`: "
+    if args.command == "simulate":
+        return f"confirm: type YES to simulate `{args.profile}` traffic on `{args.interface}`: "
     if args.command == "uds scan":
         return f"confirm: type YES to run UDS scan on `{args.interface}`: "
     if args.command == "gateway":
@@ -1605,6 +1645,7 @@ INTERFACE_FALLBACK_COMMANDS = {
     "capture",
     "send",
     "generate",
+    "simulate",
     "j1939 monitor",
     "uds scan",
     "uds trace",
@@ -1673,6 +1714,8 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command in ("fuzz signal", "fuzz spn") and getattr(args, "dry_run", False):
         return
     if args.command == "generate" and getattr(args, "dry_run", False):
+        return
+    if args.command == "simulate" and getattr(args, "dry_run", False):
         return
     if args.command == "send" and getattr(args, "dry_run", False):
         return
@@ -3247,6 +3290,61 @@ def transport_payload(
                 "implementation": implementation,
             },
             transport.generate_events(args.interface, frames, gap_ms=args.gap),
+            [],
+        )
+    if args.command == "simulate":
+        frames = simulate_frames(
+            args.profile,
+            interface=args.interface,
+            rate=args.rate,
+            duration=args.duration,
+            seed=args.seed,
+        )
+        gap_ms = (1.0 / args.rate) * 1000.0
+        if getattr(args, "dry_run", False):
+            frame_events = serialize_events(
+                [
+                    FrameEvent(
+                        frame=frame,
+                        source="simulate",
+                        timestamp=frame.timestamp,
+                    ).to_event()
+                    for frame in frames
+                ]
+            )
+            return (
+                {
+                    "interface": args.interface,
+                    "profile": args.profile,
+                    "mode": "dry_run",
+                    "dry_run": True,
+                    "frame_count": len(frames),
+                    "rate": args.rate,
+                    "duration": args.duration,
+                    "seed": args.seed,
+                    **backend_metadata,
+                    "status": "implemented",
+                    "implementation": implementation,
+                },
+                frame_events,
+                [f"ACTIVE_TRANSMIT_DRY_RUN: {len(frames)} frames planned; no transport opened."],
+            )
+        enforce_active_transmit_safety(args)
+        return (
+            {
+                "interface": args.interface,
+                "profile": args.profile,
+                "mode": "active",
+                "dry_run": False,
+                "frame_count": len(frames),
+                "rate": args.rate,
+                "duration": args.duration,
+                "seed": args.seed,
+                **backend_metadata,
+                "status": "implemented",
+                "implementation": implementation,
+            },
+            transport.generate_events(args.interface, frames, gap_ms=gap_ms),
             [],
         )
     if args.command == "filter":
@@ -7766,6 +7864,17 @@ def emit_result(result: CommandResult, output_format: str) -> None:
     if output_format == "text" and result.ok and result.command == "generate":
         print(f"command: {result.command}")
         print(f"interface: {result.data.get('interface', 'unknown')}")
+        print(f"frames: {result.data.get('frame_count', 0)}")
+        for line in format_candump_lines(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "simulate":
+        print(f"command: {result.command}")
+        print(f"interface: {result.data.get('interface', 'unknown')}")
+        print(f"profile: {result.data.get('profile', 'unknown')}")
         print(f"frames: {result.data.get('frame_count', 0)}")
         for line in format_candump_lines(result):
             print(line)
