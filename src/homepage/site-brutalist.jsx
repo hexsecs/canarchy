@@ -390,7 +390,7 @@ function BrutMCP({ viewport }) {
     { name: 'filter',        args: 'expression, file',             ret: 'stream<Event>' },
     { name: 'replay',        args: 'file, rate, interface?',       ret: 'stream<Event>' },
     { name: 'j1939_dm1',     args: 'file, source_address?',        ret: 'stream<Event>' },
-    { name: 'uds_scan',      args: 'target_sa, services[]',        ret: 'stream<Event>' },
+    { name: 'uds_scan',      args: 'interface?',                   ret: 'stream<Event>' },
     { name: 'dbc_inspect',   args: 'dbc, search?, layout?',        ret: 'Bundle' },
     { name: 'gateway',       args: 'src, dst, ack_active',         ret: 'stream<Event>' },
     { name: 'simulate',      args: 'profile, rate?, ack_active',   ret: 'stream<Event>' },
@@ -398,14 +398,12 @@ function BrutMCP({ viewport }) {
 
   const transcript = [
     { k: 'user', who: 'USER',   t: 'Audit the truck on can0 for 10s and flag anything that looks like an unsolicited diagnostic session.' },
-    { k: 'thought', t: '↳ agent decides to capture, then filter UDS, then weigh whether a probe is warranted' },
+    { k: 'thought', t: '↳ agent decides to capture, then filter for UDS traffic before deciding whether an active probe is warranted' },
     { k: 'call', fn: 'capture', body: '{ "interface": "can0", "duration": 10, "decode": "j1939" }' },
     { k: 'ret',  body: '{"command":"capture","ok":true,"data":{...}} … 428 events' },
     { k: 'call', fn: 'filter',  body: '{ "expression": "name~=UDS.*", "file": "$last" }' },
     { k: 'ret',  body: '3 matching events — all sa=0x27' },
-    { k: 'call', fn: 'uds_scan', body: '{ "target_sa": "0x27", "services": ["0x10","0x27"], "ack_active": true, "dry_run": true }' },
-    { k: 'ret',  body: 'dry-run: 2 services would be probed · set dry_run=false and reply YES to execute' },
-    { k: 'asst', who: 'AGENT',  t: 'Flagged 3 uds.session.request from sa=0x27. Stayed in dry-run — no frames written. JSONL saved to run-0427.jsonl.' },
+    { k: 'asst', who: 'AGENT',  t: 'Flagged 3 uds.session.request from sa=0x27. No active probe attempted over MCP — that requires `canarchy uds scan can0`, gated behind --ack-active and a typed YES.' },
   ];
 
   return (
