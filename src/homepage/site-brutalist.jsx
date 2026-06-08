@@ -350,7 +350,7 @@ function BrutCommand({ viewport }) {
           </div>
           <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 11 : 12) : 14, lineHeight: 1.7, color: bColors.ink, overflowX: 'auto' }}>
 {`$ canarchy capture can0 --jsonl \\
-    | canarchy j1939 decode --stdin
+    | canarchy j1939 decode --stdin --jsonl
 
 {"ts":"17:42:19.20","pgn":61444,
  "name":"EEC1","engine_rpm":1842.25}
@@ -370,9 +370,12 @@ function BrutCommand({ viewport }) {
     baseline.candump run.candump \\
     --text
 
-+ 0x00  61444  EEC1  rpm distribution shifted
-- 0xF0  ED00   VDC2  stopped broadcasting
-! 0x00  65226  DM1   new active fault SPN 110`}
+unique_pgns:
+- run.candump: 65262[ET1]
+dm1_differences:
+- sa=0x00 [Engine #1]
+  run.candump: present=True faults=spn=110/fmi=3
+  baseline.candump: present=False faults=none`}
           </pre>
         </div>
       </div>
@@ -838,7 +841,7 @@ function BrutInstall({ viewport }) {
 <span style={{ color: bColors.mute }}># 2. check your environment</span>{'\n'}
 <span style={{ color: bColors.yellow }}>➜</span> canarchy doctor --text{'\n\n'}
 <span style={{ color: bColors.mute }}># 3. stream + decode J1939 events as JSONL</span>{'\n'}
-<span style={{ color: bColors.yellow }}>➜</span> canarchy capture can0 --jsonl | canarchy j1939 decode --stdin{'\n\n'}
+<span style={{ color: bColors.yellow }}>➜</span> canarchy capture can0 --jsonl | canarchy j1939 decode --stdin --jsonl{'\n\n'}
 <span style={{ color: bColors.mute }}># 4. (optional) let an agent drive it</span>{'\n'}
 <span style={{ color: bColors.yellow }}>➜</span> canarchy mcp serve{'\n'}
           </pre>
