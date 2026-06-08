@@ -262,7 +262,7 @@ function BrutTicker({ viewport }) {
 
   const items = [
     'J1939 NATIVE', '·', 'JSONL WIRE FORMAT', '·', 'MCP SERVER', '·', 'UDS DISCOVERY',
-    '·', 'DBC PROVIDERS', '·', 'REPLAY WITH JITTER', '·', 'FRAME GATEWAY', '·',
+    '·', 'DBC PROVIDERS', '·', 'RATE-CONTROLLED REPLAY', '·', 'FRAME GATEWAY', '·',
     'ACTIVE-COMMAND SAFETY', '·', 'AGENT-DRIVEN PIPELINES', '·', 'OPEN SOURCE · GPL-3.0', '·',
   ];
   return (
@@ -340,7 +340,7 @@ function BrutCommand({ viewport }) {
       </div>
       <h2 style={{ fontFamily: bDisplay, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 42 : viewport.isCompactMobile ? 48 : 54) : viewport.isTablet ? 72 : 86, letterSpacing: viewport.isMobile ? -1.5 : -3, lineHeight: 0.95, margin: '0 0 40px', color: bColors.bg }}>
         CAPTURE. DECODE.<br/>
-        <span style={{ color: bColors.yellow }}>DIFF.</span> REPLAY.
+        <span style={{ color: bColors.yellow }}>COMPARE.</span> REPLAY.
       </h2>
 
       <div style={{ display: 'grid', gridTemplateColumns: viewport.isMobile ? '1fr' : '1fr 1fr', gap: 24 }}>
@@ -349,10 +349,8 @@ function BrutCommand({ viewport }) {
             # STEP 1 — CAPTURE + DECODE
           </div>
           <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 11 : 12) : 14, lineHeight: 1.7, color: bColors.ink, overflowX: 'auto' }}>
-{`$ canarchy capture \\
-    --iface can0 \\
-    --decode j1939 \\
-    --out run.jsonl
+{`$ canarchy capture can0 --jsonl \\
+    | canarchy j1939 decode --stdin --jsonl
 
 {"ts":"17:42:19.20","pgn":61444,
  "name":"EEC1","engine_rpm":1842.25}
@@ -365,17 +363,19 @@ function BrutCommand({ viewport }) {
 
         <div style={{ background: bColors.yellow, color: bColors.ink, padding: '24px 26px', border: `4px solid ${bColors.bg}` }}>
           <div style={{ fontFamily: bMono, fontSize: 11, color: bColors.red, letterSpacing: 2, fontWeight: 700, marginBottom: 12 }}>
-            # STEP 2 — DIFF AGAINST BASELINE
+            # STEP 2 — COMPARE AGAINST BASELINE
           </div>
           <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 11 : 12) : 14, lineHeight: 1.7, color: bColors.ink, overflowX: 'auto' }}>
-{`$ canarchy diff \\
-    baseline.jsonl run.jsonl \\
-    --by pgn --by source-address
+{`$ canarchy j1939 compare \\
+    baseline.candump run.candump \\
+    --text
 
-+ 0x27  UDS  diagnostic_session_ctrl
-+ 0x27  UDS  security_access (seed req)
-~ 0xEE  EEC1 rpm distribution shifted
-- 0xF0  VDC2 stopped broadcasting`}
+unique_pgns:
+- run.candump: 65262[ET1]
+dm1_differences:
+- sa=0x00 [Engine #1]
+  run.candump: present=True faults=spn=110/fmi=3
+  baseline.candump: present=False faults=none`}
           </pre>
         </div>
       </div>
@@ -439,10 +439,10 @@ function BrutMCP({ viewport }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap',
       }}>
         <div style={{ fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isNarrowMobile ? 12 : viewport.isCompactMobile ? 13 : 15) : 22, fontWeight: 700, letterSpacing: -0.5, overflowWrap: 'anywhere' }}>
-          <span style={{ color: bColors.red }}>$</span> canarchy mcp serve --bind 127.0.0.1:6969
+          <span style={{ color: bColors.red }}>$</span> canarchy mcp serve
         </div>
         <div style={{ fontFamily: bMono, fontSize: 11, letterSpacing: 2, fontWeight: 700 }}>
-          WORKS WITH CLAUDE DESKTOP · CURSOR · ANY MCP CLIENT
+          ONE-SHOT WIRE-UP: canarchy mcp install --client claude-desktop
         </div>
       </div>
 
@@ -833,17 +833,17 @@ function BrutInstall({ viewport }) {
         </div>
         <div style={{ background: bColors.ink, color: bColors.bg, padding: viewport.isMobile ? '24px 18px' : '30px 32px', border: `4px solid ${bColors.ink}`, position: 'relative' }}>
           <div style={{ position: 'absolute', top: -14, left: 24, background: bColors.red, color: bColors.bg, fontFamily: bMono, fontSize: 11, letterSpacing: 2, fontWeight: 700, padding: '4px 10px' }}>
-            $ ZSH · canarchy v0.4.1
+            {`$ ZSH · canarchy v${RELEASE_VERSION}`}
           </div>
           <pre style={{ margin: 0, fontFamily: bMono, fontSize: viewport.isMobile ? (viewport.isCompactMobile ? 11 : 12) : 15, lineHeight: 1.9, color: bColors.bg, overflowX: 'auto' }}>
 <span style={{ color: bColors.mute }}># 1. install</span>{'\n'}
 <span style={{ color: bColors.yellow }}>➜</span> pip install canarchy{'\n\n'}
-<span style={{ color: bColors.mute }}># 2. bring up a virtual bus</span>{'\n'}
-<span style={{ color: bColors.yellow }}>➜</span> canarchy transport up --backend virtual{'\n\n'}
-<span style={{ color: bColors.mute }}># 3. stream J1939 events as JSONL</span>{'\n'}
-<span style={{ color: bColors.yellow }}>➜</span> canarchy capture --decode j1939 --pretty{'\n\n'}
+<span style={{ color: bColors.mute }}># 2. check your environment</span>{'\n'}
+<span style={{ color: bColors.yellow }}>➜</span> canarchy doctor --text{'\n\n'}
+<span style={{ color: bColors.mute }}># 3. stream + decode J1939 events as JSONL</span>{'\n'}
+<span style={{ color: bColors.yellow }}>➜</span> canarchy capture can0 --jsonl | canarchy j1939 decode --stdin --jsonl{'\n\n'}
 <span style={{ color: bColors.mute }}># 4. (optional) let an agent drive it</span>{'\n'}
-<span style={{ color: bColors.yellow }}>➜</span> canarchy mcp serve --bind 127.0.0.1:7801{'\n'}
+<span style={{ color: bColors.yellow }}>➜</span> canarchy mcp serve{'\n'}
           </pre>
         </div>
       </div>
