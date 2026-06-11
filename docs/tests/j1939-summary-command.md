@@ -19,6 +19,7 @@
 | `REQ-J1939SUM-05` | Printable TP identifiers surface when obvious | `TEST-J1939SUM-02`, `TEST-J1939SUM-03` |
 | `REQ-J1939SUM-06` | Summary respects bounded-analysis controls | existing bounded-analysis coverage plus future dedicated summary-window assertions |
 | `REQ-J1939SUM-07` | JSON field names remain stable | `TEST-J1939SUM-01`, `TEST-J1939SUM-02` |
+| `REQ-J1939SUM-08` | Repeated printable identifiers are deduplicated with an occurrence count | `TEST-J1939SUM-04` |
 
 ## Test Cases
 
@@ -69,3 +70,15 @@ And    the printable text shall remain visible in the operator-facing output
 * non-ASCII identification decoding heuristics
 * OEM-specific VIN or ECU-identification parsing rules
 * multi-capture comparison behavior
+
+### TEST-J1939SUM-04 — Repeated BAM identifiers are deduplicated
+
+```gherkin
+Given  a capture where the same VIN is broadcast in three separate BAM sessions
+When   the operator runs `canarchy j1939 summary --file <capture> --json`
+Then   `data.tp.printable_identifiers` shall contain exactly one entry for that VIN
+And    the entry shall carry `occurrence_count: 3` and the source-address name
+And    `data.tp.session_count` shall still report all three sessions
+```
+
+**Fixture:** `tests/fixtures/j1939_tp_repeated_vin.candump`.

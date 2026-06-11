@@ -539,40 +539,52 @@ def _compile_filter(expression: str) -> Callable[[CanFrame], bool]:
     return _compile_filter_atom(expression.strip())
 
 
+def _parse_filter_number(token: str) -> int | None:
+    """Parse a filter operand as decimal, 0x-prefixed hex, or bare hex."""
+    token = token.strip()
+    try:
+        return int(token, 0)
+    except ValueError:
+        pass
+    try:
+        return int(token, 16)
+    except ValueError:
+        return None
+
+
+_FILTER_ID_RE = re.compile(r"id\s*==\s*(\S+)$")
+_FILTER_PGN_RE = re.compile(r"pgn\s*==\s*(\S+)$")
+_FILTER_DLC_RE = re.compile(r"dlc\s*>\s*(\d+)$")
+_FILTER_DATA_RE = re.compile(r"data\s*~=\s*([0-9a-f]+)$")
+
+
 def _compile_filter_atom(expr: str) -> Callable[[CanFrame], bool]:
-    n = expr.lower()
+    n = expr.strip().lower()
     if n == "all":
         return lambda frame: True
-    if n.startswith("id=="):
-        try:
-            wanted = int(n[4:], 0)
+    if n == "extended":
+        return lambda frame: frame.is_extended_id
+    if n == "standard":
+        return lambda frame: not frame.is_extended_id
+    if match := _FILTER_ID_RE.fullmatch(n):
+        wanted = _parse_filter_number(match.group(1))
+        if wanted is not None:
             return lambda frame, w=wanted: frame.arbitration_id == w
-        except ValueError:
-            pass
-    elif n.startswith("pgn=="):
-        try:
-            wanted = int(n[5:], 0)
+    elif match := _FILTER_PGN_RE.fullmatch(n):
+        wanted = _parse_filter_number(match.group(1))
+        if wanted is not None:
             return lambda frame, w=wanted: (
                 frame.is_extended_id and decompose_arbitration_id(frame.arbitration_id).pgn == w
             )
-        except ValueError:
-            pass
-    elif n.startswith("dlc>"):
+    elif match := _FILTER_DLC_RE.fullmatch(n):
+        threshold = int(match.group(1))
+        return lambda frame, t=threshold: frame.dlc > t
+    elif match := _FILTER_DATA_RE.fullmatch(n):
         try:
-            threshold = int(n[4:])
-            return lambda frame, t=threshold: frame.dlc > t
-        except ValueError:
-            pass
-    elif n.startswith("data~="):
-        try:
-            pattern = bytes.fromhex(n[6:])
+            pattern = bytes.fromhex(match.group(1))
             return lambda frame, p=pattern: p in frame.data
         except ValueError:
             pass
-    elif n == "extended":
-        return lambda frame: frame.is_extended_id
-    elif n == "standard":
-        return lambda frame: not frame.is_extended_id
     _raise_invalid_filter(expr)
 
 
@@ -580,8 +592,9 @@ def _raise_invalid_filter(expr: str) -> NoReturn:
     raise TransportError(
         "INVALID_FILTER_EXPRESSION",
         f"Filter expression '{expr}' is not recognised.",
-        "Supported: all, id==<hex>, pgn==<hex>, dlc><n>, data~=<hex>, extended, standard. "
-        "Combine with && (AND) or || (OR).",
+        "Supported: all, id==<id>, pgn==<pgn>, dlc><n>, data~=<hex>, extended, standard. "
+        "IDs/PGNs accept decimal, 0x-prefixed hex, or bare hex; whitespace around "
+        "operators is allowed. Combine with && (AND) or || (OR).",
     )
 
 

@@ -39,6 +39,7 @@ Important current behavior:
 * some protocol-oriented commands currently use explicit sample/reference providers rather than true transport-backed execution paths
 * specialized text formatting exists for J1939 monitor and decode style output; other `--text` output is generic key/value rendering
 * file-backed analysis commands support standard timestamped candump log files (`.candump`, `.log`) and pcap/pcapng files (`.pcap`, `.pcapng`) with CAN SocketCAN (DLT 227) frames; selected commands also support `--file -` for candump text from stdin
+* commands that historically took positional capture paths (the `re *` family and `j1939 compare`) also accept the `--file <path>` flag form (repeatable for multi-file commands); supplying both forms with different paths returns `CONFLICTING_FILE_ARGUMENTS`
 
 ---
 
@@ -137,6 +138,9 @@ Notes:
 * `--file -` reads candump text from standard input instead of a file and still honors `--offset`, `--max-frames`, and `--seconds`
 * `--stdin` reads JSONL `frame` events from standard input regardless of output format
 * For `filter --stdin`, each line must be a valid `frame` event JSON object
+* expression operands for `id==` / `pgn==` accept decimal, `0x`-prefixed hex, or bare hex, and all operators tolerate surrounding whitespace (e.g. `pgn == 61444`)
+* supported atoms: `all`, `id==<id>`, `pgn==<pgn>`, `dlc><n>`, `data~=<hex>`, `extended`, `standard`, combined with `&&` / `||`
+* on an invalid expression the JSON error envelope carries no `frames` / `frame_count` block, so an error can never read as a successful zero-match
 
 ### capture-info
 
@@ -839,7 +843,7 @@ Notes:
 Compare two or more J1939 capture files and highlight common versus capture-unique PGNs, source-address changes, DM1 differences, and printable TP identification changes.
 
 ```bash
-canarchy j1939 compare <file> <file> [<file> ...] [--json|--jsonl|--text]
+canarchy j1939 compare (<file> <file> [<file> ...] | --file <file> --file <file> ...) [--json|--jsonl|--text]
 ```
 
 Example:
@@ -918,7 +922,7 @@ Notes:
 Rank likely counter fields from recorded CAN traffic.
 
 ```bash
-canarchy re counters <file> [--json|--jsonl|--text]
+canarchy re counters (<file> | --file <file>) [--json|--jsonl|--text]
 ```
 
 Notes:
@@ -934,7 +938,7 @@ Notes:
 Rank likely signal fields from recorded CAN traffic.
 
 ```bash
-canarchy re signals <file> [--json|--jsonl|--text]
+canarchy re signals (<file> | --file <file>) [--json|--jsonl|--text]
 ```
 
 Notes:
@@ -951,7 +955,7 @@ Notes:
 Correlate candidate bit fields against a timestamped reference series.
 
 ```bash
-canarchy re correlate <file> --reference <ref.json|ref.jsonl> [--json|--jsonl|--text]
+canarchy re correlate (<file> | --file <file>) --reference <ref.json|ref.jsonl> [--json|--jsonl|--text]
 ```
 
 Notes:
@@ -966,7 +970,7 @@ Notes:
 Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs.
 
 ```bash
-canarchy re anomalies <file> [--baseline <ref>] [--dbc <ref>] [--z-threshold <z>] \
+canarchy re anomalies (<file> | --file <file>) [--baseline <ref>] [--dbc <ref>] [--z-threshold <z>] \
     [--cv-max <cv>] [--min-samples <n>] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
 ```
 
@@ -985,7 +989,7 @@ Notes:
 Rank arbitration IDs and byte positions by Shannon entropy over recorded CAN traffic.
 
 ```bash
-canarchy re entropy <file> [--json|--jsonl|--text]
+canarchy re entropy (<file> | --file <file>) [--json|--jsonl|--text]
 ```
 
 Notes:
@@ -1001,7 +1005,7 @@ Notes:
 Rank candidate DBC files against a capture using provider-backed catalog metadata.
 
 ```bash
-canarchy re match-dbc <capture> [--provider <name>] [--limit <n>] [--json|--jsonl|--text]
+canarchy re match-dbc (<capture> | --file <capture>) [--provider <name>] [--limit <n>] [--json|--jsonl|--text]
 ```
 
 Notes:
@@ -1015,7 +1019,7 @@ Notes:
 Rank candidate DBC files against a capture after pre-filtering by vehicle make.
 
 ```bash
-canarchy re shortlist-dbc <capture> --make <brand> [--provider <name>] [--limit <n>] [--json|--jsonl|--text]
+canarchy re shortlist-dbc (<capture> | --file <capture>) --make <brand> [--provider <name>] [--limit <n>] [--json|--jsonl|--text]
 ```
 
 Notes:

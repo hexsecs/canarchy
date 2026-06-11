@@ -48,7 +48,7 @@ canarchy j1939 spn <spn> --file <capture>
 canarchy j1939 tp sessions --file <capture>
 canarchy j1939 dm1 --file <capture>
 canarchy j1939 inventory --file <capture>
-canarchy j1939 compare <capture> <capture> [<capture> ...]
+canarchy j1939 compare <capture> <capture> [<capture> ...]   # or repeated --file <capture> flags
 ```
 
 ## Responsibilities And Boundaries

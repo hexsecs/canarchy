@@ -35,9 +35,10 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 | `REQ-TRANSPORT-07` | `TEST-TRANSPORT-07` |
 | `REQ-TRANSPORT-08` | `TEST-TRANSPORT-11` |
 | `REQ-TRANSPORT-09` | `TEST-TRANSPORT-12` |
-| `REQ-TRANSPORT-10` | `TEST-TRANSPORT-10` |
+| `REQ-TRANSPORT-10` | `TEST-TRANSPORT-10`, `TEST-TRANSPORT-25` |
 | `REQ-TRANSPORT-11` | `TEST-TRANSPORT-13`, `TEST-TRANSPORT-14` |
 | `REQ-TRANSPORT-12` | `TEST-TRANSPORT-15`, `TEST-TRANSPORT-16` |
+| `REQ-TRANSPORT-15` | `TEST-TRANSPORT-24` |
 
 ## Representative Test Cases
 
@@ -354,3 +355,32 @@ Then   the repeated id's entry shall carry non-null `mean_gap_ms` and `first_see
 ```
 
 **Fixture:** `tests/fixtures/j1939_heavy_vehicle.candump`.
+
+---
+
+### `TEST-TRANSPORT-24` — Filter accepts decimal, prefixed-hex, and bare-hex operands with whitespace
+
+```gherkin
+Given  a capture containing a frame with id 0x18FEEE31 (PGN 65262)
+When   `canarchy filter "pgn == 65262" --file <capture> --json` is invoked
+Then   exactly the matching frame shall be returned
+When   the expressions `id==0x18FEEE31`, the decimal equivalent, and bare-hex `id==18FEEE31` are each used
+Then   each shall match the same frame
+When   `dlc > 4` is used
+Then   whitespace around the operator shall be tolerated
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-TRANSPORT-25` — Invalid filter expression error carries no frames block
+
+```gherkin
+Given  an unrecognised filter expression
+When   `canarchy filter badexpr --file <capture> --json` is invoked
+Then   the envelope shall report `ok: false` with error code `INVALID_FILTER_EXPRESSION` and exit code 2
+And    `data` shall contain neither `frames` nor `frame_count`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
