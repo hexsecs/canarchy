@@ -690,3 +690,35 @@ class AnomalySparseIdTests(unittest.TestCase):
         result = anomaly_candidates(self._frames("anomaly_sparse_burst.candump"), min_samples=3)
         flagged_ids = {c["arbitration_id"] for c in result["candidates"]}
         self.assertIn(0x18FECA0B, flagged_ids)
+
+    def test_dropped_j1939_id_from_baseline_is_annotated(self) -> None:
+        # An id present only in the baseline still gets J1939 annotation on
+        # its dropped-id candidate (annotations include baseline frames).
+        from canarchy.models import CanFrame
+
+        def _ebc2(t: float) -> CanFrame:
+            return CanFrame(
+                arbitration_id=0x18FEBF0B,
+                data=bytes(8),
+                timestamp=t,
+                is_extended_id=True,
+            )
+
+        def _other(t: float) -> CanFrame:
+            return CanFrame(
+                arbitration_id=0x18F00400,
+                data=bytes(8),
+                timestamp=t,
+                is_extended_id=True,
+            )
+
+        baseline = [_ebc2(0.01 * i) for i in range(12)] + [_other(0.01 * i) for i in range(12)]
+        frames = [_other(0.01 * i) for i in range(12)]
+
+        result = anomaly_candidates(frames, baseline=baseline)
+
+        dropped = next(c for c in result["candidates"] if c["kind"] == "dropped-id")
+        self.assertEqual(dropped["arbitration_id"], 0x18FEBF0B)
+        self.assertEqual(dropped["pgn"], 65215)
+        self.assertEqual(dropped["pgn_label"], "EBC2")
+        self.assertEqual(dropped["source_address"], 11)

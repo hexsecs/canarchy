@@ -1040,7 +1040,12 @@ def anomaly_candidates(
     has_baseline = baseline is not None
     if min_samples is None:
         min_samples = _ANOMALY_MIN_GAPS if has_baseline else _ANOMALY_SELF_MIN_GAPS
+    # Include baseline frames so dropped-id candidates (ids present only in
+    # the baseline) are annotated too.
     annotations = j1939_annotations(frames)
+    if baseline is not None:
+        for arb_id, annotation in j1939_annotations(baseline).items():
+            annotations.setdefault(arb_id, annotation)
 
     candidates: list[AnomalyCandidate] = []
     classifications: list[dict[str, Any]] = []
