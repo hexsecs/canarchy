@@ -6,7 +6,12 @@ from typing import Any
 
 from canarchy.models import CanFrame
 from canarchy.plugins import CANARCHY_API_VERSION, ProcessorResult
-from canarchy.reverse_engineering import counter_candidates, entropy_candidates, signal_analysis
+from canarchy.reverse_engineering import (
+    counter_candidates,
+    entropy_candidates,
+    j1939_transport_ids,
+    signal_analysis,
+)
 
 
 class CounterCandidateProcessor:
@@ -17,14 +22,21 @@ class CounterCandidateProcessor:
 
     def process(self, frames: list[CanFrame], **kwargs: Any) -> ProcessorResult:
         candidates = counter_candidates(frames)
+        excluded_transport = j1939_transport_ids(frames)
         warns = []
         if not candidates:
             warns.append("No likely counters met the current heuristic threshold.")
+        if excluded_transport:
+            warns.append(
+                f"{len(excluded_transport)} J1939 transport-protocol id(s) were excluded "
+                "from counter detection (TP sequence numbers are not application counters)."
+            )
         return ProcessorResult(
             candidates=candidates,
             metadata={
                 "analysis": "counter_detection",
                 "candidate_count": len(candidates),
+                "excluded_transport_ids": excluded_transport,
                 "implementation": "file-backed heuristic analysis",
             },
             warnings=warns,
@@ -64,6 +76,11 @@ class SignalAnalysisProcessor:
         warns = []
         if analysis["candidate_count"] == 0:
             warns.append("No likely signal candidates met the current heuristic threshold.")
+        if analysis["excluded_transport_ids"]:
+            warns.append(
+                f"{len(analysis['excluded_transport_ids'])} J1939 transport-protocol id(s) "
+                "were excluded from signal inference (TP framing is not an application signal)."
+            )
         return ProcessorResult(
             candidates=analysis["candidates"],
             metadata={
@@ -71,6 +88,7 @@ class SignalAnalysisProcessor:
                 "candidate_count": analysis["candidate_count"],
                 "analysis_by_id": analysis["analysis_by_id"],
                 "low_sample_ids": analysis["low_sample_ids"],
+                "excluded_transport_ids": analysis["excluded_transport_ids"],
                 "implementation": "file-backed heuristic analysis",
             },
             warnings=warns,

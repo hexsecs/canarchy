@@ -166,13 +166,15 @@ Notes:
 Summarize a capture source.
 
 ```bash
-canarchy stats --file <path> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
-canarchy stats --file - [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
+canarchy stats --file <path> [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
+canarchy stats --file - [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
 ```
 
 Notes:
 
 * `--file -` reads candump text from standard input instead of a file
+* beyond `total_frames` / `unique_arbitration_ids`, the payload reports `duration_seconds`, first/last timestamps, a `dlc_distribution`, and a `bus_load` block with total bits, bits/s, and load percentages at 250 k / 500 k / 1 M bit/s (frame overhead without stuff bits; a lower-bound estimate)
+* `top_ids` details the highest-frequency arbitration ids (default 20, bounded by `--top`): `arbitration_id_hex`, `frame_count`, `share`, `rate_hz`, mean/min/max inter-frame gap, `gap_jitter_ms`, observed DLCs, and first/last seen
 
 ### generate
 
@@ -924,6 +926,8 @@ Notes:
 * this command is passive and file-backed
 * the current implementation inspects nibble- and byte-sized candidate fields on recorded arbitration IDs
 * candidates are ranked by monotonicity evidence and explicit rollover detection
+* J1939 transport-protocol IDs (TP.CM / TP.DT / ETP.CM / ETP.DT) are excluded — their sequence numbers are protocol plumbing, not application counters — and reported in metadata as `excluded_transport_ids`
+* J1939 candidates carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`; every candidate carries `arbitration_id_hex`
 
 ### re signals
 
@@ -938,6 +942,8 @@ Notes:
 * this command is passive and file-backed
 * the current implementation inspects nibble-aligned 4-bit fields, byte-aligned 8-bit fields, and word-aligned 16-bit fields
 * candidates are ranked by change-rate preference, observed range, and value diversity
+* J1939 transport-protocol IDs (TP.CM / TP.DT / ETP.CM / ETP.DT) are excluded from signal inference and reported under `excluded_transport_ids`
+* J1939 candidates carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`; every candidate carries `arbitration_id_hex`
 * arbitration IDs with fewer than 5 frames are omitted from the candidate list and reported in `low_sample_ids`
 
 ### re correlate
@@ -961,17 +967,18 @@ Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs.
 
 ```bash
 canarchy re anomalies <file> [--baseline <ref>] [--dbc <ref>] [--z-threshold <z>] \
-    [--cv-max <cv>] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
+    [--cv-max <cv>] [--min-samples <n>] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
 ```
 
 Notes:
 
 * this command is passive and file-backed; it honors the standard `--offset`, `--max-frames`, and `--seconds` window flags
-* with `--baseline`, per-ID timing statistics and the expected ID set are learned from the reference capture and the input is scored against them; without it, each ID is scored against its own statistics (self-consistency) and ID-presence anomalies are not emitted
-* anomalies carry `arbitration_id`, `kind` (`timing` / `unknown-id` / `dropped-id`), `score`, `z_score`, `sample_count`, `timestamp`, and a `rationale`, ranked by score
+* with `--baseline`, per-ID timing statistics and the expected ID set are learned from the reference capture and the input is scored against them; without it, each ID is scored against its own statistics (self-consistency), ID-presence anomalies are not emitted, and a warning nudges the operator toward supplying a baseline
+* anomalies carry `arbitration_id`, `kind` (`timing` / `unknown-id` / `dropped-id`), `score`, `z_score`, `z_score_capped`, `sample_count`, `timestamp`, and a `rationale`, ranked by score; J1939 candidates additionally carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`
 * **only IDs judged cyclic are timing-checked, so event-based and event-periodic messages are not falsely flagged.** Classification is authoritative from the database when `--dbc` is supplied (a message's `cycle_time` / send type decides cyclic vs event); otherwise a robust coefficient of variation (scaled median-absolute-deviation over the median inter-frame gap) is compared against `--cv-max` (default 0.5)
 * timing statistics use the median and MAD rather than mean and standard deviation, so a minority of outlier gaps cannot inflate the spread and mask themselves
-* the payload also reports `mode`, `timing_source` (`dbc` / `observed`), `cyclic_ids`, `event_ids` (timing skipped), and a per-ID `classifications` list
+* a cyclic-looking ID needs at least `--min-samples` inter-frame gaps before its timing is scored (default 10 without a baseline, 3 with one); sparser IDs are listed under `low_rate_ids` with classification source `low-sample` instead of being ranked, and reported z-scores are capped at ±100σ
+* the payload also reports `mode`, `timing_source` (`dbc` / `observed`), `min_samples`, `cyclic_ids`, `event_ids` (timing skipped), `low_rate_ids`, and a per-ID `classifications` list
 
 ### re entropy
 
@@ -986,6 +993,8 @@ Notes:
 * this command is passive and file-backed
 * JSON output includes one candidate per arbitration ID plus a per-byte entropy breakdown inside each candidate
 * IDs with fewer than 10 observed frames are retained and marked with `low_sample: true`
+* J1939 transport-protocol IDs are retained but labeled with `j1939_transport: true` and a rationale note, so TP framing is not mistaken for an application signal
+* J1939 candidates carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`; every candidate carries `arbitration_id_hex`
 
 ### re match-dbc
 

@@ -54,6 +54,91 @@ class TransportStats:
         }
 
 
+# CAN data-frame overhead in bits, excluding stuff bits: SOF + identifier +
+# control + CRC + ACK + EOF + interframe space. Extended frames carry the
+# 18-bit identifier extension plus SRR/IDE/r1.
+_STANDARD_FRAME_OVERHEAD_BITS = 47
+_EXTENDED_FRAME_OVERHEAD_BITS = 67
+_BUS_LOAD_BITRATES = (250_000, 500_000, 1_000_000)
+
+
+def _frame_bits_estimate(frame: CanFrame) -> int:
+    overhead = (
+        _EXTENDED_FRAME_OVERHEAD_BITS if frame.is_extended_id else _STANDARD_FRAME_OVERHEAD_BITS
+    )
+    return overhead + len(frame.data) * 8
+
+
+def detailed_frame_stats(
+    frames: list[CanFrame], *, top: int = 20
+) -> dict[str, int | float | str | list | dict | None]:
+    """Per-capture statistics: per-ID frequency/timing, DLC spread, bus load.
+
+    The output is bounded: per-ID detail covers the ``top`` highest-frequency
+    arbitration ids, with totals alongside so a consumer can tell coverage.
+    """
+    from statistics import pstdev
+
+    timestamps = [frame.timestamp for frame in frames if frame.timestamp is not None]
+    duration = (max(timestamps) - min(timestamps)) if len(timestamps) > 1 else 0.0
+
+    by_id: dict[int, list[CanFrame]] = {}
+    dlc_distribution: dict[str, int] = {}
+    total_bits = 0
+    for frame in frames:
+        by_id.setdefault(frame.arbitration_id, []).append(frame)
+        dlc = str(len(frame.data))
+        dlc_distribution[dlc] = dlc_distribution.get(dlc, 0) + 1
+        total_bits += _frame_bits_estimate(frame)
+
+    total_frames = len(frames)
+    bits_per_second = (total_bits / duration) if duration > 0 else None
+    bus_load = {
+        "total_bits_estimate": total_bits,
+        "bits_per_second_estimate": round(bits_per_second, 1) if bits_per_second else None,
+        "load_percent_at_bitrate": {
+            str(bitrate): round(bits_per_second / bitrate * 100.0, 2)
+            for bitrate in _BUS_LOAD_BITRATES
+        }
+        if bits_per_second
+        else {},
+        "assumptions": "frame overhead without stuff bits; load is a lower-bound estimate",
+    }
+
+    ranked = sorted(by_id.items(), key=lambda item: (-len(item[1]), item[0]))
+    top_ids: list[dict[str, int | float | str | list | None]] = []
+    for arb_id, group in ranked[: max(top, 0)]:
+        group_ts = sorted(f.timestamp for f in group if f.timestamp is not None)
+        gaps_ms = [(b - a) * 1000.0 for a, b in zip(group_ts, group_ts[1:])]
+        count = len(group)
+        top_ids.append(
+            {
+                "arbitration_id": arb_id,
+                "arbitration_id_hex": f"0x{arb_id:X}",
+                "frame_count": count,
+                "share": round(count / total_frames, 4) if total_frames else 0.0,
+                "rate_hz": round(count / duration, 3) if duration > 0 else None,
+                "mean_gap_ms": round(sum(gaps_ms) / len(gaps_ms), 3) if gaps_ms else None,
+                "gap_jitter_ms": round(pstdev(gaps_ms), 3) if len(gaps_ms) > 1 else None,
+                "min_gap_ms": round(min(gaps_ms), 3) if gaps_ms else None,
+                "max_gap_ms": round(max(gaps_ms), 3) if gaps_ms else None,
+                "dlcs": sorted({len(f.data) for f in group}),
+                "first_seen": group_ts[0] if group_ts else None,
+                "last_seen": group_ts[-1] if group_ts else None,
+            }
+        )
+
+    return {
+        "duration_seconds": round(duration, 6),
+        "first_timestamp": min(timestamps) if timestamps else None,
+        "last_timestamp": max(timestamps) if timestamps else None,
+        "dlc_distribution": dlc_distribution,
+        "bus_load": bus_load,
+        "top_ids": top_ids,
+        "top_ids_returned": len(top_ids),
+    }
+
+
 @dataclass(slots=True)
 class CaptureMetadata:
     frame_count: int

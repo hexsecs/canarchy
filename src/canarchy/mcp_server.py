@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import signal
@@ -1193,6 +1194,14 @@ _TOOLS: list[types.Tool] = [
                     "description": "Max coefficient of variation for an ID to be treated as cyclic when no DBC is supplied",
                     "default": 0.5,
                 },
+                "min_samples": {
+                    "type": "integer",
+                    "description": (
+                        "Minimum inter-frame gaps before an ID's timing is scored "
+                        "(default: 3 with a baseline, 10 without; sparser IDs are "
+                        "reported as low-rate instead of ranked)"
+                    ),
+                },
                 "offset": {"type": "integer", "description": "Skip the first N frames"},
                 "max_frames": {
                     "type": "integer",
@@ -2016,6 +2025,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--z-threshold", str(a["z_threshold"])]
             if "cv_max" in a:
                 argv += ["--cv-max", str(a["cv_max"])]
+            if a.get("min_samples") is not None:
+                argv += ["--min-samples", str(a["min_samples"])]
             if a.get("offset"):
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
@@ -2204,6 +2215,128 @@ _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
 )
 
 
+# --- Response bounding (#405) -----------------------------------------------
+#
+# The stdio transport (and the agent on the other end of it) cannot absorb an
+# unbounded tool result: a single high-rate per-frame command can serialize to
+# tens of megabytes and tear down the session. Every response is therefore
+# bounded to `_response_byte_limit()` bytes; oversized list-shaped data is
+# truncated with an explicit marker and total counts, and anything that still
+# cannot fit is replaced by a stub envelope rather than crashing the server.
+
+_DEFAULT_MAX_RESPONSE_BYTES = 512_000
+# Reserve headroom for the truncation marker added after trimming.
+_TRUNCATION_MARKER_RESERVE = 4_096
+_TRUNCATION_HINT = (
+    "The response exceeded the MCP output cap and was truncated. Re-run the "
+    "equivalent canarchy CLI command for the full result, or bound the input "
+    "with max_frames/seconds."
+)
+
+
+def _response_byte_limit() -> int:
+    raw = os.environ.get("CANARCHY_MCP_MAX_RESPONSE_BYTES", "")
+    try:
+        value = int(raw)
+    except ValueError:
+        return _DEFAULT_MAX_RESPONSE_BYTES
+    return value if value > 0 else _DEFAULT_MAX_RESPONSE_BYTES
+
+
+def _list_slots(node: Any, path: str, slots: list[tuple[Any, Any, str, int]]) -> None:
+    """Collect (container, key, path, length) for every list reachable in node."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            child_path = f"{path}.{key}" if path else str(key)
+            if isinstance(value, list):
+                slots.append((node, key, child_path, len(value)))
+            _list_slots(value, child_path, slots)
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            _list_slots(value, f"{path}[{index}]", slots)
+
+
+def _payload_bytes(payload: dict[str, Any]) -> int:
+    return len(json.dumps(payload, sort_keys=True).encode("utf-8"))
+
+
+def bound_payload(payload: dict[str, Any], max_bytes: int) -> dict[str, Any]:
+    """Return ``payload`` reduced to fit in ``max_bytes`` of serialized JSON.
+
+    Oversized payloads are trimmed by repeatedly halving the longest list in
+    ``data``; each trimmed list is recorded with its original total so an
+    agent can distinguish "truncated" from "zero matches". If no list can be
+    trimmed further, ``data`` is replaced by a stub. The envelope itself
+    (``ok`` / ``command`` / ``warnings`` / ``errors``) is always preserved.
+    """
+    if _payload_bytes(payload) <= max_bytes:
+        return payload
+
+    payload = copy.deepcopy(payload)
+    budget = max(max_bytes - _TRUNCATION_MARKER_RESERVE, 1_024)
+    truncated_lists: dict[str, dict[str, int]] = {}
+
+    while _payload_bytes(payload) > budget:
+        slots: list[tuple[Any, Any, str, int]] = []
+        _list_slots(payload.get("data", {}), "data", slots)
+        trimmable = [slot for slot in slots if slot[3] > 0]
+        if not trimmable:
+            # No list left to trim (e.g. one enormous string): keep the
+            # envelope, drop the data block, and say so explicitly.
+            payload["data"] = {
+                "truncated": True,
+                "truncation": {
+                    "max_response_bytes": max_bytes,
+                    "reason": "non-list data exceeded the output cap",
+                    "hint": _TRUNCATION_HINT,
+                },
+            }
+            break
+        container, key, path, length = max(trimmable, key=lambda slot: slot[3])
+        keep = length // 2
+        truncated_lists.setdefault(path, {"total_items": length})
+        truncated_lists[path]["returned_items"] = keep
+        container[key] = container[key][:keep]
+
+    if truncated_lists:
+        data = payload.get("data")
+        if isinstance(data, dict):
+            data["truncated"] = True
+            data["truncation"] = {
+                "max_response_bytes": max_bytes,
+                "hint": _TRUNCATION_HINT,
+                "lists": [
+                    {"path": path, **counts} for path, counts in sorted(truncated_lists.items())
+                ],
+            }
+        warnings = payload.setdefault("warnings", [])
+        if isinstance(warnings, list):
+            warnings.append(_TRUNCATION_HINT)
+
+    return payload
+
+
+def _tool_execution_error_payload(name: str, exc: BaseException) -> dict[str, Any]:
+    """Canonical envelope for an unexpected in-tool failure (REQ: isolation)."""
+    return {
+        "ok": False,
+        "command": name,
+        "data": {},
+        "warnings": [],
+        "errors": [
+            {
+                "code": "TOOL_EXECUTION_ERROR",
+                "message": f"{type(exc).__name__}: {exc}",
+                "hint": (
+                    "The canarchy MCP server caught this error; the session and the "
+                    "other tools remain usable. Check the tool arguments or run the "
+                    "equivalent CLI command for full diagnostics."
+                ),
+            }
+        ],
+    }
+
+
 def _missing_ack_active_payload(name: str) -> dict[str, Any]:
     """Canonical envelope for an MCP active-transmit call without `ack_active=true`."""
     return {
@@ -2244,18 +2377,26 @@ async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[
         # The argv builder respects an explicit `dry_run=false` and
         # otherwise emits --dry-run.
         args.setdefault("dry_run", True)
-    argv = _build_argv(name, args)
-    _, result = await asyncio.to_thread(execute_command, argv)
-    if result is None:
-        payload = {
-            "ok": False,
-            "command": name,
-            "data": {},
-            "warnings": [],
-            "errors": [{"code": "NO_RESULT", "message": "Command returned no result"}],
-        }
-    else:
-        payload = result.to_payload()
+    # Isolate per-tool failures: an exception or oversized result from one
+    # call must never tear down the stdio transport for the whole session
+    # (#405). Anything raised here is converted into a structured error
+    # envelope instead of propagating to the protocol layer.
+    try:
+        argv = _build_argv(name, args)
+        _, result = await asyncio.to_thread(execute_command, argv)
+        if result is None:
+            payload = {
+                "ok": False,
+                "command": name,
+                "data": {},
+                "warnings": [],
+                "errors": [{"code": "NO_RESULT", "message": "Command returned no result"}],
+            }
+        else:
+            payload = result.to_payload()
+        payload = bound_payload(payload, _response_byte_limit())
+    except Exception as exc:  # noqa: BLE001 - isolation boundary by design
+        payload = _tool_execution_error_payload(name, exc)
     return [types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))]
 
 

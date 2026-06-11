@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import Any
 
 from canarchy.models import CanFrame
+from canarchy.reverse_engineering import j1939_annotation
 from canarchy.transport import LocalTransport
 
 
@@ -93,18 +94,36 @@ def corpus_analysis(
 
     capture_count = len(capture_files)
 
+    # J1939 PGN / source-address annotation for extended (29-bit) ids (#406).
+    annotations: dict[int, dict[str, Any]] = {}
+    for idx in per_capture_index:
+        for arb_id, frames in idx.items():
+            if arb_id in annotations or not any(f.is_extended_id for f in frames):
+                continue
+            annotation = j1939_annotation(arb_id)
+            if annotation is not None:
+                annotations[arb_id] = annotation
+
+    def _annotated(entry: dict[str, Any]) -> dict[str, Any]:
+        annotation = annotations.get(entry["arbitration_id"])
+        if annotation is not None:
+            entry.update(annotation)
+        return entry
+
     coverage: list[dict[str, Any]] = []
     for arb_id in sorted(all_ids):
         counts = [len(idx.get(arb_id, [])) for idx in per_capture_index]
         present = sum(1 for c in counts if c > 0)
         coverage.append(
-            {
-                "arbitration_id": arb_id,
-                "arbitration_id_hex": f"0x{arb_id:X}",
-                "frame_counts": counts,
-                "capture_count": present,
-                "present_in_all": present == capture_count,
-            }
+            _annotated(
+                {
+                    "arbitration_id": arb_id,
+                    "arbitration_id_hex": f"0x{arb_id:X}",
+                    "frame_counts": counts,
+                    "capture_count": present,
+                    "present_in_all": present == capture_count,
+                }
+            )
         )
 
     always_present = sorted(
@@ -140,13 +159,15 @@ def corpus_analysis(
             drift_ratio = std / mean_of_means if mean_of_means != 0.0 else 0.0
 
             cycle_time_drift.append(
-                {
-                    "arbitration_id": arb_id,
-                    "arbitration_id_hex": f"0x{arb_id:X}",
-                    "per_capture_mean_ms": per_capture_means,
-                    "cross_capture_stddev_ms": std,
-                    "drift_ratio": drift_ratio,
-                }
+                _annotated(
+                    {
+                        "arbitration_id": arb_id,
+                        "arbitration_id_hex": f"0x{arb_id:X}",
+                        "per_capture_mean_ms": per_capture_means,
+                        "cross_capture_stddev_ms": std,
+                        "drift_ratio": drift_ratio,
+                    }
+                )
             )
 
     all_frames_by_id: dict[int, list[CanFrame]] = defaultdict(list)
@@ -168,14 +189,16 @@ def corpus_analysis(
         stability_score = stable_bytes / byte_count
 
         signal_stability.append(
-            {
-                "arbitration_id": arb_id,
-                "arbitration_id_hex": f"0x{arb_id:X}",
-                "byte_count": byte_count,
-                "stable_bytes": stable_bytes,
-                "varying_bytes": varying_bytes,
-                "stability_score": stability_score,
-            }
+            _annotated(
+                {
+                    "arbitration_id": arb_id,
+                    "arbitration_id_hex": f"0x{arb_id:X}",
+                    "byte_count": byte_count,
+                    "stable_bytes": stable_bytes,
+                    "varying_bytes": varying_bytes,
+                    "stability_score": stability_score,
+                }
+            )
         )
 
     stable_ids = sum(1 for entry in signal_stability if entry["stability_score"] == 1.0)

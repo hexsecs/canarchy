@@ -905,6 +905,55 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["total_frames"], 3)
         self.assertEqual(payload["data"]["unique_arbitration_ids"], 3)
 
+    def test_stats_json_output_includes_per_id_timing_and_bus_load(self) -> None:
+        """#410: stats reports per-ID frequency/timing, DLC spread, and bus load."""
+        exit_code, stdout, _ = run_cli(
+            "stats", "--file", str(FIXTURES / "sample.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["dlc_distribution"], {"4": 2, "8": 1})
+        self.assertEqual(data["duration_seconds"], 0.2)
+
+        bus_load = data["bus_load"]
+        self.assertGreater(bus_load["total_bits_estimate"], 0)
+        self.assertIn("250000", bus_load["load_percent_at_bitrate"])
+
+        self.assertEqual(data["top_ids_returned"], 3)
+        top = data["top_ids"][0]
+        self.assertIn("arbitration_id_hex", top)
+        self.assertEqual(top["frame_count"], 1)
+        self.assertAlmostEqual(top["share"], 0.3333, places=4)
+        self.assertIn("rate_hz", top)
+        self.assertIn("mean_gap_ms", top)
+
+    def test_stats_top_bound_limits_per_id_detail(self) -> None:
+        """#410: the per-ID breakdown is bounded by --top."""
+        exit_code, stdout, _ = run_cli(
+            "stats", "--file", str(FIXTURES / "sample.candump"), "--top", "1", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["top_ids_returned"], 1)
+        self.assertEqual(len(data["top_ids"]), 1)
+        # Totals remain visible alongside the bounded detail.
+        self.assertEqual(data["unique_arbitration_ids"], 3)
+
+    def test_stats_per_id_gap_statistics(self) -> None:
+        """#410: repeated ids report mean/jitter inter-frame gaps."""
+        exit_code, stdout, _ = run_cli(
+            "stats", "--file", str(FIXTURES / "j1939_heavy_vehicle.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+
+        data = json.loads(stdout)["data"]
+        repeated = [entry for entry in data["top_ids"] if entry["frame_count"] > 1]
+        self.assertTrue(repeated)
+        self.assertIsNotNone(repeated[0]["mean_gap_ms"])
+        self.assertIsNotNone(repeated[0]["first_seen"])
+
     def test_capture_info_json_output_returns_fast_metadata(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "capture-info", "--file", str(FIXTURES / "sample.candump"), "--json"

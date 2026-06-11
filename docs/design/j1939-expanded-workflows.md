@@ -39,6 +39,7 @@ Heavy-vehicle workflows should remain PGN and SPN first rather than forcing oper
 | `REQ-J1939-06` | Unwanted behaviour | If `j1939 spn` is invoked without `--file`, the system shall return a structured error with code `CAPTURE_FILE_REQUIRED` and exit code 1. |
 | `REQ-J1939-07` | Unwanted behaviour | If `j1939 spn` is invoked with a negative SPN value, the system shall return a structured error with code `INVALID_SPN` and exit code 1. |
 | `REQ-J1939-08` | Unwanted behaviour | If the requested SPN is not in the curated decoder map, the system shall return a structured error with code `J1939_SPN_UNSUPPORTED` and exit code 1. |
+| `REQ-J1939-20` | Ubiquitous | DM1 DTCs and `j1939 faults` entries shall resolve `fmi` to an `fmi_description` from the bundled SAE J1939-73 FMI catalog, and SPN `name` resolution shall support operator-supplied OEM/proprietary extensions via `$CANARCHY_J1939_SPN_OVERRIDES` (or `~/.canarchy/j1939_spns.json`) merged over the bundled SPN catalog. |
 
 ## Command Surface
 
@@ -141,8 +142,19 @@ Each DTC includes:
 * `spn`
 * `name` when known from the curated SPN map
 * `fmi`
+* `fmi_description` from the bundled SAE J1939-73 FMI catalog (`null` for reserved/out-of-range FMIs that have no entry)
 * `occurrence_count`
 * `conversion_method`
+
+### SPN name resolution and OEM extensions
+
+DTC `name` resolution uses, in order of precedence:
+
+1. a DBC supplied via `--dbc` (path or provider ref), which overrides the curated map per matched SPN
+2. operator-supplied SPN overrides: a JSON file shaped like the bundled `spns.json` (`{"<spn>": {"name": "..."}}`) resolved from `$CANARCHY_J1939_SPN_OVERRIDES`, falling back to `~/.canarchy/j1939_spns.json` when present — the documented extension path for OEM/proprietary SPN ranges
+3. the bundled SAE SPN catalog (`canarchy/resources/j1939/spns.json`)
+
+FMI descriptions always come from the bundled FMI catalog (`canarchy/resources/j1939/fmis.json`); `j1939 dm1` and `j1939 faults` both carry `fmi_description` per DTC/fault.
 
 ## `j1939 inventory`
 

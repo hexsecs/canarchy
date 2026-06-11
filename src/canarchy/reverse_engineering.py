@@ -12,6 +12,80 @@ from typing import Any
 
 from canarchy.models import CanFrame
 
+# J1939 transport-protocol PGNs whose payloads carry protocol plumbing
+# (sequence numbers, control bytes) rather than application signals. RE
+# heuristics must not report these as discovered counters/signals (#407).
+J1939_TRANSPORT_PGNS = frozenset(
+    {
+        0xEB00,  # TP.DT — transport data transfer (byte 0 is a sequence number)
+        0xEC00,  # TP.CM — transport connection management
+        0xC700,  # ETP.DT — extended transport data transfer
+        0xC800,  # ETP.CM — extended transport connection management
+    }
+)
+
+
+def j1939_annotation(arbitration_id: int) -> dict[str, Any] | None:
+    """Decode a 29-bit J1939 arbitration id into PGN / source-address fields.
+
+    Returns ``None`` for ids that do not decompose as J1939 (#406).
+    """
+    from canarchy.j1939 import decompose_arbitration_id
+    from canarchy.j1939_metadata import pgn_lookup, source_address_lookup
+
+    try:
+        identifier = decompose_arbitration_id(arbitration_id)
+    except ValueError:
+        return None
+    meta = pgn_lookup(identifier.pgn) or {}
+    return {
+        "pgn": identifier.pgn,
+        "pgn_label": meta.get("label"),
+        "pgn_name": meta.get("name"),
+        "source_address": identifier.source_address,
+        "source_address_name": source_address_lookup(identifier.source_address),
+        "j1939_transport": identifier.pgn in J1939_TRANSPORT_PGNS,
+    }
+
+
+def j1939_annotations(frames: list[CanFrame]) -> dict[int, dict[str, Any]]:
+    """Map each extended (29-bit) arbitration id in ``frames`` to its annotation."""
+    annotations: dict[int, dict[str, Any]] = {}
+    for frame in frames:
+        if frame.is_extended_id and frame.arbitration_id not in annotations:
+            annotation = j1939_annotation(frame.arbitration_id)
+            if annotation is not None:
+                annotations[frame.arbitration_id] = annotation
+    return annotations
+
+
+def j1939_transport_ids(frames: list[CanFrame]) -> list[dict[str, Any]]:
+    """List the J1939 transport-protocol ids present in ``frames``."""
+    excluded: list[dict[str, Any]] = []
+    for arb_id, annotation in sorted(j1939_annotations(frames).items()):
+        if annotation["j1939_transport"]:
+            excluded.append(
+                {
+                    "arbitration_id": arb_id,
+                    "arbitration_id_hex": f"0x{arb_id:X}",
+                    "pgn": annotation["pgn"],
+                    "pgn_label": annotation["pgn_label"],
+                }
+            )
+    return excluded
+
+
+def _annotated_payload(
+    payload: dict[str, object], annotations: dict[int, dict[str, Any]]
+) -> dict[str, object]:
+    arb_id = payload["arbitration_id"]
+    assert isinstance(arb_id, int)
+    payload.setdefault("arbitration_id_hex", f"0x{arb_id:X}")
+    annotation = annotations.get(arb_id)
+    if annotation is not None:
+        payload.update(annotation)
+    return payload
+
 
 class ReferenceSeriesError(Exception):
     """Raised when a reference series file is invalid or overlaps insufficiently."""
@@ -155,6 +229,7 @@ class AnomalyCandidate:
     sample_count: int
     timestamp: float | None
     rationale: str
+    z_score_capped: bool = False
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -163,6 +238,7 @@ class AnomalyCandidate:
             "kind": self.kind,
             "score": self.score,
             "z_score": self.z_score,
+            "z_score_capped": self.z_score_capped,
             "sample_count": self.sample_count,
             "timestamp": self.timestamp,
             "rationale": self.rationale,
@@ -170,10 +246,17 @@ class AnomalyCandidate:
 
 
 def counter_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
+    annotations = j1939_annotations(frames)
     grouped_frames: dict[int, list[CanFrame]] = defaultdict(list)
     for frame in frames:
-        if not frame.is_remote_frame and not frame.is_error_frame:
-            grouped_frames[frame.arbitration_id].append(frame)
+        if frame.is_remote_frame or frame.is_error_frame:
+            continue
+        annotation = annotations.get(frame.arbitration_id)
+        if annotation is not None and annotation["j1939_transport"]:
+            # TP.DT sequence numbers look like perfect counters; they are
+            # protocol plumbing, not application counters (#407).
+            continue
+        grouped_frames[frame.arbitration_id].append(frame)
 
     candidates: list[CounterCandidate] = []
     for arbitration_id, group in grouped_frames.items():
@@ -196,10 +279,11 @@ def counter_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
             candidate.bit_length,
         )
     )
-    return [candidate.to_payload() for candidate in candidates]
+    return [_annotated_payload(candidate.to_payload(), annotations) for candidate in candidates]
 
 
 def entropy_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
+    annotations = j1939_annotations(frames)
     grouped_frames: dict[int, list[CanFrame]] = defaultdict(list)
     for frame in frames:
         if not frame.is_remote_frame and not frame.is_error_frame and frame.data:
@@ -222,6 +306,9 @@ def entropy_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
         ]
         if low_sample:
             rationale_parts.append("low sample count")
+        annotation = annotations.get(arbitration_id)
+        if annotation is not None and annotation["j1939_transport"]:
+            rationale_parts.append("J1939 transport-protocol framing, not an application signal")
         candidates.append(
             EntropyCandidate(
                 arbitration_id=arbitration_id,
@@ -241,12 +328,17 @@ def entropy_candidates(frames: list[CanFrame]) -> list[dict[str, object]]:
             candidate.arbitration_id,
         )
     )
-    return [candidate.to_payload() for candidate in candidates]
+    return [_annotated_payload(candidate.to_payload(), annotations) for candidate in candidates]
 
 
 def signal_analysis(frames: list[CanFrame]) -> dict[str, object]:
+    annotations = j1939_annotations(frames)
+    excluded_transport = j1939_transport_ids(frames)
+    excluded_ids = {entry["arbitration_id"] for entry in excluded_transport}
     grouped_frames: dict[int, list[CanFrame]] = defaultdict(list)
     for frame in frames:
+        if frame.arbitration_id in excluded_ids:
+            continue
         if not frame.is_remote_frame and not frame.is_error_frame and frame.data:
             grouped_frames[frame.arbitration_id].append(frame)
 
@@ -308,9 +400,12 @@ def signal_analysis(frames: list[CanFrame]) -> dict[str, object]:
 
     return {
         "candidate_count": len(candidates),
-        "candidates": [candidate.to_payload() for candidate in candidates],
+        "candidates": [
+            _annotated_payload(candidate.to_payload(), annotations) for candidate in candidates
+        ],
         "analysis_by_id": analysis_by_id,
         "low_sample_ids": low_sample_ids,
+        "excluded_transport_ids": excluded_transport,
     }
 
 
@@ -793,6 +888,13 @@ def score_dbc_candidates(
 # --- Anomaly detection -----------------------------------------------------
 
 _ANOMALY_MIN_GAPS = 3
+# Without a separate baseline, statistics learned from an id's own (possibly
+# bursty) traffic need more evidence before timing deviations are scored;
+# sparse ids are reported as low-rate instead of ranked as anomalies (#408).
+_ANOMALY_SELF_MIN_GAPS = 10
+# Reported z-scores are capped: beyond this the magnitude is an artifact of a
+# near-zero spread estimate, not a meaningful number of standard deviations.
+_ANOMALY_Z_CAP = 100.0
 _ANOMALY_DEFAULT_Z = 3.0
 # Robust coefficient of variation (scaled MAD over the median inter-frame gap)
 # above which an id is treated as event-driven rather than cyclic, so its
@@ -839,11 +941,13 @@ def _classify_cyclic(
     ref_gaps: list[float],
     dbc_timing: dict[int, dict[str, Any]] | None,
     cv_max: float,
+    min_gaps: int = _ANOMALY_MIN_GAPS,
 ) -> dict[str, Any]:
     """Decide whether an id's timing should be checked, and how.
 
     A DBC entry (cycle time / send type) is authoritative when present; otherwise
     a robust coefficient of variation (scaled MAD over median) classifies the id.
+    Ids with fewer than ``min_gaps`` reference gaps are not timing-scored.
     Returns a record with ``cyclic`` (bool), ``source``
     (``dbc`` | ``cv`` | ``insufficient-samples``), the expected gap ``center`` and
     ``spread`` to score against, and the robust ``cv``.
@@ -854,6 +958,7 @@ def _classify_cyclic(
         "cyclic": False,
         "source": None,
         "cv": None,
+        "gap_count": len(ref_gaps),
     }
 
     center = spread = robust_cv = None
@@ -891,6 +996,13 @@ def _classify_cyclic(
     if robust_cv > cv_max:
         record["cyclic"] = False
         return record
+    # The id looks cyclic, but a bursty/sparse stream can also produce a tight
+    # median gap. Require enough evidence before scoring its timing; otherwise
+    # report it as a low-rate id instead of ranking artifact deviations (#408).
+    if len(ref_gaps) < min_gaps:
+        record["source"] = "low-sample"
+        record["low_rate"] = True
+        return record
     # Floor the spread to a fraction of the period so a near-perfectly regular
     # baseline (MAD ~ 0, modulo float noise) still yields a sane finite z-score
     # for an outlier rather than dividing by an effectively-zero spread.
@@ -906,13 +1018,17 @@ def anomaly_candidates(
     z_threshold: float = _ANOMALY_DEFAULT_Z,
     cv_max: float = _ANOMALY_DEFAULT_CV_MAX,
     dbc_timing: dict[int, dict[str, Any]] | None = None,
+    min_samples: int | None = None,
 ) -> dict[str, Any]:
     """Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs.
 
     With ``baseline``, per-id gap statistics and the expected id set are learned
     from the reference capture and the input is scored against them. Without a
     baseline, the input is scored against its own learned statistics
-    (self-consistency), and id-presence anomalies are not emitted.
+    (self-consistency), id-presence anomalies are not emitted, and a higher
+    minimum sample count applies so sparse/bursty ids are reported as low-rate
+    instead of being ranked on artifact z-scores (#408). Reported z-scores are
+    capped at ±100σ.
 
     Only ids judged *cyclic* are timing-checked, so event-based and event-periodic
     messages are not falsely flagged. Classification uses the DBC ``cycle_time`` /
@@ -922,6 +1038,9 @@ def anomaly_candidates(
     input_ts = _id_timestamps(frames)
     baseline_ts = _id_timestamps(baseline) if baseline is not None else input_ts
     has_baseline = baseline is not None
+    if min_samples is None:
+        min_samples = _ANOMALY_MIN_GAPS if has_baseline else _ANOMALY_SELF_MIN_GAPS
+    annotations = j1939_annotations(frames)
 
     candidates: list[AnomalyCandidate] = []
     classifications: list[dict[str, Any]] = []
@@ -929,7 +1048,12 @@ def anomaly_candidates(
     # Timing anomalies: the single most-deviant inter-frame gap per id.
     for arb_id, timestamps in sorted(input_ts.items()):
         ref_gaps = _inter_frame_gaps(baseline_ts.get(arb_id, []))
-        classification = _classify_cyclic(arb_id, ref_gaps, dbc_timing, cv_max)
+        classification = _classify_cyclic(
+            arb_id, ref_gaps, dbc_timing, cv_max, min_gaps=min_samples
+        )
+        annotation = annotations.get(arb_id)
+        if annotation is not None:
+            classification.update(annotation)
         classifications.append(classification)
         if not classification["cyclic"]:
             continue
@@ -948,10 +1072,18 @@ def anomaly_candidates(
                 worst_z, worst_gap, worst_index = z, gap, index
         if abs(worst_z) < z_threshold:
             continue
+        z_capped = abs(worst_z) > _ANOMALY_Z_CAP
+        if z_capped:
+            worst_z = _ANOMALY_Z_CAP if worst_z > 0 else -_ANOMALY_Z_CAP
         # The gap ends at the second timestamp of the pair.
         timestamp = timestamps[worst_index + 1]
         source_note = (
             "declared cycle time" if classification["source"] == "dbc" else "baseline median"
+        )
+        deviation_note = (
+            f"more than {round(_ANOMALY_Z_CAP)}σ (capped)"
+            if z_capped
+            else f"{round(abs(worst_z), 2)}σ"
         )
         candidates.append(
             AnomalyCandidate(
@@ -959,11 +1091,12 @@ def anomaly_candidates(
                 kind="timing",
                 score=round(abs(worst_z), 3),
                 z_score=round(worst_z, 3),
+                z_score_capped=z_capped,
                 sample_count=len(observed_gaps),
                 timestamp=timestamp,
                 rationale=(
                     f"inter-frame gap {round(worst_gap, 6)}s deviates "
-                    f"{round(abs(worst_z), 2)}σ from {source_note} {round(center, 6)}s"
+                    f"{deviation_note} from {source_note} {round(center, 6)}s"
                 ),
             )
         )
@@ -1012,14 +1145,23 @@ def anomaly_candidates(
         for c in classifications
         if not c["cyclic"] and c["source"] != "insufficient-samples"
     )
+    low_rate_ids = sorted(
+        c["arbitration_id"]
+        for c in classifications
+        if c["source"] in {"insufficient-samples", "low-sample"}
+    )
     return {
         "candidate_count": len(candidates),
-        "candidates": [candidate.to_payload() for candidate in candidates],
+        "candidates": [
+            _annotated_payload(candidate.to_payload(), annotations) for candidate in candidates
+        ],
         "mode": "baseline" if has_baseline else "self-consistency",
         "z_threshold": z_threshold,
         "cv_max": cv_max,
+        "min_samples": min_samples,
         "timing_source": "dbc" if dbc_timing else "observed",
         "cyclic_ids": cyclic_ids,
         "event_ids": event_ids,
+        "low_rate_ids": low_rate_ids,
         "classifications": classifications,
     }

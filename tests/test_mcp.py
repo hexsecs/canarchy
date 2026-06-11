@@ -1501,3 +1501,112 @@ def test_active_transmit_safety_bypasses_prompt_when_env_var_set():
             os.environ.pop("CANARCHY_MCP_NONINTERACTIVE_ACK", None)
         else:
             os.environ["CANARCHY_MCP_NONINTERACTIVE_ACK"] = saved
+
+
+# --- TEST-MCP-39..43: bounded responses and per-tool fault isolation (#405) --
+
+
+def _make_high_rate_j1939_capture(path: Path, frame_count: int = 4000) -> None:
+    """Write a synthetic high-rate EEC1 (PGN 61444) capture."""
+    lines = []
+    for index in range(frame_count):
+        timestamp = index * 0.01
+        payload = f"F0{index % 256:02X}7D{index % 256:02X}FFFF{index % 256:02X}FF"
+        lines.append(f"({timestamp:.6f}) can0 0CF00400#{payload}")
+    path.write_text("\n".join(lines) + "\n")
+
+
+def test_bound_payload_returns_small_payload_unchanged():
+    from canarchy.mcp_server import bound_payload
+
+    payload = {
+        "ok": True,
+        "command": "stats",
+        "data": {"events": [1, 2, 3]},
+        "warnings": [],
+        "errors": [],
+    }
+    assert bound_payload(payload, 512_000) is payload
+    assert "truncated" not in payload["data"]
+
+
+def test_bound_payload_truncates_lists_with_marker_and_total():
+    from canarchy.mcp_server import bound_payload
+
+    events = [{"event": index, "blob": "x" * 64} for index in range(2000)]
+    payload = {
+        "ok": True,
+        "command": "j1939 pgn",
+        "data": {"pgn": 61444, "events": events},
+        "warnings": [],
+        "errors": [],
+    }
+    bounded = bound_payload(payload, 20_000)
+
+    text = json.dumps(bounded, sort_keys=True)
+    assert len(text.encode("utf-8")) <= 20_000
+    assert bounded["data"]["truncated"] is True
+    truncation = bounded["data"]["truncation"]
+    assert truncation["max_response_bytes"] == 20_000
+    lists = {entry["path"]: entry for entry in truncation["lists"]}
+    assert lists["data.events"]["total_items"] == 2000
+    assert lists["data.events"]["returned_items"] < 2000
+    assert len(bounded["data"]["events"]) == lists["data.events"]["returned_items"]
+    assert any("truncated" in warning for warning in bounded["warnings"])
+    # The original payload is untouched.
+    assert len(payload["data"]["events"]) == 2000
+
+
+def test_bound_payload_falls_back_to_stub_for_giant_scalars():
+    from canarchy.mcp_server import bound_payload
+
+    payload = {
+        "ok": True,
+        "command": "dbc convert",
+        "data": {"content": "y" * 100_000},
+        "warnings": [],
+        "errors": [],
+    }
+    bounded = bound_payload(payload, 10_000)
+    text = json.dumps(bounded, sort_keys=True)
+    assert len(text.encode("utf-8")) <= 10_000
+    assert bounded["ok"] is True
+    assert bounded["command"] == "dbc convert"
+    assert bounded["data"]["truncated"] is True
+
+
+def test_call_tool_high_rate_j1939_pgn_is_bounded(tmp_path, monkeypatch):
+    capture = tmp_path / "high_rate_eec1.candump"
+    _make_high_rate_j1939_capture(capture)
+    monkeypatch.setenv("CANARCHY_MCP_MAX_RESPONSE_BYTES", "65536")
+
+    results = asyncio.run(handle_call_tool("j1939_pgn", {"pgn": 61444, "file": str(capture)}))
+
+    assert len(results) == 1
+    text = results[0].text
+    assert len(text.encode("utf-8")) <= 65_536
+    payload = json.loads(text)  # bounded AND still well-formed JSON
+    assert payload["ok"] is True
+    assert payload["command"] == "j1939 pgn"
+    assert payload["data"]["truncated"] is True
+    lists = {entry["path"]: entry for entry in payload["data"]["truncation"]["lists"]}
+    assert any(entry["total_items"] > entry["returned_items"] for entry in lists.values())
+
+
+def test_call_tool_exception_is_isolated_and_session_stays_usable(monkeypatch):
+    def _boom(argv):
+        raise RuntimeError("synthetic tool crash")
+
+    monkeypatch.setattr("canarchy.mcp_server.execute_command", _boom)
+    results = asyncio.run(handle_call_tool("uds_services", {}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "TOOL_EXECUTION_ERROR"
+    assert "synthetic tool crash" in payload["errors"][0]["message"]
+
+    monkeypatch.undo()
+    # The next call on the same server module succeeds: one failure does not
+    # poison the session.
+    results = asyncio.run(handle_call_tool("uds_services", {}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
