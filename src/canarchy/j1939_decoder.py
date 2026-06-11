@@ -13,7 +13,7 @@ from typing import Iterable, Protocol
 import j1939 as can_j1939
 
 from canarchy.j1939 import DM1_PGN, SpnDefinition, decompose_arbitration_id
-from canarchy.j1939_metadata import decodable_spns, spn_lookup
+from canarchy.j1939_metadata import decodable_spns, fmi_lookup, spn_lookup
 from canarchy.models import CanFrame, J1939ObservationEvent
 
 
@@ -363,6 +363,7 @@ class CanJ1939Decoder:
                     "spn": spn,
                     "name": spn_meta["name"] if spn_meta is not None else None,
                     "fmi": fmi,
+                    "fmi_description": fmi_lookup(fmi),
                     "occurrence_count": occurrence_count,
                     "conversion_method": conversion_method,
                 }

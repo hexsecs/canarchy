@@ -24,7 +24,7 @@ Operators need a stable base command set that supports passive live observation,
 | `REQ-TRANSPORT-02` | Event-driven | When `capture <interface>` is invoked, the system shall stream frame events through the live capture path for all output formats. |
 | `REQ-TRANSPORT-03` | Event-driven | When `send <interface> <frame-id> <data>` is invoked, the system shall emit a preflight active-transmit warning to `stderr` and then transmit the specified frame. |
 | `REQ-TRANSPORT-04` | Event-driven | When `filter <expression> --file <path>` or `filter <expression> --file -` is invoked, the system shall return only the frame events from the candump input that satisfy the expression. |
-| `REQ-TRANSPORT-05` | Event-driven | When `stats --file <path>` or `stats --file -` is invoked, the system shall return a deterministic summary including total frame count and unique arbitration ID count. |
+| `REQ-TRANSPORT-05` | Event-driven | When `stats --file <path>` or `stats --file -` is invoked, the system shall return a deterministic summary including total frame count, unique arbitration ID count, capture duration, a DLC distribution, a bus-load estimate (`bus_load`: total bits, bits/s, and load percentages at 250 k / 500 k / 1 M bit/s, explicitly excluding stuff bits), and a bounded per-ID breakdown (`top_ids`, default 20, configurable via `--top`) carrying frame count, share of traffic, rate in Hz, mean/min/max inter-frame gap, gap jitter, observed DLCs, and first/last seen timestamps. |
 | `REQ-TRANSPORT-06` | Event-driven | When `capture` or `send` is invoked, the system shall expose the effective transport backend name and configuration metadata in the result. |
 | `REQ-TRANSPORT-07` | Unwanted behaviour | If a transport interface is unavailable or a backend open fails, the system shall return a structured error with code `TRANSPORT_UNAVAILABLE` and exit code 2. |
 | `REQ-TRANSPORT-08` | Unwanted behaviour | If a capture file cannot be parsed, the system shall return a structured error with code `CAPTURE_SOURCE_INVALID` and exit code 2. |
@@ -41,7 +41,7 @@ Operators need a stable base command set that supports passive live observation,
 canarchy capture <interface> [--candump] [--json] [--jsonl] [--text]
 canarchy send <interface> <frame-id> <hex-data> [--ack-active] [--json] [--jsonl] [--text]
 canarchy filter <expression> (--file <path>|--file -|--stdin) [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--text]
-canarchy stats --file <path|-> [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--text]
+canarchy stats --file <path|-> [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json] [--jsonl] [--text]
 canarchy capture-info --file <path|-> [--json] [--jsonl] [--text]
 ```
 

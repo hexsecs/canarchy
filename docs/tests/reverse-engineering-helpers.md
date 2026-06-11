@@ -42,6 +42,9 @@ Define the expected coverage for the reverse-engineering helper family so shippe
 | `REQ-RE-14` | `TEST-RE-12`, `TEST-RE-13` |
 | `REQ-RE-15` | `TEST-RE-14`, `TEST-RE-15` |
 | `REQ-RE-16` | `TEST-RE-13` |
+| `REQ-RE-17` | `TEST-RE-16`, `TEST-RE-17` |
+| `REQ-RE-18` | `TEST-RE-18`, `TEST-RE-19` |
+| `REQ-RE-19` | `TEST-RE-20`, `TEST-RE-21` |
 
 ## Representative Test Cases
 
@@ -388,3 +391,83 @@ Current implementation note:
 ## Traceability
 
 This spec defines the coverage target for the current shipped reverse-engineering helpers and the deferred helpers that remain to be implemented.
+
+---
+
+### `TEST-RE-16` — J1939 candidates carry PGN / source-address annotation
+
+```gherkin
+Given  a capture containing EBC2 (PGN 65215) frames from source address 11
+When   `entropy_candidates`, `counter_candidates`, or `corpus_analysis` run over it
+Then   the EBC2 candidate shall carry `pgn: 65215`, `pgn_label: "EBC2"`, `source_address: 11`, and `source_address_name: "Brakes - System Controller"`
+And    every candidate shall carry `arbitration_id_hex`
+```
+
+**Fixture:** `tests/fixtures/re_j1939_tp_mix.candump`.
+
+---
+
+### `TEST-RE-17` — Non-J1939 candidates omit annotation gracefully
+
+```gherkin
+Given  a capture of 11-bit arbitration ids
+When   `entropy_candidates` runs over it
+Then   no candidate shall carry `pgn` or `source_address` fields
+```
+
+**Fixture:** `tests/fixtures/re_entropy_mixed.candump`.
+
+---
+
+### `TEST-RE-18` — TP framing is not reported as counters or signals
+
+```gherkin
+Given  a capture mixing TP.CM/TP.DT streams (with sequence numbers) and a genuine application counter
+When   `counter_candidates` and `signal_analysis` run over it
+Then   neither TP id shall appear among the candidates
+And    the application counter shall still be found
+And    `signal_analysis` shall report both TP ids under `excluded_transport_ids` with their PGN labels
+```
+
+**Fixture:** `tests/fixtures/re_j1939_tp_mix.candump`.
+
+---
+
+### `TEST-RE-19` — TP entropy candidates are labeled as transport
+
+```gherkin
+Given  the same TP-mix capture
+When   `entropy_candidates` runs over it
+Then   the TP.DT candidate shall carry `j1939_transport: true`
+And    its rationale shall mention transport-protocol framing
+```
+
+**Fixture:** `tests/fixtures/re_j1939_tp_mix.candump`.
+
+---
+
+### `TEST-RE-20` — Sparse bursty ids are reported low-rate, not ranked
+
+```gherkin
+Given  a no-baseline capture with a sparse bursty diagnostic id (7 gaps, tight median)
+When   `anomaly_candidates` runs in self-consistency mode
+Then   `min_samples` shall default to 10
+And    the sparse id shall not appear among the candidates
+And    it shall be listed in `low_rate_ids` with classification source `low-sample`
+And    passing `min_samples=3` shall restore scoring for that id
+```
+
+**Fixture:** `tests/fixtures/anomaly_sparse_burst.candump`.
+
+---
+
+### `TEST-RE-21` — Reported z-scores are capped
+
+```gherkin
+Given  a well-sampled cyclic id with one 100 s dropout (raw z-score ~100000σ)
+When   `anomaly_candidates` runs in self-consistency mode
+Then   the flagged candidate's `z_score` and `score` shall not exceed 100
+And    `z_score_capped` shall be `true` and the rationale shall say "capped"
+```
+
+**Fixture:** `tests/fixtures/anomaly_sparse_burst.candump`.

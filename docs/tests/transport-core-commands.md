@@ -30,7 +30,7 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 | `REQ-TRANSPORT-02` | `TEST-TRANSPORT-01`, `TEST-TRANSPORT-03`, `TEST-TRANSPORT-04`, `TEST-TRANSPORT-08`, `TEST-TRANSPORT-09` |
 | `REQ-TRANSPORT-03` | `TEST-TRANSPORT-02` |
 | `REQ-TRANSPORT-04` | `TEST-TRANSPORT-05` |
-| `REQ-TRANSPORT-05` | `TEST-TRANSPORT-06` |
+| `REQ-TRANSPORT-05` | `TEST-TRANSPORT-06`, `TEST-TRANSPORT-21`, `TEST-TRANSPORT-22`, `TEST-TRANSPORT-23` |
 | `REQ-TRANSPORT-06` | Deferred |
 | `REQ-TRANSPORT-07` | `TEST-TRANSPORT-07` |
 | `REQ-TRANSPORT-08` | `TEST-TRANSPORT-11` |
@@ -315,3 +315,42 @@ And    `data.file` shall equal `"-"`
 ## Traceability
 
 This spec maps to the implemented transport command behaviors currently exercised through CLI and transport tests.
+
+---
+
+### `TEST-TRANSPORT-21` — Stats reports per-ID timing, DLC spread, and bus load
+
+```gherkin
+Given  a capture file with three frames across three arbitration ids
+When   `canarchy stats --file <capture> --json` is invoked
+Then   `data.dlc_distribution` shall count frames per DLC
+And    `data.bus_load.total_bits_estimate` shall be positive with load percentages at standard bitrates
+And    each `data.top_ids` entry shall carry `arbitration_id_hex`, `frame_count`, `share`, `rate_hz`, and gap statistics
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-TRANSPORT-22` — Stats per-ID breakdown is bounded by `--top`
+
+```gherkin
+Given  the same capture file
+When   `canarchy stats --file <capture> --top 1 --json` is invoked
+Then   `data.top_ids` shall contain exactly one entry
+And    `data.unique_arbitration_ids` shall still report the full total
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-TRANSPORT-23` — Stats reports gap statistics for repeated ids
+
+```gherkin
+Given  a capture file where at least one id repeats
+When   `canarchy stats --file <capture> --json` is invoked
+Then   the repeated id's entry shall carry non-null `mean_gap_ms` and `first_seen`
+```
+
+**Fixture:** `tests/fixtures/j1939_heavy_vehicle.candump`.

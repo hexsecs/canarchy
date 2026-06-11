@@ -230,3 +230,32 @@ And    `errors[0].code` shall equal `"J1939_COMPARE_REQUIRES_MULTIPLE_FILES"`
 ## Traceability
 
 This spec maps to the J1939 expansion acceptance criteria around protocol-relevant output fields, SPN/TP/DM1 behavior, and representative transport and DM coverage.
+
+---
+
+### `TEST-J1939-13` — FMI catalog resolves fault-mode descriptions (`REQ-J1939-20`)
+
+```gherkin
+Given  the bundled SAE J1939-73 FMI catalog
+When   `fmi_lookup` is called with 3, 5, and 31
+Then   it shall return the standard descriptions ("Voltage Above Normal, Or Shorted To High Source", "Current Below Normal Or Open Circuit", "Condition Exists")
+And    out-of-range values shall return `None`
+When   DM1 messages are decoded from a capture with SPN 175 / FMI 5
+Then   each DTC shall carry `name: "Engine Oil Temperature 1"` and `fmi_description: "Current Below Normal Or Open Circuit"`
+```
+
+**Fixture:** `tests/fixtures/j1939_dm1_spn175.candump`.
+
+---
+
+### `TEST-J1939-14` — OEM SPN overrides merge over the bundled catalog (`REQ-J1939-20`)
+
+```gherkin
+Given  a JSON overrides file mapping SPN 520001 to a proprietary name
+And    `CANARCHY_J1939_SPN_OVERRIDES` points at that file
+When   `spn_lookup(520001)` is called
+Then   it shall return the proprietary name
+And    bundled entries (e.g. SPN 175) shall remain resolvable
+```
+
+**Fixture:** temporary overrides file.

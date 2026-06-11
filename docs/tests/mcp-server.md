@@ -31,6 +31,8 @@
 | REQ-MCP-17 | J1939 tools `j1939_compare`, `j1939_faults`, `j1939_tp_compare` shall be exposed as MCP tools | TEST-MCP-33, TEST-MCP-34, TEST-MCP-35 |
 | REQ-MCP-18 | `re signals` shall be exposed as MCP tool `re_signals` | TEST-MCP-36 |
 | REQ-MCP-19 | `datasets convert` and `datasets replay --list-files` shall be exposed as MCP tools | TEST-MCP-37, TEST-MCP-38 |
+| REQ-MCP-20 | Tool responses are bounded by the output cap with explicit truncation markers and totals | TEST-MCP-39, TEST-MCP-40, TEST-MCP-41, TEST-MCP-42 |
+| REQ-MCP-21 | An in-tool exception returns a `TOOL_EXECUTION_ERROR` envelope and leaves the session usable | TEST-MCP-43 |
 
 ## Representative Test Cases
 
@@ -471,5 +473,75 @@ And    the result shall include `data.count` and `data.files`
 ```
 
 **Fixture:** embedded dataset catalog.
+
+**Fixture:** none.
+
+### `TEST-MCP-39` — Small payloads pass through the output cap unchanged
+
+```gherkin
+Given  a payload that serializes below the output cap
+When   `bound_payload(payload, cap)` is called
+Then   the identical payload object shall be returned
+And    no `truncated` marker shall be added
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-MCP-40` — Oversized list data is truncated with marker and totals
+
+```gherkin
+Given  a payload whose `data.events` list serializes far beyond the cap
+When   `bound_payload(payload, cap)` is called
+Then   the serialized result shall fit within the cap
+And    `data.truncated` shall be `true`
+And    `data.truncation.lists` shall record `total_items` and `returned_items` for the trimmed list
+And    a truncation warning shall be appended to `warnings`
+And    the original payload shall be left unmodified
+```
+
+**Fixture:** synthetic 2000-element event list.
+
+---
+
+### `TEST-MCP-41` — Non-list oversized data falls back to a stub envelope
+
+```gherkin
+Given  a payload whose `data` holds one giant scalar (no trimmable list)
+When   `bound_payload(payload, cap)` is called
+Then   the serialized result shall fit within the cap
+And    the `ok` / `command` envelope fields shall be preserved
+And    `data.truncated` shall be `true`
+```
+
+**Fixture:** 100 kB string in `data.content`.
+
+---
+
+### `TEST-MCP-42` — High-rate `j1939_pgn` returns a bounded, well-formed envelope
+
+```gherkin
+Given  a synthetic high-rate EEC1 (PGN 61444) capture of 4000 frames
+And    `CANARCHY_MCP_MAX_RESPONSE_BYTES` is set to 65536
+When   `handle_call_tool("j1939_pgn", {"pgn": 61444, "file": <capture>})` is called
+Then   the response text shall not exceed 65536 bytes
+And    it shall parse as JSON with `ok: true`
+And    `data.truncated` shall be `true` with at least one trimmed list recording `total_items > returned_items`
+```
+
+**Fixture:** generated per-test high-rate candump file.
+
+---
+
+### `TEST-MCP-43` — In-tool exception is isolated; session stays usable
+
+```gherkin
+Given  `execute_command` is patched to raise `RuntimeError`
+When   `handle_call_tool("uds_services", {})` is called
+Then   the response shall be a canonical envelope with `ok: false` and error code `TOOL_EXECUTION_ERROR`
+When   the patch is removed and the same tool is called again
+Then   the call shall succeed with `ok: true`
+```
 
 **Fixture:** none.

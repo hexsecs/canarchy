@@ -573,3 +573,152 @@ class AnomaliesCliTests(unittest.TestCase):
         assert result is not None
         self.assertEqual(result.data["timing_source"], "dbc")
         self.assertIn(0x400, result.data["event_ids"])
+
+
+class J1939AnnotationTests(unittest.TestCase):
+    """RE results carry PGN / source-address annotation for J1939 frames (#406)."""
+
+    def _frames(self, name: str):
+        return LocalTransport().frames_from_file(str(FIXTURES / name))
+
+    def test_entropy_candidates_annotated_with_pgn_and_source_address(self) -> None:
+        candidates = entropy_candidates(self._frames("re_j1939_tp_mix.candump"))
+
+        ebc2 = next(c for c in candidates if c["arbitration_id"] == 0x18FEBF0B)
+        self.assertEqual(ebc2["arbitration_id_hex"], "0x18FEBF0B")
+        self.assertEqual(ebc2["pgn"], 65215)
+        self.assertEqual(ebc2["pgn_label"], "EBC2")
+        self.assertEqual(ebc2["source_address"], 11)
+        self.assertEqual(ebc2["source_address_name"], "Brakes - System Controller")
+        self.assertFalse(ebc2["j1939_transport"])
+
+    def test_non_j1939_candidates_omit_annotation(self) -> None:
+        candidates = entropy_candidates(self._frames("re_entropy_mixed.candump"))
+
+        for candidate in candidates:
+            self.assertIn("arbitration_id_hex", candidate)
+            self.assertNotIn("pgn", candidate)
+            self.assertNotIn("source_address", candidate)
+
+    def test_counter_candidates_annotated(self) -> None:
+        candidates = counter_candidates(self._frames("re_j1939_tp_mix.candump"))
+
+        self.assertTrue(candidates)
+        ebc2 = next(c for c in candidates if c["arbitration_id"] == 0x18FEBF0B)
+        self.assertEqual(ebc2["pgn"], 65215)
+        self.assertEqual(ebc2["pgn_label"], "EBC2")
+
+    def test_corpus_coverage_annotated(self) -> None:
+        from canarchy.corpus import corpus_analysis
+
+        result = corpus_analysis([str(FIXTURES / "re_j1939_tp_mix.candump")])
+        ebc2 = next(entry for entry in result["coverage"] if entry["arbitration_id"] == 0x18FEBF0B)
+        self.assertEqual(ebc2["pgn"], 65215)
+        self.assertEqual(ebc2["pgn_label"], "EBC2")
+        self.assertEqual(ebc2["source_address_name"], "Brakes - System Controller")
+
+
+class J1939TransportAwareTests(unittest.TestCase):
+    """RE heuristics must not report J1939 TP framing as discoveries (#407)."""
+
+    def _frames(self, name: str):
+        return LocalTransport().frames_from_file(str(FIXTURES / name))
+
+    def test_tp_dt_sequence_number_not_reported_as_counter(self) -> None:
+        candidates = counter_candidates(self._frames("re_j1939_tp_mix.candump"))
+
+        flagged_ids = {c["arbitration_id"] for c in candidates}
+        self.assertNotIn(0x18EBFF00, flagged_ids)  # TP.DT
+        self.assertNotIn(0x18ECFF00, flagged_ids)  # TP.CM
+        # The genuine application counter is still found.
+        self.assertIn(0x18FEBF0B, flagged_ids)
+
+    def test_tp_frames_not_reported_as_signals(self) -> None:
+        analysis = signal_analysis(self._frames("re_j1939_tp_mix.candump"))
+
+        flagged_ids = {c["arbitration_id"] for c in analysis["candidates"]}
+        self.assertNotIn(0x18EBFF00, flagged_ids)
+        self.assertNotIn(0x18ECFF00, flagged_ids)
+        excluded = {entry["arbitration_id"] for entry in analysis["excluded_transport_ids"]}
+        self.assertEqual(excluded, {0x18EBFF00, 0x18ECFF00})
+        labels = {entry["pgn_label"] for entry in analysis["excluded_transport_ids"]}
+        self.assertEqual(labels, {"TP.DT", "TP.CM.xx"})
+
+    def test_tp_entropy_candidates_labeled_as_transport(self) -> None:
+        candidates = entropy_candidates(self._frames("re_j1939_tp_mix.candump"))
+
+        tp_dt = next(c for c in candidates if c["arbitration_id"] == 0x18EBFF00)
+        self.assertTrue(tp_dt["j1939_transport"])
+        self.assertIn("transport-protocol framing", tp_dt["rationale"])
+
+
+class AnomalySparseIdTests(unittest.TestCase):
+    """No-baseline anomalies: sparse ids are low-rate, z-scores bounded (#408)."""
+
+    def _frames(self, name: str):
+        return LocalTransport().frames_from_file(str(FIXTURES / name))
+
+    def test_sparse_bursty_id_reported_low_rate_not_ranked(self) -> None:
+        result = anomaly_candidates(self._frames("anomaly_sparse_burst.candump"))
+
+        self.assertEqual(result["mode"], "self-consistency")
+        self.assertEqual(result["min_samples"], 10)
+        flagged_ids = {c["arbitration_id"] for c in result["candidates"]}
+        self.assertNotIn(0x18FECA0B, flagged_ids)
+        self.assertIn(0x18FECA0B, result["low_rate_ids"])
+        sparse = next(c for c in result["classifications"] if c["arbitration_id"] == 0x18FECA0B)
+        self.assertEqual(sparse["source"], "low-sample")
+        self.assertTrue(sparse["low_rate"])
+
+    def test_reported_z_scores_are_capped(self) -> None:
+        result = anomaly_candidates(self._frames("anomaly_sparse_burst.candump"))
+
+        dropout = next(c for c in result["candidates"] if c["arbitration_id"] == 0x18FEF100)
+        self.assertEqual(dropout["kind"], "timing")
+        self.assertLessEqual(abs(dropout["z_score"]), 100.0)
+        self.assertLessEqual(dropout["score"], 100.0)
+        self.assertTrue(dropout["z_score_capped"])
+        self.assertIn("capped", dropout["rationale"])
+
+    def test_baseline_mode_keeps_lower_minimum(self) -> None:
+        frames = self._frames("anomaly_input.candump")
+        baseline = self._frames("anomaly_baseline.candump")
+        result = anomaly_candidates(frames, baseline=baseline)
+        self.assertEqual(result["min_samples"], 3)
+
+    def test_min_samples_override(self) -> None:
+        result = anomaly_candidates(self._frames("anomaly_sparse_burst.candump"), min_samples=3)
+        flagged_ids = {c["arbitration_id"] for c in result["candidates"]}
+        self.assertIn(0x18FECA0B, flagged_ids)
+
+    def test_dropped_j1939_id_from_baseline_is_annotated(self) -> None:
+        # An id present only in the baseline still gets J1939 annotation on
+        # its dropped-id candidate (annotations include baseline frames).
+        from canarchy.models import CanFrame
+
+        def _ebc2(t: float) -> CanFrame:
+            return CanFrame(
+                arbitration_id=0x18FEBF0B,
+                data=bytes(8),
+                timestamp=t,
+                is_extended_id=True,
+            )
+
+        def _other(t: float) -> CanFrame:
+            return CanFrame(
+                arbitration_id=0x18F00400,
+                data=bytes(8),
+                timestamp=t,
+                is_extended_id=True,
+            )
+
+        baseline = [_ebc2(0.01 * i) for i in range(12)] + [_other(0.01 * i) for i in range(12)]
+        frames = [_other(0.01 * i) for i in range(12)]
+
+        result = anomaly_candidates(frames, baseline=baseline)
+
+        dropped = next(c for c in result["candidates"] if c["kind"] == "dropped-id")
+        self.assertEqual(dropped["arbitration_id"], 0x18FEBF0B)
+        self.assertEqual(dropped["pgn"], 65215)
+        self.assertEqual(dropped["pgn_label"], "EBC2")
+        self.assertEqual(dropped["source_address"], 11)

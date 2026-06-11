@@ -542,6 +542,12 @@ def build_parser() -> CanarchyArgumentParser:
     stats.add_argument(
         "--file", required=True, help="path to candump capture file (use - for stdin)"
     )
+    stats.add_argument(
+        "--top",
+        type=int,
+        default=20,
+        help="number of highest-frequency arbitration ids to detail (default: 20)",
+    )
     _add_file_analysis_arguments(stats)
     add_output_arguments(stats)
     stats.set_defaults(command="stats")
@@ -1167,6 +1173,14 @@ def build_parser() -> CanarchyArgumentParser:
         default=0.5,
         help="max coefficient of variation for an ID to be treated as cyclic when "
         "no DBC is supplied; higher-variance IDs are treated as event-based (default: 0.5)",
+    )
+    re_anomalies.add_argument(
+        "--min-samples",
+        type=int,
+        default=None,
+        help="minimum inter-frame gaps required before an ID's timing is scored "
+        "(default: 3 with a baseline, 10 without one; sparser IDs are reported "
+        "as low-rate instead of ranked)",
     )
     _add_file_analysis_arguments(re_anomalies)
     add_output_arguments(re_anomalies)
@@ -2947,6 +2961,7 @@ def _j1939_faults(messages: list[dict[str, Any]], *, file: str) -> dict[str, Any
                         "spn": spn,
                         "name": dtc.get("name"),
                         "fmi": fmi,
+                        "fmi_description": dtc.get("fmi_description"),
                         "occurrences": 0,
                         "first_seen": ts,
                         "last_seen": ts,
@@ -3423,6 +3438,8 @@ def transport_payload(
                     ],
                 )
             # Calculate stats
+            from canarchy.transport import detailed_frame_stats
+
             unique_ids = len(set(f.arbitration_id for f in frames))
             interfaces = list(set(f.interface for f in frames))
             stats = TransportStats(
@@ -3435,18 +3452,27 @@ def transport_payload(
                     "status": "implemented",
                     "implementation": "stdin-analysis",
                     **stats.to_payload(),
+                    **detailed_frame_stats(frames, top=getattr(args, "top", 20)),
                 },
                 [],
                 [],
             )
-        stats = transport.stats(
+        from canarchy.transport import TransportStats as _TransportStats, detailed_frame_stats
+
+        frames = transport.frames_from_file(
             args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
+        )
+        stats = _TransportStats(
+            total_frames=len(frames),
+            unique_arbitration_ids=len({frame.arbitration_id for frame in frames}),
+            interfaces=sorted({frame.interface or "unknown" for frame in frames}),
         )
         return (
             {
                 "mode": "passive",
                 "file": args.file,
                 **stats.to_payload(),
+                **detailed_frame_stats(frames, top=getattr(args, "top", 20)),
                 "status": "implemented",
                 "implementation": "file-backed analysis",
             },
@@ -6077,11 +6103,18 @@ def reverse_engineering_payload(
             z_threshold=args.z_threshold,
             cv_max=args.cv_max,
             dbc_timing=dbc_timing,
+            min_samples=getattr(args, "min_samples", None),
         )
         anomaly_warnings: list[str] = []
         if analysis["candidate_count"] == 0:
             anomaly_warnings.append(
                 "No timing or arbitration-id anomalies met the current threshold."
+            )
+        if analysis["mode"] == "self-consistency":
+            anomaly_warnings.append(
+                "No baseline supplied: anomalies are scored against this capture's own "
+                "statistics. Diffing against a known-good capture via --baseline gives "
+                "far more reliable results."
             )
         return (
             {
@@ -6091,12 +6124,14 @@ def reverse_engineering_payload(
                 "dbc": getattr(args, "dbc", None),
                 "z_threshold": analysis["z_threshold"],
                 "cv_max": analysis["cv_max"],
+                "min_samples": analysis["min_samples"],
                 "timing_source": analysis["timing_source"],
                 "analysis": "anomalies",
                 "candidate_count": analysis["candidate_count"],
                 "candidates": analysis["candidates"],
                 "cyclic_ids": analysis["cyclic_ids"],
                 "event_ids": analysis["event_ids"],
+                "low_rate_ids": analysis["low_rate_ids"],
                 "classifications": analysis["classifications"],
                 "implementation": "file-backed anomaly detection",
             },

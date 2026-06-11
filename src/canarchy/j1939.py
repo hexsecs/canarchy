@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import j1939 as can_j1939
 
-from canarchy.j1939_metadata import spn_lookup
+from canarchy.j1939_metadata import fmi_lookup, spn_lookup
 from canarchy.models import CanFrame
 
 TP_CM_PGN = 0x00EC00
@@ -315,6 +315,7 @@ def _parse_dtcs(payload: bytes) -> list[dict[str, object]]:
                 "spn": spn,
                 "name": meta["name"] if meta is not None else None,
                 "fmi": fmi,
+                "fmi_description": fmi_lookup(fmi),
                 "occurrence_count": occurrence_count,
                 "conversion_method": conversion_method,
             }
