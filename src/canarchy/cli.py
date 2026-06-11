@@ -1095,7 +1095,14 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_compare = j1939_subparsers.add_parser(
         "compare", help="compare multiple J1939 capture files"
     )
-    j1939_compare.add_argument("files", nargs="+", help="paths to candump capture files")
+    j1939_compare.add_argument("files", nargs="*", help="paths to candump capture files")
+    j1939_compare.add_argument(
+        "--file",
+        dest="file_opt",
+        action="append",
+        metavar="PATH",
+        help="capture file to compare (repeatable; equivalent to the positional form)",
+    )
     add_j1939_file_analysis_arguments(j1939_compare)
     add_output_arguments(j1939_compare)
     j1939_compare.set_defaults(command="j1939 compare")
@@ -1122,24 +1129,48 @@ def build_parser() -> CanarchyArgumentParser:
     re_subparsers = re_parser.add_subparsers(dest="re_action", required=True)
 
     re_signals = re_subparsers.add_parser("signals", help="infer signal candidates")
-    re_signals.add_argument("file")
+    re_signals.add_argument("file", nargs="?", help="path to capture file")
+    re_signals.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="path to capture file (equivalent to the positional form)",
+    )
     add_output_arguments(re_signals)
     re_signals.set_defaults(command="re signals")
 
     re_counters = re_subparsers.add_parser("counters", help="detect counters")
-    re_counters.add_argument("file")
+    re_counters.add_argument("file", nargs="?", help="path to capture file")
+    re_counters.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="path to capture file (equivalent to the positional form)",
+    )
     add_output_arguments(re_counters)
     re_counters.set_defaults(command="re counters")
 
     re_entropy = re_subparsers.add_parser("entropy", help="rank signal entropy")
-    re_entropy.add_argument("file")
+    re_entropy.add_argument("file", nargs="?", help="path to capture file")
+    re_entropy.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="path to capture file (equivalent to the positional form)",
+    )
     add_output_arguments(re_entropy)
     re_entropy.set_defaults(command="re entropy")
 
     re_correlate = re_subparsers.add_parser(
         "correlate", help="correlate signal candidates against a reference series"
     )
-    re_correlate.add_argument("file")
+    re_correlate.add_argument("file", nargs="?", help="path to capture file")
+    re_correlate.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="path to capture file (equivalent to the positional form)",
+    )
     re_correlate.add_argument(
         "--reference",
         help="reference series file (.json or .jsonl) with timestamp and value fields",
@@ -1151,7 +1182,13 @@ def build_parser() -> CanarchyArgumentParser:
         "anomalies",
         help="flag inter-frame-timing outliers and unexpected arbitration IDs",
     )
-    re_anomalies.add_argument("file")
+    re_anomalies.add_argument("file", nargs="?", help="path to capture file")
+    re_anomalies.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="path to capture file (equivalent to the positional form)",
+    )
     re_anomalies.add_argument(
         "--baseline",
         help="reference capture to learn expected timing and ID coverage from",
@@ -1189,7 +1226,13 @@ def build_parser() -> CanarchyArgumentParser:
     re_match_dbc = re_subparsers.add_parser(
         "match-dbc", help="rank candidate DBCs against a capture"
     )
-    re_match_dbc.add_argument("capture", help="capture file to analyse")
+    re_match_dbc.add_argument("capture", nargs="?", help="capture file to analyse")
+    re_match_dbc.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="capture file to analyse (equivalent to the positional form)",
+    )
     re_match_dbc.add_argument(
         "--provider", default="opendbc", help="DBC provider catalog to search (default: opendbc)"
     )
@@ -1202,7 +1245,13 @@ def build_parser() -> CanarchyArgumentParser:
     re_shortlist_dbc = re_subparsers.add_parser(
         "shortlist-dbc", help="rank candidate DBCs filtered by vehicle make"
     )
-    re_shortlist_dbc.add_argument("capture", help="capture file to analyse")
+    re_shortlist_dbc.add_argument("capture", nargs="?", help="capture file to analyse")
+    re_shortlist_dbc.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="capture file to analyse (equivalent to the positional form)",
+    )
     re_shortlist_dbc.add_argument(
         "--make", required=True, help="vehicle make to pre-filter candidates (e.g. toyota)"
     )
@@ -1224,6 +1273,13 @@ def build_parser() -> CanarchyArgumentParser:
         nargs="*",
         metavar="FILE",
         help="candump or PCAP capture files to analyse",
+    )
+    re_corpus.add_argument(
+        "--file",
+        dest="file_opt",
+        action="append",
+        metavar="PATH",
+        help="capture file to analyse (repeatable; equivalent to the positional form)",
     )
     re_corpus.add_argument(
         "--corpus-glob",
@@ -1671,7 +1727,67 @@ INTERFACE_FALLBACK_COMMANDS = {
 }
 
 
+# Commands that historically took a positional capture path also accept a
+# `--file` flag form (#412); both forms map onto the original destination.
+_FILE_FLAG_SINGLE_COMMANDS = {
+    "re signals": "file",
+    "re counters": "file",
+    "re entropy": "file",
+    "re correlate": "file",
+    "re anomalies": "file",
+    "re match-dbc": "capture",
+    "re shortlist-dbc": "capture",
+}
+_FILE_FLAG_MULTI_COMMANDS = {"re corpus", "j1939 compare"}
+
+
+def _normalize_file_arguments(args: argparse.Namespace) -> None:
+    """Merge the `--file` flag form into the positional capture destination."""
+    command = getattr(args, "command", None)
+    flag_value = getattr(args, "file_opt", None)
+    if command in _FILE_FLAG_SINGLE_COMMANDS:
+        dest = _FILE_FLAG_SINGLE_COMMANDS[command]
+        positional = getattr(args, dest, None)
+        if flag_value is not None and positional is not None and flag_value != positional:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="CONFLICTING_FILE_ARGUMENTS",
+                        message=(
+                            f"Both a positional capture path ({positional!r}) and --file "
+                            f"({flag_value!r}) were supplied."
+                        ),
+                        hint="Pass the capture path once, either positionally or via --file.",
+                    )
+                ],
+            )
+        if positional is None and flag_value is not None:
+            setattr(args, dest, flag_value)
+        if getattr(args, dest, None) is None:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="CAPTURE_FILE_REQUIRED",
+                        message="A capture file is required.",
+                        hint=(
+                            "Pass the capture path positionally "
+                            f"(`canarchy {command} <file>`) or via `--file <file>`."
+                        ),
+                    )
+                ],
+            )
+    elif command in _FILE_FLAG_MULTI_COMMANDS and flag_value:
+        files = list(getattr(args, "files", []) or [])
+        files += [value for value in flag_value if value not in files]
+        args.files = files
+
+
 def prepare_args(args: argparse.Namespace) -> None:
+    _normalize_file_arguments(args)
     if args.command == "send":
         send_args = getattr(args, "send_args", [])
         dbc_mode = bool(getattr(args, "dbc", None))
@@ -2462,24 +2578,41 @@ def _j1939_summary(
         _enrich_tp_session(session) for session in decoder.transport_protocol_sessions(frames)
     ]
     session_types = Counter(str(session["session_type"]) for session in tp_sessions)
-    printable_identifiers: list[dict[str, object]] = []
+    # Repeated BAM broadcasts carry the same identifier once per session;
+    # report distinct values with an occurrence count instead (#411), matching
+    # the deduped shape `j1939 compare` uses.
+    identifier_map: dict[tuple[object, ...], dict[str, object]] = {}
     for session in tp_sessions:
         if not bool(session.get("complete", False)):
             continue
         text = session.get("decoded_text")
         if text is None:
             continue
-        printable_identifiers.append(
-            {
+        source_address = int(session["source_address"])
+        key = (
+            text,
+            int(session["transfer_pgn"]),
+            source_address,
+            session["destination_address"],
+            str(session["session_type"]),
+            session.get("payload_label"),
+        )
+        entry = identifier_map.get(key)
+        if entry is None:
+            identifier_map[key] = {
                 "text": text,
                 "transfer_pgn": int(session["transfer_pgn"]),
-                "source_address": int(session["source_address"]),
+                "source_address": source_address,
+                "source_address_name": source_address_lookup(source_address),
                 "destination_address": session["destination_address"],
                 "session_type": str(session["session_type"]),
                 "payload_label": session.get("payload_label"),
                 "heuristic": bool(session.get("decoded_text_heuristic", False)),
+                "occurrence_count": 1,
             }
-        )
+        else:
+            entry["occurrence_count"] = int(entry["occurrence_count"]) + 1
+    printable_identifiers = list(identifier_map.values())
 
     return (
         {
@@ -6282,6 +6415,7 @@ def build_result(args: argparse.Namespace) -> CommandResult:
             "interface_source",
             "log_level",
             "quiet",
+            "file_opt",
         }
         and value is not None
     }
@@ -7729,7 +7863,10 @@ def emit_result(result: CommandResult, output_format: str) -> None:
     }
     if output_format == "json":
         data = payload.get("data", {})
-        if result.command == "filter":
+        if result.command == "filter" and result.ok:
+            # Only successful results carry the frames block: an error
+            # envelope with `frame_count: 0` reads as "no matches" instead
+            # of "bad query" (#414).
             events = data.pop("events", [])
             flat = [_flatten_frame_event(e) for e in events if e.get("event_type") == "frame"]
             data["frame_count"] = len(flat)

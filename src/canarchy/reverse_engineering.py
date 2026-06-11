@@ -358,6 +358,7 @@ def signal_analysis(frames: list[CanFrame]) -> dict[str, object]:
             analysis_by_id.append(
                 {
                     "arbitration_id": arbitration_id,
+                    "arbitration_id_hex": f"0x{arbitration_id:X}",
                     "frame_count": frame_count,
                     "payload_bits": payload_bits,
                     "evaluated_fields": 0,
@@ -381,6 +382,7 @@ def signal_analysis(frames: list[CanFrame]) -> dict[str, object]:
         analysis_by_id.append(
             {
                 "arbitration_id": arbitration_id,
+                "arbitration_id_hex": f"0x{arbitration_id:X}",
                 "frame_count": frame_count,
                 "payload_bits": payload_bits,
                 "evaluated_fields": evaluated_fields,
@@ -729,9 +731,10 @@ def correlate_candidates(frames: list[CanFrame], ref: ReferenceData) -> dict[str
                     candidates.append(candidate)
 
     candidates.sort(key=lambda c: (-abs(c.pearson_r), c.arbitration_id, c.start_bit, c.bit_length))
+    annotations = j1939_annotations(eligible)
     return {
         "candidate_count": len(candidates),
-        "candidates": [c.to_payload() for c in candidates],
+        "candidates": [_annotated_payload(c.to_payload(), annotations) for c in candidates],
     }
 
 

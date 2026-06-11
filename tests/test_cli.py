@@ -893,6 +893,48 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["errors"][0]["code"], "INVALID_FILTER_EXPRESSION")
 
+    def test_filter_invalid_expression_omits_frames_block(self) -> None:
+        """#414: error envelopes must not carry a misleading empty frames block."""
+        exit_code, stdout, _ = run_cli(
+            "filter", "badexpr", "--file", str(FIXTURES / "sample.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_TRANSPORT_ERROR)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertNotIn("frames", payload["data"])
+        self.assertNotIn("frame_count", payload["data"])
+
+    def test_filter_accepts_decimal_pgn_with_whitespace(self) -> None:
+        """#414: decimal IDs/PGNs and whitespace around operators are accepted."""
+        exit_code, stdout, _ = run_cli(
+            "filter", "pgn == 65262", "--file", str(FIXTURES / "sample.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["frame_count"], 1)
+        frame = payload["data"]["frames"][0]
+        self.assertEqual(frame["arbitration_id"], 0x18FEEE31)
+
+    def test_filter_accepts_bare_hex_and_decimal_id(self) -> None:
+        """#414: id== accepts decimal, 0x-prefixed hex, and bare hex."""
+        for expression in ("id==0x18FEEE31", f"id=={0x18FEEE31}", "id==18FEEE31"):
+            with self.subTest(expression=expression):
+                exit_code, stdout, _ = run_cli(
+                    "filter", expression, "--file", str(FIXTURES / "sample.candump"), "--json"
+                )
+                self.assertEqual(exit_code, EXIT_OK)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["data"]["frame_count"], 1)
+
+    def test_filter_whitespace_tolerant_dlc_and_data(self) -> None:
+        """#414: dlc/data operators tolerate whitespace too."""
+        exit_code, stdout, _ = run_cli(
+            "filter", "dlc > 4", "--file", str(FIXTURES / "sample.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["frame_count"], 1)
+
     def test_stats_json_output_returns_summary(self) -> None:
         exit_code, stdout, _ = run_cli(
             "stats", "--file", str(FIXTURES / "sample.candump"), "--json"
@@ -1139,13 +1181,35 @@ class CliTests(unittest.TestCase):
                     "text": "VIN1234",
                     "transfer_pgn": 65259,
                     "source_address": 0x31,
+                    "source_address_name": "Cab Controller - Primary",
                     "destination_address": 255,
                     "session_type": "bam",
                     "payload_label": "component_identification",
                     "heuristic": True,
+                    "occurrence_count": 1,
                 }
             ],
         )
+
+    def test_j1939_summary_dedupes_repeated_bam_identifiers(self) -> None:
+        """#411: the same VIN broadcast per BAM session is reported once with a count."""
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "summary",
+            "--file",
+            str(FIXTURES / "j1939_tp_repeated_vin.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["tp"]["session_count"], 3)
+        identifiers = data["tp"]["printable_identifiers"]
+        self.assertEqual(len(identifiers), 1)
+        self.assertEqual(identifiers[0]["text"], "VIN1234")
+        self.assertEqual(identifiers[0]["occurrence_count"], 3)
+        self.assertEqual(identifiers[0]["source_address_name"], "Cab Controller - Primary")
 
     def test_j1939_summary_text_output_is_pretty_printed(self) -> None:
         exit_code, stdout, stderr = run_cli(

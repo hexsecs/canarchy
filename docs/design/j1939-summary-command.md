@@ -26,6 +26,7 @@ Operators often start with the question "what is in this capture and what looks 
 | `REQ-J1939SUM-03` | Event-driven | When `j1939 summary <file>` is invoked, the system shall include a DM1 summary containing whether DM1 traffic is present, how many DM1 messages were observed, and the total active DTC count. |
 | `REQ-J1939SUM-04` | Event-driven | When `j1939 summary <file>` is invoked, the system shall include a TP summary containing total TP session count and complete TP session count. |
 | `REQ-J1939SUM-05` | Optional feature | Where a completed TP payload decodes cleanly as printable ASCII text, the system shall include that candidate string under a stable structured field in the TP summary. |
+| `REQ-J1939SUM-08` | Ubiquitous | Repeated identical printable TP identifiers (for example, the same VIN broadcast once per BAM session) shall be reported as one deduplicated entry carrying an `occurrence_count` and the source-address name, matching the deduplicated shape used by `j1939 compare`. |
 | `REQ-J1939SUM-06` | Optional feature | Where `--max-frames` or `--seconds` is specified, the system shall summarise only the bounded capture window. |
 | `REQ-J1939SUM-07` | Ubiquitous | The `--json` output for `j1939 summary` shall use stable field names suitable for automation. |
 

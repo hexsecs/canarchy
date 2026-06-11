@@ -45,6 +45,7 @@ Define the expected coverage for the reverse-engineering helper family so shippe
 | `REQ-RE-17` | `TEST-RE-16`, `TEST-RE-17` |
 | `REQ-RE-18` | `TEST-RE-18`, `TEST-RE-19` |
 | `REQ-RE-19` | `TEST-RE-20`, `TEST-RE-21` |
+| `REQ-RE-20` | `TEST-RE-22`, `TEST-RE-23` |
 
 ## Representative Test Cases
 
@@ -471,3 +472,34 @@ And    `z_score_capped` shall be `true` and the rationale shall say "capped"
 ```
 
 **Fixture:** `tests/fixtures/anomaly_sparse_burst.candump`.
+
+---
+
+### `TEST-RE-22` — RE commands accept both capture-path forms
+
+```gherkin
+Given  a valid capture file
+When   each `re` command is invoked with `--file <capture>` instead of the positional path
+Then   the command shall succeed identically to the positional form
+When   both forms are supplied with different paths
+Then   a structured `CONFLICTING_FILE_ARGUMENTS` error shall be returned
+When   neither form is supplied
+Then   a structured `CAPTURE_FILE_REQUIRED` error shall be returned
+And    `re corpus` shall accept repeated `--file` flags merged with positional paths
+```
+
+**Fixture:** `tests/fixtures/re_entropy_mixed.candump`, `tests/fixtures/re_signals_mixed.candump`.
+
+---
+
+### `TEST-RE-23` — Correlate candidates and per-id analysis rows carry hex ids
+
+```gherkin
+Given  a capture and reference series with correlating fields
+When   `correlate_candidates` runs
+Then   every candidate shall carry `arbitration_id_hex` matching its `arbitration_id`
+When   `signal_analysis` runs over a capture
+Then   every `analysis_by_id` row shall carry `arbitration_id_hex`
+```
+
+**Fixture:** `tests/fixtures/re_correlate_linear.candump`, `tests/fixtures/re_signals_mixed.candump`.

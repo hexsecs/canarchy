@@ -722,3 +722,84 @@ class AnomalySparseIdTests(unittest.TestCase):
         self.assertEqual(dropped["pgn"], 65215)
         self.assertEqual(dropped["pgn_label"], "EBC2")
         self.assertEqual(dropped["source_address"], 11)
+
+
+class FileArgumentConventionTests(unittest.TestCase):
+    """RE commands accept both positional and --file capture paths (#412)."""
+
+    def _run(self, *argv: str):
+        from canarchy.cli import execute_command
+
+        return execute_command([*argv, "--json"])
+
+    def test_re_commands_accept_file_flag(self) -> None:
+        capture = str(FIXTURES / "re_entropy_mixed.candump")
+        for argv in (
+            ["re", "signals", "--file", capture],
+            ["re", "counters", "--file", capture],
+            ["re", "entropy", "--file", capture],
+            ["re", "anomalies", "--file", capture],
+        ):
+            with self.subTest(argv=argv):
+                exit_code, result = self._run(*argv)
+                self.assertEqual(exit_code, 0)
+                self.assertTrue(result.ok)
+                self.assertEqual(result.data["file"], capture)
+
+    def test_re_match_dbc_accepts_file_flag(self) -> None:
+        capture = str(FIXTURES / "re_entropy_mixed.candump")
+        exit_code, result = self._run("re", "match-dbc", "--file", capture)
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(result.ok)
+        self.assertEqual(result.data["capture"], capture)
+
+    def test_re_corpus_accepts_repeated_file_flags(self) -> None:
+        first = str(FIXTURES / "re_entropy_mixed.candump")
+        second = str(FIXTURES / "re_signals_mixed.candump")
+        exit_code, result = self._run("re", "corpus", "--file", first, "--file", second)
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(result.ok)
+        self.assertEqual(result.data["capture_count"], 2)
+
+    def test_conflicting_file_forms_return_structured_error(self) -> None:
+        first = str(FIXTURES / "re_entropy_mixed.candump")
+        second = str(FIXTURES / "re_signals_mixed.candump")
+        exit_code, result = self._run("re", "entropy", first, "--file", second)
+        self.assertNotEqual(exit_code, 0)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0]["code"], "CONFLICTING_FILE_ARGUMENTS")
+
+    def test_missing_capture_returns_structured_error(self) -> None:
+        exit_code, result = self._run("re", "entropy")
+        self.assertNotEqual(exit_code, 0)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0]["code"], "CAPTURE_FILE_REQUIRED")
+
+    def test_matching_positional_and_flag_forms_are_accepted(self) -> None:
+        capture = str(FIXTURES / "re_entropy_mixed.candump")
+        exit_code, result = self._run("re", "entropy", capture, "--file", capture)
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(result.ok)
+
+
+class HexOutputConsistencyTests(unittest.TestCase):
+    """All RE outputs carry arbitration_id_hex (#412)."""
+
+    def _frames(self, name: str):
+        return LocalTransport().frames_from_file(str(FIXTURES / name))
+
+    def test_correlate_candidates_carry_hex(self) -> None:
+        frames = self._frames("re_correlate_linear.candump")
+        ref = load_reference_series(str(FIXTURES / "re_correlate_reference.json"))
+        analysis = correlate_candidates(frames, ref)
+
+        self.assertGreater(analysis["candidate_count"], 0)
+        for candidate in analysis["candidates"]:
+            self.assertEqual(candidate["arbitration_id_hex"], f"0x{candidate['arbitration_id']:X}")
+
+    def test_signal_analysis_by_id_carries_hex(self) -> None:
+        analysis = signal_analysis(self._frames("re_signals_mixed.candump"))
+
+        self.assertTrue(analysis["analysis_by_id"])
+        for entry in analysis["analysis_by_id"]:
+            self.assertEqual(entry["arbitration_id_hex"], f"0x{entry['arbitration_id']:X}")
