@@ -347,7 +347,7 @@ Notes:
 Plot decoded signal time-series from a capture to PNG, SVG, or HTML.
 
 ```bash
-canarchy plot --file <capture> --dbc <path|provider:ref> --signal <name> [--signal <name> ...] \
+canarchy plot --file <capture> --dbc <path-to-database> --signal <name> [--signal <name> ...] \
     --out <path> [--format {png,svg,html}] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
 ```
 
@@ -360,6 +360,7 @@ canarchy plot --file drive.candump --dbc truck.dbc --signal EngineSpeed --signal
 Notes:
 
 * requires the optional plotting extra: `pip install canarchy[plot]` (matplotlib for PNG/SVG, plotly for HTML); a missing dependency returns `PLOT_DEPENDENCY_MISSING` with the install hint
+* `--dbc` currently accepts a **local database file path only** — unlike `decode`/`encode`, it does not resolve `provider:ref` shorthand; `dbc fetch` a provider DBC first and pass its cached path
 * multiple `--signal` flags overlay signals; `--format` selects the renderer (default `png`)
 * the envelope reports the output file path plus `signals_plotted` and `data_points`
 * `--offset`, `--max-frames`, and `--seconds` bound the analysed window like the rest of the file-backed surface

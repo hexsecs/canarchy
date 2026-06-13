@@ -65,7 +65,7 @@ The current MCP surface exposes a curated non-interactive subset of the CLI. Spa
 
 For MCP tools that accept a single CAN interface, omit the `interface` argument only when `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE` is configured. Explicit MCP `interface` arguments take precedence over the configured default. `[transport].interface` is the python-can backend type (`socketcan`, `udp_multicast`, `pcan`, `vector`, `kvaser`, etc.) and is not the CAN channel fallback. `doctor` can report offline configured-backend dependency hints, but it does not open hardware.
 
-Active-transmit MCP tools (`send`, `generate`, `gateway`, `replay`, `sequence_replay`, and `fuzz_*`) require `ack_active=true`. Their `dry_run` argument defaults to `true`, so agent calls plan without transmitting unless an operator explicitly authorizes live transmission with `dry_run=false`.
+Active-transmit MCP tools (`send`, `generate`, `simulate`, `gateway`, `replay`, `sequence_replay`, and `fuzz_*`) require `ack_active=true`. Their `dry_run` argument defaults to `true`, so agent calls plan without transmitting unless an operator explicitly authorizes live transmission with `dry_run=false`.
 
 For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-rendered message bit diagrams, signal trees, and choice tables as structured strings on each message payload.
 
