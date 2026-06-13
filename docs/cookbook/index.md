@@ -10,6 +10,7 @@ For longer walkthroughs, see the [Tutorials](../tutorials/index.md) page.
 ## Capture and triage
 
 * [Filter for a single arbitration ID or PGN](filter-pgn.md)
+* [Analyze a capture from a UTHP / TCAT appliance](analyze-tcat-capture.md)
 * [Compare two captures for DM1 fault diffs](compare-dm1-faults.md)
 * [Build a virtual CAN loop for offline testing](virtual-can-loop.md)
 * [Verify a PCAN interface in 30 seconds](verify-pcan-interface.md)
