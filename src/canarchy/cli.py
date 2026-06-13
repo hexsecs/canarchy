@@ -7948,14 +7948,14 @@ def emit_web_serve(args: argparse.Namespace, output_format: str) -> int:
 
     dbc_path: str | None = None
     dbc_source: dict[str, Any] | None = None
-    if getattr(args, "dbc", None):
-        from canarchy.dbc_provider import get_registry
-
-        resolution = get_registry().resolve(args.dbc)
-        dbc_path = str(resolution.local_path)
-        dbc_source = _build_dbc_source(resolution)
-
     try:
+        if getattr(args, "dbc", None):
+            from canarchy.dbc_provider import get_registry
+
+            resolution = get_registry().resolve(args.dbc)
+            dbc_path = str(resolution.local_path)
+            dbc_source = _build_dbc_source(resolution)
+
         events = build_dashboard_events(frames, dbc_path=dbc_path)
     except DbcError as exc:
         emit_result(

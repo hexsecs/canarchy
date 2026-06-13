@@ -230,6 +230,31 @@ def test_cli_web_serve_missing_file_returns_structured_error(capsys) -> None:
     assert payload["command"] == "web serve"
 
 
+def test_cli_web_serve_bad_dbc_returns_structured_error(capsys) -> None:
+    """#324 review: a bad --dbc ref yields a DBC_* envelope, not a traceback."""
+    from canarchy.cli import EXIT_DECODE_ERROR, main
+
+    exit_code = main(
+        [
+            "web",
+            "serve",
+            "--file",
+            str(FIXTURES / "j1939_heavy_vehicle.candump"),
+            "--dbc",
+            "/tmp/does-not-exist.dbc",
+            "--bind",
+            "127.0.0.1:0",
+            "--json",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == EXIT_DECODE_ERROR
+    assert payload["ok"] is False
+    assert payload["command"] == "web serve"
+    assert payload["errors"][0]["code"].startswith("DBC_")
+
+
 def test_cli_web_serve_starts_and_reports_url(capsys) -> None:
     from unittest.mock import patch
 
