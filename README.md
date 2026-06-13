@@ -50,32 +50,66 @@ The [event schema](docs/event-schema.md) is the stable contract. The CLI wraps i
 
 Fully implemented and tested:
 
-* `capture`, `send`, `filter`, `stats` — transport workflows with live `python-can` and deterministic scaffold backends
+_Transport_
+
+* `capture`, `send`, `filter`, `stats` — transport workflows with live `python-can` and deterministic scaffold backends; `stats` reports per-ID frequency/timing, DLC distribution, and a bus-load estimate
+* `capture-info` — fast capture metadata without loading every frame
 * `generate` — cangen-style frame generation (fixed, random, incrementing modes)
+* `simulate` — deterministic, profile-driven mix of classic CAN, J1939, and DM1 traffic (no hardware needed)
 * `gateway` — bridge frames between two interfaces (unidirectional and bidirectional)
-* `replay` — deterministic replay planning from candump files
-* `decode`, `encode` — database-backed signal decode and encode (DBC, ARXML, KCD, and SYM via cantools)
-* `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, `compare` — J1939 operator workflows across live, file-backed, and decoded views
+* `replay`, `sequence replay` — deterministic replay planning from candump files, and YAML/JSON multi-message coordinated transmit
+
+_Databases (DBC / ARXML / KCD / SYM via cantools)_
+
+* `decode`, `encode` — database-backed signal decode and encode; `encode` resolves SAE PGN/SPN display names for a decode→encode round-trip
+* `dbc inspect` (incl. `--layout`, `--search`), `dbc signals` — database and signal inspection
+* `dbc convert` — convert databases between DBC / KCD / SYM
+* `dbc generate-c` — C source/header/fuzzer generation from a database
+* `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list|prune|refresh` — provider-backed DBC discovery and cache workflows
+
+_J1939_
+
+* `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, `compare` — J1939 operator workflows across live, file-backed, and decoded views; faults resolve SPN names and FMI descriptions from the bundled SAE catalog
+
+_UDS_
+
 * `uds scan`, `trace`, `services` — UDS diagnostic workflows and service catalog, including initial transport-backed scan/trace heuristics
-* `re signals` — file-backed signal-candidate ranking across 4-bit, 8-bit, and 16-bit fields
-* `re counters` — file-backed counter-candidate detection for reverse-engineering workflows
-* `re entropy` — file-backed entropy ranking across arbitration IDs and byte positions
-* `re correlate` — file-backed correlation of candidate fields against timestamped reference series
+
+_Reverse engineering_
+
+* `re signals`, `re counters`, `re entropy` — file-backed signal/counter/entropy candidate ranking, annotated with J1939 PGN/source-address context and transport-protocol aware
+* `re correlate` — correlation of candidate fields against timestamped reference series
+* `re anomalies` — inter-frame-timing and unexpected/dropped-ID anomaly detection, with optional baseline
+* `re corpus` — cross-capture coverage, cycle-time drift, and signal-stability analysis
 * `re match-dbc`, `re shortlist-dbc` — provider-backed DBC candidate ranking against captures
-* `skills provider list`, `skills search`, `skills fetch`, `skills cache list`, `skills cache refresh` — repository-backed CANarchy skill discovery, caching, and provenance workflows
-* `session save`, `load`, `show` — session management
-* `export` — structured artifact export
+
+_Datasets_
+
+* `datasets provider list`, `search`, `inspect`, `fetch`, `cache list|refresh` — public CAN dataset provider workflows
+* `datasets convert`, `stream`, `replay` — dataset conversion and bounded streaming/replay
+
+_Visualization, front ends, and extensions_
+
+* `plot` — signal time-series plots to PNG/SVG/HTML (`pip install canarchy[plot]`)
+* `web serve` — read-only browser dashboard over the JSONL envelope (HTTP + WebSocket)
 * `shell` — interactive REPL and `--command` scripting mode
 * `tui` — terminal UI front end
-* `doctor` — local environment health checks (Python, `python-can`, caches, MCP, config)
+* `plugins list|info|enable|disable` — Python entry-point plugin discovery and toggles
+* `skills provider list`, `search`, `fetch`, `cache list|refresh` — repository-backed CANarchy skill discovery, caching, and provenance workflows
+
+_Active-transmit fuzzing_ (gated by the [active-transmit safety design](docs/design/active-transmit-safety.md); `--dry-run` is the safe planning path)
+
+* `fuzz payload`, `fuzz replay`, `fuzz arbitration-id` — payload/replay/ID-walk fuzzing
+* `fuzz signal`, `fuzz spn` — DBC-signal and J1939-SPN-aware mutation with sentinel coverage
+
+_Session, export, and utilities_
+
+* `session save`, `load`, `show` — session management
+* `export` — structured artifact export
+* `doctor` — local environment health checks (Python, `python-can`, vendor backends, caches, MCP, config)
+* `mcp serve`, `mcp install` — Model Context Protocol server and client-config helper
 * `completion {bash,zsh,fish}` — emit a shell completion script
 * `--log-level` and `--quiet` — global stderr logging controls (place before the subcommand)
-* `fuzz payload`, `fuzz replay`, `fuzz arbitration-id` — active-transmit fuzzing gated by the [active-transmit safety design](docs/design/active-transmit-safety.md); `--dry-run` is the safe planning path
-
-Recently reintroduced under the active-transmit safety model; deeper controls
-(configurable rate-cap ceiling, TOML target allowlist, `KILL_SWITCH_TRIGGERED`
-alert on SIGINT, MCP `ack_active=true` enforcement) are tracked as Horizon 2
-follow-ups (#312 and the fuzzing-extensions cluster #346–#350).
 
 Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
 

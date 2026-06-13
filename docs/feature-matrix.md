@@ -49,7 +49,7 @@ The workflow matrix above is useful for operator-facing comparison, but several 
 | Hardware / backend breadth | Yes | Partial | Yes | No | Partial | Partial | Partial | Partial | Yes | No |
 | Database format breadth beyond DBC | Yes | No | No | Yes | Partial | No | No | No | Partial | No |
 | Plotting / visualization depth | Partial | No | No | Yes | Yes | No | No | No | Partial | No |
-| Code generation | No | No | No | Yes | No | No | No | No | No | No |
+| Code generation | Yes | No | No | Yes | No | No | No | No | No | No |
 | Extensibility via plugins / modules | Yes | No | Yes | Partial | Partial | Yes | Yes | Partial | Partial | Partial |
 | Reverse-engineering workflow depth | Partial | Partial | No | Partial | Yes | Yes | Partial | Yes | Partial | No |
 | Protocol breadth beyond raw CAN | Partial | Yes | Partial | Partial | Partial | Yes | Partial | Yes | Yes | No |

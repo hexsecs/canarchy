@@ -205,6 +205,30 @@ Notes:
 * when active acknowledgement is required by configuration, omitting `--ack-active` returns a structured `ACTIVE_ACK_REQUIRED` error
 * generated JSON output includes an active-transmit alert followed by generated frame events
 
+### simulate
+
+Emit a deterministic, profile-driven mix of classic CAN, J1939, and DM1 traffic without hardware or an external generator.
+
+```bash
+canarchy simulate [interface] --profile {heavy-truck,passenger-car} [--rate <hz>] \
+    [--duration <seconds>] [--seed <n>] [--dry-run] [--ack-active] [--json|--jsonl|--text]
+```
+
+Examples:
+
+```bash
+canarchy simulate --profile heavy-truck --duration 5 --dry-run --json
+canarchy simulate vcan0 --profile passenger-car --rate 50 --seed 7 --ack-active --json
+```
+
+Notes:
+
+* profiles are data-driven JSON resources (`canarchy/resources/simulate/profiles.json`); frame mix, weights, and DM1 bursts are defined there, so new archetypes need no code changes
+* deterministic and seedable via `--seed`; timestamps are spaced at `1 / --rate`
+* `--dry-run` plans the frame mix without transmitting; live transmission honors the active-transmit safety model (`--ack-active`, `YES` confirmation, `[safety].require_active_ack`)
+* reuses the existing transport backends, including `socketcan` virtual interfaces, `udp_multicast`, and stdout candump piping
+* structured errors: `SIMULATE_INVALID_RATE`, `SIMULATE_INVALID_DURATION`
+
 ### replay
 
 Replay a capture source with deterministic timing derived from relative frame timestamps. By default this returns a replay plan (planning mode). When `--interface` is specified, frames are transmitted onto a live CAN bus with capture timing.
@@ -317,6 +341,30 @@ Notes:
 * unsupplied signals default to the DBC initial value (else 0, clamped into range/choices) so single-signal encodes work; every default is reported under `data.resolution.filled_signals` and in a warning — review before transmitting (multiplexed messages are not auto-filled)
 * all non-exact resolutions are recorded under `data.resolution` (`message.via`, `signal_aliases`) and warned about; misspelled names get closest-match suggestions in the error hint
 * `send --dbc` applies the same resolution and defaulting, with a transmission-specific warning
+
+### plot
+
+Plot decoded signal time-series from a capture to PNG, SVG, or HTML.
+
+```bash
+canarchy plot --file <capture> --dbc <path-to-database> --signal <name> [--signal <name> ...] \
+    --out <path> [--format {png,svg,html}] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
+```
+
+Example:
+
+```bash
+canarchy plot --file drive.candump --dbc truck.dbc --signal EngineSpeed --signal VehicleSpeed --out rpm.png --json
+```
+
+Notes:
+
+* requires the optional plotting extra: `pip install canarchy[plot]` (matplotlib for PNG/SVG, plotly for HTML); a missing dependency returns `PLOT_DEPENDENCY_MISSING` with the install hint
+* `--dbc` currently accepts a **local database file path only** — unlike `decode`/`encode`, it does not resolve `provider:ref` shorthand; `dbc fetch` a provider DBC first and pass its cached path
+* multiple `--signal` flags overlay signals; `--format` selects the renderer (default `png`)
+* the envelope reports the output file path plus `signals_plotted` and `data_points`
+* `--offset`, `--max-frames`, and `--seconds` bound the analysed window like the rest of the file-backed surface
+* structured errors: `PLOT_DEPENDENCY_MISSING`, `PLOT_ERROR`, `UNSUPPORTED_OUTPUT_FORMAT`
 
 ### web serve
 
@@ -1014,6 +1062,22 @@ Notes:
 * timing statistics use the median and MAD rather than mean and standard deviation, so a minority of outlier gaps cannot inflate the spread and mask themselves
 * a cyclic-looking ID needs at least `--min-samples` inter-frame gaps before its timing is scored (default 10 without a baseline, 3 with one); sparser IDs are listed under `low_rate_ids` with classification source `low-sample` instead of being ranked, and reported z-scores are capped at ±100σ
 * the payload also reports `mode`, `timing_source` (`dbc` / `observed`), `min_samples`, `cyclic_ids`, `event_ids` (timing skipped), `low_rate_ids`, and a per-ID `classifications` list
+
+### re corpus
+
+Cross-capture corpus analysis: per-ID coverage matrix, cycle-time drift, and signal stability across multiple captures.
+
+```bash
+canarchy re corpus (<file> ... | --file <file> ...) [--corpus-glob <pattern>] \
+    [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* this command is passive and file-backed; accepts two or more captures positionally, via repeatable `--file`, or expanded from `--corpus-glob`
+* reports per-ID `coverage` (frame counts per capture, presence), `cycle_time_drift` (cross-capture mean-gap stddev and drift ratio), and `signal_stability` (per-byte coefficient of variation), plus a `summary` of unique/stable/drifting/new IDs
+* J1939 ids are annotated with `pgn`, `pgn_label`, and `source_address_name`; every row carries `arbitration_id_hex`
+* `--offset`, `--max-frames`, and `--seconds` bound each capture independently
 
 ### re entropy
 

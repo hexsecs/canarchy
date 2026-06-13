@@ -80,6 +80,8 @@ Relevant modules:
 
 * `src/canarchy/models.py`
 * `src/canarchy/j1939.py`
+* `src/canarchy/j1939_decoder.py`
+* `src/canarchy/j1939_metadata.py` — bundled SAE PGN / SPN / FMI / source-address catalogs
 * `src/canarchy/dbc.py`
 * `src/canarchy/dbc_provider.py`
 * `src/canarchy/dbc_provider_local.py`
@@ -88,10 +90,20 @@ Relevant modules:
 * `src/canarchy/dbc_runtime.py`
 * `src/canarchy/dbc_types.py`
 * `src/canarchy/reverse_engineering.py`
+* `src/canarchy/re_processors.py` — plugin-registered RE processors
+* `src/canarchy/corpus.py` — cross-capture corpus analysis (`re corpus`)
 * `src/canarchy/fuzzing.py`
 * `src/canarchy/replay.py`
+* `src/canarchy/sequence.py` — coordinated multi-message sequence replay
+* `src/canarchy/simulate.py` — data-driven bus simulator (`simulate`)
 * `src/canarchy/session.py`
 * `src/canarchy/uds.py`
+* `src/canarchy/scapy_uds.py` — optional Scapy-based UDS enrichment
+* `src/canarchy/pcap_reader.py` — PCAP / PCAPng capture ingestion
+* `src/canarchy/plot.py` — signal time-series plotting (`plot`, optional extra)
+* `src/canarchy/web.py` — read-only HTTP + WebSocket dashboard (`web serve`)
+* `src/canarchy/plugins.py` — plugin discovery and registry
+* `src/canarchy/dataset_provider.py`, `src/canarchy/dataset_cache.py`, `src/canarchy/comma_segments.py` — dataset provider, cache, and commaCarSegments support
 
 DBC architecture (current):
 

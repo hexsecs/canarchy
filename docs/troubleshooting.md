@@ -140,6 +140,31 @@ Check the `min`, `max`, and choice set before retrying.
 
 ---
 
+### `DBC_CONVERT_FAILED` / `DBC_CONVERT_UNSUPPORTED_FORMAT` / `DBC_CONVERT_WRITE_FAILED`
+
+Symptom — `dbc convert` could not serialize the database.
+
+Causes — the source database uses a feature the target format cannot
+express (`DBC_CONVERT_FAILED`), `--to` named a format other than
+`dbc` / `kcd` / `sym` (`DBC_CONVERT_UNSUPPORTED_FORMAT`), or the `--out`
+path is not writable (`DBC_CONVERT_WRITE_FAILED`).
+
+Recovery — pick a supported target format, choose a writable `--out`
+directory, or omit `--out` to receive the serialized content in the
+envelope.
+
+### `DBC_GENERATE_C_DIR_MISSING` / `DBC_GENERATE_C_FAILED` / `DBC_GENERATE_C_WRITE_FAILED`
+
+Symptom — `dbc generate-c` could not emit C source.
+
+Causes — the `--out-dir` does not exist (`DBC_GENERATE_C_DIR_MISSING`),
+cantools could not generate code for the database
+(`DBC_GENERATE_C_FAILED`), or a generated file could not be written
+(`DBC_GENERATE_C_WRITE_FAILED`).
+
+Recovery — create the output directory first, confirm the database loads
+with `dbc inspect`, and ensure the directory is writable.
+
 ## Dataset workflow errors
 
 ### `DATASET_NOT_FOUND`
@@ -201,6 +226,37 @@ canarchy datasets replay <ref> --list-files --json
 ```
 
 ---
+
+### `SOURCE_NOT_FOUND` / `MALFORMED_SOURCE`
+
+Symptom — a dataset or replay source could not be read.
+
+Causes — the referenced source file does not exist (`SOURCE_NOT_FOUND`),
+or a `comma-rlog` source string could not be parsed
+(`MALFORMED_SOURCE`).
+
+Recovery — confirm the path or ref, and check the source syntax against
+`datasets replay --help`.
+
+### `COMMA_RLOG_SUPPORT_UNAVAILABLE`
+
+Symptom — a `comma-rlog` dataset was requested but optional support is
+not installed.
+
+Recovery — install openpilot's LogReader support
+(`uv pip install git+https://github.com/commaai/openpilot.git` on
+Python 3.12.x); see the dataset cookbook recipes.
+
+### `COMMA_SEGMENTS_MANIFEST_UNAVAILABLE` / `COMMA_SEGMENTS_MANIFEST_EMPTY` / `COMMA_SEGMENTS_MANIFEST_MALFORMED` / `COMMA_SEGMENTS_PLATFORM_NOT_FOUND` / `COMMA_SEGMENTS_URL_UNAVAILABLE` / `COMMA_SEGMENTS_LFS_POINTER_MALFORMED`
+
+Symptom — the commaCarSegments dynamic manifest could not be resolved.
+
+Causes — the HuggingFace manifest could not be fetched, was empty or
+malformed, the requested `--platform` was not in the manifest, a segment
+URL was unavailable, or a Git-LFS pointer could not be parsed.
+
+Recovery — retry (network), pass a valid `--platform` from
+`datasets replay <ref> --list-files`, and bound listings with `--limit`.
 
 ## Frame and argument validation errors
 
@@ -291,6 +347,70 @@ value matches the signal's declared type.
 
 ---
 
+### `MISSING_MESSAGE`
+
+Symptom — `send --dbc` was invoked without `--message`.
+
+Recovery — pass the DBC message name, e.g. `--message EngineStatus1`.
+
+### `INTERFACE_REQUIRED`
+
+Symptom — a command needs a CAN interface but none was given and no
+default is configured.
+
+Recovery — pass the interface argument, or set
+`[transport].default_interface` / `CANARCHY_DEFAULT_INTERFACE`.
+
+### `INVALID_FRAME`
+
+Symptom — a frame could not be constructed from the supplied id/data.
+
+Recovery — check the hex id width and payload length against the frame
+format; see `send --help`.
+
+### `CONFLICTING_FILE_ARGUMENTS`
+
+Symptom — a capture path was supplied both positionally and via `--file`
+with different values (`re *` commands and `j1939 compare`).
+
+Recovery — pass the capture path once, in either form.
+
+### `INVALID_LIMIT` / `INVALID_ANALYSIS_OFFSET`
+
+Symptom — a `--limit` was non-positive, or an analysis `--offset` was
+negative.
+
+Recovery — pass a positive `--limit` and a non-negative `--offset`.
+
+### `J1939_COMPARE_REQUIRES_MULTIPLE_FILES`
+
+Symptom — `j1939 compare` was given fewer than two captures.
+
+Recovery — pass two or more capture files (positionally or via repeated
+`--file`).
+
+### `J1939_SPN_UNSUPPORTED`
+
+Symptom — `j1939 spn` was asked for an SPN with no built-in decoder and
+no matching DBC signal.
+
+Recovery — supply a `--dbc` that defines the SPN, or add it via the SPN
+override file (`$CANARCHY_J1939_SPN_OVERRIDES`).
+
+### `INVALID_FUZZ_RANGE` / `INVALID_FUZZ_SIGNAL` / `INVALID_FUZZ_SPN`
+
+Symptom — a fuzz command received a malformed arbitration-id range,
+DBC signal selection, or SPN selection.
+
+Recovery — check the range/signal/SPN arguments against the relevant
+`fuzz ... --help`.
+
+### `ACTIVE_TRANSMIT_INVALID_RUN_ID`
+
+Symptom — an explicit `--run-id` was not a valid UUID.
+
+Recovery — omit `--run-id` (a UUID is generated) or pass a valid UUID.
+
 ## Capture, stdin, and input errors
 
 ### `CAPTURE_EMPTY`
@@ -358,6 +478,13 @@ Recovery — re-capture or re-export the reference so both cover the same
 time window.
 
 ---
+
+### `CORPUS_NO_FILES`
+
+Symptom — `re corpus` was invoked without any capture files.
+
+Recovery — pass capture paths positionally, via repeated `--file`, or
+expand them with `--corpus-glob '<pattern>'`.
 
 ## Session and skill errors
 
@@ -482,6 +609,26 @@ would have done.
 
 ---
 
+### `ACTIVE_TRANSMIT_REQUIRES_ACK`
+
+Symptom — an active-transmit MCP tool was called without
+`ack_active=true`.
+
+Recovery — re-call with `ack_active=true` (and `dry_run=true` unless an
+operator has authorised live transmission). This is the MCP gate,
+separate from the CLI `--ack-active` flag.
+
+### `SEQUENCE_LOAD_ERROR` / `SEQUENCE_ENCODE_ERROR`
+
+Symptom — `sequence replay` could not load or encode the sequence file.
+
+Causes — the YAML/JSON sequence is missing/malformed
+(`SEQUENCE_LOAD_ERROR`), or a step's signals failed DBC encoding
+(`SEQUENCE_ENCODE_ERROR`).
+
+Recovery — validate the sequence file structure and confirm each step's
+message/signals against the referenced DBC.
+
 ## Plugin errors
 
 ### `PLUGIN_NOT_FOUND`
@@ -507,6 +654,18 @@ continue to load without the failing plugin.
 
 ---
 
+### `PLUGIN_CONFIG_INVALID` / `PLUGIN_CONFIG_WRITE_FAILED`
+
+Symptom — `plugins enable` / `plugins disable` could not read or persist
+the plugin toggle.
+
+Causes — the `[plugins]` section in `~/.canarchy/config.toml` is
+malformed (`PLUGIN_CONFIG_INVALID`), or the config file is not writable
+(`PLUGIN_CONFIG_WRITE_FAILED`).
+
+Recovery — fix or remove the malformed `[plugins]` table, and ensure the
+config file is writable.
+
 ## TUI errors
 
 ### `TUI_COMMAND_UNSUPPORTED`
@@ -516,6 +675,69 @@ TUI front end.
 
 Recovery — drop back to the shell or run the command directly from the
 CLI.
+
+---
+
+## Plot errors
+
+### `PLOT_DEPENDENCY_MISSING`
+
+Symptom — `plot` needs a plotting backend that is not installed.
+
+Recovery — install the optional extra: `pip install canarchy[plot]`
+(matplotlib for PNG/SVG, plotly for HTML).
+
+### `PLOT_ERROR`
+
+Symptom — plotting failed after dependencies were satisfied.
+
+Recovery — confirm the `--signal` names exist in the `--dbc` (use
+`dbc signals`), and that the output path is writable.
+
+---
+
+## Web dashboard errors
+
+### `WEB_BIND_INVALID`
+
+Symptom — `web serve --bind` is not in `<host>:<port>` form, or the port
+is out of range.
+
+Recovery — pass `--bind 127.0.0.1:8474` (port 0 selects an ephemeral
+port).
+
+### `WEB_BIND_FAILED`
+
+Symptom — the dashboard could not bind the requested address/port.
+
+Recovery — choose a free port with `--bind`, or stop the process holding
+it.
+
+### `WEB_READ_ONLY`
+
+Symptom — a non-GET HTTP request was sent to the dashboard (returned as
+HTTP 405, not a CLI exit).
+
+Recovery — the dashboard is read-only by design; active-transmit
+workflows are CLI-only and gated by the active-transmit safety model.
+
+---
+
+## MCP server errors
+
+### `TOOL_EXECUTION_ERROR`
+
+Symptom — an MCP tool call raised an unexpected error.
+
+Recovery — the server isolates the failure and stays usable; check the
+tool arguments or run the equivalent CLI command for full diagnostics.
+
+### `NO_RESULT`
+
+Symptom — an MCP tool returned no result object.
+
+Recovery — usually transient; retry the call, or run the equivalent CLI
+command to surface the underlying error.
 
 ---
 
