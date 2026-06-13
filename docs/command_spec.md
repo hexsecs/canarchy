@@ -311,6 +311,11 @@ Notes:
 * `--crc-algorithm` overrides checksum detection for DBC messages with an 8-bit `CHECKSUM` signal; when omitted, CANarchy attempts DBC-name detection and otherwise uses the default supported CRC behavior
 * explicitly supplied `CHECKSUM=<value>` signal assignments are preserved
 * structured output includes a `dbc_source` object describing the provider-backed or local DBC resolution that was used
+* message names resolve by exact DBC name, case/spacing-insensitive match, or SAE PGN label/name (e.g. `EEC1` → the DBC message carrying PGN 61444); signal names resolve by exact DBC name, case/spacing-insensitive match, or the bundled SAE SPN name — so names displayed by `decode`/`j1939` re-encode directly (e.g. `encode EEC1 "Engine Speed=1200"`)
+* when a PGN label matches several messages (same PGN, different source addresses), the supplied signal names break the tie; a remaining ambiguity returns `DBC_MESSAGE_NOT_FOUND` listing the candidates
+* unsupplied signals default to the DBC initial value (else 0, clamped into range/choices) so single-signal encodes work; every default is reported under `data.resolution.filled_signals` and in a warning — review before transmitting (multiplexed messages are not auto-filled)
+* all non-exact resolutions are recorded under `data.resolution` (`message.via`, `signal_aliases`) and warned about; misspelled names get closest-match suggestions in the error hint
+* `send --dbc` applies the same resolution and defaulting, with a transmission-specific warning
 
 ### dbc inspect
 

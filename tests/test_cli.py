@@ -5251,6 +5251,68 @@ class DatabaseFormatBreadthTests(unittest.TestCase):
         self.assertEqual(kcd_payload["data"]["frame"]["data"], dbc_frame)
         self.assertEqual(kcd_payload["data"]["dbc_source"]["kind"], "kcd")
 
+    def test_encode_resolves_sae_names_and_reports_resolution(self) -> None:
+        """#413: decode-displayed names re-encode without manual DBC lookup."""
+        exit_code, stdout, _ = run_cli(
+            "encode",
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "EEC1",
+            "Engine Speed=1200",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        data = payload["data"]
+        self.assertEqual(data["resolved_message"], "EngineSpeed1")
+        resolution = data["resolution"]
+        self.assertEqual(resolution["message"]["via"], "pgn_label")
+        self.assertEqual(resolution["message"]["pgn"], 61444)
+        self.assertEqual(
+            resolution["signal_aliases"],
+            [{"requested": "Engine Speed", "resolved": "EngineSpeed", "via": "normalized"}],
+        )
+        filled = {entry["signal"] for entry in resolution["filled_signals"]}
+        self.assertEqual(filled, {"Reserved", "TorqueMode"})
+        self.assertTrue(any("resolved to DBC message" in w for w in payload["warnings"]))
+        self.assertTrue(any("defaulted for encoding" in w for w in payload["warnings"]))
+
+    def test_encode_unknown_signal_suggests_close_match(self) -> None:
+        """#413: a name miss suggests the closest valid signal names."""
+        exit_code, stdout, _ = run_cli(
+            "encode",
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "EngineSpeed1",
+            "EngineSped=100",
+            "--json",
+        )
+        self.assertNotEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "DBC_SIGNAL_INVALID")
+        self.assertIn("EngineSpeed", payload["errors"][0]["hint"])
+
+    def test_send_dbc_warns_about_defaulted_signals(self) -> None:
+        """#413: send --dbc surfaces auto-filled signals before transmit."""
+        exit_code, stdout, _ = run_cli(
+            "send",
+            "--dbc",
+            str(FIXTURES / "j1939_sample.dbc"),
+            "--message",
+            "EngineSpeed1",
+            "--signals",
+            "EngineSpeed=1200",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        filled = {entry["signal"] for entry in payload["data"]["resolution"]["filled_signals"]}
+        self.assertEqual(filled, {"Reserved", "TorqueMode"})
+        self.assertTrue(any("defaulted for transmission" in w for w in payload["warnings"]))
+
     def test_decode_against_kcd_matches_dbc_decoding(self) -> None:
         capture = str(FIXTURES / "sample.candump")
         dbc_code, dbc_out, _ = run_cli(

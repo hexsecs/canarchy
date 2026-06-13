@@ -35,6 +35,7 @@ Every DBC-aware transmit research session currently requires importing cantools,
 | `REQ-SEND-DBC-12` | Unwanted behaviour | If the DBC cannot be resolved or loaded, the system shall propagate the existing `DBC_LOAD_FAILED` error. |
 | `REQ-SEND-DBC-13` | Unwanted behaviour | If a signal name or value fails DBC validation, the system shall propagate the existing `DBC_SIGNAL_INVALID` error. |
 | `REQ-SEND-DBC-14` | Ubiquitous | The raw `send <interface> <frame_id> <data>` surface shall remain fully backwards-compatible. |
+| `REQ-SEND-DBC-15` | Ubiquitous | `send --dbc` shall apply the same encode name resolution and unsupplied-signal defaulting as `encode` (REQ-DBC-08/09), reporting defaults under `data.resolution.filled_signals` and warning the operator to review them before live transmission. |
 
 ## Command Surface
 

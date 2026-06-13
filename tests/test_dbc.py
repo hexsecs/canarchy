@@ -38,7 +38,7 @@ class DbcTests(unittest.TestCase):
         self.assertEqual(decoded_messages[1]["payload"]["message_name"], "EngineSpeed1")
 
     def test_encode_message_returns_frame(self) -> None:
-        frame, events = encode_message(
+        frame, events, _ = encode_message(
             str(FIXTURES / "sample.dbc"),
             "EngineStatus1",
             {"CoolantTemp": 55, "OilTemp": 65, "Load": 40, "LampState": 1},

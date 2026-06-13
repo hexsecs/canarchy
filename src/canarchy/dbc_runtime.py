@@ -541,6 +541,221 @@ def _auto_compute_checksum(
     return {**signals, "CHECKSUM": crc}
 
 
+# --- encode name resolution (#413) ------------------------------------------
+#
+# The built-in J1939 decoder displays SAE labels ("Engine Speed", message
+# "EEC1") while the DBC defines raw names ("EngineSpeed" in "EngineSpeed1").
+# `encode` resolves both spellings so a decoded signal can be re-encoded by
+# its displayed name without a manual DBC lookup.
+
+
+def _normalized_name(name: str) -> str:
+    import re
+
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def _message_pgn(message: Any) -> int | None:
+    if not bool(message.is_extended_frame):
+        return None
+    try:
+        return decompose_arbitration_id(int(message.frame_id)).pgn
+    except ValueError:
+        return None
+
+
+def _resolve_encode_message(
+    database: Any, message_name: str, signal_names: list[str] | None = None
+) -> tuple[Any, dict[str, Any]]:
+    """Resolve a requested message name to a DBC message.
+
+    Tries, in order: the exact DBC name; a case/spacing-insensitive match;
+    and the SAE PGN label/name from the bundled J1939 catalog (e.g. "EEC1"
+    resolves to the DBC message whose frame id carries PGN 61444). When a PGN
+    label matches several messages (same PGN from different source
+    addresses), the supplied signal names break the tie. Ambiguous or failed
+    lookups raise `DBC_MESSAGE_NOT_FOUND` with suggestions.
+    """
+    from canarchy.j1939_metadata import pgn_lookup
+
+    try:
+        message = database.get_message_by_name(message_name)
+        return message, {"requested": message_name, "resolved": message.name, "via": "exact"}
+    except KeyError:
+        pass
+
+    wanted = _normalized_name(message_name)
+    normalized_matches = [m for m in database.messages if _normalized_name(m.name) == wanted]
+    if len(normalized_matches) == 1:
+        message = normalized_matches[0]
+        return message, {"requested": message_name, "resolved": message.name, "via": "normalized"}
+
+    pgn_label_matches = []
+    for candidate in database.messages:
+        pgn = _message_pgn(candidate)
+        if pgn is None:
+            continue
+        meta = pgn_lookup(pgn) or {}
+        labels = {meta.get("label"), meta.get("name")}
+        if any(label and _normalized_name(str(label)) == wanted for label in labels):
+            pgn_label_matches.append((candidate, pgn))
+    if len(pgn_label_matches) > 1 and signal_names:
+        # Same PGN can appear once per source address; only candidates whose
+        # signals can absorb every supplied name stay in the running.
+        def _absorbs_all(candidate: Any) -> bool:
+            resolved, _ = _resolve_encode_signal_names(
+                candidate, {name: None for name in signal_names}
+            )
+            known = {signal.name for signal in candidate.signals}
+            return all(name in known for name in resolved)
+
+        narrowed = [(c, p) for c, p in pgn_label_matches if _absorbs_all(c)]
+        if len(narrowed) == 1:
+            pgn_label_matches = narrowed
+    if len(pgn_label_matches) == 1:
+        message, pgn = pgn_label_matches[0]
+        return message, {
+            "requested": message_name,
+            "resolved": message.name,
+            "via": "pgn_label",
+            "pgn": pgn,
+        }
+    if len(pgn_label_matches) > 1:
+        names = sorted(candidate.name for candidate, _ in pgn_label_matches)
+        raise DbcError(
+            code="DBC_MESSAGE_NOT_FOUND",
+            message=f"Message name '{message_name}' matches multiple DBC messages by PGN.",
+            hint=f"Use one of the exact DBC message names: {', '.join(names)}.",
+            detail={"candidates": names},
+        )
+
+    import difflib
+
+    catalog: dict[str, str] = {}
+    for candidate in database.messages:
+        catalog.setdefault(_normalized_name(candidate.name), candidate.name)
+        pgn = _message_pgn(candidate)
+        meta = pgn_lookup(pgn) or {} if pgn is not None else {}
+        label = meta.get("label")
+        if label:
+            catalog.setdefault(_normalized_name(str(label)), f"{label} ({candidate.name})")
+    close = difflib.get_close_matches(wanted, list(catalog), n=3, cutoff=0.6)
+    suggestions = [catalog[key] for key in close]
+    raise DbcError(
+        code="DBC_MESSAGE_NOT_FOUND",
+        message=f"DBC message '{message_name}' was not found.",
+        hint=(
+            f"Did you mean: {', '.join(suggestions)}? "
+            if suggestions
+            else "Use a message name that exists in the selected DBC. "
+        )
+        + "Message names also match case/spacing-insensitively and by SAE PGN label.",
+        detail={"suggestions": suggestions} if suggestions else None,
+    )
+
+
+def _resolve_encode_signal_names(
+    message: Any, signals: dict[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """Map supplied signal names onto the message's DBC signal names.
+
+    Falls back from the exact name to a case/spacing-insensitive match and
+    then to the bundled SAE SPN name of a signal carrying an SPN attribute.
+    Unresolvable names are passed through for the caller's unknown-signal
+    error path.
+    """
+    from canarchy.j1939_metadata import spn_lookup
+
+    known = {signal.name for signal in message.signals}
+    by_normalized = {_normalized_name(signal.name): signal.name for signal in message.signals}
+    by_spn_name: dict[str, str] = {}
+    for signal in message.signals:
+        spn = getattr(signal, "spn", None)
+        if spn is None:
+            continue
+        meta = spn_lookup(int(spn))
+        if meta and meta.get("name"):
+            by_spn_name.setdefault(_normalized_name(str(meta["name"])), signal.name)
+
+    resolved: dict[str, Any] = {}
+    aliases: list[dict[str, str]] = []
+    for name, value in signals.items():
+        if name in known:
+            resolved[name] = value
+            continue
+        wanted = _normalized_name(name)
+        target = by_normalized.get(wanted)
+        via = "normalized"
+        if target is None:
+            target = by_spn_name.get(wanted)
+            via = "spn_name"
+        if target is None or target in resolved:
+            resolved[name] = value
+            continue
+        resolved[target] = value
+        aliases.append({"requested": name, "resolved": target, "via": via})
+    return resolved, aliases
+
+
+def _signal_name_suggestions(message: Any, unknown_signals: list[str]) -> list[str]:
+    from canarchy.j1939_metadata import spn_lookup
+    import difflib
+
+    catalog: dict[str, str] = {}
+    for signal in message.signals:
+        catalog.setdefault(_normalized_name(signal.name), signal.name)
+        spn = getattr(signal, "spn", None)
+        meta = spn_lookup(int(spn)) if spn is not None else None
+        if meta and meta.get("name"):
+            catalog.setdefault(
+                _normalized_name(str(meta["name"])), f"{meta['name']} ({signal.name})"
+            )
+
+    suggestions: list[str] = []
+    for name in unknown_signals:
+        close = difflib.get_close_matches(_normalized_name(name), list(catalog), n=2, cutoff=0.5)
+        suggestions += [catalog[key] for key in close if catalog[key] not in suggestions]
+    return suggestions
+
+
+def _fill_missing_signals(
+    message: Any, signals: dict[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Default unsupplied signals so a single-signal encode round-trips.
+
+    Each missing signal takes its DBC initial value when declared, otherwise
+    0 clamped into the declared range. Multiplexed messages are left alone —
+    their required-signal set depends on the selector value.
+    """
+    if getattr(message, "is_multiplexed", lambda: False)():
+        return signals, []
+
+    filled: list[dict[str, Any]] = []
+    resolved = dict(signals)
+    for signal in message.signals:
+        if signal.name in resolved or signal.name == "CHECKSUM":
+            continue
+        initial = getattr(signal, "initial", None)
+        if initial is not None:
+            value = normalize_value(initial)
+        else:
+            value = 0
+            minimum = normalize_value(signal.minimum) if signal.minimum is not None else None
+            maximum = normalize_value(signal.maximum) if signal.maximum is not None else None
+            if minimum is not None and value < minimum:
+                value = minimum
+            if maximum is not None and value > maximum:
+                value = maximum
+        choices = getattr(signal, "choices", None)
+        if choices and value not in set(choices.keys()):
+            # Raw choice keys are what message.encode accepts numerically;
+            # fall back to the smallest defined choice.
+            value = sorted(choices.keys())[0]
+        resolved[signal.name] = value
+        filled.append({"signal": signal.name, "value": value})
+    return resolved, filled
+
+
 def encode_message_runtime(
     dbc_path: str,
     message_name: str,
@@ -548,27 +763,35 @@ def encode_message_runtime(
     *,
     interface: str | None = None,
     crc_algorithm: str | None = None,
-) -> tuple[CanFrame, list[dict[str, Any]]]:
+) -> tuple[CanFrame, list[dict[str, Any]], dict[str, Any]]:
     database = load_runtime_database(dbc_path)
 
-    try:
-        message = database.get_message_by_name(message_name)
-    except KeyError as exc:
-        raise DbcError(
-            code="DBC_MESSAGE_NOT_FOUND",
-            message=f"DBC message '{message_name}' was not found.",
-            hint="Use a message name that exists in the selected DBC.",
-        ) from exc
+    message, message_resolution = _resolve_encode_message(
+        database, message_name, signal_names=list(signals)
+    )
+    signals, signal_aliases = _resolve_encode_signal_names(message, signals)
+    resolution: dict[str, Any] = {
+        "message": message_resolution,
+        "signal_aliases": signal_aliases,
+        "filled_signals": [],
+    }
 
     known_signals = {signal.name for signal in message.signals}
     unknown_signals = sorted(set(signals) - known_signals)
     if unknown_signals:
+        suggestions = _signal_name_suggestions(message, unknown_signals)
         raise DbcError(
             code="DBC_SIGNAL_INVALID",
             message=(
-                f"Message '{message_name}' does not define signal(s): {', '.join(unknown_signals)}."
+                f"Message '{message.name}' does not define signal(s): {', '.join(unknown_signals)}."
             ),
-            hint="Use only signal names that exist in the selected DBC message.",
+            hint=(
+                f"Did you mean: {', '.join(suggestions)}? "
+                if suggestions
+                else "Use only signal names that exist in the selected DBC message. "
+            )
+            + "Signal names also match case/spacing-insensitively and by SAE SPN name.",
+            detail={"unknown_signals": unknown_signals, "suggestions": suggestions},
         )
 
     for sig_name, sig_value in signals.items():
@@ -616,7 +839,8 @@ def encode_message_runtime(
                     },
                 )
 
-    resolved_signals = dict(signals)
+    resolved_signals, filled = _fill_missing_signals(message, signals)
+    resolution["filled_signals"] = filled
     cs = _checksum_signal(message)
     if cs is not None:
         resolved_signals = _auto_compute_checksum(
@@ -633,7 +857,7 @@ def encode_message_runtime(
     except Exception as exc:  # pragma: no cover
         raise DbcError(
             code="DBC_SIGNAL_INVALID",
-            message=f"Failed to encode message '{message_name}' with the provided signals.",
+            message=f"Failed to encode message '{message.name}' with the provided signals.",
             hint="Check the signal names, types, ranges, and required values for the selected DBC message.",
         ) from exc
 
@@ -644,4 +868,5 @@ def encode_message_runtime(
         is_extended_id=bool(message.is_extended_frame),
         timestamp=0.0,
     )
-    return frame, serialize_events([FrameEvent(frame=frame, source="dbc.encode").to_event()])
+    events = serialize_events([FrameEvent(frame=frame, source="dbc.encode").to_event()])
+    return frame, events, resolution
