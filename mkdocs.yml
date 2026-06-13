@@ -78,6 +78,7 @@ nav:
   - Tutorials:
       - Overview: tutorials/index.md
       - Stream CAN Data from CANdid: tutorials/stream_candid_dataset.md
+      - Launch the Web Dashboard: tutorials/web_dashboard.md
       - Discover and Use Provider-Backed DBC Files: tutorials/dbc_provider_workflow.md
       - J1939 Heavy Vehicle Analysis: tutorials/j1939_heavy_vehicle.md
       - Generate and Capture: tutorials/generate_and_capture.md
@@ -134,6 +135,7 @@ nav:
           - UDS Services Command: design/uds-services-command.md
           - Shell Command: design/shell-command.md
           - TUI Shell: design/tui-shell.md
+          - Web Dashboard: design/web-serve.md
       - Test Specs:
           - Active Command Safety: tests/active-command-safety.md
           - Active-Transmit Safety Model: tests/active-transmit-safety.md
@@ -161,6 +163,7 @@ nav:
           - UDS Services Command: tests/uds-services-command.md
           - Shell Command: tests/shell-command.md
           - TUI Shell: tests/tui-shell.md
+          - Web Dashboard: tests/web-serve.md
           - Composition: tests/composition.md
   - Agents:
       - Agent Guide: agents.md
