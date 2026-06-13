@@ -170,7 +170,7 @@ IMPLEMENTED_COMMANDS = (
     | RE_COMMANDS
     | FUZZ_COMMANDS
     | SEQUENCE_COMMANDS
-    | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export", "plot"}
+    | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export", "plot", "web serve"}
 )
 
 
@@ -1576,6 +1576,43 @@ def build_parser() -> CanarchyArgumentParser:
     mcp_subparsers = mcp.add_subparsers(dest="mcp_action", required=True)
     mcp_serve = mcp_subparsers.add_parser("serve", help="start MCP server over stdio")
     mcp_serve.set_defaults(command="mcp serve")
+
+    web = subparsers.add_parser("web", help="read-only browser dashboard")
+    web_subparsers = web.add_subparsers(dest="web_action", required=True)
+    web_serve = web_subparsers.add_parser(
+        "serve", help="serve the read-only dashboard over HTTP + WebSocket"
+    )
+    web_serve.add_argument(
+        "--file", required=True, help="capture file to stream over the dashboard"
+    )
+    web_serve.add_argument(
+        "--dbc", help="database (path or provider ref) for decoded-signal events"
+    )
+    web_serve.add_argument(
+        "--bind",
+        default="127.0.0.1:8474",
+        help="host:port to bind the dashboard to (default: 127.0.0.1:8474)",
+    )
+    web_serve.add_argument(
+        "--rate",
+        type=float,
+        default=1.0,
+        help="playback rate multiplier for the capture stream (default: 1.0)",
+    )
+    web_serve.add_argument(
+        "--loop",
+        action="store_true",
+        help="restart the capture stream when it completes",
+    )
+    web_serve.add_argument(
+        "--read-only",
+        action="store_true",
+        default=True,
+        help="serve without any transmit endpoints (always on; v1 exposes no active surface)",
+    )
+    _add_file_analysis_arguments(web_serve)
+    add_output_arguments(web_serve)
+    web_serve.set_defaults(command="web serve")
     mcp_install = mcp_subparsers.add_parser(
         "install", help="write the canarchy MCP server block into a client config"
     )
@@ -7886,6 +7923,101 @@ def emit_mcp_install(args: argparse.Namespace, output_format: str) -> int:
     return EXIT_OK
 
 
+def emit_web_serve(args: argparse.Namespace, output_format: str) -> int:
+    """Start the read-only web dashboard and serve until interrupted."""
+    from canarchy.dbc import DbcError
+    from canarchy.web import WebDashboardServer, WebDependencyError, build_dashboard_events
+
+    transport = LocalTransport()
+    try:
+        frames = transport.frames_from_file(
+            args.file,
+            offset=getattr(args, "offset", 0) or 0,
+            max_frames=getattr(args, "max_frames", None),
+            seconds=getattr(args, "seconds", None),
+        )
+    except TransportError as exc:
+        emit_result(
+            error_result(
+                args.command,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+            output_format,
+        )
+        return EXIT_TRANSPORT_ERROR
+
+    dbc_path: str | None = None
+    dbc_source: dict[str, Any] | None = None
+    try:
+        if getattr(args, "dbc", None):
+            from canarchy.dbc_provider import get_registry
+
+            resolution = get_registry().resolve(args.dbc)
+            dbc_path = str(resolution.local_path)
+            dbc_source = _build_dbc_source(resolution)
+
+        events = build_dashboard_events(frames, dbc_path=dbc_path)
+    except DbcError as exc:
+        emit_result(
+            error_result(
+                args.command,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+            output_format,
+        )
+        return EXIT_DECODE_ERROR
+
+    source: dict[str, Any] = {"file": args.file, "dbc": getattr(args, "dbc", None)}
+    if dbc_source is not None:
+        source["dbc_source"] = dbc_source
+    try:
+        server = WebDashboardServer(
+            args.bind,
+            events=events,
+            source=source,
+            rate=args.rate,
+            loop=bool(getattr(args, "loop", False)),
+        )
+    except WebDependencyError as exc:
+        emit_result(
+            error_result(
+                args.command,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ),
+            output_format,
+        )
+        return EXIT_USER_ERROR
+
+    emit_result(
+        CommandResult(
+            command=args.command,
+            data={
+                "url": server.url,
+                "bind": args.bind,
+                "read_only": True,
+                "source": source,
+                "event_count": len(events),
+                "frame_count": len(frames),
+                "rate": args.rate,
+                "loop": bool(getattr(args, "loop", False)),
+                "mode": "passive",
+            },
+            warnings=[
+                "The dashboard is read-only: no active-transmit endpoints are exposed.",
+                "Press Ctrl+C to stop the server.",
+            ],
+        ),
+        output_format,
+    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.stop()
+    return EXIT_OK
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     _J1939_SESSION_COMMANDS = {
@@ -8319,6 +8451,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         run_server()
         return EXIT_OK
+    if args.command == "web serve":
+        return emit_web_serve(args, output_format)
     if args.command == "mcp install":
         return emit_mcp_install(args, output_format)
     if args.command == "shell":

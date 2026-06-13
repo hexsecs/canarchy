@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CANarchy Dashboard</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+         background: #10141a; color: #d8dee9; }
+  header { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: baseline;
+           padding: 0.7rem 1rem; background: #161c25; border-bottom: 1px solid #2a3342; }
+  header h1 { font-size: 1rem; margin: 0; color: #88c0d0; }
+  header .stat b { color: #eceff4; }
+  #conn { padding: 0.1rem 0.5rem; border-radius: 3px; background: #5a3030; }
+  #conn.ok { background: #2e4d36; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; padding: 0.8rem; }
+  section { background: #161c25; border: 1px solid #2a3342; border-radius: 4px;
+            min-height: 12rem; max-height: 24rem; overflow: auto; }
+  section h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
+               margin: 0; padding: 0.45rem 0.7rem; color: #81a1c1; position: sticky;
+               top: 0; background: #161c25; border-bottom: 1px solid #2a3342; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.18rem 0.7rem; white-space: nowrap; }
+  th { color: #6b7a90; font-weight: normal; }
+  tbody tr:nth-child(odd) { background: #131922; }
+  .num { text-align: right; }
+  .muted { color: #6b7a90; }
+  #alerts { grid-column: 1 / -1; min-height: 2rem; max-height: 6rem; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>CANarchy</h1>
+  <span id="conn">connecting…</span>
+  <span class="stat">frames <b id="stat-frames">0</b></span>
+  <span class="stat">ids <b id="stat-ids">0</b></span>
+  <span class="stat">rate <b id="stat-rate">0</b>/s</span>
+  <span class="stat muted" id="stat-source"></span>
+</header>
+<main>
+  <section id="frames-pane">
+    <h2>Live frames</h2>
+    <table><thead><tr><th>time</th><th>id</th><th class="num">dlc</th><th>data</th></tr></thead>
+    <tbody id="frames"></tbody></table>
+  </section>
+  <section id="signals-pane">
+    <h2>Decoded signals</h2>
+    <table><thead><tr><th>message</th><th>signal</th><th class="num">value</th></tr></thead>
+    <tbody id="signals"></tbody></table>
+  </section>
+  <section id="j1939-pane">
+    <h2>J1939 activity</h2>
+    <table><thead><tr><th>pgn</th><th>label</th><th>source</th><th class="num">count</th></tr></thead>
+    <tbody id="j1939"></tbody></table>
+  </section>
+  <section id="uds-pane">
+    <h2>UDS transactions</h2>
+    <table><thead><tr><th>service</th><th>request</th><th>response</th></tr></thead>
+    <tbody id="uds"></tbody></table>
+  </section>
+  <section id="alerts"><h2>Alerts</h2><table><tbody id="alert-rows"></tbody></table></section>
+</main>
+<script>
+"use strict";
+const MAX_FRAME_ROWS = 50;
+const state = {
+  frames: 0,
+  ids: new Set(),
+  windowTimes: [],
+  signals: new Map(),   // "message.signal" -> {message, signal, value}
+  j1939: new Map(),     // "pgn:sa" -> {pgn, label, source, count}
+};
+const el = (id) => document.getElementById(id);
+const text = (value) => (value === null || value === undefined ? "" : String(value));
+
+function hexId(frame) {
+  const width = frame.is_extended_id ? 8 : 3;
+  return "0x" + frame.arbitration_id.toString(16).toUpperCase().padStart(width, "0");
+}
+
+function addRow(tbody, cells, max) {
+  const row = document.createElement("tr");
+  for (const cell of cells) {
+    const td = document.createElement("td");
+    if (typeof cell === "object") { td.textContent = cell.text; td.className = cell.cls || ""; }
+    else td.textContent = cell;
+    row.appendChild(td);
+  }
+  tbody.prepend(row);
+  while (max && tbody.rows.length > max) tbody.deleteRow(-1);
+}
+
+function renderMap(tbody, entries, toCells) {
+  tbody.replaceChildren();
+  for (const entry of entries) {
+    const row = document.createElement("tr");
+    for (const value of toCells(entry)) {
+      const td = document.createElement("td");
+      if (typeof value === "object") { td.textContent = value.text; td.className = value.cls || ""; }
+      else td.textContent = value;
+      row.appendChild(td);
+    }
+    tbody.appendChild(row);
+  }
+}
+
+function onFrame(payload) {
+  const frame = payload.frame;
+  state.frames += 1;
+  state.ids.add(frame.arbitration_id);
+  state.windowTimes.push(performance.now());
+  addRow(el("frames"), [
+    { text: (frame.timestamp ?? 0).toFixed(4), cls: "muted" },
+    hexId(frame),
+    { text: text(frame.dlc ?? (frame.data.length / 2)), cls: "num" },
+    frame.data.toUpperCase(),
+  ], MAX_FRAME_ROWS);
+  el("stat-frames").textContent = state.frames;
+  el("stat-ids").textContent = state.ids.size;
+}
+
+function onDecoded(payload) {
+  for (const [signal, value] of Object.entries(payload.signals)) {
+    state.signals.set(payload.message_name + "." + signal,
+      { message: payload.message_name, signal, value });
+  }
+  renderMap(el("signals"),
+    Array.from(state.signals.values()).sort((a, b) =>
+      (a.message + a.signal).localeCompare(b.message + b.signal)),
+    (entry) => [entry.message, entry.signal, { text: text(entry.value), cls: "num" }]);
+}
+
+function onJ1939(payload) {
+  const key = payload.pgn + ":" + payload.source_address;
+  const entry = state.j1939.get(key) ||
+    { pgn: payload.pgn, label: payload.pgn_label || "", source: "", count: 0 };
+  entry.count += 1;
+  entry.source = text(payload.source_address) +
+    (payload.source_address_name ? " " + payload.source_address_name : "");
+  state.j1939.set(key, entry);
+  renderMap(el("j1939"),
+    Array.from(state.j1939.values()).sort((a, b) => b.count - a.count).slice(0, 40),
+    (entry) => [entry.pgn, entry.label, entry.source, { text: entry.count, cls: "num" }]);
+}
+
+function onUds(payload) {
+  addRow(el("uds"), [
+    text(payload.service_name || payload.service),
+    payload.request_summary || payload.request_data,
+    payload.response_summary || payload.response_data ||
+      (payload.negative_response_name ? "NRC " + payload.negative_response_name : ""),
+  ], 30);
+}
+
+function onAlert(payload) {
+  addRow(el("alert-rows"), [
+    { text: payload.code || payload.level || "alert", cls: "muted" },
+    payload.message || "",
+  ], 10);
+}
+
+setInterval(() => {
+  const now = performance.now();
+  state.windowTimes = state.windowTimes.filter((t) => now - t < 2000);
+  el("stat-rate").textContent = Math.round(state.windowTimes.length / 2);
+}, 500);
+
+fetch("/api/status").then((r) => r.json()).then((status) => {
+  const src = status.source || {};
+  el("stat-source").textContent =
+    (src.file ? "file " + src.file : "") + (src.dbc ? " · dbc " + src.dbc : "") +
+    (status.read_only ? " · read-only" : "");
+}).catch(() => {});
+
+function connect() {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") +
+    location.host + "/ws");
+  ws.onopen = () => { el("conn").textContent = "live"; el("conn").className = "ok"; };
+  ws.onclose = () => { el("conn").textContent = "disconnected"; el("conn").className = ""; };
+  ws.onmessage = (message) => {
+    let event;
+    try { event = JSON.parse(message.data); } catch { return; }
+    const payload = event.payload || {};
+    if (event.event_type === "frame") onFrame(payload);
+    else if (event.event_type === "decoded_message") onDecoded(payload);
+    else if (event.event_type === "j1939_pgn") onJ1939(payload);
+    else if (event.event_type === "uds_transaction") onUds(payload);
+    else if (event.event_type === "alert") onAlert(payload);
+  };
+}
+connect();
+</script>
+</body>
+</html>

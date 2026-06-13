@@ -11,6 +11,7 @@ Use them when you want a realistic, command-by-command path instead of reference
 * [Generate and Capture](generate_and_capture.md) shows how to generate traffic in one terminal and observe it live from another terminal.
 * [Simulate Vehicle Traffic](simulate_vehicle_traffic.md) shows how to plan, transmit, and analyze a deterministic, profile-driven mix of classic CAN, J1939, and DM1 traffic with `canarchy simulate`.
 * [Discover and Use Provider-Backed DBC Files](dbc_provider_workflow.md) walks through provider catalog refresh, search, fetch, inspection, decode, and DBC matching against a capture.
+* [Launch the Web Dashboard](web_dashboard.md) serves a capture through the read-only browser dashboard — live frames, decoded signals, J1939 activity, and UDS transactions over WebSocket.
 
 ## Suggested Reading Order
 

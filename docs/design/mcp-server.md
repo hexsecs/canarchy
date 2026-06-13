@@ -152,6 +152,7 @@ landing here.
 | CLI surface | Rationale |
 |-------------|-----------|
 | `shell`, `tui` | Interactive front ends with no one-shot RPC equivalent. |
+| `web serve` | Long-running HTTP/WebSocket front end, like `shell`/`tui`; read-only by design (`docs/design/web-serve.md`). |
 | `mcp serve` | The server itself; not a tool it would expose. |
 | `mcp install` | Writes a client config file — a user action, like `plugins enable/disable`, kept off the agent surface. |
 | `plugins enable`, `plugins disable` | Write user plugin configuration under `~/.canarchy/config.toml`; kept CLI-only. |

@@ -44,6 +44,7 @@ SUBCOMMANDS: list[tuple[str, str]] = [
     ("config", "inspect CANarchy configuration"),
     ("doctor", "environment health checks"),
     ("mcp", "MCP server workflows"),
+    ("web", "read-only browser dashboard"),
     ("shell", "start the interactive shell"),
     ("tui", "start the terminal UI"),
     ("completion", "emit shell completion script"),

@@ -24,6 +24,7 @@ Implemented and verified in the current codebase:
 * `re signals`, `re counters`, `re entropy`, `re correlate`, and `re anomalies` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
 * `plugins list`, `plugins info`, `plugins enable`, and `plugins disable` for Python entry-point plugin inspection and toggles
+* `web serve` for the read-only browser dashboard over the JSONL event envelope
 * structured JSON and JSONL output
 * explicit error schema and exit codes
 
@@ -316,6 +317,31 @@ Notes:
 * unsupplied signals default to the DBC initial value (else 0, clamped into range/choices) so single-signal encodes work; every default is reported under `data.resolution.filled_signals` and in a warning — review before transmitting (multiplexed messages are not auto-filled)
 * all non-exact resolutions are recorded under `data.resolution` (`message.via`, `signal_aliases`) and warned about; misspelled names get closest-match suggestions in the error hint
 * `send --dbc` applies the same resolution and defaulting, with a transmission-specific warning
+
+### web serve
+
+Serve the read-only browser dashboard over HTTP + WebSocket.
+
+```bash
+canarchy web serve --file <capture> [--dbc <path|provider:ref>] [--bind <host:port>] \
+    [--rate <multiplier>] [--loop] [--offset <n>] [--max-frames <n>] [--seconds <s>] \
+    [--json|--jsonl|--text]
+```
+
+Example:
+
+```bash
+canarchy web serve --file tests/fixtures/j1939_heavy_vehicle.candump --dbc tests/fixtures/j1939_sample.dbc --json
+```
+
+Notes:
+
+* streams the capture as canonical envelope events (`frame`, `j1939_pgn` with bundled PGN/source-address annotation, `decoded_message` when `--dbc` is supplied, `uds_transaction` reassembled from the capture) to the bundled single-file SPA
+* the server is read-only: no active-transmit endpoints exist and non-GET requests return HTTP 405 with `WEB_READ_ONLY`
+* default bind is `127.0.0.1:8474`; port `0` selects an ephemeral port and the startup envelope reports the resolved `url`
+* `--rate` scales timestamp pacing (`0` disables it; gaps are capped at 1 s); `--loop` restarts the stream when the capture ends, otherwise a `STREAM_COMPLETE` alert closes it
+* structured errors: `WEB_BIND_INVALID` / `WEB_BIND_FAILED` (exit 1) and the standard capture-file transport errors (exit 2)
+* the command runs until interrupted and is not exposed as an MCP tool (long-running front end, like `shell`/`tui`)
 
 ### dbc inspect
 

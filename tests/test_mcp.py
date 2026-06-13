@@ -115,6 +115,7 @@ _MCP_EXCLUDED_COMMANDS = {
     "tui",
     "mcp serve",
     "mcp install",
+    "web serve",  # long-running HTTP/WebSocket front end, like shell/tui
     "completion",
     "datasets stream",
     "dbc generate-c",  # file generation is a developer action, not an agent tool call
