@@ -5288,10 +5288,20 @@ def plot_payload(
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     from canarchy.plot import PlotDependencyError, decode_signal_series, plot_signals
 
+    # Resolve the database ref through the provider registry so `plot` accepts
+    # `opendbc:<name>` shorthand like decode/encode (#427). A bad ref raises
+    # DbcError here — outside the broad PLOT_ERROR handler below — so it surfaces
+    # as the canonical DBC_* envelope via the global handler.
+    from canarchy.dbc_provider import get_registry
+
+    resolution = get_registry().resolve(args.dbc)
+    dbc_path = str(resolution.local_path)
+    dbc_source = _build_dbc_source(resolution)
+
     try:
         series = decode_signal_series(
             args.file,
-            args.dbc,
+            dbc_path,
             args.signals,
             offset=getattr(args, "offset", 0) or 0,
             max_frames=getattr(args, "max_frames", None),
@@ -5336,6 +5346,7 @@ def plot_payload(
         {
             "file": args.file,
             "dbc": args.dbc,
+            "dbc_source": dbc_source,
             "signals": args.signals,
             "out": args.out,
             "format": args.plot_format,

@@ -198,3 +198,47 @@ class PlotCliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("command: plot", stdout)
         self.assertIn("out:", stdout)
+
+
+class PlotProviderRefTests(unittest.TestCase):
+    """`plot --dbc` resolves provider refs like decode/encode (#427)."""
+
+    def test_local_path_resolves_and_reports_dbc_source(self) -> None:
+        mock_plt = MagicMock()
+        mock_plt.subplots.return_value = (MagicMock(), MagicMock())
+        with patch("canarchy.plot.plt", mock_plt):
+            exit_code, stdout, _ = run_cli(
+                "plot",
+                "--file",
+                str(FIXTURES / "complex.candump"),
+                "--dbc",
+                str(FIXTURES / "complex.dbc"),
+                "--signal",
+                "EngineSpeed",
+                "--out",
+                "/tmp/plot_provider_ref.png",
+                "--json",
+            )
+        self.assertEqual(exit_code, 0)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["dbc_source"]["kind"], "dbc")
+
+    def test_bad_provider_ref_returns_dbc_error_not_plot_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "plot",
+            "--file",
+            str(FIXTURES / "complex.candump"),
+            "--dbc",
+            "opendbc:does_not_exist_xyz",
+            "--signal",
+            "EngineSpeed",
+            "--out",
+            "/tmp/plot_bad_ref.png",
+            "--json",
+        )
+        self.assertEqual(exit_code, 3)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        code = payload["errors"][0]["code"]
+        self.assertTrue(code.startswith("DBC_"))
+        self.assertNotEqual(code, "PLOT_ERROR")
