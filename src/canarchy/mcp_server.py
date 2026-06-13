@@ -1577,7 +1577,10 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump or PCAP capture file"},
-                "dbc": {"type": "string", "description": "Path to DBC file for signal decoding"},
+                "dbc": {
+                    "type": "string",
+                    "description": "Database path or provider ref (e.g. opendbc:<name>) for signal decoding",
+                },
                 "signals": {
                     "type": "array",
                     "items": {"type": "string"},
