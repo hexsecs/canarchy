@@ -92,7 +92,10 @@ Feature: DBC-aware signal transmit via `send --dbc`
 Given  a DBC message with three signals
 When   `canarchy send --dbc <dbc> --message <msg> --signals EngineSpeed=1200 --dry-run --json` is invoked
 Then   the unsupplied signals shall be listed under `data.resolution.filled_signals`
-And    a warning shall direct the operator to review the defaults before sending live
+And    a warning shall name the defaulted signal=value pairs
+When   the same command runs live (no --dry-run)
+Then   the defaulted-values warning shall be on stderr before the transport send is invoked
 ```
 
-Covered by `test_send_dbc_warns_about_defaulted_signals` in `tests/test_cli.py`.
+Covered by `test_send_dbc_warns_about_defaulted_signals` and
+`test_send_dbc_default_warning_emitted_before_transmission` in `tests/test_cli.py`.

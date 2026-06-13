@@ -3338,12 +3338,13 @@ def transport_payload(
             )
             send_warnings: list[str] = []
             if encode_resolution.get("filled_signals"):
-                filled_names = ", ".join(
-                    entry["signal"] for entry in encode_resolution["filled_signals"]
+                filled_values = ", ".join(
+                    f"{entry['signal']}={entry['value']}"
+                    for entry in encode_resolution["filled_signals"]
                 )
                 send_warnings.append(
-                    f"Unsupplied signal(s) defaulted for transmission: {filled_names}. "
-                    "Review data.resolution.filled_signals before sending live."
+                    f"Unsupplied signal(s) defaulted for transmission: {filled_values}. "
+                    "Supply explicit values via --signals if these are not intended."
                 )
             dry_run = getattr(args, "dry_run", False)
             count = args.count
@@ -3365,6 +3366,11 @@ def transport_payload(
             if dry_run:
                 base_data["mode"] = "dry_run"
                 return (base_data, [], send_warnings)
+            # The operator must see synthesized defaults BEFORE the
+            # confirmation prompt / bus write, not just in the result
+            # envelope after transmission.
+            for warning in send_warnings:
+                print(f"warning: {warning}", file=sys.stderr)
             enforce_active_transmit_safety(args)
             base_data["mode"] = "active"
             all_events: list[dict[str, Any]] = []
@@ -3625,7 +3631,6 @@ def transport_payload(
     if args.command == "capture-info":
         if args.file == "-":
             # Handle stdin
-            import sys
             from canarchy.transport import parse_candump_line
 
             frames = []

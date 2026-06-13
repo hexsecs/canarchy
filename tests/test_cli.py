@@ -5313,6 +5313,39 @@ class DatabaseFormatBreadthTests(unittest.TestCase):
         self.assertEqual(filled, {"Reserved", "TorqueMode"})
         self.assertTrue(any("defaulted for transmission" in w for w in payload["warnings"]))
 
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_send_dbc_default_warning_emitted_before_transmission(self, _mock_cfg) -> None:
+        """#413/#422 review: defaults reach stderr before any bus write."""
+        observed_stderr: dict[str, str] = {}
+
+        def fake_send_events(_transport, _interface, _frame):
+            import sys
+
+            observed_stderr["value"] = sys.stderr.getvalue()
+            return []
+
+        with patch("canarchy.cli.LocalTransport.send_events", new=fake_send_events):
+            exit_code, stdout, stderr = run_cli(
+                "send",
+                "can0",
+                "--dbc",
+                str(FIXTURES / "j1939_sample.dbc"),
+                "--message",
+                "EngineSpeed1",
+                "--signals",
+                "EngineSpeed=1200",
+                "--json",
+            )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("defaulted for transmission", stderr)
+        self.assertIn("Reserved=0", stderr)
+        # The warning was already on stderr when the transport was invoked.
+        self.assertIn("defaulted for transmission", observed_stderr["value"])
+
     def test_decode_against_kcd_matches_dbc_decoding(self) -> None:
         capture = str(FIXTURES / "sample.candump")
         dbc_code, dbc_out, _ = run_cli(
