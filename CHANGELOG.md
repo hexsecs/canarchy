@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+* **decode→encode round-trip: `encode` resolves SAE display names (#413).** Signals you can decode can now be re-encoded by the same name: `encode EEC1 "Engine Speed=1200"` works against a DBC that defines `EngineSpeed` inside `EngineSpeed1`. Message names resolve by exact DBC name, case/spacing-insensitive match, or SAE PGN label/name from the bundled J1939 catalog (PGN-label ties across source addresses are broken by the supplied signal names; remaining ambiguity returns `DBC_MESSAGE_NOT_FOUND` listing the candidates). Signal names resolve by exact DBC name, case/spacing-insensitive match, or the bundled SAE SPN name of an SPN-attributed signal. Unsupplied signals are defaulted (DBC initial value, else 0 clamped into range/choices; multiplexed messages excluded) so single-signal encodes succeed. Every non-exact resolution and defaulted signal is reported under `data.resolution` and as warnings, misspelled names get closest-match suggestions in the error hint, and `send --dbc` applies the same behavior with a transmission-specific warning. Tests cover the issue's exact example, a byte-identical decode→encode round-trip, SPN-name resolution, the PGN tie-break, defaults reporting, and suggestion hints. Closes #413.
+
 ### Fixed
 
 * **`j1939 summary` dedupes repeated BAM identifiers (#411).** The same printable TP identifier (e.g. a VIN broadcast once per BAM session) was listed once per session, inflating the response 14× on real drive captures. `tp.printable_identifiers` now reports distinct values with an `occurrence_count` and the source-address name, matching the deduped shape `j1939 compare` already used; `j1939 compare`'s passthrough inherits the fix. Closes #411.

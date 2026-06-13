@@ -166,7 +166,7 @@ def encode_message(
     *,
     interface: str | None = None,
     crc_algorithm: str | None = None,
-) -> tuple[CanFrame, list[dict[str, Any]]]:
+) -> tuple[CanFrame, list[dict[str, Any]], dict[str, Any]]:
     from canarchy.dbc_runtime import encode_message_runtime
 
     return encode_message_runtime(

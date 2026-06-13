@@ -3329,13 +3329,23 @@ def transport_payload(
             dbc_path = str(resolution.local_path)
             dbc_source = _build_dbc_source(resolution)
             signals = parse_signal_assignments(args.signals or [])
-            frame, _ = encode_message(
+            frame, _, encode_resolution = encode_message(
                 dbc_path,
                 args.message,
                 signals,
                 interface=args.interface,
                 crc_algorithm=args.crc_algorithm,
             )
+            send_warnings: list[str] = []
+            if encode_resolution.get("filled_signals"):
+                filled_values = ", ".join(
+                    f"{entry['signal']}={entry['value']}"
+                    for entry in encode_resolution["filled_signals"]
+                )
+                send_warnings.append(
+                    f"Unsupplied signal(s) defaulted for transmission: {filled_values}. "
+                    "Supply explicit values via --signals if these are not intended."
+                )
             dry_run = getattr(args, "dry_run", False)
             count = args.count
             rate = args.rate
@@ -3344,6 +3354,7 @@ def transport_payload(
                 "dbc_source": dbc_source,
                 "message": args.message,
                 "signals": signals,
+                "resolution": encode_resolution,
                 "frame": frame.to_payload(),
                 "count": count,
                 "rate": rate,
@@ -3354,7 +3365,12 @@ def transport_payload(
             }
             if dry_run:
                 base_data["mode"] = "dry_run"
-                return (base_data, [], [])
+                return (base_data, [], send_warnings)
+            # The operator must see synthesized defaults BEFORE the
+            # confirmation prompt / bus write, not just in the result
+            # envelope after transmission.
+            for warning in send_warnings:
+                print(f"warning: {warning}", file=sys.stderr)
             enforce_active_transmit_safety(args)
             base_data["mode"] = "active"
             all_events: list[dict[str, Any]] = []
@@ -3362,7 +3378,7 @@ def transport_payload(
                 all_events.extend(transport.send_events(args.interface, frame))
                 if rate and i < count - 1:
                     _time.sleep(1.0 / rate)
-            return (base_data, all_events, [])
+            return (base_data, all_events, send_warnings)
         frame = parse_send_frame(args)
         if getattr(args, "dry_run", False):
             return (
@@ -3615,7 +3631,6 @@ def transport_payload(
     if args.command == "capture-info":
         if args.file == "-":
             # Handle stdin
-            import sys
             from canarchy.transport import parse_candump_line
 
             frames = []
@@ -4158,9 +4173,29 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         )
     if args.command == "encode":
         signals = parse_signal_assignments(args.signals)
-        frame, events = encode_message(
+        frame, events, resolution = encode_message(
             dbc_path, args.message, signals, crc_algorithm=args.crc_algorithm
         )
+        encode_warnings = [
+            "Encoding prepares an active transmit frame; send it intentionally via a transmit workflow."
+        ]
+        message_resolution = resolution.get("message", {})
+        if message_resolution.get("via") not in (None, "exact"):
+            encode_warnings.append(
+                f"Message '{args.message}' resolved to DBC message "
+                f"'{message_resolution.get('resolved')}' via {message_resolution.get('via')}."
+            )
+        for alias in resolution.get("signal_aliases", []):
+            encode_warnings.append(
+                f"Signal '{alias['requested']}' resolved to DBC signal "
+                f"'{alias['resolved']}' via {alias['via']}."
+            )
+        if resolution.get("filled_signals"):
+            filled_names = ", ".join(entry["signal"] for entry in resolution["filled_signals"])
+            encode_warnings.append(
+                f"Unsupplied signal(s) defaulted for encoding: {filled_names}. "
+                "Review data.resolution.filled_signals before transmitting."
+            )
         return (
             {
                 "crc_algorithm": args.crc_algorithm or "auto",
@@ -4168,13 +4203,13 @@ def dbc_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "dbc_source": dbc_source,
                 "frame": frame.to_payload(),
                 "message": args.message,
+                "resolved_message": message_resolution.get("resolved", args.message),
+                "resolution": resolution,
                 "mode": "active",
                 "signals": signals,
             },
             events,
-            [
-                "Encoding prepares an active transmit frame; send it intentionally via a transmit workflow."
-            ],
+            encode_warnings,
         )
     if args.command == "dbc inspect":
         data, events = inspect_database(

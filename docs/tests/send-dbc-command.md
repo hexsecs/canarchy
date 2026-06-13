@@ -84,3 +84,18 @@ Feature: DBC-aware signal transmit via `send --dbc`
 | Invalid --count error | REQ-SEND-DBC-11 |
 | Invalid --rate error | REQ-SEND-DBC-10 |
 | Raw send backwards-compatible | REQ-SEND-DBC-14 |
+| Defaulted signals reported + warned | REQ-SEND-DBC-15 |
+
+### Defaulted signals reported and warned (REQ-SEND-DBC-15)
+
+```gherkin
+Given  a DBC message with three signals
+When   `canarchy send --dbc <dbc> --message <msg> --signals EngineSpeed=1200 --dry-run --json` is invoked
+Then   the unsupplied signals shall be listed under `data.resolution.filled_signals`
+And    a warning shall name the defaulted signal=value pairs
+When   the same command runs live (no --dry-run)
+Then   the defaulted-values warning shall be on stderr before the transport send is invoked
+```
+
+Covered by `test_send_dbc_warns_about_defaulted_signals` and
+`test_send_dbc_default_warning_emitted_before_transmission` in `tests/test_cli.py`.

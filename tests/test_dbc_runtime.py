@@ -55,10 +55,10 @@ def test_inspect_database_runtime_matches_current_inspection_shape() -> None:
 def test_encode_message_runtime_parity_with_primary_encode() -> None:
     signals = {"CoolantTemp": 55, "OilTemp": 65, "Load": 40, "LampState": 1}
 
-    current_frame, current_events = encode_message(
+    current_frame, current_events, _ = encode_message(
         str(FIXTURES / "sample.dbc"), "EngineStatus1", signals
     )
-    runtime_frame, runtime_events = encode_message_runtime(
+    runtime_frame, runtime_events, _ = encode_message_runtime(
         str(FIXTURES / "sample.dbc"),
         "EngineStatus1",
         signals,
@@ -115,8 +115,8 @@ def test_complex_dbc_fixture_decode_parity() -> None:
 def test_complex_dbc_fixture_encode_preserves_message_identity() -> None:
     signals = {"CoolantTemp": 55, "OilTemp": 65, "Load": 40, "LampState": 1}
 
-    current_frame, _ = encode_message(str(FIXTURES / "complex.dbc"), "EngineStatus1", signals)
-    runtime_frame, _ = encode_message_runtime(
+    current_frame, _, _ = encode_message(str(FIXTURES / "complex.dbc"), "EngineStatus1", signals)
+    runtime_frame, _, _ = encode_message_runtime(
         str(FIXTURES / "complex.dbc"),
         "EngineStatus1",
         signals,
@@ -158,7 +158,7 @@ _CHECKSUM_DBC = str(FIXTURES / "checksum_sample.dbc")
 
 
 def test_encode_auto_checksum_sets_valid_crc_on_short_message() -> None:
-    frame, _ = encode_message_runtime(
+    frame, _, _ = encode_message_runtime(
         _CHECKSUM_DBC,
         "TestButtons",
         {"Button1": 1, "Button2": 0, "Button3": 1, "COUNTER": 0},
@@ -174,7 +174,7 @@ def test_encode_auto_checksum_sets_valid_crc_on_short_message() -> None:
 
 
 def test_encode_auto_checksum_sets_valid_crc_on_long_message() -> None:
-    frame, _ = encode_message_runtime(
+    frame, _, _ = encode_message_runtime(
         _CHECKSUM_DBC,
         "TestSensor",
         {"Value": 12345, "STATUS": 7, "COUNTER": 0},
@@ -190,7 +190,7 @@ def test_encode_auto_checksum_sets_valid_crc_on_long_message() -> None:
 
 
 def test_encode_auto_checksum_respects_explicit_checksum() -> None:
-    frame, _ = encode_message_runtime(
+    frame, _, _ = encode_message_runtime(
         _CHECKSUM_DBC,
         "TestButtons",
         {"Button1": 1, "Button2": 0, "Button3": 1, "COUNTER": 0, "CHECKSUM": 0xAB},
@@ -199,9 +199,126 @@ def test_encode_auto_checksum_respects_explicit_checksum() -> None:
 
 
 def test_encode_auto_checksum_coverage_for_no_checksum_signal() -> None:
-    frame, _ = encode_message_runtime(
+    frame, _, _ = encode_message_runtime(
         str(FIXTURES / "sample.dbc"),
         "EngineStatus1",
         {"CoolantTemp": 55, "OilTemp": 65, "Load": 40, "LampState": 1},
     )
     assert frame.dlc == 4
+
+
+# --- decode -> encode round-trip and name resolution (#413) ------------------
+
+_J1939_DBC = str(FIXTURES / "j1939_sample.dbc")
+
+
+def test_encode_resolves_sae_pgn_label_and_signal_name() -> None:
+    """The issue's exact example: encode EEC1 "Engine Speed=1200"."""
+    frame, _, resolution = encode_message_runtime(_J1939_DBC, "EEC1", {"Engine Speed": 1200})
+
+    assert frame.arbitration_id == 0x18F00431
+    assert resolution["message"] == {
+        "requested": "EEC1",
+        "resolved": "EngineSpeed1",
+        "via": "pgn_label",
+        "pgn": 61444,
+    }
+    assert resolution["signal_aliases"] == [
+        {"requested": "Engine Speed", "resolved": "EngineSpeed", "via": "normalized"}
+    ]
+    # 1200 rpm / 0.125 = 9600 = 0x2580, little-endian at byte 1.
+    assert frame.data[1:3] == bytes([0x80, 0x25])
+
+
+def test_encode_resolves_spn_catalog_name() -> None:
+    """SPN 110's SAE name differs from the DBC name: spn_name resolution."""
+    frame, _, resolution = encode_message_runtime(
+        _J1939_DBC, "EngineTemperature1", {"Engine Coolant Temperature": 85}
+    )
+
+    assert resolution["signal_aliases"] == [
+        {
+            "requested": "Engine Coolant Temperature",
+            "resolved": "EngineCoolantTemp",
+            "via": "spn_name",
+        }
+    ]
+    assert frame.data[0] == 125  # 85 degC with -40 offset
+
+
+def test_encode_decode_round_trip_by_displayed_names() -> None:
+    """A decoded frame re-encodes byte-identically via its displayed names."""
+    original, _, _ = encode_message_runtime(
+        _J1939_DBC,
+        "EngineSpeed1",
+        {"Reserved": 7, "EngineSpeed": 1872.5, "TorqueMode": 3},
+    )
+    decoded_events = decode_frames_runtime([original], _J1939_DBC)
+    signal_values = {
+        event["payload"]["signal_name"]: event["payload"]["value"]
+        for event in decoded_events
+        if event["event_type"] == "signal"
+    }
+    assert signal_values["EngineSpeed"] == 1872.5
+
+    round_tripped, _, resolution = encode_message_runtime(_J1939_DBC, "EEC1", signal_values)
+
+    assert round_tripped.data == original.data
+    assert round_tripped.arbitration_id == original.arbitration_id
+    assert resolution["filled_signals"] == []
+
+
+def test_encode_fills_unsupplied_signals_and_reports_them() -> None:
+    frame, _, resolution = encode_message_runtime(_J1939_DBC, "EngineSpeed1", {"EngineSpeed": 1200})
+
+    filled = {entry["signal"] for entry in resolution["filled_signals"]}
+    assert filled == {"Reserved", "TorqueMode"}
+    assert frame.data[0] == 0 and frame.data[3] == 0
+
+
+def test_encode_pgn_label_tie_break_by_signal_names() -> None:
+    """Two fixture messages share PGN 61444; the signals disambiguate."""
+    from canarchy.dbc import DbcError
+
+    frame, _, resolution = encode_message_runtime(_J1939_DBC, "EEC1", {"NibbleSignal": 5})
+    assert resolution["message"]["resolved"] == "EngineBitfield1"
+
+    # Without signals to break the tie the ambiguity is a structured error.
+    try:
+        encode_message_runtime(_J1939_DBC, "EEC1", {})
+    except DbcError as exc:
+        assert exc.code == "DBC_MESSAGE_NOT_FOUND"
+        assert set(exc.detail["candidates"]) == {"EngineSpeed1", "EngineBitfield1"}
+    else:
+        raise AssertionError("ambiguous PGN label should raise")
+
+
+def test_encode_unknown_names_suggest_close_matches() -> None:
+    from canarchy.dbc import DbcError
+
+    try:
+        encode_message_runtime(_J1939_DBC, "EngineSpede1", {})
+    except DbcError as exc:
+        assert exc.code == "DBC_MESSAGE_NOT_FOUND"
+        assert "EngineSpeed1" in (exc.detail or {}).get("suggestions", [])
+    else:
+        raise AssertionError("unknown message should raise")
+
+    try:
+        encode_message_runtime(_J1939_DBC, "EngineSpeed1", {"EngineSped": 100})
+    except DbcError as exc:
+        assert exc.code == "DBC_SIGNAL_INVALID"
+        assert "EngineSpeed" in exc.detail["suggestions"]
+    else:
+        raise AssertionError("unknown signal should raise")
+
+
+def test_encode_exact_names_keep_exact_resolution() -> None:
+    _, _, resolution = encode_message_runtime(
+        _J1939_DBC,
+        "EngineSpeed1",
+        {"Reserved": 0, "EngineSpeed": 1200, "TorqueMode": 0},
+    )
+    assert resolution["message"]["via"] == "exact"
+    assert resolution["signal_aliases"] == []
+    assert resolution["filled_signals"] == []
