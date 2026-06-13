@@ -178,6 +178,24 @@ In practice, many users will still pair CANarchy with other tools:
 * BUSMASTER for desktop-centric CAN analysis on Windows
 * `udsoncan` for Python-native UDS client workflows
 
+## Companion Hardware: UTHP And TCAT
+
+For heavy-vehicle field work, CANarchy pairs naturally with the
+[UTHP](https://github.com/SystemsCyber/UTHP) (Universal Truck Hacking
+Platform, Colorado State University Systems Cyber) and its productized
+descendant, the NMFTA [TCAT](https://github.com/nmfta-repo/TCAT) (Truck
+Cybersecurity Assessment Tool). Both are BeagleBone-class appliances with
+four SocketCAN channels (`can0`–`can3`), J1708/PLC bus hardware, and a
+bundled truck-protocol tool image (both MIT licensed; their bundled
+third-party tools carry their own licenses).
+
+The division of labor: the appliance provides bus access, channel breadth,
+and truck-specific physical layers; CANarchy provides the structured,
+scriptable analysis layer over the captures — candump files from the
+appliance feed directly into `capture-info`, the `j1939 *` family, and the
+`re *` tools. See the cookbook recipe
+[Analyze a capture from a UTHP / TCAT appliance](cookbook/analyze-tcat-capture.md).
+
 ## Notes And Caveats
 
 * This matrix is intentionally high-level and not exhaustive.
