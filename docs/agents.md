@@ -77,6 +77,7 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `gateway` | `canarchy gateway` |
 | `replay` | `canarchy replay` |
 | `sequence_replay` | `canarchy sequence replay` |
+| `simulate` | `canarchy simulate` |
 | `filter` | `canarchy filter` |
 | `stats` | `canarchy stats` |
 | `capture_info` | `canarchy capture-info` |
@@ -125,6 +126,8 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `j1939_faults` | `canarchy j1939 faults` |
 | `j1939_compare` | `canarchy j1939 compare` |
 | `re_signals` | `canarchy re signals` |
+| `re_corpus` | `canarchy re corpus` |
+| `plot` | `canarchy plot` |
 | `datasets_convert` | `canarchy datasets convert` |
 | `datasets_replay_files` | `canarchy datasets replay --list-files` |
 | `skills_provider_list` | `canarchy skills provider list` |
