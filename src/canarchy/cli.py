@@ -1647,6 +1647,13 @@ def build_parser() -> CanarchyArgumentParser:
         help="maximum CAN frames per UDP datagram (default: 64)",
     )
     cannelloni_send.add_argument(
+        "--mtu",
+        type=int,
+        default=1500,
+        help="maximum encoded bytes per UDP datagram so a peer's MTU is not "
+        "overrun (default: 1500; 0 disables the byte cap)",
+    )
+    cannelloni_send.add_argument(
         "--rate",
         type=float,
         default=0.0,
@@ -5991,11 +5998,13 @@ def _parse_host_port(target: str, command: str) -> tuple[str, int]:
 def cannelloni_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    import socket
+
     from canarchy.cannelloni import (
+        DEFAULT_MTU,
         CannelloniError,
         encode_packets,
         frames_from_bytes,
-        send_frames_udp,
     )
 
     if args.command == "cannelloni decode":
@@ -6045,8 +6054,13 @@ def cannelloni_payload(
         max_frames=getattr(args, "max_frames", None),
         seconds=getattr(args, "seconds", None),
     )
+    # mtu <= 0 disables the byte cap (frame-count chunking only).
+    mtu = getattr(args, "mtu", DEFAULT_MTU)
+    max_bytes = mtu if mtu and mtu > 0 else None
     try:
-        datagrams = encode_packets(frames, seq_no=args.seq_no, max_count=args.max_count)
+        datagrams = encode_packets(
+            frames, seq_no=args.seq_no, max_count=args.max_count, max_bytes=max_bytes
+        )
     except CannelloniError as exc:
         raise CommandError(
             command=args.command,
@@ -6063,6 +6077,7 @@ def cannelloni_payload(
         "frame_count": len(frames),
         "datagram_count": len(datagrams),
         "max_count": args.max_count,
+        "mtu": mtu,
         "seq_no": args.seq_no,
     }
     if dry_run:
@@ -6079,13 +6094,12 @@ def cannelloni_payload(
 
     enforce_active_transmit_safety(args)
     gap = 1.0 / args.rate if args.rate and args.rate > 0 else 0.0
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        for index, frame_chunk in enumerate(
-            [frames[i : i + args.max_count] for i in range(0, len(frames), args.max_count)]
-        ):
+        for index, datagram in enumerate(datagrams):
             if index > 0 and gap > 0:
                 time.sleep(gap)
-            send_frames_udp(host, port, frame_chunk, seq_no=(args.seq_no + index) & 0xFF)
+            udp.sendto(datagram, (host, port))
     except OSError as exc:
         raise CommandError(
             command=args.command,
@@ -6098,6 +6112,8 @@ def cannelloni_payload(
                 )
             ],
         ) from exc
+    finally:
+        udp.close()
     data["mode"] = "active"
     return (data, [], [])
 

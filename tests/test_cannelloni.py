@@ -203,3 +203,65 @@ class CannelloniMcpTests(unittest.TestCase):
             _build_argv("cannelloni_decode", {"file": "x.bin"}),
             ["cannelloni", "decode", "--file", "x.bin", "--json"],
         )
+
+
+class CodecBoundsTests(unittest.TestCase):
+    """MTU chunking and DLC validation (PR #429 review)."""
+
+    def test_encode_packets_caps_datagrams_by_mtu(self) -> None:
+        # 64 full-size CAN FD frames would be one count-chunk (~4.6 KB) but must
+        # split into several datagrams once the 1500-byte MTU is applied.
+        frames = [
+            CanFrame(arbitration_id=i & 0x7FF, data=bytes(64), frame_format="can_fd")
+            for i in range(64)
+        ]
+        datagrams = encode_packets(frames, max_count=64)  # default MTU 1500
+        self.assertGreater(len(datagrams), 1)
+        self.assertTrue(all(len(d) <= 1500 for d in datagrams))
+        self.assertEqual(len(frames_from_bytes(b"".join(datagrams))), 64)
+
+    def test_encode_packets_mtu_none_disables_byte_cap(self) -> None:
+        frames = [
+            CanFrame(arbitration_id=i & 0x7FF, data=bytes(64), frame_format="can_fd")
+            for i in range(64)
+        ]
+        datagrams = encode_packets(frames, max_count=64, max_bytes=None)
+        self.assertEqual(len(datagrams), 1)
+        self.assertGreater(len(datagrams[0]), 1500)
+
+    def test_oversize_single_frame_emitted_alone(self) -> None:
+        frames = [CanFrame(arbitration_id=0x1, data=bytes(64), frame_format="can_fd")]
+        datagrams = encode_packets(frames, max_bytes=10)  # smaller than the frame
+        self.assertEqual(len(datagrams), 1)
+
+    def test_invalid_classic_dlc_raises_structured_error(self) -> None:
+        # header(count=1) + can_id + len=9 + 9 data bytes: non-truncated but invalid.
+        bad = struct.pack(">BBBH", 2, 0, 0, 1) + struct.pack(">I", 0x123) + b"\x09" + bytes(9)
+        with self.assertRaises(CannelloniError) as ctx:
+            decode_packet(bad)
+        self.assertEqual(ctx.exception.code, "CANNELLONI_INVALID_DLC")
+
+    def test_invalid_fd_dlc_raises_structured_error(self) -> None:
+        bad = (
+            struct.pack(">BBBH", 2, 0, 0, 1)
+            + struct.pack(">I", 0x1)
+            + bytes([0x80 | 65])
+            + b"\x00"
+            + bytes(65)
+        )
+        with self.assertRaises(CannelloniError) as ctx:
+            decode_packet(bad)
+        self.assertEqual(ctx.exception.code, "CANNELLONI_INVALID_DLC")
+
+    def test_decode_cli_returns_structured_error_for_invalid_dlc(self) -> None:
+        bad = struct.pack(">BBBH", 2, 0, 0, 1) + struct.pack(">I", 0x123) + b"\x09" + bytes(9)
+        path = FIXTURES / "cannelloni_invalid_dlc.bin"
+        path.write_bytes(bad)
+        try:
+            exit_code, stdout, _ = run_cli("cannelloni", "decode", "--file", str(path), "--json")
+            self.assertNotEqual(exit_code, 0)
+            payload = json.loads(stdout)
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["errors"][0]["code"], "CANNELLONI_INVALID_DLC")
+        finally:
+            path.unlink(missing_ok=True)

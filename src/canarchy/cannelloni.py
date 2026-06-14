@@ -48,6 +48,14 @@ _CANFD_ESI = 0x02
 _HEADER = struct.Struct(">BBBH")  # version, op_code, seq_no, count
 _MAX_COUNT = 0xFFFF
 
+# Maximum CAN data lengths the wire `len` byte may declare.
+_MAX_CLASSIC_DLC = 8
+_MAX_FD_DLC = 64
+
+# cannelloni's default receive-buffer / MTU. A stock peer drops datagrams
+# larger than this, so chunking caps encoded byte size by default.
+DEFAULT_MTU = 1500
+
 
 class CannelloniError(Exception):
     """Raised when a cannelloni datagram is malformed or cannot be built."""
@@ -127,18 +135,43 @@ def encode_packets(
     *,
     seq_no: int = 0,
     max_count: int = _MAX_COUNT,
+    max_bytes: int | None = DEFAULT_MTU,
 ) -> list[bytes]:
-    """Encode frames into one or more datagrams of at most ``max_count`` frames."""
+    """Encode frames into one or more datagrams.
+
+    Each datagram holds at most ``max_count`` frames and, when ``max_bytes`` is
+    set (default :data:`DEFAULT_MTU`), at most that many encoded bytes so a
+    stock cannelloni peer's MTU/receive buffer is not overrun by, for example,
+    full-size CAN FD frames. ``max_bytes=None`` disables the byte cap. A single
+    frame whose encoding already exceeds ``max_bytes`` is still emitted alone.
+    """
     if max_count < 1:
         raise CannelloniError(
             code="CANNELLONI_INVALID_MAX_COUNT",
             message="max_count must be at least 1.",
             hint="Pass a positive --max-count.",
         )
+
     datagrams: list[bytes] = []
-    for index in range(0, len(frames), max_count):
-        chunk = frames[index : index + max_count]
-        datagrams.append(encode_packet(chunk, seq_no=(seq_no + len(datagrams)) & 0xFF))
+    chunk: list[CanFrame] = []
+    chunk_bytes = _HEADER.size
+
+    def _flush() -> None:
+        nonlocal chunk, chunk_bytes
+        if chunk:
+            datagrams.append(encode_packet(chunk, seq_no=(seq_no + len(datagrams)) & 0xFF))
+            chunk = []
+            chunk_bytes = _HEADER.size
+
+    for frame in frames:
+        frame_size = len(encode_frame(frame))
+        over_count = len(chunk) >= max_count
+        over_bytes = max_bytes is not None and chunk and chunk_bytes + frame_size > max_bytes
+        if over_count or over_bytes:
+            _flush()
+        chunk.append(frame)
+        chunk_bytes += frame_size
+    _flush()
     return datagrams
 
 
@@ -154,6 +187,16 @@ def _decode_frame(data: bytes, offset: int) -> tuple[CanFrame, int]:
     offset += 5
     is_fd = bool(length_byte & _CANFD_FRAME)
     dlc = length_byte & ~_CANFD_FRAME
+    max_dlc = _MAX_FD_DLC if is_fd else _MAX_CLASSIC_DLC
+    if dlc > max_dlc:
+        raise CannelloniError(
+            code="CANNELLONI_INVALID_DLC",
+            message=(
+                f"cannelloni frame declares data length {dlc}, exceeding the "
+                f"{'CAN FD' if is_fd else 'classic CAN'} maximum of {max_dlc}."
+            ),
+            hint="Confirm the source is a valid cannelloni stream.",
+        )
     bitrate_switch = error_state_indicator = False
     if is_fd:
         if offset >= len(data):

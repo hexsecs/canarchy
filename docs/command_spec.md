@@ -379,7 +379,7 @@ Notes:
 
 * reads one or more concatenated cannelloni datagrams (wire version 2) from a raw payload file and emits canonical `frame` events
 * passive and file-backed; supports classic CAN, extended, RTR, error, and CAN FD frames
-* structured errors: `CANNELLONI_TRUNCATED`, `CANNELLONI_VERSION_UNSUPPORTED`, `CANNELLONI_FILE_UNREADABLE`
+* structured errors: `CANNELLONI_TRUNCATED`, `CANNELLONI_VERSION_UNSUPPORTED`, `CANNELLONI_INVALID_DLC`, `CANNELLONI_FILE_UNREADABLE`
 
 ### cannelloni send
 
@@ -395,7 +395,7 @@ Notes:
 
 * active-transmit path gated by the [active-transmit safety design](design/active-transmit-safety.md) (`--ack-active`, `YES` confirmation, `[safety].require_active_ack`)
 * `--dry-run` plans the datagrams (returned as hex in `data.datagrams`) without opening a socket
-* `--max-count` bounds frames per datagram (default 64); `--rate` paces datagrams per second; `--seq-no` sets the starting cannelloni sequence number
+* `--max-count` bounds frames per datagram (default 64); `--mtu` bounds encoded bytes per datagram (default 1500, so a stock peer's MTU is not overrun by CAN FD frames; `--mtu 0` disables it); `--rate` paces datagrams per second; `--seq-no` sets the starting cannelloni sequence number
 * CLI-only (not an MCP tool): active UDP egress to an arbitrary host
 * structured errors: `CANNELLONI_INVALID_TARGET` (exit 1), `CANNELLONI_SEND_FAILED` (exit 2)
 

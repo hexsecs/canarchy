@@ -20,6 +20,8 @@
 | `REQ-CAN-06` | `TEST-CAN-07` |
 | `REQ-CAN-07` | `TEST-CAN-03` |
 | `REQ-CAN-08` | `TEST-CAN-08` |
+| `REQ-CAN-04` (MTU) | `TEST-CAN-09` |
+| `REQ-CAN-09` | `TEST-CAN-10` |
 
 ## Representative Test Cases
 
@@ -123,3 +125,28 @@ And    `_build_argv("cannelloni_decode", {...})` shall map to the decode CLI arg
 ```
 
 **Fixture:** none.
+
+---
+
+### `TEST-CAN-09` — Chunks are capped by MTU for CAN FD captures
+
+```gherkin
+Given  64 full-size (64-byte) CAN FD frames
+When   they are encoded with the default 1500-byte MTU
+Then   they shall split into more than one datagram, each within 1500 bytes
+And    `max_bytes=None` shall emit a single oversize datagram
+```
+
+**Fixture:** none.
+
+---
+
+### `TEST-CAN-10` — Out-of-range DLC is a structured error end to end
+
+```gherkin
+Given  a datagram declaring a classic frame with length 9 and 9 data bytes
+When   it is decoded (codec and `cannelloni decode --file`)
+Then   `CANNELLONI_INVALID_DLC` shall be raised / returned, not a crash
+```
+
+**Fixture:** generated in-test.

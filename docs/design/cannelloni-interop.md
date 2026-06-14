@@ -28,17 +28,18 @@ such an appliance cannot exchange frames over the tunnel.
 | `REQ-CAN-01` | Ubiquitous | The system shall provide a pure codec that encodes a list of CAN frames into cannelloni wire-format (version 2) UDP datagrams and decodes datagrams back into CAN frames, opening no live hardware. |
 | `REQ-CAN-02` | Ubiquitous | The codec shall round-trip classic CAN, extended-ID, remote (RTR), error, and CAN FD frames (including BRS / ESI flags), carrying the SocketCAN EFF / RTR / ERR flag bits in the `can_id`. |
 | `REQ-CAN-03` | Event-driven | When `cannelloni decode --file <path>` is invoked, the system shall decode one or more concatenated cannelloni datagrams from the file into canonical `frame` events. |
-| `REQ-CAN-04` | Event-driven | When `cannelloni send <host:port> --file <capture>` is invoked, the system shall encode the capture into cannelloni datagrams (at most `--max-count` frames each, default 64) and transmit them over UDP to the endpoint, paced by `--rate` datagrams per second. |
+| `REQ-CAN-04` | Event-driven | When `cannelloni send <host:port> --file <capture>` is invoked, the system shall encode the capture into cannelloni datagrams (at most `--max-count` frames each, default 64, and at most `--mtu` encoded bytes each, default 1500, so a stock peer's MTU is not overrun by CAN FD frames; `--mtu 0` disables the byte cap) and transmit them over UDP to the endpoint, paced by `--rate` datagrams per second. |
 | `REQ-CAN-05` | Ubiquitous | `cannelloni send` shall be an active-transmit command honouring the active-transmit safety model (`--ack-active`, `YES` confirmation, `[safety].require_active_ack`); `--dry-run` shall plan the datagrams (returned as hex in the envelope) without opening a socket. |
 | `REQ-CAN-06` | Unwanted behaviour | If the target is not `<host>:<port>` or the port is out of range, the system shall return a structured error with code `CANNELLONI_INVALID_TARGET` and exit code 1. |
 | `REQ-CAN-07` | Unwanted behaviour | If a datagram is truncated or uses an unsupported version, the decoder shall raise a structured error (`CANNELLONI_TRUNCATED` / `CANNELLONI_VERSION_UNSUPPORTED`); if a UDP send fails, `cannelloni send` shall return `CANNELLONI_SEND_FAILED` (exit code 2). |
 | `REQ-CAN-08` | Ubiquitous | `cannelloni decode` shall be exposed as the MCP tool `cannelloni_decode`; `cannelloni send` shall be a documented MCP exclusion (active UDP egress to an arbitrary host). |
+| `REQ-CAN-09` | Unwanted behaviour | If a datagram declares a non-truncated but out-of-range DLC (a classic frame > 8 bytes or a CAN FD frame > 64 bytes), the decoder shall raise `CANNELLONI_INVALID_DLC` so the CLI/MCP path returns a structured error rather than crashing. |
 
 ## Command Surface
 
 ```text
 canarchy cannelloni decode --file <payload> [--json|--jsonl|--text]
-canarchy cannelloni send <host:port> --file <capture> [--seq-no <n>] [--max-count <n>] \
+canarchy cannelloni send <host:port> --file <capture> [--seq-no <n>] [--max-count <n>] [--mtu <bytes>] \
     [--rate <hz>] [--ack-active] [--dry-run] [--offset <n>] [--max-frames <n>] [--seconds <s>] \
     [--json|--jsonl|--text]
 ```
@@ -80,5 +81,6 @@ Out of scope (v1):
 | `CANNELLONI_FILE_UNREADABLE` | `decode` payload file cannot be read | 2 |
 | `CANNELLONI_TRUNCATED` | datagram ends mid-frame | 2 |
 | `CANNELLONI_VERSION_UNSUPPORTED` | datagram version != 2 | 2 |
+| `CANNELLONI_INVALID_DLC` | declared DLC exceeds the classic (8) / FD (64) maximum | 2 |
 | `CANNELLONI_SEND_FAILED` | UDP send raised `OSError` | 2 |
 | `CANNELLONI_TOO_MANY_FRAMES` / `CANNELLONI_INVALID_MAX_COUNT` | codec bounds violated | 1 |
