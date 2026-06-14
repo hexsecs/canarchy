@@ -136,6 +136,7 @@ nav:
           - Shell Command: design/shell-command.md
           - TUI Shell: design/tui-shell.md
           - Web Dashboard: design/web-serve.md
+          - cannelloni Interop: design/cannelloni-interop.md
       - Test Specs:
           - Active Command Safety: tests/active-command-safety.md
           - Active-Transmit Safety Model: tests/active-transmit-safety.md
@@ -164,6 +165,7 @@ nav:
           - Shell Command: tests/shell-command.md
           - TUI Shell: tests/tui-shell.md
           - Web Dashboard: tests/web-serve.md
+          - cannelloni Interop: tests/cannelloni-interop.md
           - Composition: tests/composition.md
   - Agents:
       - Agent Guide: agents.md

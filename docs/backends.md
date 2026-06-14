@@ -121,6 +121,30 @@ The table below covers common python-can interface types. CANarchy passes the co
 
 ---
 
+## cannelloni CAN-over-UDP interop
+
+[cannelloni](https://github.com/mguentner/cannelloni) tunnels SocketCAN frames over UDP/TCP/SCTP and is the remote-bus transport used by the UTHP / TCAT heavy-vehicle appliances. CANarchy speaks the cannelloni **UDP datagram wire format** (version 2) so captures can be sent to, or decoded from, a cannelloni endpoint — frame-format interop, not a new python-can hardware backend.
+
+This is a dedicated command surface rather than a `[transport].interface`: python-can's `udp_multicast` uses its own framing and does not interoperate with cannelloni.
+
+```bash
+# decode a captured cannelloni datagram payload into CAN frame events
+canarchy cannelloni decode --file captured_udp_payload.bin --json
+
+# preview the datagrams a capture would produce (no socket opened)
+canarchy cannelloni send 192.168.1.50:20000 --file drive.candump --dry-run --json
+
+# transmit a capture to a cannelloni endpoint as UDP datagrams
+canarchy cannelloni send 192.168.1.50:20000 --file drive.candump --ack-active
+```
+
+* `cannelloni decode` is passive and file-backed: it reads one or more concatenated cannelloni datagrams and emits the canonical `frame` events.
+* `cannelloni send` is an **active-transmit** path — it honours the active-transmit safety model (`--ack-active`, `YES` confirmation, `[safety].require_active_ack`); `--dry-run` plans the datagrams (returned as hex in the envelope) without opening a socket.
+* `--max-count` bounds frames per datagram (default 64); `--rate` paces datagrams per second; `--seq-no` sets the starting cannelloni sequence number.
+* The wire codec supports classic CAN, extended, RTR, error, and CAN FD frames (BRS/ESI flags). `cannelloni send` is CLI-only and not exposed as an MCP tool (active UDP egress to an arbitrary host); `cannelloni decode` is exposed.
+
+---
+
 ## Common Setups
 
 ### SocketCAN on Linux (real hardware or vcan)

@@ -153,6 +153,7 @@ landing here.
 |-------------|-----------|
 | `shell`, `tui` | Interactive front ends with no one-shot RPC equivalent. |
 | `web serve` | Long-running HTTP/WebSocket front end, like `shell`/`tui`; read-only by design (`docs/design/web-serve.md`). |
+| `cannelloni send` | Transmits UDP datagrams to an arbitrary host:port — a CLI-only operator action, not a CAN-interface tool. `cannelloni decode` (passive) is exposed. |
 | `mcp serve` | The server itself; not a tool it would expose. |
 | `mcp install` | Writes a client config file — a user action, like `plugins enable/disable`, kept off the agent surface. |
 | `plugins enable`, `plugins disable` | Write user plugin configuration under `~/.canarchy/config.toml`; kept CLI-only. |

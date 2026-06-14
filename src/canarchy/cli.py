@@ -133,11 +133,14 @@ RE_COMMANDS = {
     "re shortlist-dbc",
     "re corpus",
 }
+CANNELLONI_COMMANDS = {"cannelloni decode", "cannelloni send"}
+
 ACTIVE_TRANSMIT_COMMANDS = {
     "send",
     "generate",
     "simulate",
     "gateway",
+    "cannelloni send",
     "uds scan",
     "fuzz payload",
     "fuzz replay",
@@ -170,6 +173,7 @@ IMPLEMENTED_COMMANDS = (
     | RE_COMMANDS
     | FUZZ_COMMANDS
     | SEQUENCE_COMMANDS
+    | CANNELLONI_COMMANDS
     | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export", "plot", "web serve"}
 )
 
@@ -1613,6 +1617,58 @@ def build_parser() -> CanarchyArgumentParser:
     _add_file_analysis_arguments(web_serve)
     add_output_arguments(web_serve)
     web_serve.set_defaults(command="web serve")
+
+    cannelloni = subparsers.add_parser(
+        "cannelloni", help="cannelloni CAN-over-UDP wire-format interop"
+    )
+    cannelloni_subparsers = cannelloni.add_subparsers(dest="cannelloni_action", required=True)
+
+    cannelloni_decode = cannelloni_subparsers.add_parser(
+        "decode", help="decode a captured cannelloni datagram payload into frames"
+    )
+    cannelloni_decode.add_argument(
+        "--file", required=True, help="path to a raw cannelloni datagram payload file"
+    )
+    add_output_arguments(cannelloni_decode)
+    cannelloni_decode.set_defaults(command="cannelloni decode")
+
+    cannelloni_send = cannelloni_subparsers.add_parser(
+        "send", help="transmit a capture to a cannelloni endpoint as UDP datagrams"
+    )
+    cannelloni_send.add_argument("target", help="cannelloni endpoint as <host>:<port>")
+    cannelloni_send.add_argument("--file", required=True, help="candump/PCAP capture to transmit")
+    cannelloni_send.add_argument(
+        "--seq-no", type=int, default=0, help="starting cannelloni sequence number (default: 0)"
+    )
+    cannelloni_send.add_argument(
+        "--max-count",
+        type=int,
+        default=64,
+        help="maximum CAN frames per UDP datagram (default: 64)",
+    )
+    cannelloni_send.add_argument(
+        "--mtu",
+        type=int,
+        default=1500,
+        help="maximum encoded bytes per UDP datagram so a peer's MTU is not "
+        "overrun (default: 1500; 0 disables the byte cap)",
+    )
+    cannelloni_send.add_argument(
+        "--rate",
+        type=float,
+        default=0.0,
+        help="datagrams per second (0 = send as fast as possible; default: 0)",
+    )
+    add_active_ack_argument(cannelloni_send)
+    cannelloni_send.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="plan the datagrams without opening a socket or transmitting",
+    )
+    _add_file_analysis_arguments(cannelloni_send)
+    add_output_arguments(cannelloni_send)
+    cannelloni_send.set_defaults(command="cannelloni send")
+
     mcp_install = mcp_subparsers.add_parser(
         "install", help="write the canarchy MCP server block into a client config"
     )
@@ -1723,6 +1779,11 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `sequence replay` will transmit DBC-encoded frames on interface `{args.interface}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command == "cannelloni send":
+        return (
+            f"warning: `cannelloni send` will transmit UDP datagrams to `{args.target}`; "
+            "use intentionally against a controlled endpoint."
+        )
     raise AssertionError(f"unsupported active transmit command: {args.command}")
 
 
@@ -1745,6 +1806,8 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return f"confirm: type YES to replay frames on `{args.interface}`: "
     if args.command == "sequence replay":
         return f"confirm: type YES to transmit sequence on `{args.interface}`: "
+    if args.command == "cannelloni send":
+        return f"confirm: type YES to transmit cannelloni datagrams to `{args.target}`: "
     raise AssertionError(f"unsupported active transmit command: {args.command}")
 
 
@@ -5889,6 +5952,172 @@ def fuzz_payload(
     return data, events, warnings
 
 
+def _parse_host_port(target: str, command: str) -> tuple[str, int]:
+    host, _, port_text = target.rpartition(":")
+    if not host or not port_text:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="CANNELLONI_INVALID_TARGET",
+                    message=f"Target {target!r} is not in <host>:<port> form.",
+                    hint="Pass the endpoint as host:port, e.g. 127.0.0.1:20000.",
+                )
+            ],
+        )
+    try:
+        port = int(port_text)
+    except ValueError as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="CANNELLONI_INVALID_TARGET",
+                    message=f"Target port {port_text!r} is not an integer.",
+                    hint="Pass the endpoint as host:port, e.g. 127.0.0.1:20000.",
+                )
+            ],
+        ) from exc
+    if not 1 <= port <= 65535:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="CANNELLONI_INVALID_TARGET",
+                    message=f"Target port {port} is outside 1..65535.",
+                    hint="Pass a port between 1 and 65535.",
+                )
+            ],
+        )
+    return host, port
+
+
+def cannelloni_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    import socket
+
+    from canarchy.cannelloni import (
+        DEFAULT_MTU,
+        CannelloniError,
+        encode_packets,
+        frames_from_bytes,
+    )
+
+    if args.command == "cannelloni decode":
+        try:
+            payload = Path(args.file).read_bytes()
+        except OSError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_TRANSPORT_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="CANNELLONI_FILE_UNREADABLE",
+                        message=f"Could not read cannelloni payload file: {exc}.",
+                        hint="Pass a path to a raw cannelloni datagram payload.",
+                    )
+                ],
+            ) from exc
+        try:
+            frames = frames_from_bytes(payload)
+        except CannelloniError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_TRANSPORT_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ) from exc
+        events = serialize_events(
+            [FrameEvent(frame=frame, source="cannelloni.decode").to_event() for frame in frames]
+        )
+        warnings = [] if frames else ["No CAN frames were decoded from the cannelloni payload."]
+        return (
+            {
+                "mode": "passive",
+                "file": args.file,
+                "frame_count": len(frames),
+                "events": events,
+            },
+            events,
+            warnings,
+        )
+
+    # cannelloni send
+    host, port = _parse_host_port(args.target, args.command)
+    transport = LocalTransport()
+    frames = transport.frames_from_file(
+        args.file,
+        offset=getattr(args, "offset", 0) or 0,
+        max_frames=getattr(args, "max_frames", None),
+        seconds=getattr(args, "seconds", None),
+    )
+    # mtu <= 0 disables the byte cap (frame-count chunking only).
+    mtu = getattr(args, "mtu", DEFAULT_MTU)
+    max_bytes = mtu if mtu and mtu > 0 else None
+    try:
+        datagrams = encode_packets(
+            frames, seq_no=args.seq_no, max_count=args.max_count, max_bytes=max_bytes
+        )
+    except CannelloniError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+        ) from exc
+
+    dry_run = getattr(args, "dry_run", False)
+    data: dict[str, Any] = {
+        "target": args.target,
+        "host": host,
+        "port": port,
+        "file": args.file,
+        "frame_count": len(frames),
+        "datagram_count": len(datagrams),
+        "max_count": args.max_count,
+        "mtu": mtu,
+        "seq_no": args.seq_no,
+    }
+    if dry_run:
+        data["mode"] = "dry_run"
+        data["datagrams"] = [datagram.hex() for datagram in datagrams]
+        return (
+            data,
+            [],
+            [
+                f"ACTIVE_TRANSMIT_DRY_RUN: {len(datagrams)} datagram(s) planned for "
+                f"{args.target}; no socket opened."
+            ],
+        )
+
+    enforce_active_transmit_safety(args)
+    gap = 1.0 / args.rate if args.rate and args.rate > 0 else 0.0
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        for index, datagram in enumerate(datagrams):
+            if index > 0 and gap > 0:
+                time.sleep(gap)
+            udp.sendto(datagram, (host, port))
+    except OSError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_TRANSPORT_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="CANNELLONI_SEND_FAILED",
+                    message=f"Could not send cannelloni datagrams to {args.target}: {exc}.",
+                    hint="Confirm the endpoint host/port and that UDP egress is permitted.",
+                )
+            ],
+        ) from exc
+    finally:
+        udp.close()
+    data["mode"] = "active"
+    return (data, [], [])
+
+
 def replay_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -6453,6 +6682,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in RE_COMMANDS:
         _, events, _ = reverse_engineering_payload(args)
         return events
+    if args.command in CANNELLONI_COMMANDS:
+        _, events, _ = cannelloni_payload(args)
+        return events
     if args.command == "export":
         _, events, _ = export_payload(args)
         return events
@@ -6557,6 +6789,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(re_data)
         data["events"] = re_events
         warnings.extend(re_warnings)
+    elif args.command in CANNELLONI_COMMANDS:
+        can_data, can_events, can_warnings = cannelloni_payload(args)
+        data.update(can_data)
+        data["events"] = can_events
+        warnings.extend(can_warnings)
     elif args.command == "export":
         export_data, export_events, export_warnings = export_payload(args)
         data.update(export_data)

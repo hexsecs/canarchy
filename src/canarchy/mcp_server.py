@@ -1608,6 +1608,20 @@ _TOOLS: list[types.Tool] = [
             "required": ["file", "dbc", "signals", "out"],
         },
     ),
+    types.Tool(
+        name="cannelloni_decode",
+        description="Decode a captured cannelloni CAN-over-UDP datagram payload file into CAN frame events.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {
+                    "type": "string",
+                    "description": "Path to a raw cannelloni datagram payload file",
+                },
+            },
+            "required": ["file"],
+        },
+    ),
 ]
 
 _TOOL_NAMES: frozenset[str] = frozenset(tool.name for tool in _TOOLS)
@@ -2178,6 +2192,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return ["plugins", "list", "--json"]
         case "plugins_info":
             return ["plugins", "info", a["name"], "--json"]
+        case "cannelloni_decode":
+            return ["cannelloni", "decode", "--file", a["file"], "--json"]
         case "plot":
             argv = ["plot", "--dbc", a["dbc"], "--out", a["out"]]
             for sig in a.get("signals", []):

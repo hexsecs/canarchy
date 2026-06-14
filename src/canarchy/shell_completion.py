@@ -45,6 +45,7 @@ SUBCOMMANDS: list[tuple[str, str]] = [
     ("doctor", "environment health checks"),
     ("mcp", "MCP server workflows"),
     ("web", "read-only browser dashboard"),
+    ("cannelloni", "cannelloni CAN-over-UDP wire-format interop"),
     ("shell", "start the interactive shell"),
     ("tui", "start the terminal UI"),
     ("completion", "emit shell completion script"),
