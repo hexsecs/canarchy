@@ -85,6 +85,7 @@ _EXPECTED_TOOLS = {
     "fuzz_arbitration_id",
     "fuzz_signal",
     "fuzz_spn",
+    "fuzz_guided",
     "plugins_list",
     "plugins_info",
     "cannelloni_decode",

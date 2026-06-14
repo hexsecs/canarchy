@@ -109,6 +109,7 @@ nav:
       - Design Specs:
           - Active Command Safety: design/active-command-safety.md
           - Active-Transmit Safety Model: design/active-transmit-safety.md
+          - Response-Feedback Guided Fuzzing: design/response-feedback-fuzz.md
           - Transport Core Commands: design/transport-core-commands.md
           - DBC Command Workflows: design/dbc-command-workflows.md
           - DBC Inspect Command: design/dbc-inspect-command.md
@@ -143,6 +144,7 @@ nav:
       - Test Specs:
           - Active Command Safety: tests/active-command-safety.md
           - Active-Transmit Safety Model: tests/active-transmit-safety.md
+          - Response-Feedback Guided Fuzzing: tests/response-feedback-fuzz.md
           - Transport Core Commands: tests/transport-core-commands.md
           - DBC Command Workflows: tests/dbc-command-workflows.md
           - DBC Inspect Command: tests/dbc-inspect-command.md
