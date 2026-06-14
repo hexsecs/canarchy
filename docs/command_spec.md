@@ -20,6 +20,7 @@ Implemented and verified in the current codebase:
 * shell one-shot command execution
 * initial text-mode `tui` shell over the shared command layer
 * UDS `scan`, `trace`, and `services`
+* XCP (measurement/calibration) `scan`, `trace`, `read`, and `commands` for XCP-on-CAN
 * `config show` for effective transport configuration inspection
 * `re signals`, `re counters`, `re entropy`, `re correlate`, and `re anomalies` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
@@ -1032,6 +1033,60 @@ Notes:
 * this is a reference command and does not require an interface
 * output includes service identifier, positive-response identifier, category, and subfunction expectations
 
+### xcp scan
+
+Discover XCP responders by transmitting an XCP CONNECT command.
+
+```bash
+canarchy xcp scan <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--ack-active] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* XCP-on-CAN: sends a single CONNECT (`FF 00`) on `--request-id` and reports each command-response object on `--response-id` as an `xcp_transaction` event; a CONNECT positive response is parsed into resources, max-CTO, max-DTO, and protocol/transport versions
+* with the `scaffold` backend, this command emits sample/reference XCP transaction data
+* this is an active command honouring the active-transmit safety model; `--ack-active` requests an interactive `YES` confirmation before the CONNECT is sent
+* `--request-id` / `--response-id` accept decimal or `0x` hex CAN ids (defaults 0x3E0 / 0x3E1); a malformed id returns `XCP_INVALID_ID`
+
+### xcp trace
+
+Pair XCP command and response transactions from bus traffic.
+
+```bash
+canarchy xcp trace <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* passive: pairs each command CTO on `--request-id` with the following response CTO on `--response-id`, naming the command and surfacing positive/error status (error codes resolve to ASAM names)
+* with the `scaffold` backend, this command emits sample/reference XCP transaction data
+
+### xcp read
+
+Surface raw DAQ measurement (DTO) payloads from a short capture.
+
+```bash
+canarchy xcp read <interface> [--response-id 0x3E1] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* passive: emits an `xcp_measurement` event (packet identifier plus raw bytes) for each DAQ DTO on `--response-id`; command-response objects (PID ≥ 0xFC) are skipped
+* signal-level decoding of DAQ payloads requires the slave's A2L description and is out of scope; raw ODT bytes are reported
+
+### xcp commands
+
+Inspect the built-in XCP command catalog.
+
+```bash
+canarchy xcp commands [--json|--jsonl|--text]
+```
+
+Notes:
+
+* this is a reference command and does not require an interface
+* output includes the command code, name, and category (standard / calibration / daq / programming)
+
 ### re counters
 
 Rank likely counter fields from recorded CAN traffic.
@@ -1387,6 +1442,8 @@ Implemented commands currently emit these event types:
 * `signal`
 * `j1939_pgn`
 * `uds_transaction`
+* `xcp_transaction`
+* `xcp_measurement`
 * `replay_event`
 * `alert`
 

@@ -145,7 +145,7 @@ landing here.
 | Plugin inspection (`plugins list`, `plugins info`) | Read-only discovery and metadata inspection with bounded JSON envelopes. |
 | J1939 analysis (`j1939 decode/pgn/spn/tp sessions/tp compare/dm1/faults/summary/inventory/compare/monitor`) | File-backed analysis commands are safe, bounded, and deterministic. |
 | Reverse-engineering helpers (`re signals/counters/entropy/correlate/anomalies/match-dbc/shortlist-dbc`) | File-backed analysis commands are safe and deterministic. |
-| Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`) | Bounded, non-interactive envelopes. |
+| Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`), XCP (`xcp scan/trace/read/commands`) | Bounded, non-interactive envelopes. |
 
 ### Excluded
 

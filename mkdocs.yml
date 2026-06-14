@@ -134,6 +134,7 @@ nav:
           - UDS Transaction Workflows: design/uds-transaction-workflows.md
           - UDS Services Command: design/uds-services-command.md
           - DoIP Diagnostic Workflows: design/doip-diagnostic-workflows.md
+          - XCP Workflows: design/xcp-workflows.md
           - Shell Command: design/shell-command.md
           - TUI Shell: design/tui-shell.md
           - Web Dashboard: design/web-serve.md
@@ -164,6 +165,7 @@ nav:
           - UDS Transaction Workflows: tests/uds-transaction-workflows.md
           - UDS Services Command: tests/uds-services-command.md
           - DoIP Diagnostic Workflows: tests/doip-diagnostic-workflows.md
+          - XCP Workflows: tests/xcp-workflows.md
           - Shell Command: tests/shell-command.md
           - TUI Shell: tests/tui-shell.md
           - Web Dashboard: tests/web-serve.md

@@ -67,6 +67,11 @@ from canarchy.transport import (
 from canarchy.tui import run_tui
 from canarchy.doip import is_doip_target
 from canarchy.uds import uds_decoder_backend, uds_services_payload
+from canarchy.xcp import (
+    XCP_DEFAULT_REQUEST_ID,
+    XCP_DEFAULT_RESPONSE_ID,
+    xcp_commands_payload,
+)
 
 EXIT_OK = 0
 EXIT_USER_ERROR = 1
@@ -122,6 +127,7 @@ J1939_COMMANDS = {
 }
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
+XCP_COMMANDS = {"xcp scan", "xcp trace", "xcp read", "xcp commands"}
 CONFIG_COMMANDS = {"config show"}
 DOCTOR_COMMANDS = {"doctor"}
 RE_COMMANDS = {
@@ -143,6 +149,7 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "gateway",
     "cannelloni send",
     "uds scan",
+    "xcp scan",
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
@@ -169,6 +176,7 @@ IMPLEMENTED_COMMANDS = (
     | J1939_COMMANDS
     | SESSION_COMMANDS
     | UDS_COMMANDS
+    | XCP_COMMANDS
     | CONFIG_COMMANDS
     | DOCTOR_COMMANDS
     | RE_COMMANDS
@@ -273,6 +281,19 @@ def add_active_ack_argument(parser: argparse.ArgumentParser) -> None:
         "--ack-active",
         action="store_true",
         help="require interactive confirmation before active transmission",
+    )
+
+
+def _add_xcp_id_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--request-id",
+        default=hex(XCP_DEFAULT_REQUEST_ID),
+        help=f"master request CAN id (default: {hex(XCP_DEFAULT_REQUEST_ID)})",
+    )
+    parser.add_argument(
+        "--response-id",
+        default=hex(XCP_DEFAULT_RESPONSE_ID),
+        help=f"slave response CAN id (default: {hex(XCP_DEFAULT_RESPONSE_ID)})",
     )
 
 
@@ -1139,6 +1160,36 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(uds_services)
     uds_services.set_defaults(command="uds services")
 
+    xcp = subparsers.add_parser("xcp", help="XCP measurement/calibration workflows")
+    xcp_subparsers = xcp.add_subparsers(dest="xcp_action", required=True)
+
+    xcp_scan = xcp_subparsers.add_parser("scan", help="scan for XCP responders via CONNECT")
+    xcp_scan.add_argument("interface", nargs="?")
+    _add_xcp_id_arguments(xcp_scan)
+    add_active_ack_argument(xcp_scan)
+    add_output_arguments(xcp_scan)
+    xcp_scan.set_defaults(command="xcp scan")
+
+    xcp_trace = xcp_subparsers.add_parser("trace", help="trace XCP command/response transactions")
+    xcp_trace.add_argument("interface", nargs="?")
+    _add_xcp_id_arguments(xcp_trace)
+    add_output_arguments(xcp_trace)
+    xcp_trace.set_defaults(command="xcp trace")
+
+    xcp_read = xcp_subparsers.add_parser("read", help="read DAQ measurement values from a capture")
+    xcp_read.add_argument("interface", nargs="?")
+    xcp_read.add_argument(
+        "--response-id",
+        default=hex(XCP_DEFAULT_RESPONSE_ID),
+        help=f"slave response CAN id (default: {hex(XCP_DEFAULT_RESPONSE_ID)})",
+    )
+    add_output_arguments(xcp_read)
+    xcp_read.set_defaults(command="xcp read")
+
+    xcp_commands = xcp_subparsers.add_parser("commands", help="list the XCP command catalog")
+    add_output_arguments(xcp_commands)
+    xcp_commands.set_defaults(command="xcp commands")
+
     re_parser = subparsers.add_parser("re", help="reverse engineering helpers")
     re_subparsers = re_parser.add_subparsers(dest="re_action", required=True)
 
@@ -1772,6 +1823,11 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `uds scan` will transmit diagnostic requests on interface `{args.interface}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command == "xcp scan":
+        return (
+            f"warning: `xcp scan` will transmit an XCP CONNECT request on interface "
+            f"`{args.interface}`; use intentionally on a controlled bus."
+        )
     if args.command == "gateway":
         return (
             f"warning: `gateway` will forward traffic from `{args.src}` to `{args.dst}`; "
@@ -1815,6 +1871,8 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         )
     if args.command == "uds scan":
         return f"confirm: type YES to run UDS scan on `{args.interface}`: "
+    if args.command == "xcp scan":
+        return f"confirm: type YES to run XCP scan on `{args.interface}`: "
     if args.command == "gateway":
         return f"confirm: type YES to forward traffic from `{args.src}` to `{args.dst}`: "
     if args.command in FUZZ_COMMANDS:
@@ -1838,6 +1896,9 @@ INTERFACE_FALLBACK_COMMANDS = {
     "j1939 monitor",
     "uds scan",
     "uds trace",
+    "xcp scan",
+    "xcp trace",
+    "xcp read",
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
@@ -5364,6 +5425,120 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     raise AssertionError(f"unsupported uds command: {args.command}")
 
 
+def _parse_can_id(value: str, *, command: str, name: str) -> int:
+    try:
+        parsed = int(str(value), 0)
+    except ValueError as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="XCP_INVALID_ID",
+                    message=f"{name} {value!r} is not a valid CAN id.",
+                    hint="Pass a decimal or 0x-prefixed hex CAN id (e.g. 0x3E0).",
+                )
+            ],
+        ) from exc
+    if parsed < 0 or parsed > 0x1FFFFFFF:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="XCP_INVALID_ID",
+                    message=f"{name} 0x{parsed:X} is outside the 29-bit CAN id range.",
+                    hint="CAN ids are 0x000-0x1FFFFFFF.",
+                )
+            ],
+        )
+    return parsed
+
+
+def xcp_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    transport = LocalTransport()
+    backend_metadata = transport.backend_metadata()
+    implementation = (
+        "transport-backed"
+        if backend_metadata["transport_backend"] != "scaffold"
+        else "sample/reference provider"
+    )
+
+    if args.command == "xcp commands":
+        commands = xcp_commands_payload()
+        return (
+            {"mode": "reference", "command_count": len(commands), "commands": commands},
+            [],
+            [],
+        )
+
+    response_id = _parse_can_id(
+        getattr(args, "response_id", hex(XCP_DEFAULT_RESPONSE_ID)),
+        command=args.command,
+        name="--response-id",
+    )
+
+    if args.command == "xcp read":
+        events = transport.xcp_read_events(args.interface, response_id=response_id)
+        return (
+            {
+                "interface": args.interface,
+                "mode": "passive",
+                "response_id": response_id,
+                "measurement_count": len(events),
+                **backend_metadata,
+                "implementation": implementation,
+            },
+            events,
+            [],
+        )
+
+    request_id = _parse_can_id(
+        getattr(args, "request_id", hex(XCP_DEFAULT_REQUEST_ID)),
+        command=args.command,
+        name="--request-id",
+    )
+
+    if args.command == "xcp scan":
+        enforce_active_transmit_safety(args)
+        events = transport.xcp_scan_events(
+            args.interface, request_id=request_id, response_id=response_id
+        )
+        return (
+            {
+                "interface": args.interface,
+                "mode": "active",
+                "request_id": request_id,
+                "response_id": response_id,
+                "responder_count": len(events),
+                **backend_metadata,
+                "implementation": implementation,
+            },
+            events,
+            [],
+        )
+
+    if args.command == "xcp trace":
+        events = transport.xcp_trace_events(
+            args.interface, request_id=request_id, response_id=response_id
+        )
+        return (
+            {
+                "interface": args.interface,
+                "mode": "passive",
+                "request_id": request_id,
+                "response_id": response_id,
+                "transaction_count": len(events),
+                **backend_metadata,
+                "implementation": implementation,
+            },
+            events,
+            [],
+        )
+
+    raise AssertionError(f"unsupported xcp command: {args.command}")
+
+
 def gateway_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -6764,6 +6939,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in UDS_COMMANDS:
         _, events, _ = uds_payload(args)
         return events
+    if args.command in XCP_COMMANDS:
+        _, events, _ = xcp_payload(args)
+        return events
     if args.command in RE_COMMANDS:
         _, events, _ = reverse_engineering_payload(args)
         return events
@@ -6869,6 +7047,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(uds_data)
         data["events"] = uds_events
         warnings.extend(uds_warnings)
+    elif args.command in XCP_COMMANDS:
+        xcp_data, xcp_events, xcp_warnings = xcp_payload(args)
+        data.update(xcp_data)
+        data["events"] = xcp_events
+        warnings.extend(xcp_warnings)
     elif args.command in RE_COMMANDS:
         re_data, re_events, re_warnings = reverse_engineering_payload(args)
         data.update(re_data)
@@ -7359,6 +7542,77 @@ def format_uds_table(result: CommandResult) -> list[str]:
             lines.append(f"  nrc={code_text} name={payload['negative_response_name']}")
         if payload.get("response_summary"):
             lines.append(f"  response_summary: {payload['response_summary']}")
+    return lines
+
+
+def format_xcp_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    if result.command == "xcp commands":
+        lines.append(f"commands: {result.data.get('command_count', 0)}")
+        lines.append("catalog:")
+        commands = result.data.get("commands", [])
+        if not commands:
+            lines.append("- no xcp commands")
+            return lines
+        for command in commands:
+            lines.append(
+                f"- code=0x{command['code']:02X} name={command['name']} "
+                f"category={command['category']}"
+            )
+        return lines
+
+    lines.append(f"interface: {result.data.get('interface', 'unknown')}")
+    if result.data.get("request_id") is not None:
+        lines.append(f"request_id: 0x{result.data['request_id']:03X}")
+    lines.append(f"response_id: 0x{result.data.get('response_id', 0):03X}")
+    events = result.data.get("events", [])
+
+    if result.command == "xcp read":
+        lines.append(f"measurements: {result.data.get('measurement_count', 0)}")
+        if not events:
+            lines.append("- no xcp measurements")
+            return lines
+        for event in events:
+            payload = event["payload"]
+            lines.append(
+                f"- pid=0x{payload['pid']:02X} "
+                f"resp_id=0x{payload['response_id']:03X} "
+                f"data={payload['data']}"
+            )
+        return lines
+
+    if result.command == "xcp scan":
+        lines.append(f"responders: {result.data.get('responder_count', 0)}")
+    else:
+        lines.append(f"transactions: {result.data.get('transaction_count', 0)}")
+    lines.append("transactions:")
+    if not events:
+        lines.append("- no xcp transactions")
+        return lines
+    for event in events:
+        payload = event["payload"]
+        lines.append(
+            "- "
+            f"command=0x{payload['command']:02X} "
+            f"name={payload['command_name']} "
+            f"req_id=0x{payload['request_id']:03X} "
+            f"resp_id=0x{payload['response_id']:03X} "
+            f"positive={payload['positive']} "
+            f"req={payload['request_data']} "
+            f"resp={payload['response_data']}"
+        )
+        if payload.get("error_name"):
+            code = payload.get("error_code")
+            code_text = f"0x{code:02X}" if isinstance(code, int) else "unknown"
+            lines.append(f"  error={code_text} name={payload['error_name']}")
+        if payload.get("connect_info"):
+            info = payload["connect_info"]
+            resources = ",".join(info.get("resources", [])) or "none"
+            lines.append(
+                f"  connect: resources={resources} "
+                f"max_cto={info.get('max_cto')} max_dto={info.get('max_dto')} "
+                f"proto_layer={info.get('protocol_layer_version')}"
+            )
     return lines
 
 
@@ -8521,6 +8775,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "text" and result.ok and result.command in UDS_COMMANDS:
         for line in format_uds_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command in XCP_COMMANDS:
+        for line in format_xcp_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

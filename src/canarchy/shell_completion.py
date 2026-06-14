@@ -40,6 +40,7 @@ SUBCOMMANDS: list[tuple[str, str]] = [
     ("session", "save and restore CANarchy session context"),
     ("j1939", "J1939 protocol workflows"),
     ("uds", "UDS diagnostic workflows"),
+    ("xcp", "XCP measurement/calibration workflows"),
     ("re", "reverse-engineering helpers"),
     ("config", "inspect CANarchy configuration"),
     ("doctor", "environment health checks"),

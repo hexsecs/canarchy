@@ -820,6 +820,73 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="xcp_scan",
+        description="Scan for XCP responders on a CAN interface via the CONNECT command.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name; omit to use configured default",
+                },
+                "request_id": {
+                    "type": "string",
+                    "description": "Master request CAN id (decimal or 0x hex; default 0x3E0)",
+                },
+                "response_id": {
+                    "type": "string",
+                    "description": "Slave response CAN id (decimal or 0x hex; default 0x3E1)",
+                },
+            },
+        },
+    ),
+    types.Tool(
+        name="xcp_trace",
+        description="Trace XCP command/response transactions on a CAN interface.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name; omit to use configured default",
+                },
+                "request_id": {
+                    "type": "string",
+                    "description": "Master request CAN id (decimal or 0x hex; default 0x3E0)",
+                },
+                "response_id": {
+                    "type": "string",
+                    "description": "Slave response CAN id (decimal or 0x hex; default 0x3E1)",
+                },
+            },
+        },
+    ),
+    types.Tool(
+        name="xcp_read",
+        description="Read raw XCP DAQ measurement (DTO) values from a short CAN capture.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "interface": {
+                    "type": "string",
+                    "description": "CAN interface name; omit to use configured default",
+                },
+                "response_id": {
+                    "type": "string",
+                    "description": "Slave response CAN id (decimal or 0x hex; default 0x3E1)",
+                },
+            },
+        },
+    ),
+    types.Tool(
+        name="xcp_commands",
+        description="List the XCP command catalog with codes, names, and categories.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
         name="config_show",
         description="Show the effective CANarchy transport configuration.",
         inputSchema={
@@ -1924,6 +1991,33 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "uds_services":
             return ["uds", "services", "--json"]
+        case "xcp_scan":
+            argv = ["xcp", "scan"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            if a.get("request_id"):
+                argv += ["--request-id", str(a["request_id"])]
+            if a.get("response_id"):
+                argv += ["--response-id", str(a["response_id"])]
+            return argv + ["--json"]
+        case "xcp_trace":
+            argv = ["xcp", "trace"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            if a.get("request_id"):
+                argv += ["--request-id", str(a["request_id"])]
+            if a.get("response_id"):
+                argv += ["--response-id", str(a["response_id"])]
+            return argv + ["--json"]
+        case "xcp_read":
+            argv = ["xcp", "read"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            if a.get("response_id"):
+                argv += ["--response-id", str(a["response_id"])]
+            return argv + ["--json"]
+        case "xcp_commands":
+            return ["xcp", "commands", "--json"]
         case "config_show":
             return ["config", "show", "--json"]
         case "doctor":
