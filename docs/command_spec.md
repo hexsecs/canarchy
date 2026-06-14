@@ -24,6 +24,7 @@ Implemented and verified in the current codebase:
 * `config show` for effective transport configuration inspection
 * `re signals`, `re counters`, `re entropy`, `re correlate`, and `re anomalies` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
+* `re suggest` for heuristic signal-name suggestions (with an optional, off-by-default external-LLM enrichment)
 * `plugins list`, `plugins info`, `plugins enable`, and `plugins disable` for Python entry-point plugin inspection and toggles
 * `web serve` for the read-only browser dashboard over the JSONL event envelope
 * `cannelloni decode` and `cannelloni send` for cannelloni CAN-over-UDP wire-format interop
@@ -1214,6 +1215,22 @@ Notes:
 * this command is passive and file-backed
 * `--make` narrows provider-catalog candidates before scoring them against the capture
 * the default provider is `opendbc`
+
+### re suggest
+
+Propose names for ranked signal candidates.
+
+```bash
+canarchy re suggest (<file> | --file <file>) [--reference-dbc <ref>] [--limit <n>] \
+    [--llm <provider> [--llm-model <model>] [--yes]] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* passive and file-backed: reuses `re signals` to rank candidates, then attaches `suggestions` (each with a `source` of `dbc` / `spn` / `pgn` / `heuristic` / `llm` and a `confidence`), reporting the top as `suggested_name` / `suggested_source`
+* heuristics combine reference-DBC overlap (`--reference-dbc`, a path or provider ref), bit-range overlap with the bundled J1939 SPN catalog, the PGN name as a coarse fallback, and a plain-English template from the candidate's change behaviour — all fully offline
+* `--llm <provider>` (off by default; only `anthropic` is supported) enriches names via an external LLM. It requires explicit confirmation (`--yes`, or a `YES` reply, or `CANARCHY_LLM_NONINTERACTIVE=1`), sends only candidate metadata — never payload bytes — and records `external_enrichment` plus an `EXTERNAL_SERVICE_CALLED` warning. Declining returns `LLM_CONFIRMATION_DECLINED`; an unknown provider returns `LLM_PROVIDER_UNSUPPORTED`; a missing key returns `LLM_PROVIDER_UNAVAILABLE`
+* the `re_suggest` MCP tool exposes the heuristic path only; the `--llm` enrichment is CLI-only
 
 ### config show
 

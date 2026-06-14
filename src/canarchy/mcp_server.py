@@ -1390,6 +1390,29 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="re_suggest",
+        description=(
+            "Propose names for ranked signal candidates using offline heuristics "
+            "(reference-DBC overlap, J1939 SPN/PGN catalog, range/scale, templates). "
+            "The optional external-LLM enrichment is CLI-only and not available here."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump or PCAP capture file"},
+                "reference_dbc": {
+                    "type": "string",
+                    "description": "DBC/ARXML/KCD/SYM file or provider ref to seed name suggestions",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum ranked candidates to name (default 25)",
+                },
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
         name="fuzz_payload",
         description=(
             "Active-transmit payload fuzzing gated by docs/design/active-transmit-safety.md. "
@@ -2187,6 +2210,13 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--max-frames", str(a["max_frames"])]
             if a.get("seconds") is not None:
                 argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
+        case "re_suggest":
+            argv = ["re", "suggest", a["file"]]
+            if a.get("reference_dbc"):
+                argv += ["--reference-dbc", a["reference_dbc"]]
+            if a.get("limit") is not None:
+                argv += ["--limit", str(a["limit"])]
             return argv + ["--json"]
         case "fuzz_payload":
             argv = ["fuzz", "payload"]

@@ -129,6 +129,7 @@ nav:
           - Composition: design/composition.md
           - MCP Server: design/mcp-server.md
           - Reverse-Engineering Helpers: design/reverse-engineering-helpers.md
+          - RE Suggest: design/re-suggest.md
           - Replay Command: design/replay-command.md
           - Session Workflows: design/session-workflows.md
           - UDS Transaction Workflows: design/uds-transaction-workflows.md
@@ -160,6 +161,7 @@ nav:
           - Skills Provider Workflows: tests/skills-provider-workflows.md
           - MCP Server: tests/mcp-server.md
           - Reverse-Engineering Helpers: tests/reverse-engineering-helpers.md
+          - RE Suggest: tests/re-suggest.md
           - Replay Command: tests/replay-command.md
           - Session Workflows: tests/session-workflows.md
           - UDS Transaction Workflows: tests/uds-transaction-workflows.md
