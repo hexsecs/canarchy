@@ -88,6 +88,11 @@ canarchy fuzz guided <interface> --id <arb-id> [--signals nrc,timing,dm1,silence
   positive fingerprinting.
 * **J1939:** `canarchy.j1939.dm1_messages` extracts DM1 active DTCs for fault
   emergence.
+* **Transport:** each iteration uses a single `LocalTransport.transaction`
+  (send + receive on one bus) rather than `send()` then a separate `capture()`,
+  so the receive path is buffering before the probe is transmitted and a fast
+  response is not missed and recorded as false `silence`. `uds scan` and
+  `xcp scan` use the same primitive.
 * **Safety:** `fuzz guided` is an active-transmit command — it honours
   `--ack-active`, `[safety].require_active_ack`, the `YES` confirmation, `--rate`
   pacing, and `--dry-run` (which plans the campaign without opening the

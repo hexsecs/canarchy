@@ -120,31 +120,51 @@ def run_guided_fuzz(
     tracker = FeedbackTracker(weights=dict(weights or DEFAULT_WEIGHTS))
     counter = itertools.count()
     corpus: list[Seed] = []
+    max_corpus = max(1, max_corpus)
 
     def _clamp(payload: bytes) -> bytes:
         return payload[:max_payload] if max_payload is not None else payload
-
-    seed_inputs = initial_seeds or [bytes(8)]
-    for data in seed_inputs:
-        seed_data = _clamp(bytes(data))
-        # Prime the baseline: observe (do not score) each initial seed.
-        tracker.observe(fingerprint_response(responder(seed_data), signals=signals))
-        corpus.append(Seed(seed_data, f"s{next(counter)}", None, 0, 0.0))
 
     findings: list[Finding] = []
     start = clock()
     iteration = 0
     stop_reason = "max_iterations"
 
-    while True:
+    def _stop() -> str | None:
+        # Every responder call (priming or mutation) is a transmission, so the
+        # campaign budget bounds them all: nothing is sent past the limit, and
+        # the iteration count reflects all transmissions.
         if iteration >= max_iterations:
-            stop_reason = "max_iterations"
-            break
+            return "max_iterations"
         if max_seconds is not None and (clock() - start) >= max_seconds:
-            stop_reason = "max_seconds"
-            break
+            return "max_seconds"
         if kill_switch is not None and kill_switch():
-            stop_reason = "kill_switch"
+            return "kill_switch"
+        return None
+
+    # Prime the baseline: each initial seed is added to the corpus, then (within
+    # the campaign budget) transmitted once to observe its response.
+    for data in initial_seeds or [bytes(8)]:
+        seed_data = _clamp(bytes(data))
+        corpus.append(Seed(seed_data, f"s{next(counter)}", None, 0, 0.0))
+        reason = _stop()
+        if reason is not None:
+            return GuidedFuzzResult(
+                iterations=iteration,
+                new_behaviour_count=len(findings),
+                corpus_size=len(corpus),
+                unique_markers=len(tracker.seen),
+                stop_reason=reason,
+                findings=findings,
+                seeds=list(corpus),
+            )
+        tracker.observe(fingerprint_response(responder(seed_data), signals=signals))
+        iteration += 1
+
+    while True:
+        reason = _stop()
+        if reason is not None:
+            stop_reason = reason
             break
 
         parent = _select_seed(corpus, rng)

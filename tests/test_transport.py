@@ -436,41 +436,67 @@ class TransportBackendTests(unittest.TestCase):
     ) -> None:
         transport = LocalTransport(live_backend=PythonCanBackend(bus_interface="virtual"))
 
-        with (
-            patch.object(transport, "send") as send_mock,
-            patch.object(
-                transport,
-                "capture",
-                return_value=[
-                    CanFrame(
-                        arbitration_id=0x7E8,
-                        data=bytes.fromhex("100A5001003201F4"),
-                        interface="can0",
-                        timestamp=0.1,
-                    ),
-                    CanFrame(
-                        arbitration_id=0x7DF,
-                        data=bytes.fromhex("3000000000000000"),
-                        interface="can0",
-                        timestamp=0.11,
-                    ),
-                    CanFrame(
-                        arbitration_id=0x7E8,
-                        data=bytes.fromhex("2100000000000000"),
-                        interface="can0",
-                        timestamp=0.12,
-                    ),
-                ],
-            ) as capture_mock,
-        ):
+        with patch.object(
+            transport,
+            "transaction",
+            return_value=[
+                CanFrame(
+                    arbitration_id=0x7E8,
+                    data=bytes.fromhex("100A5001003201F4"),
+                    interface="can0",
+                    timestamp=0.1,
+                ),
+                CanFrame(
+                    arbitration_id=0x7DF,
+                    data=bytes.fromhex("3000000000000000"),
+                    interface="can0",
+                    timestamp=0.11,
+                ),
+                CanFrame(
+                    arbitration_id=0x7E8,
+                    data=bytes.fromhex("2100000000000000"),
+                    interface="can0",
+                    timestamp=0.12,
+                ),
+            ],
+        ) as transaction_mock:
             events = transport.uds_scan_events("can0")
 
-        send_mock.assert_called_once()
-        capture_mock.assert_called_once_with("can0")
+        transaction_mock.assert_called_once()
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["payload"]["request_id"], 0x7DF)
         self.assertEqual(events[0]["payload"]["service"], 0x10)
         self.assertTrue(events[0]["payload"]["complete"])
+
+    def test_transaction_uses_one_bus_and_receives_after_send(self) -> None:
+        # The transaction primitive must reuse a single bus (so the receive path
+        # is buffering before the request is sent), unlike send()+capture().
+        backend = PythonCanBackend(bus_interface="virtual", capture_limit=2, capture_timeout=0.0)
+        calls: list[str] = []
+
+        class _FakeBus:
+            def send(self, message: object) -> None:
+                calls.append("send")
+
+            def recv(self, timeout: float | None = None) -> None:
+                calls.append("recv")
+                return None
+
+            def shutdown(self) -> None:
+                calls.append("shutdown")
+
+        with patch.object(backend, "_open_bus", return_value=_FakeBus()) as open_mock:
+            frames = backend.transaction("can0", CanFrame(arbitration_id=0x123, data=b"\x01"))
+
+        open_mock.assert_called_once()  # a single bus serves both directions
+        self.assertEqual(frames, [])
+        self.assertEqual(calls[0], "send")
+        self.assertIn("recv", calls)
+
+    def test_scaffold_transaction_returns_sample_frames(self) -> None:
+        backend = ScaffoldCanBackend()
+        frames = backend.transaction("can0", CanFrame(arbitration_id=0x123, data=b"\x01"))
+        self.assertEqual(len(frames), 2)
 
     def test_build_live_backend_rejects_unknown_backend(self) -> None:
         with patch.dict(os.environ, {"CANARCHY_TRANSPORT_BACKEND": "unknown"}, clear=False):

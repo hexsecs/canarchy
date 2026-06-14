@@ -122,6 +122,45 @@ class GuidedLoopTests(unittest.TestCase):
         self.assertEqual(result.stop_reason, "kill_switch")
         self.assertLessEqual(result.iterations, 6)
 
+    def test_zero_budget_transmits_nothing(self) -> None:
+        # The campaign budget bounds priming too: max_iterations=0 sends nothing.
+        calls = {"n": 0}
+
+        def counting_responder(payload: bytes) -> ResponseObservation:
+            calls["n"] += 1
+            return ResponseObservation(silent=True)
+
+        result = run_guided_fuzz([bytes(8), bytes(8)], counting_responder, max_iterations=0)
+        self.assertEqual(calls["n"], 0)
+        self.assertEqual(result.iterations, 0)
+        self.assertEqual(result.stop_reason, "max_iterations")
+
+    def test_priming_counts_against_budget(self) -> None:
+        # With three seeds and a budget of two, only two transmissions happen.
+        calls = {"n": 0}
+
+        def counting_responder(payload: bytes) -> ResponseObservation:
+            calls["n"] += 1
+            return ResponseObservation(silent=True)
+
+        result = run_guided_fuzz(
+            [bytes(8), bytes(8), bytes(8)], counting_responder, max_iterations=2
+        )
+        self.assertEqual(calls["n"], 2)
+        self.assertEqual(result.iterations, 2)
+
+    def test_nonpositive_max_corpus_is_clamped(self) -> None:
+        # Defensive: the engine never prunes the corpus to empty.
+        result = run_guided_fuzz(
+            [bytes(8)],
+            _reactive_responder,
+            max_iterations=120,
+            max_corpus=0,
+            rng_seed=1,
+            max_payload=8,
+        )
+        self.assertGreaterEqual(result.corpus_size, 1)
+
     def test_corpus_persistence_round_trip(self) -> None:
         import tempfile
 
@@ -157,6 +196,13 @@ class CliTests(unittest.TestCase):
         exit_code, stdout, _ = run_cli("fuzz", "guided", "--id", "not-an-id", "--dry-run", "--json")
         self.assertEqual(exit_code, 1)
         self.assertEqual(json.loads(stdout)["errors"][0]["code"], "FUZZ_GUIDED_INVALID_ID")
+
+    def test_invalid_max_corpus_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "fuzz", "guided", "--id", "0x123", "--max-corpus", "0", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "FUZZ_GUIDED_INVALID_MAX_CORPUS")
 
     def test_active_path_over_scaffold_backend(self) -> None:
         with patch.dict(

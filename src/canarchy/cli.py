@@ -6386,6 +6386,19 @@ def fuzz_guided_payload(
         )
     signals = tuple(signal_tokens)
 
+    if args.max_corpus < 1:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="FUZZ_GUIDED_INVALID_MAX_CORPUS",
+                    message=f"--max-corpus must be at least 1; got {args.max_corpus}.",
+                    hint="Pass a positive --max-corpus (default 64).",
+                )
+            ],
+        )
+
     arbitration_id = _parse_can_id(
         args.arbitration_id, command=args.command, name="--id", code="FUZZ_GUIDED_INVALID_ID"
     )
@@ -6438,8 +6451,10 @@ def fuzz_guided_payload(
         frame = CanFrame(arbitration_id=arbitration_id, data=payload, is_extended_id=extended)
         started = time.monotonic()
         try:
-            transport.send(args.interface, frame)
-            frames = transport.capture(args.interface)
+            # A single send+receive transaction keeps the receive path active
+            # before the probe is transmitted, so a fast response is not missed
+            # and recorded as false silence.
+            frames = transport.transaction(args.interface, frame)
         except TransportError as exc:
             raise CommandError(
                 command=args.command,
