@@ -65,6 +65,7 @@ from canarchy.transport import (
     generate_frames,
 )
 from canarchy.tui import run_tui
+from canarchy.doip import is_doip_target
 from canarchy.uds import uds_decoder_backend, uds_services_payload
 
 EXIT_OK = 0
@@ -1115,13 +1116,22 @@ def build_parser() -> CanarchyArgumentParser:
     uds_subparsers = uds.add_subparsers(dest="uds_action", required=True)
 
     uds_scan = uds_subparsers.add_parser("scan", help="scan for UDS responders")
-    uds_scan.add_argument("interface", nargs="?")
+    uds_scan.add_argument(
+        "interface",
+        nargs="?",
+        help="CAN interface, or a doip://<host>:<port>?logical_address=0x0E80 endpoint",
+    )
     add_active_ack_argument(uds_scan)
     add_output_arguments(uds_scan)
     uds_scan.set_defaults(command="uds scan")
 
     uds_trace = uds_subparsers.add_parser("trace", help="trace UDS transactions")
-    uds_trace.add_argument("interface", nargs="?")
+    uds_trace.add_argument(
+        "interface",
+        nargs="?",
+        help="CAN interface, or a doip://<host>:<port>?logical_address=0x0E80 endpoint",
+    )
+    add_active_ack_argument(uds_trace)
     add_output_arguments(uds_trace)
     uds_trace.set_defaults(command="uds trace")
 
@@ -1752,6 +1762,11 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `simulate` will transmit `{args.profile}` profile traffic on interface "
             f"`{args.interface}`; use intentionally on a controlled bus."
         )
+    if _is_doip_active_command(args):
+        return (
+            f"warning: `{args.command}` will open a DoIP session and transmit diagnostic "
+            f"requests to `{args.interface}`; use intentionally against a controlled endpoint."
+        )
     if args.command == "uds scan":
         return (
             f"warning: `uds scan` will transmit diagnostic requests on interface `{args.interface}`; "
@@ -1794,6 +1809,10 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return f"confirm: type YES to generate frames on `{args.interface}`: "
     if args.command == "simulate":
         return f"confirm: type YES to simulate `{args.profile}` traffic on `{args.interface}`: "
+    if _is_doip_active_command(args):
+        return (
+            f"confirm: type YES to run `{args.command}` against DoIP endpoint `{args.interface}`: "
+        )
     if args.command == "uds scan":
         return f"confirm: type YES to run UDS scan on `{args.interface}`: "
     if args.command == "gateway":
@@ -1962,10 +1981,17 @@ def prepare_args(args: argparse.Namespace) -> None:
     )
 
 
+def _is_doip_active_command(args: argparse.Namespace) -> bool:
+    """`uds scan` / `uds trace` over DoIP open a TCP session and transmit."""
+    return args.command in ("uds scan", "uds trace") and is_doip_target(
+        getattr(args, "interface", None)
+    )
+
+
 def enforce_active_transmit_safety(
     args: argparse.Namespace,
 ) -> None:
-    if args.command not in ACTIVE_TRANSMIT_COMMANDS:
+    if args.command not in ACTIVE_TRANSMIT_COMMANDS and not _is_doip_active_command(args):
         return
 
     print(active_transmit_preflight_warning(args), file=sys.stderr)
@@ -5228,7 +5254,66 @@ def validate_dataset_replay_options(
         )
 
 
+def _doip_uds_payload(
+    args: argparse.Namespace, target: str
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.doip import (
+        DoipError,
+        doip_scan_events,
+        doip_trace_events,
+        parse_doip_target,
+    )
+
+    try:
+        doip_target = parse_doip_target(target)
+    except DoipError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+        ) from exc
+
+    # Both scan and trace open a TCP session and transmit over DoIP, so the
+    # active-transmit safety gate runs before any socket is opened.
+    enforce_active_transmit_safety(args)
+
+    try:
+        if args.command == "uds scan":
+            events = doip_scan_events(doip_target)
+            count_field = {"responder_count": len(events)}
+        else:  # uds trace
+            events = doip_trace_events(doip_target)
+            count_field = {"transaction_count": len(events)}
+    except DoipError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_TRANSPORT_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            data={"mode": "active", "transport": "doip", "target": target},
+        ) from exc
+
+    return (
+        {
+            "interface": target,
+            "target": target,
+            "transport": "doip",
+            "host": doip_target.host,
+            "port": doip_target.port,
+            "logical_address": doip_target.logical_address,
+            "source_address": doip_target.source_address,
+            "mode": "active",
+            "protocol_decoder": uds_decoder_backend(),
+            **count_field,
+        },
+        events,
+        [],
+    )
+
+
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    target = getattr(args, "interface", None)
+    if args.command in ("uds scan", "uds trace") and is_doip_target(target):
+        return _doip_uds_payload(args, target)
     transport = LocalTransport()
     backend_metadata = transport.backend_metadata()
     implementation = (

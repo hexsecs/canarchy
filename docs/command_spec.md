@@ -991,13 +991,15 @@ Notes:
 Inspect representative UDS responder discovery transactions.
 
 ```bash
-canarchy uds scan <interface> [--ack-active] [--json|--jsonl|--text]
+canarchy uds scan <interface | doip://host:port?logical_address=0x0E80> [--ack-active] [--json|--jsonl|--text]
 ```
 
 Notes:
 
 * with the `python-can` backend, this command sends a single-frame functional DiagnosticSessionControl request and summarizes captured UDS responses after ISO-TP reassembly when needed
 * with the `scaffold` backend, this command emits explicit sample/reference UDS transaction data
+* a `doip://<host>:<port>?logical_address=0x0E80` target routes the scan over DoIP (Diagnostic over IP, ISO 13400-2): the command opens a TCP connection, performs routing activation, and probes the default / programming / extended diagnostic sessions, emitting the same `uds_transaction` events with `transport: doip` in the envelope. Optional query parameters: `source_address` (tester address, default `0x0E00`), `activation_type` (default `0x00`), `timeout` (seconds, default `2.0`); port defaults to `13400`
+* DoIP targets are an active network egress and are gated by the active-transmit safety model; structured errors include `DOIP_INVALID_TARGET` (exit 1), `DOIP_CONNECTION_FAILED` / `DOIP_TIMEOUT` / `DOIP_ROUTING_ACTIVATION_DENIED` / `DOIP_DIAGNOSTIC_NACK` / `DOIP_PROTOCOL_ERROR` (exit 2)
 * `--ack-active` requests an interactive `YES` confirmation before the diagnostic request is sent
 * if a segmented response is truncated or arrives out of order, the emitted `uds_transaction` event keeps the partial `response_data` and sets `complete` to `false`
 
@@ -1006,13 +1008,14 @@ Notes:
 Inspect representative UDS request and response transactions.
 
 ```bash
-canarchy uds trace <interface> [--json|--jsonl|--text]
+canarchy uds trace <interface | doip://host:port?logical_address=0x0E80> [--ack-active] [--json|--jsonl|--text]
 ```
 
 Notes:
 
 * with the `python-can` backend, this command captures raw CAN frames and infers UDS request/response transactions from common diagnostic IDs, including ISO-TP multi-frame responses
 * with the `scaffold` backend, this command emits explicit sample/reference UDS transaction data
+* a `doip://` target routes the trace over DoIP: the command performs routing activation and a DiagnosticSessionControl + TesterPresent exchange, emitting the transactions with `transport: doip`. Because DoIP is connection-oriented, this is an active exchange (not a passive sniff) and is gated by the active-transmit safety model; the same DoIP query parameters and error codes as `uds scan` apply
 * flow-control frames are used only for reassembly and are not emitted as transactions
 * if a segmented response is truncated or arrives out of order, the emitted `uds_transaction` event keeps the partial `response_data` and sets `complete` to `false`
 
