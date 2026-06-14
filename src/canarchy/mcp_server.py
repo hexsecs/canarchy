@@ -2356,6 +2356,33 @@ def _tool_execution_error_payload(name: str, exc: BaseException) -> dict[str, An
     }
 
 
+def _is_doip_interface(value: Any) -> bool:
+    return isinstance(value, str) and value.strip().lower().startswith("doip://")
+
+
+def _doip_excluded_payload(name: str) -> dict[str, Any]:
+    """Envelope refusing a DoIP target on the MCP `uds_scan` / `uds_trace` tools."""
+    return {
+        "ok": False,
+        "command": name,
+        "data": {},
+        "warnings": [],
+        "errors": [
+            {
+                "code": "DOIP_MCP_EXCLUDED",
+                "message": (
+                    "DoIP diagnostic workflows perform active TCP egress to an arbitrary "
+                    "network host and are not exposed through the MCP server."
+                ),
+                "hint": (
+                    "Run `canarchy uds scan|trace doip://<host>:<port>?logical_address=0x...` "
+                    "from the CLI as an operator action."
+                ),
+            }
+        ],
+    }
+
+
 def _missing_ack_active_payload(name: str) -> dict[str, Any]:
     """Canonical envelope for an MCP active-transmit call without `ack_active=true`."""
     return {
@@ -2383,6 +2410,12 @@ async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[
     if name not in _TOOL_NAMES:
         raise ValueError(f"Unknown tool: {name!r}")
     args = arguments or {}
+    if name in ("uds_scan", "uds_trace") and _is_doip_interface(args.get("interface")):
+        # Active TCP egress to an arbitrary host is a CLI-only operator action,
+        # consistent with the `cannelloni send` exclusion. See the "Excluded"
+        # table in docs/design/mcp-server.md.
+        payload = _doip_excluded_payload(name)
+        return [types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))]
     if name in _ACTIVE_TRANSMIT_TOOLS:
         # The CLI surface already enforces `--ack-active`; the MCP gate
         # is the *separate* opt-in token that prevents a confused agent

@@ -79,6 +79,14 @@ def uds_services_payload() -> list[dict[str, object]]:
     return [service.to_payload() for service in UDS_SERVICE_CATALOG]
 
 
+def uds_service_name(service: int) -> str:
+    """Return the catalog name for a UDS service id, or a hex fallback."""
+    for uds_service in UDS_SERVICE_CATALOG:
+        if uds_service.service == service:
+            return uds_service.name
+    return f"Service0x{service:02X}"
+
+
 def uds_decoder_backend() -> str:
     return "scapy" if scapy_uds_available() else "built-in"
 

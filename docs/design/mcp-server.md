@@ -161,6 +161,12 @@ landing here.
 | `completion` | Emits a raw shell script, not a JSON envelope. |
 | `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
 
+The `uds_scan` / `uds_trace` tools are exposed for CAN interfaces, but a
+`doip://` target is a **target-level exclusion**: DoIP routes the workflow over
+active TCP egress to an arbitrary network host, which (like `cannelloni send`) is
+a CLI-only operator action. The tools refuse a `doip://` interface with code
+`DOIP_MCP_EXCLUDED` rather than connecting.
+
 ### Deferred (not yet implemented)
 
 There are no deferred implemented CLI commands in the current MCP matrix.
