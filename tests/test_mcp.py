@@ -79,6 +79,7 @@ _EXPECTED_TOOLS = {
     "re_match_dbc",
     "re_shortlist_dbc",
     "re_corpus",
+    "re_suggest",
     "fuzz_payload",
     "fuzz_replay",
     "fuzz_arbitration_id",

@@ -140,6 +140,7 @@ RE_COMMANDS = {
     "re match-dbc",
     "re shortlist-dbc",
     "re corpus",
+    "re suggest",
 }
 CANNELLONI_COMMANDS = {"cannelloni decode", "cannelloni send"}
 
@@ -1381,6 +1382,43 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(re_corpus)
     re_corpus.set_defaults(command="re corpus")
 
+    re_suggest = re_subparsers.add_parser(
+        "suggest", help="propose names for ranked signal candidates"
+    )
+    re_suggest.add_argument("file", nargs="?", help="path to capture file")
+    re_suggest.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="path to capture file (equivalent to the positional form)",
+    )
+    re_suggest.add_argument(
+        "--reference-dbc",
+        help="DBC/ARXML/KCD/SYM file or provider ref whose signals seed name suggestions",
+    )
+    re_suggest.add_argument(
+        "--limit",
+        type=int,
+        default=25,
+        help="maximum ranked candidates to name (default: 25)",
+    )
+    re_suggest.add_argument(
+        "--llm",
+        metavar="PROVIDER",
+        help="optional, off-by-default external LLM provider for name enrichment (e.g. anthropic)",
+    )
+    re_suggest.add_argument(
+        "--llm-model",
+        help="model id for the --llm provider (provider default otherwise)",
+    )
+    re_suggest.add_argument(
+        "--yes",
+        action="store_true",
+        help="confirm the external --llm call without an interactive prompt",
+    )
+    add_output_arguments(re_suggest)
+    re_suggest.set_defaults(command="re suggest")
+
     plot_parser = subparsers.add_parser(
         "plot", help="plot decoded signal time-series from a capture"
     )
@@ -1921,6 +1959,7 @@ _FILE_FLAG_SINGLE_COMMANDS = {
     "re entropy": "file",
     "re correlate": "file",
     "re anomalies": "file",
+    "re suggest": "file",
     "re match-dbc": "capture",
     "re shortlist-dbc": "capture",
 }
@@ -6656,12 +6695,128 @@ def _build_match_catalog(
     return result
 
 
+def _confirm_llm_enrichment(args: argparse.Namespace, provider: str) -> None:
+    """Gate the external `--llm` call behind an explicit operator confirmation."""
+    if getattr(args, "yes", False):
+        return
+    if os.environ.get("CANARCHY_LLM_NONINTERACTIVE") == "1":
+        return
+    print(
+        f"warning: `re suggest --llm {provider}` will send candidate metadata to the external "
+        f"LLM provider `{provider}` (ids, bit ranges, observed ranges; no payload bytes).",
+        file=sys.stderr,
+    )
+    print(
+        f"confirm: type YES to call the external LLM provider `{provider}`: ",
+        file=sys.stderr,
+        end="",
+        flush=True,
+    )
+    if sys.stdin.readline().strip() == "YES":
+        return
+    raise CommandError(
+        command=args.command,
+        exit_code=EXIT_USER_ERROR,
+        errors=[
+            ErrorDetail(
+                code="LLM_CONFIRMATION_DECLINED",
+                message="External LLM enrichment was not confirmed.",
+                hint="Re-run with --yes (or set CANARCHY_LLM_NONINTERACTIVE=1) to authorise the call.",
+            )
+        ],
+    )
+
+
+def _re_suggest_payload(
+    args: argparse.Namespace, processor: Any
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.re_suggest import suggest_names
+
+    transport = LocalTransport()
+    frames = transport.frames_from_file(args.file)
+    result = processor.process(frames)
+    candidates = list(result.candidates)[: max(args.limit, 0)]
+
+    dbc_signals_by_id: dict[int, list[dict[str, Any]]] | None = None
+    reference_dbc = getattr(args, "reference_dbc", None)
+    if reference_dbc:
+        from canarchy.dbc_runtime import load_runtime_database
+
+        database = load_runtime_database(reference_dbc)
+        dbc_signals_by_id = {
+            int(message.frame_id): [
+                {"name": signal.name, "length": int(signal.length), "unit": signal.unit or None}
+                for signal in message.signals
+            ]
+            for message in database.messages
+        }
+
+    named = suggest_names(candidates, dbc_signals_by_id)
+    warnings = list(result.warnings)
+    data: dict[str, Any] = {
+        "mode": "passive",
+        "file": args.file,
+        "reference_dbc": reference_dbc,
+        "candidate_count": len(named),
+        "candidates": named,
+        "events": [],
+    }
+
+    provider = getattr(args, "llm", None)
+    if provider:
+        _confirm_llm_enrichment(args, provider)
+        from canarchy.llm_suggest import LlmError, enrich_with_llm
+
+        try:
+            named = enrich_with_llm(provider, named, model=getattr(args, "llm_model", None))
+        except LlmError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR
+                if exc.code == "LLM_PROVIDER_UNSUPPORTED"
+                else EXIT_TRANSPORT_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ) from exc
+        data["candidates"] = named
+        data["candidate_count"] = len(named)
+        data["external_enrichment"] = {
+            "provider": provider,
+            "confirmed": True,
+            "note": (
+                "Candidate metadata (arbitration ids, bit ranges, observed value ranges, and "
+                f"heuristic names; no payload bytes) was sent to the external LLM provider "
+                f"'{provider}'."
+            ),
+        }
+        warnings.append(
+            f"EXTERNAL_SERVICE_CALLED: signal-name suggestions were enriched via the external "
+            f"LLM provider '{provider}'."
+        )
+
+    return (data, [], warnings)
+
+
 def reverse_engineering_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     from canarchy.plugins import get_registry
 
     transport = LocalTransport()
+    if args.command == "re suggest":
+        processor = get_registry().get_processor("signal-analysis")
+        if processor is None:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="PLUGIN_NOT_FOUND",
+                        message="Built-in processor 'signal-analysis' is not registered.",
+                        hint="Ensure the plugin registry has not been modified.",
+                    )
+                ],
+            )
+        return _re_suggest_payload(args, processor)
     if args.command == "re signals":
         frames = transport.frames_from_file(args.file)
         processor = get_registry().get_processor("signal-analysis")
@@ -7647,6 +7802,34 @@ def format_xcp_table(result: CommandResult) -> list[str]:
 
 def format_re_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
+
+    if result.command == "re suggest":
+        lines.append(f"file: {result.data.get('file')}")
+        if result.data.get("reference_dbc"):
+            lines.append(f"reference_dbc: {result.data['reference_dbc']}")
+        if result.data.get("external_enrichment"):
+            lines.append(f"llm_provider: {result.data['external_enrichment']['provider']}")
+        lines.append(f"candidate_count: {result.data.get('candidate_count', 0)}")
+        lines.append("suggestions:")
+        candidates = result.data.get("candidates", [])
+        if not candidates:
+            lines.append("- no signal candidates")
+            return lines
+        for candidate in candidates:
+            names = " | ".join(
+                f"{s['name']}[{s['source']}:{s['confidence']}]"
+                for s in candidate.get("suggestions", [])
+            )
+            lines.append(
+                "- "
+                f"id=0x{candidate['arbitration_id']:X} "
+                f"start={candidate['start_bit']} "
+                f"len={candidate['bit_length']} "
+                f"=> {candidate.get('suggested_name')} ({candidate.get('suggested_source')})"
+            )
+            if names:
+                lines.append(f"  candidates: {names}")
+        return lines
 
     if result.command == "re corpus":
         data = result.data

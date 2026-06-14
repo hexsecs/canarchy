@@ -131,6 +131,7 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `j1939_compare` | `canarchy j1939 compare` |
 | `re_signals` | `canarchy re signals` |
 | `re_corpus` | `canarchy re corpus` |
+| `re_suggest` | `canarchy re suggest` (heuristic path only) |
 | `plot` | `canarchy plot` |
 | `cannelloni_decode` | `canarchy cannelloni decode` |
 | `datasets_convert` | `canarchy datasets convert` |
@@ -229,4 +230,5 @@ tool: send {"interface": "vcan0", "frame_id": "0x7DF", "data": "0201F1", "ack_ac
 * `encode` (and `send --dbc`) resolve message names by exact DBC name, case/spacing-insensitive match, or SAE PGN label (`EEC1`), and signal names by exact name, case/spacing-insensitive match, or SAE SPN name (`Engine Speed`) — so names displayed by decode tools re-encode directly. Unsupplied signals are defaulted and reported under `data.resolution.filled_signals` with a warning; review them before transmitting.
 * CLI capture paths: the `re *` family and `j1939 compare` accept both positional paths and `--file <path>` flags, so agents shelling out do not need to remember which convention a command uses. Filter expressions accept decimal, `0x`-prefixed hex, or bare hex IDs/PGNs with whitespace tolerated around operators.
 * RE tool results (`re_signals`, `re_counters`, `re_entropy`, `re_anomalies`, `re_corpus`) annotate J1939 frames with `pgn`, `pgn_label`, `source_address`, and `source_address_name`, and label or exclude J1939 transport-protocol framing (`j1939_transport`, `excluded_transport_ids`). `re_anomalies` without a `baseline` reports sparse ids under `low_rate_ids` instead of ranking them and caps z-scores at ±100σ — prefer supplying a known-good `baseline` capture.
+* `re_suggest` proposes signal names for ranked candidates using offline heuristics only (reference-DBC overlap, the J1939 SPN/PGN catalog, and behaviour templates); each suggestion carries a `source` and `confidence`. The optional external-LLM enrichment (`re suggest --llm <provider>`) is **CLI-only** — it is not reachable through the MCP tool — because it sends candidate metadata to an external service and requires explicit operator confirmation. Even on the CLI it sends only candidate metadata (ids, bit ranges, observed ranges, heuristic names), never raw payload bytes, and records an `external_enrichment` note plus an `EXTERNAL_SERVICE_CALLED` warning.
 * Stdin pipelines: `capture-info`, `stats`, and `filter --file -` read candump text from stdin. `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin regardless of output format. This enables piping `datasets replay` candump output directly into analysis commands without temporary files.

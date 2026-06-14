@@ -49,6 +49,26 @@ Fuzzing workflows are intentionally not exposed in the current CLI while
 the active-transmit safety design is being completed. See
 `CHANGELOG.md` and the project roadmap for status.
 
+## External-service operations
+
+Most CANarchy workflows run entirely offline. A small number of features
+can contact an external service, and they are off by default and opt-in:
+
+* `re suggest --llm <provider>` sends signal-candidate metadata to an
+  external LLM for name enrichment. It requires explicit confirmation
+  (`--yes`, a `YES` reply, or `CANARCHY_LLM_NONINTERACTIVE=1`), is never
+  reachable through the MCP server, and transmits **only** candidate
+  metadata — arbitration ids, bit ranges, observed value ranges, change
+  rates, and the offline heuristic names. It never sends raw payload
+  bytes. Every such invocation records an `external_enrichment` note and
+  an `EXTERNAL_SERVICE_CALLED` warning in the output envelope.
+* DBC and dataset provider fetches (`dbc fetch`, `datasets fetch`)
+  download files over the network from the configured provider.
+
+Treat any capture-derived metadata as potentially sensitive: review what
+a feature sends before enabling an external-service path on data from a
+real vehicle or fleet, and prefer the offline heuristics when in doubt.
+
 ## Scope
 
 This policy covers the CANarchy CLI, library, MCP server, and the
