@@ -12,6 +12,8 @@ EventType = Literal[
     "signal",
     "j1939_pgn",
     "uds_transaction",
+    "xcp_transaction",
+    "xcp_measurement",
     "replay_event",
     "alert",
 ]
@@ -279,6 +281,68 @@ class UdsTransactionEvent:
                 "response_summary": self.response_summary,
                 "service": self.service,
                 "service_name": self.service_name,
+            },
+            timestamp=self.timestamp,
+        )
+
+    def to_payload(self) -> dict[str, Any]:
+        return self.to_event().to_payload()
+
+
+@dataclass(slots=True, frozen=True)
+class XcpTransactionEvent:
+    request_id: int
+    response_id: int
+    command: int
+    command_name: str
+    request_data: bytes = field(repr=False)
+    response_data: bytes = field(repr=False)
+    positive: bool = True
+    error_code: int | None = None
+    error_name: str | None = None
+    connect_info: dict[str, Any] | None = None
+    source: str = "xcp"
+    timestamp: float | None = None
+
+    def to_event(self) -> Event:
+        return Event(
+            event_type="xcp_transaction",
+            source=self.source,
+            payload={
+                "command": self.command,
+                "command_name": self.command_name,
+                "connect_info": self.connect_info,
+                "error_code": self.error_code,
+                "error_name": self.error_name,
+                "positive": self.positive,
+                "request_data": self.request_data.hex(),
+                "request_id": self.request_id,
+                "response_data": self.response_data.hex(),
+                "response_id": self.response_id,
+            },
+            timestamp=self.timestamp,
+        )
+
+    def to_payload(self) -> dict[str, Any]:
+        return self.to_event().to_payload()
+
+
+@dataclass(slots=True, frozen=True)
+class XcpMeasurementEvent:
+    response_id: int
+    pid: int
+    data: bytes = field(repr=False)
+    source: str = "xcp"
+    timestamp: float | None = None
+
+    def to_event(self) -> Event:
+        return Event(
+            event_type="xcp_measurement",
+            source=self.source,
+            payload={
+                "data": self.data.hex(),
+                "pid": self.pid,
+                "response_id": self.response_id,
             },
             timestamp=self.timestamp,
         )

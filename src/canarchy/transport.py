@@ -30,6 +30,9 @@ from canarchy.sample_data import (
     sample_j1939_monitor_frames,
     sample_uds_scan_transactions,
     sample_uds_trace_transactions,
+    sample_xcp_read_measurements,
+    sample_xcp_scan_transactions,
+    sample_xcp_trace_transactions,
     scaffold_transport_frames,
 )
 from canarchy.uds import (
@@ -37,6 +40,14 @@ from canarchy.uds import (
     enrich_uds_transactions,
     uds_scan_transactions,
     uds_trace_transactions,
+)
+from canarchy.xcp import (
+    XCP_DEFAULT_REQUEST_ID,
+    XCP_DEFAULT_RESPONSE_ID,
+    connect_request_frame,
+    xcp_read_measurements,
+    xcp_scan_transactions,
+    xcp_trace_transactions,
 )
 
 
@@ -836,6 +847,75 @@ class LocalTransport:
 
         frames = self.capture(interface)
         return serialize_events(uds_trace_transactions(frames, source="transport.uds.trace"))
+
+    def xcp_scan_events(
+        self,
+        interface: str,
+        *,
+        request_id: int = XCP_DEFAULT_REQUEST_ID,
+        response_id: int = XCP_DEFAULT_RESPONSE_ID,
+    ) -> list[dict[str, object]]:
+        if self.live_backend.backend_name == "scaffold":
+            self._require_interface(interface)
+            return serialize_events([event.to_event() for event in sample_xcp_scan_transactions()])
+
+        self.send(interface, connect_request_frame(interface, request_id))
+        frames = self.capture(interface)
+        return serialize_events(
+            [
+                event.to_event()
+                for event in xcp_scan_transactions(
+                    frames,
+                    request_id=request_id,
+                    response_id=response_id,
+                    source="transport.xcp.scan",
+                )
+            ]
+        )
+
+    def xcp_trace_events(
+        self,
+        interface: str,
+        *,
+        request_id: int = XCP_DEFAULT_REQUEST_ID,
+        response_id: int = XCP_DEFAULT_RESPONSE_ID,
+    ) -> list[dict[str, object]]:
+        if self.live_backend.backend_name == "scaffold":
+            self._require_interface(interface)
+            return serialize_events([event.to_event() for event in sample_xcp_trace_transactions()])
+
+        frames = self.capture(interface)
+        return serialize_events(
+            [
+                event.to_event()
+                for event in xcp_trace_transactions(
+                    frames,
+                    request_id=request_id,
+                    response_id=response_id,
+                    source="transport.xcp.trace",
+                )
+            ]
+        )
+
+    def xcp_read_events(
+        self,
+        interface: str,
+        *,
+        response_id: int = XCP_DEFAULT_RESPONSE_ID,
+    ) -> list[dict[str, object]]:
+        if self.live_backend.backend_name == "scaffold":
+            self._require_interface(interface)
+            return serialize_events([event.to_event() for event in sample_xcp_read_measurements()])
+
+        frames = self.capture(interface)
+        return serialize_events(
+            [
+                event.to_event()
+                for event in xcp_read_measurements(
+                    frames, response_id=response_id, source="transport.xcp.read"
+                )
+            ]
+        )
 
     def generate_events(
         self, interface: str, frames: list[CanFrame], *, gap_ms: float = 0.0

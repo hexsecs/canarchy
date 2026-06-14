@@ -8,7 +8,19 @@ commands that are not yet truly transport-backed.
 
 from __future__ import annotations
 
-from canarchy.models import CanFrame, UdsTransactionEvent
+from canarchy.models import (
+    CanFrame,
+    UdsTransactionEvent,
+    XcpMeasurementEvent,
+    XcpTransactionEvent,
+)
+from canarchy.xcp import (
+    XCP_DEFAULT_REQUEST_ID,
+    XCP_DEFAULT_RESPONSE_ID,
+    XCP_ERROR_CODES,
+    parse_connect_response,
+    xcp_command_name,
+)
 
 
 def scaffold_transport_frames() -> list[CanFrame]:
@@ -94,5 +106,76 @@ def sample_uds_trace_transactions() -> list[UdsTransactionEvent]:
             ecu_address=0x7E8,
             source="transport.uds.trace",
             timestamp=0.2,
+        ),
+    ]
+
+
+def _xcp_transaction(
+    command: int,
+    request_data: str,
+    response_data: str,
+    *,
+    source: str,
+    timestamp: float,
+) -> XcpTransactionEvent:
+    response = bytes.fromhex(response_data)
+    positive = bool(response) and response[0] == 0xFF
+    is_error = bool(response) and response[0] == 0xFE
+    error_code = response[1] if is_error and len(response) >= 2 else None
+    error_name = XCP_ERROR_CODES.get(error_code) if error_code is not None else None
+    connect_info = parse_connect_response(response) if command == 0xFF and positive else None
+    return XcpTransactionEvent(
+        request_id=XCP_DEFAULT_REQUEST_ID,
+        response_id=XCP_DEFAULT_RESPONSE_ID,
+        command=command,
+        command_name=xcp_command_name(command),
+        request_data=bytes.fromhex(request_data),
+        response_data=response,
+        positive=positive,
+        error_code=error_code,
+        error_name=error_name,
+        connect_info=connect_info,
+        source=source,
+        timestamp=timestamp,
+    )
+
+
+def sample_xcp_scan_transactions() -> list[XcpTransactionEvent]:
+    return [
+        _xcp_transaction(
+            0xFF,
+            "FF00",
+            "FF14C00800080101",
+            source="transport.xcp.scan",
+            timestamp=0.0,
+        ),
+    ]
+
+
+def sample_xcp_trace_transactions() -> list[XcpTransactionEvent]:
+    return [
+        _xcp_transaction(0xFD, "FD", "FF091D0000", source="transport.xcp.trace", timestamp=0.0),
+        _xcp_transaction(
+            0xF4, "F40400000004", "FF11223344", source="transport.xcp.trace", timestamp=0.1
+        ),
+        _xcp_transaction(0xF8, "F80000", "FE25", source="transport.xcp.trace", timestamp=0.2),
+    ]
+
+
+def sample_xcp_read_measurements() -> list[XcpMeasurementEvent]:
+    return [
+        XcpMeasurementEvent(
+            response_id=XCP_DEFAULT_RESPONSE_ID,
+            pid=0x00,
+            data=bytes.fromhex("11223344"),
+            source="transport.xcp.read",
+            timestamp=0.0,
+        ),
+        XcpMeasurementEvent(
+            response_id=XCP_DEFAULT_RESPONSE_ID,
+            pid=0x01,
+            data=bytes.fromhex("AABBCCDD"),
+            source="transport.xcp.read",
+            timestamp=0.1,
         ),
     ]
