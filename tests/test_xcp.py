@@ -199,6 +199,24 @@ class XcpTransportTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["payload"]["command_name"], "CONNECT")
 
+    def test_scan_dry_run_plans_connect_without_transmit(self) -> None:
+        # No backend env needed: dry-run never opens the transport.
+        exit_code, stdout, _ = run_cli("xcp", "scan", "vcan0", "--dry-run", "--json")
+        self.assertEqual(exit_code, 0)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "dry_run")
+        self.assertEqual(data["responder_count"], 0)
+        self.assertEqual(bytes.fromhex(data["planned_frame"]["data"]), bytes([0xFF, 0x00]))
+
+    def test_scan_dry_run_marks_extended_id(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "xcp", "scan", "vcan0", "--request-id", "0x18DAF110", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, 0)
+        planned = json.loads(stdout)["data"]["planned_frame"]
+        self.assertTrue(planned["is_extended_id"])
+        self.assertEqual(planned["arbitration_id"], 0x18DAF110)
+
 
 class XcpMcpTests(unittest.TestCase):
     def test_tools_exposed_and_argv(self) -> None:
@@ -207,7 +225,22 @@ class XcpMcpTests(unittest.TestCase):
         for tool in ("xcp_scan", "xcp_trace", "xcp_read", "xcp_commands"):
             self.assertIn(tool, _TOOL_NAMES)
         self.assertEqual(
-            _build_argv("xcp_scan", {"interface": "can0", "request_id": "0x3E0"}),
-            ["xcp", "scan", "can0", "--request-id", "0x3E0", "--json"],
+            _build_argv(
+                "xcp_scan",
+                {"interface": "can0", "request_id": "0x3E0", "ack_active": True, "dry_run": False},
+            ),
+            ["xcp", "scan", "can0", "--request-id", "0x3E0", "--ack-active", "--json"],
         )
         self.assertEqual(_build_argv("xcp_commands", {}), ["xcp", "commands", "--json"])
+
+    def test_scan_is_active_transmit_gated(self) -> None:
+        import asyncio
+
+        from canarchy.mcp_server import _ACTIVE_TRANSMIT_TOOLS, handle_call_tool
+
+        self.assertIn("xcp_scan", _ACTIVE_TRANSMIT_TOOLS)
+        # Without ack_active the MCP gate refuses before any transport call.
+        result = asyncio.run(handle_call_tool("xcp_scan", {"interface": "can0"}))
+        payload = json.loads(result[0].text)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "ACTIVE_TRANSMIT_REQUIRES_ACK")

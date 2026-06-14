@@ -17,10 +17,11 @@
 | `REQ-XCP-03` | Trace pairs command/response | `TEST-XCP-04`, `TEST-XCP-08` |
 | `REQ-XCP-04` | Read surfaces DAQ DTOs | `TEST-XCP-05`, `TEST-XCP-08` |
 | `REQ-XCP-05` | Active-transmit safety on scan | `TEST-XCP-11` |
-| `REQ-XCP-06` | Request/response id defaults + overrides | `TEST-XCP-07`, `TEST-XCP-12` |
+| `REQ-XCP-05a` | `xcp scan --dry-run` plans without transmit | `TEST-XCP-13` |
+| `REQ-XCP-06` | Request/response id defaults + overrides | `TEST-XCP-07`, `TEST-XCP-12`, `TEST-XCP-13` |
 | `REQ-XCP-07` | Invalid id structured error | `TEST-XCP-09` |
 | `REQ-XCP-08` | Scaffold backend sample data | `TEST-XCP-07`, `TEST-XCP-08` |
-| `REQ-XCP-09` | MCP tool exposure | `TEST-XCP-12` |
+| `REQ-XCP-09` | MCP tool exposure + active gate | `TEST-XCP-12`, `TEST-XCP-14` |
 
 ## Test Cases
 
@@ -162,6 +163,30 @@ Then   the system shall exit 1 with an error code of `ACTIVE_ACK_REQUIRED`
 Given  the MCP tool registry
 Then   `xcp_scan`, `xcp_trace`, `xcp_read`, and `xcp_commands` shall be registered tools
 And    `_build_argv` shall map them to the corresponding CLI argv
+```
+
+**Fixture:** none.
+
+---
+
+### TEST-XCP-13 — `xcp scan --dry-run` plans the CONNECT without transmitting
+
+```gherkin
+Given  a 29-bit request id and `--dry-run`
+When   `canarchy xcp scan vcan0 --request-id 0x18DAF110 --dry-run --json` is invoked
+Then   the system shall report mode dry_run with a planned CONNECT frame marked extended, opening no transport
+```
+
+**Fixture:** none.
+
+---
+
+### TEST-XCP-14 — MCP `xcp_scan` is gated behind active-transmit ack
+
+```gherkin
+Given  the MCP `xcp_scan` tool
+When   it is called without `ack_active=true`
+Then   the system shall refuse with `ACTIVE_TRANSMIT_REQUIRES_ACK` before any transport call
 ```
 
 **Fixture:** none.

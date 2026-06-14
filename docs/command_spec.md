@@ -1038,15 +1038,16 @@ Notes:
 Discover XCP responders by transmitting an XCP CONNECT command.
 
 ```bash
-canarchy xcp scan <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--ack-active] [--json|--jsonl|--text]
+canarchy xcp scan <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--ack-active] [--dry-run] [--json|--jsonl|--text]
 ```
 
 Notes:
 
 * XCP-on-CAN: sends a single CONNECT (`FF 00`) on `--request-id` and reports each command-response object on `--response-id` as an `xcp_transaction` event; a CONNECT positive response is parsed into resources, max-CTO, max-DTO, and protocol/transport versions
 * with the `scaffold` backend, this command emits sample/reference XCP transaction data
-* this is an active command honouring the active-transmit safety model; `--ack-active` requests an interactive `YES` confirmation before the CONNECT is sent
-* `--request-id` / `--response-id` accept decimal or `0x` hex CAN ids (defaults 0x3E0 / 0x3E1); a malformed id returns `XCP_INVALID_ID`
+* this is an active command honouring the active-transmit safety model; `--ack-active` requests an interactive `YES` confirmation before the CONNECT is sent; `--dry-run` plans the CONNECT frame (reported as `planned_frame`, `mode: dry_run`) without opening the transport or transmitting
+* `--request-id` / `--response-id` accept decimal or `0x` hex CAN ids (defaults 0x3E0 / 0x3E1; an extended 29-bit request id is transmitted as an extended frame); a malformed id returns `XCP_INVALID_ID`
+* the `xcp_scan` MCP tool is gated like other active-transmit tools: mandatory `ack_active=true` with `dry_run` defaulting to true
 
 ### xcp trace
 

@@ -37,15 +37,16 @@ JSON/JSONL envelope.
 | `REQ-XCP-03` | Event-driven | When `xcp trace <interface>` is invoked, the system shall pair command CTOs on the request id with the following response CTOs on the response id, emitting named transactions with positive/error status. |
 | `REQ-XCP-04` | Event-driven | When `xcp read <interface>` is invoked, the system shall surface DAQ DTOs on the response id (packet identifier 0x00–0xFB) as raw measurement events, skipping CTO response/error/event/service frames. |
 | `REQ-XCP-05` | Ubiquitous | `xcp scan` shall be an active-transmit command honouring the active-transmit safety model (`--ack-active`, `[safety].require_active_ack`, `YES` confirmation); `xcp trace`, `xcp read`, and `xcp commands` shall be passive/reference. |
+| `REQ-XCP-05a` | Optional feature | Where `xcp scan --dry-run` is specified, the system shall report the planned CONNECT frame (`planned_frame`, `mode: dry_run`) without opening the transport or transmitting. |
 | `REQ-XCP-06` | Optional feature | Where `--request-id` / `--response-id` are supplied, the system shall use those CAN ids; otherwise it shall default to 0x3E0 (request) and 0x3E1 (response). |
 | `REQ-XCP-07` | Unwanted behaviour | If a supplied request/response id is not a valid CAN id, the system shall return a structured error with code `XCP_INVALID_ID` and exit code 1. |
 | `REQ-XCP-08` | State-driven | While the scaffold transport backend is active, the system shall return deterministic sample XCP transactions/measurements instead of opening a live interface. |
-| `REQ-XCP-09` | Ubiquitous | `xcp scan`, `xcp trace`, `xcp read`, and `xcp commands` shall be exposed as MCP tools (`xcp_scan`, `xcp_trace`, `xcp_read`, `xcp_commands`). |
+| `REQ-XCP-09` | Ubiquitous | `xcp scan`, `xcp trace`, `xcp read`, and `xcp commands` shall be exposed as MCP tools (`xcp_scan`, `xcp_trace`, `xcp_read`, `xcp_commands`); the active `xcp_scan` tool shall be in `_ACTIVE_TRANSMIT_TOOLS` with a mandatory `ack_active=true` and `dry_run` defaulting to true. |
 
 ## Command Surface
 
 ```text
-canarchy xcp scan  <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--ack-active] [--json|--jsonl|--text]
+canarchy xcp scan  <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--ack-active] [--dry-run] [--json|--jsonl|--text]
 canarchy xcp trace <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--json|--jsonl|--text]
 canarchy xcp read  <interface> [--response-id 0x3E1] [--json|--jsonl|--text]
 canarchy xcp commands [--json|--jsonl|--text]

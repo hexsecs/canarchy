@@ -136,7 +136,7 @@ landing here.
 | CLI surface | Rationale |
 |-------------|-----------|
 | Transport reads (`capture`, `filter`, `stats`, `capture-info`, `decode`, `encode`) | Non-interactive commands with bounded JSON envelopes. |
-| MCP-gated active transmit (`send`, `generate`, `gateway`, `replay`, `sequence replay`) | In `_ACTIVE_TRANSMIT_TOOLS`: schemas require `ack_active=true` and default `dry_run=true`. |
+| MCP-gated active transmit (`send`, `generate`, `gateway`, `replay`, `sequence replay`, `xcp scan`) | In `_ACTIVE_TRANSMIT_TOOLS`: schemas require `ack_active=true` and default `dry_run=true`. `xcp scan` transmits an XCP CONNECT, so its MCP tool is gated and `--dry-run` plans the frame without sending. |
 | Fuzzing (`fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz signal`, `fuzz spn`) | In `_ACTIVE_TRANSMIT_TOOLS`: mandatory `ack_active=true`, default `dry_run=true`. |
 | DBC + DBC provider (`dbc inspect`, `dbc signals`, `dbc convert`, `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list/prune/refresh`) | Bounded inspection, conversion, and provider/cache workflows. `dbc_inspect.layout=true` exposes cantools-rendered bit layouts without ANSI parsing; `dbc_convert` returns the serialized database (or writes it to `out`) — file generation is a developer action, so no active-transmit gate applies. |
 | Datasets provider/cache/fetch/search/inspect/convert | Metadata and local conversion workflows return bounded JSON envelopes. |
@@ -145,7 +145,7 @@ landing here.
 | Plugin inspection (`plugins list`, `plugins info`) | Read-only discovery and metadata inspection with bounded JSON envelopes. |
 | J1939 analysis (`j1939 decode/pgn/spn/tp sessions/tp compare/dm1/faults/summary/inventory/compare/monitor`) | File-backed analysis commands are safe, bounded, and deterministic. |
 | Reverse-engineering helpers (`re signals/counters/entropy/correlate/anomalies/match-dbc/shortlist-dbc`) | File-backed analysis commands are safe and deterministic. |
-| Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`), XCP (`xcp scan/trace/read/commands`) | Bounded, non-interactive envelopes. |
+| Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`), XCP (`xcp trace/read/commands`) | Bounded, non-interactive envelopes. |
 
 ### Excluded
 

@@ -70,6 +70,7 @@ from canarchy.uds import uds_decoder_backend, uds_services_payload
 from canarchy.xcp import (
     XCP_DEFAULT_REQUEST_ID,
     XCP_DEFAULT_RESPONSE_ID,
+    connect_request_frame,
     xcp_commands_payload,
 )
 
@@ -1167,6 +1168,11 @@ def build_parser() -> CanarchyArgumentParser:
     xcp_scan.add_argument("interface", nargs="?")
     _add_xcp_id_arguments(xcp_scan)
     add_active_ack_argument(xcp_scan)
+    xcp_scan.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="plan the CONNECT frame without opening the transport or transmitting",
+    )
     add_output_arguments(xcp_scan)
     xcp_scan.set_defaults(command="xcp scan")
 
@@ -2028,6 +2034,8 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "simulate" and getattr(args, "dry_run", False):
         return
     if args.command == "send" and getattr(args, "dry_run", False):
+        return
+    if args.command == "xcp scan" and getattr(args, "dry_run", False):
         return
     raise CommandError(
         command=args.command,
@@ -5500,6 +5508,27 @@ def xcp_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     )
 
     if args.command == "xcp scan":
+        if getattr(args, "dry_run", False):
+            frame = connect_request_frame(args.interface, request_id)
+            return (
+                {
+                    "interface": args.interface,
+                    "mode": "dry_run",
+                    "request_id": request_id,
+                    "response_id": response_id,
+                    "responder_count": 0,
+                    "planned_frame": {
+                        "arbitration_id": frame.arbitration_id,
+                        "is_extended_id": frame.is_extended_id,
+                        "data": frame.data.hex(),
+                    },
+                },
+                [],
+                [
+                    f"ACTIVE_TRANSMIT_DRY_RUN: planned XCP CONNECT to id "
+                    f"0x{request_id:X} on `{args.interface}`; no frame sent."
+                ],
+            )
         enforce_active_transmit_safety(args)
         events = transport.xcp_scan_events(
             args.interface, request_id=request_id, response_id=response_id

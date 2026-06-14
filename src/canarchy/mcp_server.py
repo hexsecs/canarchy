@@ -821,7 +821,10 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="xcp_scan",
-        description="Scan for XCP responders on a CAN interface via the CONNECT command.",
+        description=(
+            "Scan for XCP responders on a CAN interface via the CONNECT command. "
+            "Active transmit: mandatory `ack_active=true`; `dry_run` defaults to true."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -837,7 +840,16 @@ _TOOLS: list[types.Tool] = [
                     "type": "string",
                     "description": "Slave response CAN id (decimal or 0x hex; default 0x3E1)",
                 },
+                "ack_active": {
+                    "type": "boolean",
+                    "description": "Must be true to authorise transmitting the CONNECT frame",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Plan the CONNECT without transmitting (defaults to true)",
+                },
             },
+            "required": ["ack_active"],
         },
     ),
     types.Tool(
@@ -1999,6 +2011,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--request-id", str(a["request_id"])]
             if a.get("response_id"):
                 argv += ["--response-id", str(a["response_id"])]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
             return argv + ["--json"]
         case "xcp_trace":
             argv = ["xcp", "trace"]
@@ -2324,6 +2340,7 @@ _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
         "fuzz_spn",
         "replay",
         "sequence_replay",
+        "xcp_scan",
     }
 )
 

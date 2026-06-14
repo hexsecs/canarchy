@@ -26,6 +26,9 @@ from canarchy.models import CanFrame, XcpMeasurementEvent, XcpTransactionEvent
 XCP_DEFAULT_REQUEST_ID = 0x3E0
 XCP_DEFAULT_RESPONSE_ID = 0x3E1
 
+# Largest standard (11-bit) CAN id; anything above is an extended (29-bit) id.
+_CAN_SFF_MAX = 0x7FF
+
 # Response packet identifiers (first byte of a slave CTO response).
 PID_RES = 0xFF  # positive response
 PID_ERR = 0xFE  # error
@@ -159,6 +162,7 @@ def connect_request_frame(
         arbitration_id=request_id,
         data=bytes([CMD_CONNECT, CONNECT_MODE_NORMAL]),
         interface=interface,
+        is_extended_id=request_id > _CAN_SFF_MAX,
     )
 
 
