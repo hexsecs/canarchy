@@ -454,6 +454,7 @@ def _run_sequence(
     *,
     source: str,
     connect=_connect,
+    skip_on_timeout: bool = False,
 ) -> list[UdsTransactionEvent]:
     sock = connect(target)
     conn = DoipConnection(sock)
@@ -464,8 +465,10 @@ def _run_sequence(
             try:
                 response = _diagnostic_exchange(conn, target, request)
             except DoipError as exc:
-                if exc.code == "DOIP_TIMEOUT":
-                    # A silent probe: no response to this request, keep scanning.
+                # `uds scan` treats a per-probe timeout as a silent ECU and keeps
+                # probing; `uds trace` is a deliberate exchange, so a timeout is a
+                # real DOIP_TIMEOUT error rather than an empty successful trace.
+                if exc.code == "DOIP_TIMEOUT" and skip_on_timeout:
                     continue
                 raise
             if not response:
@@ -493,7 +496,9 @@ def doip_scan_transactions(
     target: DoipTarget, *, source: str = "transport.doip.scan", connect=_connect
 ) -> list[UdsTransactionEvent]:
     """Probe default / programming / extended sessions on a DoIP ECU."""
-    return _run_sequence(target, _SCAN_REQUESTS, source=source, connect=connect)
+    return _run_sequence(
+        target, _SCAN_REQUESTS, source=source, connect=connect, skip_on_timeout=True
+    )
 
 
 def doip_trace_transactions(

@@ -120,7 +120,9 @@ table. All three are identical in shape to the CAN-backed `uds` output.
 
 A per-probe read timeout during `uds scan` is treated as a silent ECU and that
 probe is skipped, not raised — only an initial/total failure surfaces as an
-error.
+error. `uds trace` is a deliberate two-request exchange rather than a probe
+sweep, so a timeout there surfaces as `DOIP_TIMEOUT` (exit 2) instead of an empty
+successful trace.
 
 ## Deferred Decisions
 

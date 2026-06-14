@@ -267,6 +267,19 @@ class DoipCliTests(unittest.TestCase):
         data = json.loads(stdout)["data"]
         self.assertEqual(data["responder_count"], 2)
 
+    def test_trace_surfaces_timeout_instead_of_empty_success(self) -> None:
+        # A DoIP endpoint that routing-activates but never answers the trace
+        # exchange must surface DOIP_TIMEOUT, not report an empty successful
+        # trace (the silent-skip contract is scan-only).
+        with DoipResponder({}, silent=(b"\x10\x01", b"\x3e\x00")) as server:
+            exit_code, stdout, _ = run_cli(
+                "uds", "trace", self._target(server.port, timeout=0.3), "--json"
+            )
+        self.assertEqual(exit_code, 2)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "DOIP_TIMEOUT")
+
     def test_invalid_target_returns_user_error(self) -> None:
         exit_code, stdout, _ = run_cli("uds", "scan", "doip://127.0.0.1:13400", "--json")
         self.assertEqual(exit_code, 1)
