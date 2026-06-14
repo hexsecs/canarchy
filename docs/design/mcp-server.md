@@ -35,7 +35,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-12` | Ubiquitous | File-backed J1939 tools (`j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_tp_compare`, `j1939_dm1`, `j1939_faults`, `j1939_summary`, `j1939_inventory`, `j1939_compare`) shall expose optional `max_frames` (integer) and `seconds` (number) parameters that bound analysis to the first N frames or first T seconds of the capture, respectively. |
 | `REQ-MCP-13` | Ubiquitous | Dataset provider workflows selected for MCP shall expose provider list, search, inspect, fetch, cache list, cache refresh, conversion, replay file listing, and safe replay planning tools while excluding streaming dataset frame output. |
 | `REQ-MCP-14` | Ubiquitous | Skills provider workflows selected for MCP shall expose provider list, search, fetch, cache list, and cache refresh tools while preserving the same CLI result envelope. |
-| `REQ-MCP-15` | Ubiquitous | Reverse-engineering helpers selected for MCP shall include `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, and `re shortlist-dbc`. |
+| `REQ-MCP-15` | Ubiquitous | Reverse-engineering helpers selected for MCP shall include `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, `re shortlist-dbc`, and `re suggest` (heuristic path only; the external `--llm` enrichment is CLI-only). |
 | `REQ-MCP-16` | Ubiquitous | Every implemented CLI command shall be either exposed as an MCP tool or listed in the documented exclusion set (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`, `dbc generate-c`); a test shall enforce this invariant so new commands cannot silently drift out of coverage. |
 | `REQ-MCP-20` | Ubiquitous | No tool response shall exceed the configured output cap (`CANARCHY_MCP_MAX_RESPONSE_BYTES`, default 512000 bytes). Oversized list-shaped data shall be truncated with `data.truncated: true` and a `data.truncation` block recording, per trimmed list, the original `total_items` and `returned_items`, plus a hint pointing at the CLI for the full result; data that cannot be reduced by list truncation shall be replaced by a stub that preserves the envelope. |
 | `REQ-MCP-21` | Unwanted behaviour | If a tool call raises an unexpected exception, the server shall return a canonical envelope with error code `TOOL_EXECUTION_ERROR` instead of propagating the exception to the stdio transport, so one failing or oversized call never makes the remaining tools unavailable for the session. |
@@ -112,6 +112,7 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `re entropy` | `re_entropy` |
 | `re match-dbc` | `re_match_dbc` |
 | `re shortlist-dbc` | `re_shortlist_dbc` |
+| `re suggest` | `re_suggest` (heuristic path only) |
 | `dbc signals` | `dbc_signals` |
 | `doctor` | `doctor` |
 | `sequence replay` | `sequence_replay` |
@@ -144,7 +145,7 @@ landing here.
 | Skills provider/cache/search/fetch | Non-interactive provider workflows with canonical JSON envelopes. |
 | Plugin inspection (`plugins list`, `plugins info`) | Read-only discovery and metadata inspection with bounded JSON envelopes. |
 | J1939 analysis (`j1939 decode/pgn/spn/tp sessions/tp compare/dm1/faults/summary/inventory/compare/monitor`) | File-backed analysis commands are safe, bounded, and deterministic. |
-| Reverse-engineering helpers (`re signals/counters/entropy/correlate/anomalies/match-dbc/shortlist-dbc`) | File-backed analysis commands are safe and deterministic. |
+| Reverse-engineering helpers (`re signals/counters/entropy/correlate/anomalies/match-dbc/shortlist-dbc`, and `re suggest` heuristic path) | File-backed analysis commands are safe and deterministic. `re_suggest` exposes the offline heuristic path only; the external `--llm` enrichment is a CLI-only operator action behind explicit confirmation. |
 | Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`), XCP (`xcp trace/read/commands`) | Bounded, non-interactive envelopes. |
 
 ### Excluded

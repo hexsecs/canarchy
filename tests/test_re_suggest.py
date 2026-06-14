@@ -53,13 +53,45 @@ class HeuristicSuggestionTests(unittest.TestCase):
         self.assertTrue(any(s["source"] == "spn" for s in result["suggestions"]))
 
     def test_dbc_reference_suggests_message_signal(self) -> None:
-        dbc_signals = {0x18F00400: [{"name": "MyEngineRpm", "length": 8, "unit": "rpm"}]}
+        dbc_signals = {
+            0x18F00400: [
+                {
+                    "name": "MyEngineRpm",
+                    "length": 8,
+                    "start": 24,
+                    "byte_order": "little_endian",
+                    "unit": "rpm",
+                }
+            ]
+        }
         result = suggest_for_candidate(
             _candidate(pgn=None, pgn_label=None, pgn_name=None), dbc_signals
         )
         names = [s["name"] for s in result["suggestions"]]
         self.assertIn("MyEngineRpm", names)
         self.assertEqual(result["suggested_source"], "dbc")
+
+    def test_dbc_suggestion_respects_bit_position(self) -> None:
+        # Two same-length signals: only the one overlapping the candidate's bytes
+        # should be suggested (a byte-7 candidate is not the byte-0 signal).
+        dbc_signals = {
+            0x200: [
+                {"name": "FirstByteSig", "length": 8, "start": 0, "byte_order": "little_endian"},
+                {"name": "ByteSevenSig", "length": 8, "start": 56, "byte_order": "little_endian"},
+            ]
+        }
+        candidate = _candidate(
+            arbitration_id=0x200,
+            start_bit=56,
+            bit_length=8,
+            pgn=None,
+            pgn_label=None,
+            pgn_name=None,
+        )
+        result = suggest_for_candidate(candidate, dbc_signals)
+        dbc_names = [s["name"] for s in result["suggestions"] if s["source"] == "dbc"]
+        self.assertEqual(dbc_names, ["ByteSevenSig"])
+        self.assertEqual(result["suggested_name"], "ByteSevenSig")
 
     def test_pgn_fallback_when_no_spn_overlap(self) -> None:
         # A bit range with no decodable SPN overlap falls back to the PGN label.
@@ -140,6 +172,29 @@ class CliLlmPathTests(unittest.TestCase):
             )
         self.assertEqual(exit_code, 1)
         self.assertEqual(json.loads(stdout)["errors"][0]["code"], "LLM_PROVIDER_UNSUPPORTED")
+
+    def test_anthropic_client_validates_malformed_response(self) -> None:
+        # A syntactically valid but wrong-shaped provider reply must become a
+        # structured LlmError, not a traceback.
+        import requests
+
+        from canarchy.llm_suggest import LlmError, _AnthropicClient
+
+        class _Resp:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return {"content": [{"text": '{"not": "a list"}'}]}
+
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch.object(requests, "post", return_value=_Resp()),
+        ):
+            client = _AnthropicClient(model=None)
+            with self.assertRaises(LlmError) as ctx:
+                client.suggest([{"index": 0, "arbitration_id_hex": "0x1"}])
+        self.assertEqual(ctx.exception.code, "LLM_REQUEST_FAILED")
 
 
 class McpExposureTests(unittest.TestCase):

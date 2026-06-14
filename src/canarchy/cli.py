@@ -6745,7 +6745,13 @@ def _re_suggest_payload(
         database = load_runtime_database(reference_dbc)
         dbc_signals_by_id = {
             int(message.frame_id): [
-                {"name": signal.name, "length": int(signal.length), "unit": signal.unit or None}
+                {
+                    "name": signal.name,
+                    "length": int(signal.length),
+                    "start": int(signal.start),
+                    "byte_order": str(signal.byte_order),
+                    "unit": signal.unit or None,
+                }
                 for signal in message.signals
             ]
             for message in database.messages

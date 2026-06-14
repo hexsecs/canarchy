@@ -102,20 +102,26 @@ class _AnthropicClient:
             response.raise_for_status()
             text = response.json()["content"][0]["text"]
             proposals = json.loads(text)
+            if not isinstance(proposals, list):
+                raise ValueError("expected a JSON array of proposals")
+            # Validate the shape here, inside the error boundary, so a malformed
+            # but syntactically valid response becomes a structured LlmError
+            # rather than a traceback in `re suggest --llm`.
+            parsed: dict[int, dict[str, str]] = {}
+            for item in proposals:
+                if not isinstance(item, dict) or "index" not in item or "name" not in item:
+                    continue
+                parsed[int(item["index"])] = {
+                    "name": str(item["name"]),
+                    "rationale": str(item.get("rationale", "")),
+                }
         except Exception as exc:
             raise LlmError(
                 code="LLM_REQUEST_FAILED",
                 message=f"The anthropic LLM request failed: {exc}.",
                 hint="Check connectivity and the API key, or run without --llm.",
             ) from exc
-        return {
-            int(item["index"]): {
-                "name": str(item["name"]),
-                "rationale": str(item.get("rationale", "")),
-            }
-            for item in proposals
-            if "index" in item and "name" in item
-        }
+        return parsed
 
 
 def _build_client(provider: str, model: str | None) -> LlmClient:

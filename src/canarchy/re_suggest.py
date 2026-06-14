@@ -59,6 +59,19 @@ def _overlap_bits(a_start: int, a_len: int, b_start: int, b_len: int) -> int:
     return max(0, min(a_start + a_len, b_start + b_len) - max(a_start, b_start))
 
 
+def _signal_byte_span(start: int, length: int, byte_order: str) -> tuple[int, int]:
+    """Return the inclusive ``(first_byte, last_byte)`` a DBC signal occupies.
+
+    Little-endian uses the exact LSB0 span; big-endian (Motorola sawtooth, where
+    ``start`` is the most-significant bit) is approximated as ``ceil(length/8)``
+    bytes forward from the start byte — precise enough to rank overlap.
+    """
+    if "big" in (byte_order or "").lower():
+        first = start // 8
+        return first, first + (length + 7) // 8 - 1
+    return start // 8, (start + length - 1) // 8
+
+
 def _template_name(candidate: dict[str, Any]) -> str:
     change_rate = float(candidate.get("change_rate", 0.0) or 0.0)
     if change_rate < 0.05:
@@ -103,10 +116,20 @@ def _dbc_suggestions(
     if not signals:
         return []
     bit_length = int(candidate["bit_length"])
+    start_bit = int(candidate["start_bit"])
+    candidate_first, candidate_last = start_bit // 8, (start_bit + bit_length - 1) // 8
     observed_max = int(candidate.get("observed_max", 0) or 0)
     suggestions: list[dict[str, Any]] = []
     for signal in signals:
         length = int(signal["length"])
+        signal_first, signal_last = _signal_byte_span(
+            int(signal.get("start", 0)), length, str(signal.get("byte_order", "little_endian"))
+        )
+        overlap = min(candidate_last, signal_last) - max(candidate_first, signal_first) + 1
+        if overlap <= 0:
+            # A signal whose bytes do not overlap the candidate is not a name for it.
+            continue
+        overlap_fraction = overlap / (signal_last - signal_first + 1)
         length_match = (
             1.0 if length == bit_length else max(0.0, 1.0 - abs(length - bit_length) / 8.0)
         )
@@ -115,7 +138,16 @@ def _dbc_suggestions(
             {
                 "name": signal["name"],
                 "source": "dbc",
-                "confidence": round(0.5 + 0.35 * length_match + (0.05 if fits else 0.0), 3),
+                "confidence": round(
+                    min(
+                        0.95,
+                        0.5
+                        + 0.25 * length_match
+                        + 0.15 * overlap_fraction
+                        + (0.05 if fits else 0.0),
+                    ),
+                    3,
+                ),
                 "unit": signal.get("unit"),
                 "length": length,
             }
