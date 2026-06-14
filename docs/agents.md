@@ -128,6 +128,7 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `re_signals` | `canarchy re signals` |
 | `re_corpus` | `canarchy re corpus` |
 | `plot` | `canarchy plot` |
+| `cannelloni_decode` | `canarchy cannelloni decode` |
 | `datasets_convert` | `canarchy datasets convert` |
 | `datasets_replay_files` | `canarchy datasets replay --list-files` |
 | `skills_provider_list` | `canarchy skills provider list` |
@@ -148,6 +149,7 @@ Current exclusions:
 
 * dataset streaming commands that emit frame records, such as `datasets stream` and non-dry-run `datasets replay`
 * interactive or service commands such as `shell`, `tui`, `web serve`, `mcp serve`, and `mcp install`
+* `cannelloni send` — active UDP egress to an arbitrary host:port; CLI-only operator action (`cannelloni decode` is exposed)
 * `completion`, which emits a raw shell script rather than a JSON envelope
 * `dbc generate-c`, which generates C source/header files to disk and is a developer action
 * `plugins enable` and `plugins disable`, which write user plugin configuration

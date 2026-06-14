@@ -82,6 +82,7 @@ _EXPECTED_TOOLS = {
     "fuzz_spn",
     "plugins_list",
     "plugins_info",
+    "cannelloni_decode",
 }
 
 
@@ -116,6 +117,7 @@ _MCP_EXCLUDED_COMMANDS = {
     "mcp serve",
     "mcp install",
     "web serve",  # long-running HTTP/WebSocket front end, like shell/tui
+    "cannelloni send",  # active UDP egress to an arbitrary host; CLI-only operator action
     "completion",
     "datasets stream",
     "dbc generate-c",  # file generation is a developer action, not an agent tool call

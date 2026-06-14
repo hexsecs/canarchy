@@ -25,6 +25,7 @@ Implemented and verified in the current codebase:
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
 * `plugins list`, `plugins info`, `plugins enable`, and `plugins disable` for Python entry-point plugin inspection and toggles
 * `web serve` for the read-only browser dashboard over the JSONL event envelope
+* `cannelloni decode` and `cannelloni send` for cannelloni CAN-over-UDP wire-format interop
 * structured JSON and JSONL output
 * explicit error schema and exit codes
 
@@ -365,6 +366,38 @@ Notes:
 * the envelope reports the output file path plus `signals_plotted` and `data_points`
 * `--offset`, `--max-frames`, and `--seconds` bound the analysed window like the rest of the file-backed surface
 * structured errors: `PLOT_DEPENDENCY_MISSING`, `PLOT_ERROR`, `UNSUPPORTED_OUTPUT_FORMAT`
+
+### cannelloni decode
+
+Decode a captured cannelloni CAN-over-UDP datagram payload into CAN frames.
+
+```bash
+canarchy cannelloni decode --file <payload> [--json|--jsonl|--text]
+```
+
+Notes:
+
+* reads one or more concatenated cannelloni datagrams (wire version 2) from a raw payload file and emits canonical `frame` events
+* passive and file-backed; supports classic CAN, extended, RTR, error, and CAN FD frames
+* structured errors: `CANNELLONI_TRUNCATED`, `CANNELLONI_VERSION_UNSUPPORTED`, `CANNELLONI_FILE_UNREADABLE`
+
+### cannelloni send
+
+Transmit a capture to a cannelloni endpoint as UDP datagrams.
+
+```bash
+canarchy cannelloni send <host:port> --file <capture> [--seq-no <n>] [--max-count <n>] \
+    [--rate <hz>] [--ack-active] [--dry-run] [--offset <n>] [--max-frames <n>] [--seconds <s>] \
+    [--json|--jsonl|--text]
+```
+
+Notes:
+
+* active-transmit path gated by the [active-transmit safety design](design/active-transmit-safety.md) (`--ack-active`, `YES` confirmation, `[safety].require_active_ack`)
+* `--dry-run` plans the datagrams (returned as hex in `data.datagrams`) without opening a socket
+* `--max-count` bounds frames per datagram (default 64); `--rate` paces datagrams per second; `--seq-no` sets the starting cannelloni sequence number
+* CLI-only (not an MCP tool): active UDP egress to an arbitrary host
+* structured errors: `CANNELLONI_INVALID_TARGET` (exit 1), `CANNELLONI_SEND_FAILED` (exit 2)
 
 ### web serve
 
