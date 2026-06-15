@@ -9,6 +9,7 @@ import json
 import logging
 import math
 import os
+import random
 import shlex
 import sys
 import time
@@ -66,6 +67,7 @@ from canarchy.transport import (
 )
 from canarchy.tui import run_tui
 from canarchy.doip import is_doip_target
+from canarchy.fuzz_feedback import SIGNAL_CATEGORIES
 from canarchy.uds import uds_decoder_backend, uds_services_payload
 from canarchy.xcp import (
     XCP_DEFAULT_REQUEST_ID,
@@ -157,6 +159,7 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "fuzz arbitration-id",
     "fuzz signal",
     "fuzz spn",
+    "fuzz guided",
     "replay",
     "sequence replay",
 }
@@ -167,6 +170,7 @@ FUZZ_COMMANDS = {
     "fuzz signal",
     "fuzz spn",
 }
+FUZZ_GUIDED_COMMANDS = {"fuzz guided"}
 SEQUENCE_COMMANDS = {"sequence replay"}
 IMPLEMENTED_COMMANDS = (
     TRANSPORT_COMMANDS
@@ -183,6 +187,7 @@ IMPLEMENTED_COMMANDS = (
     | DOCTOR_COMMANDS
     | RE_COMMANDS
     | FUZZ_COMMANDS
+    | FUZZ_GUIDED_COMMANDS
     | SEQUENCE_COMMANDS
     | CANNELLONI_COMMANDS
     | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export", "plot", "web serve"}
@@ -1655,6 +1660,46 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(fuzz_spn)
     fuzz_spn.set_defaults(command="fuzz spn")
 
+    fuzz_guided = fuzz_subparsers.add_parser(
+        "guided", help="response-feedback guided fuzzing against an ECU target"
+    )
+    fuzz_guided.add_argument("interface", nargs="?")
+    fuzz_guided.add_argument(
+        "--id",
+        dest="arbitration_id",
+        required=True,
+        help="arbitration id to transmit fuzzed payloads on (decimal or 0x hex)",
+    )
+    fuzz_guided.add_argument("--extended", action="store_true", help="send on a 29-bit extended id")
+    fuzz_guided.add_argument(
+        "--signals",
+        default=",".join(SIGNAL_CATEGORIES),
+        help=f"comma list of feedback signals to use (default: {','.join(SIGNAL_CATEGORIES)})",
+    )
+    fuzz_guided.add_argument(
+        "--corpus", default=None, help="seed-corpus directory (persisted/reused)"
+    )
+    fuzz_guided.add_argument(
+        "--seed-data", default=None, help="initial seed payload as hex (defaults to 8 zero bytes)"
+    )
+    fuzz_guided.add_argument(
+        "--max-iterations", type=int, default=200, help="campaign iteration budget (default 200)"
+    )
+    fuzz_guided.add_argument(
+        "--max-seconds", type=float, default=None, help="campaign wall-clock budget in seconds"
+    )
+    fuzz_guided.add_argument(
+        "--max-corpus", type=int, default=64, help="maximum retained corpus seeds (default 64)"
+    )
+    fuzz_guided.add_argument("--rate", type=float, default=100.0, help="iterations per second")
+    fuzz_guided.add_argument("--seed", type=int, default=0, help="deterministic RNG seed")
+    add_active_ack_argument(fuzz_guided)
+    fuzz_guided.add_argument(
+        "--dry-run", action="store_true", help="plan the campaign without opening the transport"
+    )
+    add_output_arguments(fuzz_guided)
+    fuzz_guided.set_defaults(command="fuzz guided")
+
     config = subparsers.add_parser("config", help="inspect CANarchy configuration")
     config_subparsers = config.add_subparsers(dest="config_action", required=True)
     config_show = config_subparsers.add_parser(
@@ -1884,6 +1929,12 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `fuzz {sub}` will transmit mutated frames on `{target}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command == "fuzz guided":
+        return (
+            f"warning: `fuzz guided` will transmit mutated frames on interface "
+            f"`{args.interface}` and observe the target's responses; "
+            "use intentionally on a controlled bus."
+        )
     if args.command == "replay":
         return (
             f"warning: `replay` will transmit recorded frames on interface `{args.interface}`; "
@@ -1923,6 +1974,8 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         target = getattr(args, "interface", None) or getattr(args, "file", "<input>")
         sub = args.command.removeprefix("fuzz ")
         return f"confirm: type YES to fuzz `{sub}` on `{target}`: "
+    if args.command == "fuzz guided":
+        return f"confirm: type YES to run guided fuzzing on `{args.interface}`: "
     if args.command == "replay":
         return f"confirm: type YES to replay frames on `{args.interface}`: "
     if args.command == "sequence replay":
@@ -1943,6 +1996,7 @@ INTERFACE_FALLBACK_COMMANDS = {
     "xcp scan",
     "xcp trace",
     "xcp read",
+    "fuzz guided",
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
@@ -2075,6 +2129,8 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "send" and getattr(args, "dry_run", False):
         return
     if args.command == "xcp scan" and getattr(args, "dry_run", False):
+        return
+    if args.command == "fuzz guided" and getattr(args, "dry_run", False):
         return
     raise CommandError(
         command=args.command,
@@ -5472,7 +5528,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     raise AssertionError(f"unsupported uds command: {args.command}")
 
 
-def _parse_can_id(value: str, *, command: str, name: str) -> int:
+def _parse_can_id(value: str, *, command: str, name: str, code: str = "XCP_INVALID_ID") -> int:
     try:
         parsed = int(str(value), 0)
     except ValueError as exc:
@@ -5481,7 +5537,7 @@ def _parse_can_id(value: str, *, command: str, name: str) -> int:
             exit_code=EXIT_USER_ERROR,
             errors=[
                 ErrorDetail(
-                    code="XCP_INVALID_ID",
+                    code=code,
                     message=f"{name} {value!r} is not a valid CAN id.",
                     hint="Pass a decimal or 0x-prefixed hex CAN id (e.g. 0x3E0).",
                 )
@@ -5493,7 +5549,7 @@ def _parse_can_id(value: str, *, command: str, name: str) -> int:
             exit_code=EXIT_USER_ERROR,
             errors=[
                 ErrorDetail(
-                    code="XCP_INVALID_ID",
+                    code=code,
                     message=f"{name} 0x{parsed:X} is outside the 29-bit CAN id range.",
                     hint="CAN ids are 0x000-0x1FFFFFFF.",
                 )
@@ -6278,6 +6334,166 @@ def fuzz_payload(
             f"ACTIVE_TRANSMIT_DRY_RUN: {len(frames)} frames planned; no transport opened."
         )
     return data, events, warnings
+
+
+def _fuzz_guided_initial_seeds(args: argparse.Namespace) -> list[bytes]:
+    from canarchy.fuzz_guided import load_corpus
+
+    seeds: list[bytes] = []
+    if getattr(args, "corpus", None):
+        seeds.extend(load_corpus(args.corpus))
+    seed_data = getattr(args, "seed_data", None)
+    if seed_data:
+        try:
+            seeds.append(bytes.fromhex(seed_data))
+        except ValueError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="FUZZ_GUIDED_INVALID_SEED",
+                        message=f"--seed-data {seed_data!r} is not valid hex.",
+                        hint="Pass an even-length hex string, e.g. 0011223344556677.",
+                    )
+                ],
+            ) from exc
+    return seeds or [bytes(8)]
+
+
+def fuzz_guided_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.fuzz_feedback import SIGNAL_CATEGORIES, ResponseObservation
+    from canarchy.fuzz_guided import run_guided_fuzz, save_corpus
+
+    rate = getattr(args, "rate", None)
+    _validate_fuzz_rate(rate, args.command)
+
+    signal_tokens = [token.strip() for token in str(args.signals).split(",") if token.strip()]
+    unknown = [token for token in signal_tokens if token not in SIGNAL_CATEGORIES]
+    if unknown or not signal_tokens:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="FUZZ_GUIDED_INVALID_SIGNALS",
+                    message=f"Unknown feedback signal(s): {', '.join(unknown) or '(none given)'}.",
+                    hint=f"Choose from: {', '.join(SIGNAL_CATEGORIES)}.",
+                )
+            ],
+        )
+    signals = tuple(signal_tokens)
+
+    if args.max_corpus < 1:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="FUZZ_GUIDED_INVALID_MAX_CORPUS",
+                    message=f"--max-corpus must be at least 1; got {args.max_corpus}.",
+                    hint="Pass a positive --max-corpus (default 64).",
+                )
+            ],
+        )
+
+    arbitration_id = _parse_can_id(
+        args.arbitration_id, command=args.command, name="--id", code="FUZZ_GUIDED_INVALID_ID"
+    )
+    extended = bool(getattr(args, "extended", False))
+    # Classic CAN frames carry at most 8 payload bytes; clamp seeds/mutations.
+    max_payload = 8
+    seeds = [seed[:max_payload] for seed in _fuzz_guided_initial_seeds(args)]
+    dry_run = bool(getattr(args, "dry_run", False))
+
+    base = {
+        "interface": args.interface,
+        "arbitration_id": arbitration_id,
+        "extended": extended,
+        "signals": list(signals),
+        "max_iterations": args.max_iterations,
+        "max_seconds": args.max_seconds,
+        "max_corpus": args.max_corpus,
+        "rate_hz": rate,
+        "seed": args.seed,
+        "corpus": getattr(args, "corpus", None),
+        "initial_seed_count": len(seeds),
+    }
+
+    if dry_run:
+        from canarchy.fuzz_guided import default_mutator
+
+        rng = random.Random(args.seed)
+        planned = [
+            default_mutator(seeds[0], rng, seeds)[:max_payload].hex()
+            for _ in range(min(3, args.max_iterations))
+        ]
+        data = {**base, "mode": "dry_run", "planned_mutations": planned}
+        return (
+            data,
+            [],
+            [
+                f"ACTIVE_TRANSMIT_DRY_RUN: guided campaign planned ({len(seeds)} seed(s), "
+                f"up to {args.max_iterations} iterations); no transport opened."
+            ],
+        )
+
+    enforce_active_transmit_safety(args)
+
+    transport = LocalTransport()
+    gap_s = 1.0 / rate if rate and rate > 0 else 0.0
+
+    def responder(payload: bytes) -> ResponseObservation:
+        if gap_s > 0:
+            time.sleep(gap_s)
+        frame = CanFrame(arbitration_id=arbitration_id, data=payload, is_extended_id=extended)
+        started = time.monotonic()
+        try:
+            # A single send+receive transaction keeps the receive path active
+            # before the probe is transmitted, so a fast response is not missed
+            # and recorded as false silence.
+            frames = transport.transaction(args.interface, frame)
+        except TransportError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_TRANSPORT_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="FUZZ_GUIDED_TRANSPORT_FAILED", message=str(exc), hint=exc.hint
+                    )
+                ],
+            ) from exc
+        elapsed = time.monotonic() - started
+        return ResponseObservation(frames=tuple(frames), elapsed=elapsed, silent=not frames)
+
+    result = run_guided_fuzz(
+        seeds,
+        responder,
+        signals=signals,
+        max_iterations=args.max_iterations,
+        max_seconds=args.max_seconds,
+        max_corpus=args.max_corpus,
+        max_payload=max_payload,
+        rng_seed=args.seed,
+    )
+
+    if getattr(args, "corpus", None):
+        save_corpus(args.corpus, result.seeds)
+
+    events = [finding.to_payload() for finding in result.findings]
+    data = {
+        **base,
+        "mode": "active",
+        "iterations": result.iterations,
+        "new_behaviour_count": result.new_behaviour_count,
+        "corpus_size": result.corpus_size,
+        "unique_markers": result.unique_markers,
+        "stop_reason": result.stop_reason,
+        "findings": events,
+    }
+    return data, events, []
 
 
 def _parse_host_port(target: str, command: str) -> tuple[str, int]:
@@ -7281,6 +7497,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(fuzz_data)
         data["events"] = fuzz_events
         warnings.extend(fuzz_warnings)
+    elif args.command in FUZZ_GUIDED_COMMANDS:
+        guided_data, guided_events, guided_warnings = fuzz_guided_payload(args)
+        data.update(guided_data)
+        data["events"] = guided_events
+        warnings.extend(guided_warnings)
     else:
         data["events"] = build_events(args)
     if args.command not in IMPLEMENTED_COMMANDS:
@@ -7802,6 +8023,36 @@ def format_xcp_table(result: CommandResult) -> list[str]:
                 f"  connect: resources={resources} "
                 f"max_cto={info.get('max_cto')} max_dto={info.get('max_dto')} "
                 f"proto_layer={info.get('protocol_layer_version')}"
+            )
+    return lines
+
+
+def format_fuzz_guided_table(result: CommandResult) -> list[str]:
+    data = result.data
+    lines = [f"command: {result.command}"]
+    lines.append(f"interface: {data.get('interface', 'unknown')}")
+    arb = data.get("arbitration_id")
+    lines.append(f"id: 0x{arb:X}" if isinstance(arb, int) else "id: unknown")
+    lines.append(f"signals: {','.join(data.get('signals', []))}")
+    lines.append(f"mode: {data.get('mode')}")
+    if data.get("mode") == "dry_run":
+        lines.append(f"initial_seeds: {data.get('initial_seed_count', 0)}")
+        for index, mutation in enumerate(data.get("planned_mutations", [])):
+            lines.append(f"  planned[{index}]: {mutation}")
+        return lines
+    lines.append(f"iterations: {data.get('iterations', 0)}")
+    lines.append(f"new_behaviours: {data.get('new_behaviour_count', 0)}")
+    lines.append(f"corpus_size: {data.get('corpus_size', 0)}")
+    lines.append(f"unique_markers: {data.get('unique_markers', 0)}")
+    lines.append(f"stop_reason: {data.get('stop_reason')}")
+    findings = data.get("findings", [])
+    if findings:
+        lines.append("findings:")
+        for finding in findings[:25]:
+            markers = ",".join(finding.get("new_markers", []))
+            lines.append(
+                f"  iter={finding.get('iteration')} gen={finding.get('generation')} "
+                f"gain={finding.get('gain')} markers={markers}"
             )
     return lines
 
@@ -9007,6 +9258,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "text" and result.ok and result.command in RE_COMMANDS:
         for line in format_re_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "fuzz guided":
+        for line in format_fuzz_guided_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

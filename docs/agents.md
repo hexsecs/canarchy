@@ -149,6 +149,7 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `fuzz_arbitration_id` | `canarchy fuzz arbitration-id` |
 | `fuzz_signal` | `canarchy fuzz signal` |
 | `fuzz_spn` | `canarchy fuzz spn` |
+| `fuzz_guided` | `canarchy fuzz guided` |
 
 Current exclusions:
 

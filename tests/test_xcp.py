@@ -183,19 +183,13 @@ class XcpCliScaffoldTests(unittest.TestCase):
 class XcpTransportTests(unittest.TestCase):
     def test_scan_events_send_connect_and_parse_responses(self) -> None:
         transport = LocalTransport(live_backend=PythonCanBackend(bus_interface="virtual"))
-        with (
-            patch.object(transport, "send") as send_mock,
-            patch.object(
-                transport,
-                "capture",
-                return_value=[
-                    _frame(XCP_DEFAULT_RESPONSE_ID, "FF14C00800080101", 0.1),
-                ],
-            ) as capture_mock,
-        ):
+        with patch.object(
+            transport,
+            "transaction",
+            return_value=[_frame(XCP_DEFAULT_RESPONSE_ID, "FF14C00800080101", 0.1)],
+        ) as transaction_mock:
             events = transport.xcp_scan_events("can0")
-        send_mock.assert_called_once()
-        capture_mock.assert_called_once_with("can0")
+        transaction_mock.assert_called_once()
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["payload"]["command_name"], "CONNECT")
 

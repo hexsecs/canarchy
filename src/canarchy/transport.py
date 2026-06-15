@@ -230,6 +230,8 @@ class LiveCanBackend(Protocol):
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame: ...
 
+    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]: ...
+
 
 class ScaffoldCanBackend:
     """Deterministic backend used when no live CAN backend is selected."""
@@ -249,6 +251,10 @@ class ScaffoldCanBackend:
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         self._require_interface(interface)
         return frame.with_interface(interface)
+
+    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]:
+        self._require_interface(interface)
+        return [frame.with_interface(interface) for frame in scaffold_transport_frames()[:2]]
 
     def _require_interface(self, interface: str) -> None:
         if interface.lower() in {"offline0", "down0", "missing0"}:
@@ -315,6 +321,31 @@ class PythonCanBackend:
         finally:
             bus.shutdown()
         return frame.with_interface(interface).with_timestamp(time.time())
+
+    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]:
+        # A single bus serves both directions: it is buffering received frames
+        # from the moment it is opened, *before* the request is transmitted, so a
+        # fast response cannot arrive before the receive path is active (unlike a
+        # send() followed by a separate capture()).
+        frames: list[CanFrame] = []
+        bus = self._open_bus(interface)
+        try:
+            try:
+                bus.send(self._encode_message(frame))
+            except Exception as exc:
+                raise TransportError(
+                    "TRANSPORT_UNAVAILABLE",
+                    f"Failed to send CAN frame on interface '{interface}'.",
+                    "Check that the python-can backend is available and the channel is configured.",
+                ) from exc
+            while len(frames) < self.capture_limit:
+                message = bus.recv(timeout=self.capture_timeout)
+                if message is None:
+                    break
+                frames.append(self._decode_message(message, interface))
+        finally:
+            bus.shutdown()
+        return frames
 
     def _open_bus(self, interface: str):
         if python_can is None:
@@ -624,6 +655,10 @@ class LocalTransport:
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         return self.live_backend.send(interface, frame)
 
+    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]:
+        """Transmit ``frame`` and return the response, receive path active first."""
+        return self.live_backend.transaction(interface, frame)
+
     def gateway_events(
         self,
         src: str,
@@ -836,8 +871,7 @@ class LocalTransport:
             self._require_interface(interface)
             return serialize_events(enrich_uds_transactions(sample_uds_scan_transactions()))
 
-        self.send(interface, diagnostic_session_control_request_frame(interface))
-        frames = self.capture(interface)
+        frames = self.transaction(interface, diagnostic_session_control_request_frame(interface))
         return serialize_events(uds_scan_transactions(frames, source="transport.uds.scan"))
 
     def uds_trace_events(self, interface: str) -> list[dict[str, object]]:
@@ -859,8 +893,7 @@ class LocalTransport:
             self._require_interface(interface)
             return serialize_events([event.to_event() for event in sample_xcp_scan_transactions()])
 
-        self.send(interface, connect_request_frame(interface, request_id))
-        frames = self.capture(interface)
+        frames = self.transaction(interface, connect_request_frame(interface, request_id))
         return serialize_events(
             [
                 event.to_event()

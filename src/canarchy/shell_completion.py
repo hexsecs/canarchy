@@ -42,6 +42,7 @@ SUBCOMMANDS: list[tuple[str, str]] = [
     ("uds", "UDS diagnostic workflows"),
     ("xcp", "XCP measurement/calibration workflows"),
     ("re", "reverse-engineering helpers"),
+    ("fuzz", "active-transmit fuzzing workflows"),
     ("config", "inspect CANarchy configuration"),
     ("doctor", "environment health checks"),
     ("mcp", "MCP server workflows"),

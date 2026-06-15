@@ -1347,6 +1347,25 @@ will land in subsequent PRs: configurable rate-cap ceiling
 allowlist (`--targets`), explicit `KILL_SWITCH_TRIGGERED` alert on
 SIGINT, MCP `ack_active=true` enforcement (#312).
 
+### fuzz guided
+
+Response-feedback coverage-guided fuzzing against an ECU target.
+
+```bash
+canarchy fuzz guided <interface> --id <arb-id> [--signals nrc,pos,dm1,timing,silence]
+                     [--corpus <dir>] [--seed-data <hex>] [--max-iterations <n>]
+                     [--max-seconds <s>] [--max-corpus <n>] [--rate <hz>] [--seed <int>]
+                     [--extended] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* active-transmit: each iteration sends a mutated payload (via the `canarchy.fuzzing` havoc/splice mutators) on `--id` and observes the target's response. Novelty is scored from observed responses — UDS NRCs, UDS positive responses, DM1 fault emergence, response-timing buckets, and silence — selectable via `--signals` (default all)
+* inputs that elicit new behaviour become corpus seeds whose lineage is prioritised for further mutation; `--corpus <dir>` persists the corpus (raw seed files plus a `lineage.json` manifest) and reloads it to resume campaigns; `--max-corpus` caps retained seeds (lowest-scoring pruned first)
+* the campaign is bounded by `--max-iterations` and/or `--max-seconds`; the envelope reports `iterations`, `new_behaviour_count`, `corpus_size`, `unique_markers`, `stop_reason`, and a `findings` list
+* honours the active-transmit safety model (`--ack-active`, `--rate` pacing); `--dry-run` plans the campaign (planned mutations, `mode: dry_run`) without opening the transport. Structured errors: `FUZZ_GUIDED_INVALID_SIGNALS`, `FUZZ_GUIDED_INVALID_ID` (exit 1), `FUZZ_GUIDED_TRANSPORT_FAILED` (exit 2)
+* the `fuzz_guided` MCP tool is gated like other active tools (mandatory `ack_active=true`, `dry_run` defaulting to true)
+
 ### mcp serve
 
 Start the MCP server over stdio.

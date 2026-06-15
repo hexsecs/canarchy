@@ -1657,6 +1657,58 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="fuzz_guided",
+        description=(
+            "Active-transmit response-feedback guided fuzzing gated by "
+            "docs/design/active-transmit-safety.md. Mutates payloads on a CAN id and scores "
+            "novelty from the target's responses (UDS NRCs, DM1 faults, timing, silence). "
+            "Mandatory `ack_active=true`. `dry_run` defaults to true; set to false only after "
+            "explicit human authorisation."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "interface": {"type": "string", "description": "Target CAN interface"},
+                "id": {
+                    "type": "string",
+                    "description": "Arbitration id to transmit on (decimal or 0x hex)",
+                },
+                "extended": {"type": "boolean", "description": "Send on a 29-bit extended id"},
+                "signals": {
+                    "type": "string",
+                    "description": "Comma list of feedback signals (nrc,pos,dm1,timing,silence)",
+                },
+                "corpus": {
+                    "type": "string",
+                    "description": "Seed-corpus directory (persisted/reused)",
+                },
+                "max_iterations": {
+                    "type": "integer",
+                    "description": "Campaign iteration budget",
+                    "default": 200,
+                },
+                "max_seconds": {"type": "number", "description": "Campaign wall-clock budget"},
+                "rate": {
+                    "type": "number",
+                    "description": "Iterations per second",
+                    "default": 100.0,
+                },
+                "seed": {"type": "integer", "description": "Deterministic RNG seed", "default": 0},
+                "ack_active": {
+                    "type": "boolean",
+                    "const": True,
+                    "description": "Mandatory explicit human acknowledgement of active transmission",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "When true, plan the campaign without transmitting",
+                    "default": True,
+                },
+            },
+            "required": ["id", "ack_active"],
+        },
+    ),
+    types.Tool(
         name="plugins_list",
         description="List discovered CANarchy processor, sink, and input plugins.",
         inputSchema={"type": "object", "properties": {}},
@@ -2328,6 +2380,30 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             if a.get("dry_run", True):
                 argv += ["--dry-run"]
             return argv + ["--jsonl"]
+        case "fuzz_guided":
+            argv = ["fuzz", "guided"]
+            if a.get("interface"):
+                argv.append(a["interface"])
+            argv += ["--id", str(a["id"])]
+            if a.get("extended"):
+                argv.append("--extended")
+            if a.get("signals"):
+                argv += ["--signals", str(a["signals"])]
+            if a.get("corpus"):
+                argv += ["--corpus", str(a["corpus"])]
+            if a.get("max_iterations") is not None:
+                argv += ["--max-iterations", str(a["max_iterations"])]
+            if a.get("max_seconds") is not None:
+                argv += ["--max-seconds", str(a["max_seconds"])]
+            if "rate" in a:
+                argv += ["--rate", str(a["rate"])]
+            if "seed" in a:
+                argv += ["--seed", str(a["seed"])]
+            if a.get("ack_active"):
+                argv += ["--ack-active"]
+            if a.get("dry_run", True):
+                argv += ["--dry-run"]
+            return argv + ["--json"]
         case "plugins_list":
             return ["plugins", "list", "--json"]
         case "plugins_info":
@@ -2371,6 +2447,7 @@ _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
         "replay",
         "sequence_replay",
         "xcp_scan",
+        "fuzz_guided",
     }
 )
 
