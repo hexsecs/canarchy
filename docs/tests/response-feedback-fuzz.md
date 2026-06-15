@@ -21,6 +21,8 @@
 | Corpus persistence | Save/load round-trips the corpus | `TEST-GF-09` |
 | CLI dry-run / errors | Plan-only and structured errors | `TEST-GF-10`, `TEST-GF-11`, `TEST-GF-12` |
 | Active-transmit safety + MCP gate | Active run + MCP `ack_active` gate | `TEST-GF-13`, `TEST-GF-14` |
+| Rate pacing bounded by budget | A pacing delay crossing `--max-seconds` ends the run without a further transmission; pacing precedes each transmission | `TEST-GF-15`, `TEST-GF-16` |
+| Extended-id inference | A 29-bit `--id` without `--extended` runs as an extended frame; an out-of-range id is a structured error | `TEST-GF-17`, `TEST-GF-18`, `TEST-GF-19` |
 
 ## Test Cases
 
@@ -187,6 +189,66 @@ Given  the MCP `fuzz_guided` tool
 When   it is called without `ack_active=true`
 Then   the system shall refuse with `ACTIVE_TRANSMIT_REQUIRES_ACK` before any transport call
 And    its argv builder shall default to `--dry-run`
+```
+
+**Fixture:** none.
+
+---
+
+### TEST-GF-15 — Pacing re-checks the budget before transmitting
+
+```gherkin
+Given  an injected clock and sleep where the pacing delay advances the clock past max_seconds
+When   `run_guided_fuzz` runs with `pace_seconds` larger than the remaining `max_seconds`
+Then   the system shall transmit nothing and stop with stop_reason max_seconds
+```
+
+**Fixture:** in-process counting responder with injected `clock` / `sleep`.
+
+---
+
+### TEST-GF-16 — Pacing delays each transmission
+
+```gherkin
+Given  an injected sleep recorder and `pace_seconds` set
+When   `run_guided_fuzz` runs for three transmissions
+Then   the system shall apply one pacing delay before each of the three transmissions
+```
+
+**Fixture:** in-process reactive responder with an injected `sleep`.
+
+---
+
+### TEST-GF-17 — 29-bit `--id` without `--extended` runs as an extended frame
+
+```gherkin
+Given  the scaffold backend and `CANARCHY_MCP_NONINTERACTIVE_ACK=1`
+When   `canarchy fuzz guided vcan0 --id 0x18DAF110 --ack-active --max-iterations 2 --json` is invoked
+Then   the envelope shall report mode active with `extended` true (no uncaught error)
+```
+
+**Fixture:** scaffold transport backend.
+
+---
+
+### TEST-GF-18 — Dry-run infers the extended flag for a 29-bit id
+
+```gherkin
+Given  a 29-bit `--id` and `--dry-run`
+When   `canarchy fuzz guided --id 0x18DAF110 --dry-run --json` is invoked
+Then   the planned campaign shall report `extended` true
+```
+
+**Fixture:** none.
+
+---
+
+### TEST-GF-19 — `--id` outside the 29-bit range returns a structured error
+
+```gherkin
+Given  an `--id` above the 29-bit CAN id ceiling
+When   `canarchy fuzz guided --id 0x20000000 --dry-run --json` is invoked
+Then   the system shall exit 1 with error code `FUZZ_GUIDED_INVALID_ID`
 ```
 
 **Fixture:** none.
