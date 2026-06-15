@@ -20,6 +20,7 @@
 | `REQ-AFL-07` | payloads clamped to 64 bytes | `TEST-AFL-03`, `TEST-AFL-09` |
 | `REQ-AFL-08` | CLI strategies emit frames | `TEST-AFL-10`, `TEST-AFL-11`, `TEST-AFL-13` |
 | `REQ-AFL-09` | splice without corpus errors | `TEST-AFL-12` |
+| `REQ-AFL-10` | 29-bit id inferred extended; out-of-range id errors | `TEST-AFL-14`, `TEST-AFL-15` |
 
 ## Test Cases
 
@@ -84,6 +85,30 @@ Then   the system shall emit 6 frame events
 ```
 
 **Fixture:** `tests/fixtures/complex.candump`.
+
+---
+
+### TEST-AFL-14 — 29-bit `--id` without `--extended` is inferred extended
+
+```gherkin
+Given  `fuzz payload --id 0x18DAF110` without `--extended`
+When   the operator runs the command with `--dry-run`
+Then   the system shall emit frames with `is_extended_id` true and the given arbitration id
+```
+
+**Fixture:** none.
+
+---
+
+### TEST-AFL-15 — `--id` outside the 29-bit range returns a structured error
+
+```gherkin
+Given  `fuzz payload --id 0xFFFFFFFF`
+When   the operator runs the command with `--dry-run`
+Then   the system shall exit non-zero with error code `INVALID_FRAME_ID`
+```
+
+**Fixture:** none.
 
 ## Fixtures And Environment
 

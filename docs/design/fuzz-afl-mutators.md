@@ -39,6 +39,7 @@ bugs.
 | `REQ-AFL-07` | Ubiquitous | The generators shall clamp emitted payloads to 64 bytes (CAN FD maximum). |
 | `REQ-AFL-08` | Optional feature | Where `canarchy fuzz payload --strategy {havoc,splice,interesting}` is invoked, the system shall apply the matching generator under the active-transmit safety controls. |
 | `REQ-AFL-09` | Unwanted behaviour | If `--strategy splice` is used without `--corpus`, the system shall return `MISSING_INPUT`. |
+| `REQ-AFL-10` | Optional feature | Where `fuzz payload --id` exceeds the 11-bit standard range, the system shall transmit extended frames (inferring the extended flag like `send` / `xcp scan`); if `--id` is outside the 29-bit range it shall return a structured `INVALID_FRAME_ID` error rather than an uncaught `CanFrame` error. |
 
 ## Command Surface
 

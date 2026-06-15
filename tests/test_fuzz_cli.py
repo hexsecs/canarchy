@@ -240,6 +240,52 @@ def test_fuzz_payload_invalid_hex_id_returns_structured_error():
     assert payload["errors"][0]["code"] == "INVALID_FRAME_ID"
 
 
+def test_fuzz_payload_29bit_id_without_extended_infers_extended():
+    # A 29-bit --id without --extended is built as an extended frame (matching
+    # `send` / `xcp scan`) instead of raising an uncaught CanFrame ValueError.
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0x18DAF110",
+        "--strategy",
+        "random",
+        "--max",
+        "1",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code == 0
+    payload = json.loads(stdout)
+    assert payload["ok"] is True
+    frames = [evt for evt in payload["data"]["events"] if evt.get("event_type") == "frame"]
+    assert frames
+    assert all(evt["payload"]["frame"]["is_extended_id"] is True for evt in frames)
+    assert all(evt["payload"]["frame"]["arbitration_id"] == 0x18DAF110 for evt in frames)
+
+
+def test_fuzz_payload_id_above_29bit_range_returns_structured_error():
+    # An id past the 29-bit ceiling is a structured user error, not a traceback.
+    exit_code, stdout, _ = run_cli(
+        "fuzz",
+        "payload",
+        "can0",
+        "--id",
+        "0xFFFFFFFF",
+        "--strategy",
+        "random",
+        "--max",
+        "1",
+        "--dry-run",
+        "--json",
+    )
+    assert exit_code != 0
+    payload = json.loads(stdout)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "INVALID_FRAME_ID"
+
+
 def test_fuzz_payload_invalid_rate_returns_structured_error():
     exit_code, stdout, _ = run_cli(
         "fuzz",

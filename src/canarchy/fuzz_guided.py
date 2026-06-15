@@ -108,13 +108,18 @@ def run_guided_fuzz(
     rng_seed: int = 0,
     mutate: Mutator = default_mutator,
     clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    pace_seconds: float = 0.0,
     kill_switch: Callable[[], bool] | None = None,
 ) -> GuidedFuzzResult:
     """Run the guided campaign, returning the result and final corpus.
 
     The initial seeds' responses prime the tracker as the behaviour baseline, so
     only genuinely new markers count as findings. ``max_payload`` clamps seeds and
-    mutations to a valid frame size (e.g. 8 for classic CAN).
+    mutations to a valid frame size (e.g. 8 for classic CAN). ``pace_seconds``
+    rate-limits transmissions: the delay is applied inside the campaign budget
+    and the deadline re-checked after it, so a pacing delay that crosses
+    ``max_seconds`` ends the campaign rather than permitting one more send.
     """
     rng = random.Random(rng_seed)
     tracker = FeedbackTracker(weights=dict(weights or DEFAULT_WEIGHTS))
@@ -128,7 +133,6 @@ def run_guided_fuzz(
     findings: list[Finding] = []
     start = clock()
     iteration = 0
-    stop_reason = "max_iterations"
 
     def _stop() -> str | None:
         # Every responder call (priming or mutation) is a transmission, so the
@@ -142,6 +146,26 @@ def run_guided_fuzz(
             return "kill_switch"
         return None
 
+    def _pace_then_stop() -> str | None:
+        # Rate pacing lives inside the budget: sleep, then re-check the deadline
+        # before the next transmission so a pacing delay that crosses
+        # max_seconds ends the campaign instead of allowing one more send.
+        if pace_seconds > 0:
+            sleep(pace_seconds)
+            return _stop()
+        return None
+
+    def _result(reason: str) -> GuidedFuzzResult:
+        return GuidedFuzzResult(
+            iterations=iteration,
+            new_behaviour_count=len(findings),
+            corpus_size=len(corpus),
+            unique_markers=len(tracker.seen),
+            stop_reason=reason,
+            findings=findings,
+            seeds=list(corpus),
+        )
+
     # Prime the baseline: each initial seed is added to the corpus, then (within
     # the campaign budget) transmitted once to observe its response.
     for data in initial_seeds or [bytes(8)]:
@@ -149,26 +173,23 @@ def run_guided_fuzz(
         corpus.append(Seed(seed_data, f"s{next(counter)}", None, 0, 0.0))
         reason = _stop()
         if reason is not None:
-            return GuidedFuzzResult(
-                iterations=iteration,
-                new_behaviour_count=len(findings),
-                corpus_size=len(corpus),
-                unique_markers=len(tracker.seen),
-                stop_reason=reason,
-                findings=findings,
-                seeds=list(corpus),
-            )
+            return _result(reason)
+        reason = _pace_then_stop()
+        if reason is not None:
+            return _result(reason)
         tracker.observe(fingerprint_response(responder(seed_data), signals=signals))
         iteration += 1
 
     while True:
         reason = _stop()
         if reason is not None:
-            stop_reason = reason
-            break
+            return _result(reason)
 
         parent = _select_seed(corpus, rng)
         child_data = _clamp(mutate(parent.data, rng, [seed.data for seed in corpus]))
+        reason = _pace_then_stop()
+        if reason is not None:
+            return _result(reason)
         observation = responder(child_data)
         fingerprint = fingerprint_response(observation, signals=signals)
         gain, new_markers = tracker.score_and_observe(fingerprint)
@@ -194,16 +215,6 @@ def run_guided_fuzz(
                 )
             )
             _prune(corpus, max_corpus)
-
-    return GuidedFuzzResult(
-        iterations=iteration,
-        new_behaviour_count=len(findings),
-        corpus_size=len(corpus),
-        unique_markers=len(tracker.seen),
-        stop_reason=stop_reason,
-        findings=findings,
-        seeds=list(corpus),
-    )
 
 
 def save_corpus(directory: str | Path, seeds: list[Seed]) -> None:

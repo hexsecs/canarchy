@@ -96,8 +96,13 @@ canarchy fuzz guided <interface> --id <arb-id> [--signals nrc,timing,dm1,silence
 * **Safety:** `fuzz guided` is an active-transmit command — it honours
   `--ack-active`, `[safety].require_active_ack`, the `YES` confirmation, `--rate`
   pacing, and `--dry-run` (which plans the campaign without opening the
-  transport). The MCP tool mandates `ack_active=true` with `dry_run` defaulting
-  to true.
+  transport). `--rate` pacing is applied inside the campaign budget with the
+  deadline re-checked after each pacing delay, so a delay that crosses
+  `--max-seconds` ends the run rather than permitting one more transmission. An
+  `--id` above the 11-bit standard range is transmitted as an extended frame
+  (inferred, like `send` / `xcp scan`), so a 29-bit id never builds an invalid
+  standard frame. The MCP tool mandates `ack_active=true` with `dry_run`
+  defaulting to true.
 
 ## Failure-Mode Handling
 
@@ -122,7 +127,7 @@ planned mutations, opening no transport.
 | Code | Trigger | Exit code |
 |------|---------|-----------|
 | `FUZZ_GUIDED_INVALID_SIGNALS` | `--signals` names an unknown marker category | 1 |
-| `FUZZ_GUIDED_INVALID_ID` | `--id` is not a valid CAN id | 1 |
+| `FUZZ_GUIDED_INVALID_ID` | `--id` is not a valid CAN id, or is outside the 29-bit range | 1 |
 | `ACTIVE_ACK_REQUIRED` | active run without `--ack-active` while required | 1 |
 | `FUZZ_GUIDED_TRANSPORT_FAILED` | the transport raised mid-campaign | 2 |
 
