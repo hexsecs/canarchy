@@ -308,6 +308,41 @@ Emitted by: `j1939 monitor`, `j1939 decode`, `j1939 pgn`
 
 ---
 
+### `j1587_parameter`
+
+A decoded J1587 PID parameter extracted from a J1708 message.
+
+Emitted by: `j1587 decode`
+
+```json
+{
+  "event_type": "j1587_parameter",
+  "source": "j1587",
+  "timestamp": 0.0,
+  "payload": {
+    "checksum_valid": true,
+    "mid": 128,
+    "name": "Engine Speed",
+    "pid": 190,
+    "raw": "7017",
+    "units": "rpm",
+    "value": 1500.0
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mid` | int | Source MID (0–255) from the J1708 message. |
+| `pid` | int | J1587 Parameter ID (0–511; values above 253 use the extended-PID encoding). |
+| `raw` | string | Raw parameter data bytes as hex. |
+| `name` | string \| null | Parameter name from the bundled PID catalog, or `null` if unknown. |
+| `value` | float \| null | Scaled value, or `null` if unknown or the all-ones "data not available" sentinel. |
+| `units` | string \| null | Units from the bundled PID catalog, or `null` if unknown. |
+| `checksum_valid` | bool | Whether the source J1708 message's byte-sum checksum was valid. |
+
+---
+
 ### `uds_transaction`
 
 A UDS request/response pair observed during a scan or trace.

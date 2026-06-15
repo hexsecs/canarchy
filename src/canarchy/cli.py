@@ -35,6 +35,8 @@ from canarchy.dbc import (
 )
 from canarchy import __version__
 from canarchy.exporter import ExportError, export_artifact
+from canarchy.j1587 import decode_events as decode_j1587_events
+from canarchy.j1587 import iter_j1708_messages_from_file, j1587_pids_payload
 from canarchy.j1939 import TP_CM_PGN, TP_DT_PGN, decompose_arbitration_id
 from canarchy.j1939_decoder import get_j1939_decoder
 from canarchy.j1939_metadata import pgn_lookup, source_address_lookup
@@ -131,6 +133,7 @@ J1939_COMMANDS = {
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 XCP_COMMANDS = {"xcp scan", "xcp trace", "xcp read", "xcp commands"}
+J1587_COMMANDS = {"j1587 decode", "j1587 pids"}
 CONFIG_COMMANDS = {"config show"}
 DOCTOR_COMMANDS = {"doctor"}
 RE_COMMANDS = {
@@ -183,6 +186,7 @@ IMPLEMENTED_COMMANDS = (
     | SESSION_COMMANDS
     | UDS_COMMANDS
     | XCP_COMMANDS
+    | J1587_COMMANDS
     | CONFIG_COMMANDS
     | DOCTOR_COMMANDS
     | RE_COMMANDS
@@ -1201,6 +1205,19 @@ def build_parser() -> CanarchyArgumentParser:
     xcp_commands = xcp_subparsers.add_parser("commands", help="list the XCP command catalog")
     add_output_arguments(xcp_commands)
     xcp_commands.set_defaults(command="xcp commands")
+
+    j1587 = subparsers.add_parser("j1587", help="J1587/J1708 legacy truck-bus workflows")
+    j1587_subparsers = j1587.add_subparsers(dest="j1587_action", required=True)
+
+    j1587_decode = j1587_subparsers.add_parser("decode", help="decode J1708 capture traffic")
+    j1587_decode.add_argument("--file", required=True, help="path to a J1708 capture file")
+    add_j1939_file_analysis_arguments(j1587_decode)
+    add_output_arguments(j1587_decode)
+    j1587_decode.set_defaults(command="j1587 decode")
+
+    j1587_pids = j1587_subparsers.add_parser("pids", help="list the bundled J1587 PID catalog")
+    add_output_arguments(j1587_pids)
+    j1587_pids.set_defaults(command="j1587 pids")
 
     re_parser = subparsers.add_parser("re", help="reverse engineering helpers")
     re_subparsers = re_parser.add_subparsers(dest="re_action", required=True)
@@ -5663,6 +5680,42 @@ def xcp_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
     raise AssertionError(f"unsupported xcp command: {args.command}")
 
 
+def j1587_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    if args.command == "j1587 pids":
+        pids = j1587_pids_payload()
+        return ({"mode": "reference", "pid_count": len(pids), "pids": pids}, [], [])
+
+    try:
+        messages = list(
+            iter_j1708_messages_from_file(args.file, **j1939_file_analysis_kwargs(args))
+        )
+    except TransportError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        ) from exc
+
+    events = decode_j1587_events(messages)
+    warnings: list[str] = []
+    if not messages:
+        warnings.append("No J1708 messages were found in the input.")
+    checksum_failures = sum(1 for message in messages if not message.checksum_valid)
+    return (
+        {
+            "mode": "passive",
+            "file": args.file,
+            "message_count": len(messages),
+            "parameter_count": len(events),
+            "checksum_failures": checksum_failures,
+        },
+        serialize_events(events),
+        warnings,
+    )
+
+
 def gateway_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -7348,6 +7401,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in XCP_COMMANDS:
         _, events, _ = xcp_payload(args)
         return events
+    if args.command in J1587_COMMANDS:
+        _, events, _ = j1587_payload(args)
+        return events
     if args.command in RE_COMMANDS:
         _, events, _ = reverse_engineering_payload(args)
         return events
@@ -7458,6 +7514,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(xcp_data)
         data["events"] = xcp_events
         warnings.extend(xcp_warnings)
+    elif args.command in J1587_COMMANDS:
+        j1587_data, j1587_events, j1587_warnings = j1587_payload(args)
+        data.update(j1587_data)
+        data["events"] = j1587_events
+        warnings.extend(j1587_warnings)
     elif args.command in RE_COMMANDS:
         re_data, re_events, re_warnings = reverse_engineering_payload(args)
         data.update(re_data)
@@ -8024,6 +8085,41 @@ def format_xcp_table(result: CommandResult) -> list[str]:
                 f"max_cto={info.get('max_cto')} max_dto={info.get('max_dto')} "
                 f"proto_layer={info.get('protocol_layer_version')}"
             )
+    return lines
+
+
+def format_j1587_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    if result.command == "j1587 pids":
+        lines.append(f"pids: {result.data.get('pid_count', 0)}")
+        lines.append("catalog:")
+        pids = result.data.get("pids", [])
+        if not pids:
+            lines.append("- no j1587 pids")
+            return lines
+        for pid in pids:
+            lines.append(
+                f"- pid={pid['pid']} name={pid['name']} units={pid['units']} length={pid['length']}"
+            )
+        return lines
+
+    lines.append(f"file: {result.data['file']}")
+    lines.append(f"messages: {result.data.get('message_count', 0)}")
+    lines.append(f"checksum_failures: {result.data.get('checksum_failures', 0)}")
+    events = result.data.get("events", [])
+    lines.append("parameters:")
+    if not events:
+        lines.append("- no j1587 parameters")
+        return lines
+    for event in events:
+        payload = event["payload"]
+        name = payload["name"] or "unknown"
+        units_suffix = f" units={payload['units']}" if payload["units"] else ""
+        checksum_suffix = "" if payload["checksum_valid"] else " checksum=invalid"
+        lines.append(
+            f"- mid={payload['mid']} pid={payload['pid']} name={name} "
+            f"value={payload['value']}{units_suffix} raw={payload['raw']}{checksum_suffix}"
+        )
     return lines
 
 
@@ -9251,6 +9347,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "text" and result.ok and result.command in XCP_COMMANDS:
         for line in format_xcp_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command in J1587_COMMANDS:
+        for line in format_j1587_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

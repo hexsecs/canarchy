@@ -21,6 +21,7 @@ Implemented and verified in the current codebase:
 * initial text-mode `tui` shell over the shared command layer
 * UDS `scan`, `trace`, and `services`
 * XCP (measurement/calibration) `scan`, `trace`, `read`, and `commands` for XCP-on-CAN
+* J1587/J1708 `decode` and `pids` for legacy heavy-vehicle diagnostic captures
 * `config show` for effective transport configuration inspection
 * `re signals`, `re counters`, `re entropy`, `re correlate`, and `re anomalies` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
@@ -1089,6 +1090,40 @@ Notes:
 * this is a reference command and does not require an interface
 * output includes the command code, name, and category (standard / calibration / daq / programming)
 
+### j1587 decode
+
+Decode a J1708 capture file into J1587 PID parameters.
+
+```bash
+canarchy j1587 decode --file <path> [--offset N] [--max-frames N] [--seconds N] [--json|--jsonl|--text]
+```
+
+```bash
+canarchy j1587 decode --file tests/fixtures/j1708_sample.j1708 --json
+```
+
+Notes:
+
+* each line of the capture file must read `(timestamp) j1708 <hex>`, where `<hex>` is the full raw message (source MID, PID-framed parameters, and a trailing checksum byte)
+* emits one `j1587_parameter` event per parameter, with `mid`, `pid`, `raw`, `name`, `value`, `units`, `checksum_valid`, and `timestamp`; PIDs are resolved against the bundled `resources/j1587/pids.json` catalog (override via `CANARCHY_J1587_PID_OVERRIDES` or `~/.canarchy/j1587_pids.json`)
+* an all-ones raw value (the J1587 "data not available" sentinel) resolves `value` to `null` while keeping `name`/`units`
+* `data` reports `mode: "passive"`, `file`, `message_count`, `parameter_count`, and `checksum_failures`
+* `--offset` / `--max-frames` / `--seconds` apply to the message stream the same way they do for `j1939 decode`
+* a missing `--file` returns `J1587_SOURCE_UNAVAILABLE`; a line that does not match the expected format, has an odd number of hex digits, or fails J1708 framing returns `J1587_SOURCE_INVALID` (exit code 1)
+
+### j1587 pids
+
+Inspect the built-in J1587 PID catalog.
+
+```bash
+canarchy j1587 pids [--json|--jsonl|--text]
+```
+
+Notes:
+
+* this is a reference command and does not require a capture file
+* output includes each PID's name, data length, resolution, offset, units, and byte order
+
 ### re counters
 
 Rank likely counter fields from recorded CAN traffic.
@@ -1478,6 +1513,7 @@ Implemented commands currently emit these event types:
 * `decoded_message`
 * `signal`
 * `j1939_pgn`
+* `j1587_parameter`
 * `uds_transaction`
 * `xcp_transaction`
 * `xcp_measurement`
