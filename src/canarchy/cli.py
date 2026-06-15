@@ -5822,6 +5822,36 @@ def _parse_fuzz_hex_id(value: str, *, command: str) -> int:
         ) from exc
 
 
+_CAN_STANDARD_ID_MAX = 0x7FF
+_CAN_EXTENDED_ID_MAX = 0x1FFFFFFF
+
+
+def _resolve_can_frame_extended(
+    arbitration_id: int, explicit_extended: bool, *, command: str, name: str, code: str
+) -> bool:
+    """Validate a CAN id and decide whether its frame is extended.
+
+    Like ``parse_send_frame`` / ``xcp.connect_request_frame``, an id above the
+    11-bit standard range implies an extended frame, so a 29-bit id is never
+    built as an (invalid) standard frame. An id outside the 29-bit range is
+    reported as a structured user error instead of leaking the ``CanFrame``
+    ``ValueError`` as an uncaught traceback.
+    """
+    if arbitration_id < 0 or arbitration_id > _CAN_EXTENDED_ID_MAX:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {arbitration_id} is outside the 29-bit CAN id range.",
+                    hint="CAN ids are 0x000-0x1FFFFFFF; pass --extended to force a 29-bit frame.",
+                )
+            ],
+        )
+    return explicit_extended or arbitration_id > _CAN_STANDARD_ID_MAX
+
+
 def _parse_fuzz_payload_data(value: str | None, *, default_dlc: int, command: str) -> bytes:
     if value is None:
         return b"\x00" * default_dlc
@@ -5952,6 +5982,13 @@ def _load_fuzz_corpus(args: argparse.Namespace) -> list[bytes]:
 
 def _build_fuzz_payload_frames(args: argparse.Namespace) -> list[CanFrame]:
     arbitration_id = _parse_fuzz_hex_id(args.id, command=args.command)
+    extended = _resolve_can_frame_extended(
+        arbitration_id,
+        bool(args.extended),
+        command=args.command,
+        name="--id",
+        code="INVALID_FRAME_ID",
+    )
     # For bitflip we mutate the explicit (or default-8-byte-zero) baseline
     # in place — DLC is inherited from the baseline payload.
     # For random / boundary the user's --dlc takes precedence; --data is
@@ -5996,7 +6033,7 @@ def _build_fuzz_payload_frames(args: argparse.Namespace) -> list[CanFrame]:
         CanFrame(
             arbitration_id=arbitration_id,
             data=payload,
-            is_extended_id=args.extended,
+            is_extended_id=extended,
             timestamp=i / args.rate if args.rate else None,
         )
         for i, payload in enumerate(materialised)
@@ -6402,7 +6439,13 @@ def fuzz_guided_payload(
     arbitration_id = _parse_can_id(
         args.arbitration_id, command=args.command, name="--id", code="FUZZ_GUIDED_INVALID_ID"
     )
-    extended = bool(getattr(args, "extended", False))
+    extended = _resolve_can_frame_extended(
+        arbitration_id,
+        bool(getattr(args, "extended", False)),
+        command=args.command,
+        name="--id",
+        code="FUZZ_GUIDED_INVALID_ID",
+    )
     # Classic CAN frames carry at most 8 payload bytes; clamp seeds/mutations.
     max_payload = 8
     seeds = [seed[:max_payload] for seed in _fuzz_guided_initial_seeds(args)]
@@ -6446,8 +6489,6 @@ def fuzz_guided_payload(
     gap_s = 1.0 / rate if rate and rate > 0 else 0.0
 
     def responder(payload: bytes) -> ResponseObservation:
-        if gap_s > 0:
-            time.sleep(gap_s)
         frame = CanFrame(arbitration_id=arbitration_id, data=payload, is_extended_id=extended)
         started = time.monotonic()
         try:
@@ -6477,6 +6518,7 @@ def fuzz_guided_payload(
         max_corpus=args.max_corpus,
         max_payload=max_payload,
         rng_seed=args.seed,
+        pace_seconds=gap_s,
     )
 
     if getattr(args, "corpus", None):

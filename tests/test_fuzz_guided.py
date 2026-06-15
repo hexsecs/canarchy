@@ -161,6 +161,55 @@ class GuidedLoopTests(unittest.TestCase):
         )
         self.assertGreaterEqual(result.corpus_size, 1)
 
+    def test_pacing_re_checks_budget_and_stops_before_transmitting(self) -> None:
+        # Codex review on #350: a pacing delay that crosses max_seconds must end
+        # the campaign rather than permit one more transmission past the budget.
+        now = {"t": 0.0}
+        calls = {"n": 0}
+
+        def clock() -> float:
+            return now["t"]
+
+        def sleep(seconds: float) -> None:
+            now["t"] += seconds
+
+        def counting_responder(payload: bytes) -> ResponseObservation:
+            calls["n"] += 1
+            return ResponseObservation(silent=True)
+
+        result = run_guided_fuzz(
+            [bytes(8)],
+            counting_responder,
+            max_iterations=100,
+            max_seconds=0.5,
+            clock=clock,
+            sleep=sleep,
+            pace_seconds=1.0,
+        )
+        # The first pacing sleep advances the clock to 1.0 >= 0.5, so nothing is
+        # ever transmitted.
+        self.assertEqual(calls["n"], 0)
+        self.assertEqual(result.iterations, 0)
+        self.assertEqual(result.stop_reason, "max_seconds")
+
+    def test_pacing_delays_each_transmission(self) -> None:
+        sleeps: list[float] = []
+
+        def sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+
+        result = run_guided_fuzz(
+            [bytes(8)],
+            _reactive_responder,
+            max_iterations=3,
+            sleep=sleep,
+            pace_seconds=0.01,
+            max_payload=8,
+        )
+        # One pacing delay precedes each of the three transmissions.
+        self.assertEqual(sleeps, [0.01, 0.01, 0.01])
+        self.assertEqual(result.iterations, 3)
+
     def test_corpus_persistence_round_trip(self) -> None:
         import tempfile
 
@@ -203,6 +252,43 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(exit_code, 1)
         self.assertEqual(json.loads(stdout)["errors"][0]["code"], "FUZZ_GUIDED_INVALID_MAX_CORPUS")
+
+    def test_29bit_id_without_extended_infers_extended(self) -> None:
+        # A 29-bit --id without --extended runs as an extended frame instead of
+        # crashing with an uncaught CanFrame ValueError (Codex review on #350).
+        with patch.dict(
+            os.environ,
+            {"CANARCHY_TRANSPORT_BACKEND": "scaffold", "CANARCHY_MCP_NONINTERACTIVE_ACK": "1"},
+        ):
+            exit_code, stdout, _ = run_cli(
+                "fuzz",
+                "guided",
+                "vcan0",
+                "--id",
+                "0x18DAF110",
+                "--ack-active",
+                "--max-iterations",
+                "2",
+                "--json",
+            )
+        self.assertEqual(exit_code, 0)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "active")
+        self.assertTrue(data["extended"])
+
+    def test_dry_run_infers_extended_for_29bit_id(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "fuzz", "guided", "--id", "0x18DAF110", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(json.loads(stdout)["data"]["extended"])
+
+    def test_id_above_29bit_range_returns_structured_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "fuzz", "guided", "--id", "0x20000000", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "FUZZ_GUIDED_INVALID_ID")
 
     def test_active_path_over_scaffold_backend(self) -> None:
         with patch.dict(
