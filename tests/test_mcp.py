@@ -55,6 +55,8 @@ _EXPECTED_TOOLS = {
     "xcp_trace",
     "xcp_read",
     "xcp_commands",
+    "j1587_decode",
+    "j1587_pids",
     "config_show",
     "doctor",
     "datasets_provider_list",
@@ -268,6 +270,27 @@ def test_call_tool_stats_uses_file_flag():
     assert payload["command"] == "stats"
     assert payload["data"]["total_frames"] == 3
     assert payload["data"]["unique_arbitration_ids"] == 3
+
+
+def test_call_tool_j1587_decode_uses_file_flag():
+    results = asyncio.run(
+        handle_call_tool("j1587_decode", {"file": str(FIXTURES / "j1708_sample.j1708")})
+    )
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "j1587 decode"
+    assert payload["data"]["message_count"] == 7
+    assert payload["data"]["parameter_count"] == 8
+
+
+def test_call_tool_j1587_pids():
+    results = asyncio.run(handle_call_tool("j1587_pids", {}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "j1587 pids"
+    assert payload["data"]["mode"] == "reference"
 
 
 def test_call_tool_filter_orders_expression_before_file_flag():
@@ -610,6 +633,35 @@ def test_build_argv_j1939_pgn():
     assert "--file" in argv
     assert "trace.candump" in argv
     assert argv[-1] == "--json"
+
+
+def test_build_argv_j1587_decode_uses_file_flag():
+    argv = _build_argv("j1587_decode", {"file": "trace.j1708"})
+    assert argv == ["j1587", "decode", "--file", "trace.j1708", "--json"]
+
+
+def test_build_argv_j1587_decode_with_bounds():
+    argv = _build_argv(
+        "j1587_decode", {"file": "trace.j1708", "offset": 2, "max_frames": 5, "seconds": 1.5}
+    )
+    assert argv == [
+        "j1587",
+        "decode",
+        "--file",
+        "trace.j1708",
+        "--offset",
+        "2",
+        "--max-frames",
+        "5",
+        "--seconds",
+        "1.5",
+        "--json",
+    ]
+
+
+def test_build_argv_j1587_pids():
+    argv = _build_argv("j1587_pids", {})
+    assert argv == ["j1587", "pids", "--json"]
 
 
 def test_build_argv_j1939_decode_uses_file_flag():

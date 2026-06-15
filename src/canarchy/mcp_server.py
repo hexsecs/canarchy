@@ -899,6 +899,40 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="j1587_decode",
+        description=(
+            "Decode a J1708 capture file into J1587 PID parameters. Use max_frames or "
+            "seconds to limit processing on large captures."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to a J1708 capture file"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N messages from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N messages (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
+        name="j1587_pids",
+        description="List the bundled J1587 PID catalog with names, units, and scaling.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
         name="config_show",
         description="Show the effective CANarchy transport configuration.",
         inputSchema={
@@ -2109,6 +2143,17 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "xcp_commands":
             return ["xcp", "commands", "--json"]
+        case "j1587_decode":
+            argv = ["j1587", "decode", "--file", a["file"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
+        case "j1587_pids":
+            return ["j1587", "pids", "--json"]
         case "config_show":
             return ["config", "show", "--json"]
         case "doctor":

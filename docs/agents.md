@@ -118,6 +118,8 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `xcp_trace` | `canarchy xcp trace` |
 | `xcp_read` | `canarchy xcp read` |
 | `xcp_commands` | `canarchy xcp commands` |
+| `j1587_decode` | `canarchy j1587 decode` |
+| `j1587_pids` | `canarchy j1587 pids` |
 | `config_show` | `canarchy config show` |
 | `doctor` | `canarchy doctor` |
 | `re_anomalies` | `canarchy re anomalies` |

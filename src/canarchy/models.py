@@ -11,6 +11,7 @@ EventType = Literal[
     "decoded_message",
     "signal",
     "j1939_pgn",
+    "j1587_parameter",
     "uds_transaction",
     "xcp_transaction",
     "xcp_measurement",
@@ -217,6 +218,44 @@ class J1939ObservationEvent:
                 "source_address": self.source_address,
             },
             timestamp=self.timestamp if self.timestamp is not None else self.frame.timestamp,
+        )
+
+    def to_payload(self) -> dict[str, Any]:
+        return self.to_event().to_payload()
+
+
+@dataclass(slots=True, frozen=True)
+class J1587ObservationEvent:
+    mid: int
+    pid: int
+    raw: bytes
+    name: str | None = None
+    value: float | None = None
+    units: str | None = None
+    checksum_valid: bool = True
+    source: str = "j1587"
+    timestamp: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.mid < 0 or self.mid > 0xFF:
+            raise ValueError("mid must be between 0 and 255")
+        if self.pid < 0 or self.pid > 0x1FF:
+            raise ValueError("pid must be between 0 and 511")
+
+    def to_event(self) -> Event:
+        return Event(
+            event_type="j1587_parameter",
+            source=self.source,
+            payload={
+                "checksum_valid": self.checksum_valid,
+                "mid": self.mid,
+                "name": self.name,
+                "pid": self.pid,
+                "raw": self.raw.hex(),
+                "units": self.units,
+                "value": self.value,
+            },
+            timestamp=self.timestamp,
         )
 
     def to_payload(self) -> dict[str, Any]:
