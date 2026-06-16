@@ -12,6 +12,7 @@ EventType = Literal[
     "signal",
     "j1939_pgn",
     "j1587_parameter",
+    "j2497_message",
     "uds_transaction",
     "xcp_transaction",
     "xcp_measurement",
@@ -254,6 +255,36 @@ class J1587ObservationEvent:
                 "raw": self.raw.hex(),
                 "units": self.units,
                 "value": self.value,
+            },
+            timestamp=self.timestamp,
+        )
+
+    def to_payload(self) -> dict[str, Any]:
+        return self.to_event().to_payload()
+
+
+@dataclass(slots=True, frozen=True)
+class J2497ObservationEvent:
+    mid: int
+    data: bytes
+    name: str | None = None
+    checksum_valid: bool = True
+    source: str = "j2497"
+    timestamp: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.mid < 0 or self.mid > 0xFF:
+            raise ValueError("mid must be between 0 and 255")
+
+    def to_event(self) -> Event:
+        return Event(
+            event_type="j2497_message",
+            source=self.source,
+            payload={
+                "checksum_valid": self.checksum_valid,
+                "data": self.data.hex(),
+                "mid": self.mid,
+                "name": self.name,
             },
             timestamp=self.timestamp,
         )

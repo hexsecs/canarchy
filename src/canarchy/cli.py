@@ -37,6 +37,8 @@ from canarchy import __version__
 from canarchy.exporter import ExportError, export_artifact
 from canarchy.j1587 import decode_events as decode_j1587_events
 from canarchy.j1587 import iter_j1708_messages_from_file, j1587_pids_payload
+from canarchy.j2497 import decode_events as decode_j2497_events
+from canarchy.j2497 import iter_j2497_frames_from_file, j2497_mids_payload
 from canarchy.j1939 import TP_CM_PGN, TP_DT_PGN, decompose_arbitration_id
 from canarchy.j1939_decoder import get_j1939_decoder
 from canarchy.j1939_metadata import pgn_lookup, source_address_lookup
@@ -134,6 +136,7 @@ SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
 XCP_COMMANDS = {"xcp scan", "xcp trace", "xcp read", "xcp commands"}
 J1587_COMMANDS = {"j1587 decode", "j1587 pids"}
+J2497_COMMANDS = {"j2497 decode", "j2497 mids"}
 CONFIG_COMMANDS = {"config show"}
 DOCTOR_COMMANDS = {"doctor"}
 RE_COMMANDS = {
@@ -187,6 +190,7 @@ IMPLEMENTED_COMMANDS = (
     | UDS_COMMANDS
     | XCP_COMMANDS
     | J1587_COMMANDS
+    | J2497_COMMANDS
     | CONFIG_COMMANDS
     | DOCTOR_COMMANDS
     | RE_COMMANDS
@@ -1218,6 +1222,19 @@ def build_parser() -> CanarchyArgumentParser:
     j1587_pids = j1587_subparsers.add_parser("pids", help="list the bundled J1587 PID catalog")
     add_output_arguments(j1587_pids)
     j1587_pids.set_defaults(command="j1587 pids")
+
+    j2497 = subparsers.add_parser("j2497", help="J2497 (PLC4TRUCKS) trailer power-line workflows")
+    j2497_subparsers = j2497.add_subparsers(dest="j2497_action", required=True)
+
+    j2497_decode = j2497_subparsers.add_parser("decode", help="decode J2497 capture frames")
+    j2497_decode.add_argument("--file", required=True, help="path to a J2497 capture file")
+    add_j1939_file_analysis_arguments(j2497_decode)
+    add_output_arguments(j2497_decode)
+    j2497_decode.set_defaults(command="j2497 decode")
+
+    j2497_mids = j2497_subparsers.add_parser("mids", help="list the bundled J2497 MID catalog")
+    add_output_arguments(j2497_mids)
+    j2497_mids.set_defaults(command="j2497 mids")
 
     re_parser = subparsers.add_parser("re", help="reverse engineering helpers")
     re_subparsers = re_parser.add_subparsers(dest="re_action", required=True)
@@ -5716,6 +5733,41 @@ def j1587_payload(
     )
 
 
+def j2497_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    if args.command == "j2497 mids":
+        mids = j2497_mids_payload()
+        return ({"mode": "reference", "mid_count": len(mids), "mids": mids}, [], [])
+
+    try:
+        messages = list(
+            iter_j2497_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
+        )
+    except TransportError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        ) from exc
+
+    events = decode_j2497_events(messages)
+    warnings: list[str] = []
+    if not messages:
+        warnings.append("No J2497 frames were found in the input.")
+    checksum_failures = sum(1 for message in messages if not message.checksum_valid)
+    return (
+        {
+            "mode": "passive",
+            "file": args.file,
+            "frame_count": len(messages),
+            "checksum_failures": checksum_failures,
+        },
+        serialize_events(events),
+        warnings,
+    )
+
+
 def gateway_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -7446,6 +7498,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in J1587_COMMANDS:
         _, events, _ = j1587_payload(args)
         return events
+    if args.command in J2497_COMMANDS:
+        _, events, _ = j2497_payload(args)
+        return events
     if args.command in RE_COMMANDS:
         _, events, _ = reverse_engineering_payload(args)
         return events
@@ -7561,6 +7616,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(j1587_data)
         data["events"] = j1587_events
         warnings.extend(j1587_warnings)
+    elif args.command in J2497_COMMANDS:
+        j2497_data, j2497_events, j2497_warnings = j2497_payload(args)
+        data.update(j2497_data)
+        data["events"] = j2497_events
+        warnings.extend(j2497_warnings)
     elif args.command in RE_COMMANDS:
         re_data, re_events, re_warnings = reverse_engineering_payload(args)
         data.update(re_data)
@@ -8161,6 +8221,37 @@ def format_j1587_table(result: CommandResult) -> list[str]:
         lines.append(
             f"- mid={payload['mid']} pid={payload['pid']} name={name} "
             f"value={payload['value']}{units_suffix} raw={payload['raw']}{checksum_suffix}"
+        )
+    return lines
+
+
+def format_j2497_table(result: CommandResult) -> list[str]:
+    lines = [f"command: {result.command}"]
+    if result.command == "j2497 mids":
+        lines.append(f"mids: {result.data.get('mid_count', 0)}")
+        lines.append("catalog:")
+        mids = result.data.get("mids", [])
+        if not mids:
+            lines.append("- no j2497 mids")
+            return lines
+        for mid in mids:
+            lines.append(f"- mid={mid['mid']} name={mid['name']}")
+        return lines
+
+    lines.append(f"file: {result.data['file']}")
+    lines.append(f"frames: {result.data.get('frame_count', 0)}")
+    lines.append(f"checksum_failures: {result.data.get('checksum_failures', 0)}")
+    events = result.data.get("events", [])
+    lines.append("frames:")
+    if not events:
+        lines.append("- no j2497 frames")
+        return lines
+    for event in events:
+        payload = event["payload"]
+        name = payload["name"] or "unknown"
+        checksum_suffix = "" if payload["checksum_valid"] else " checksum=invalid"
+        lines.append(
+            f"- mid={payload['mid']} name={name} data={payload['data']}{checksum_suffix}"
         )
     return lines
 
@@ -9396,6 +9487,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "text" and result.ok and result.command in J1587_COMMANDS:
         for line in format_j1587_table(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command in J2497_COMMANDS:
+        for line in format_j2497_table(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

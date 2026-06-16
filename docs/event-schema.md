@@ -343,6 +343,35 @@ Emitted by: `j1587 decode`
 
 ---
 
+### `j2497_message`
+
+A decoded J2497 (PLC4TRUCKS trailer power-line) frame.
+
+Emitted by: `j2497 decode`
+
+```json
+{
+  "event_type": "j2497_message",
+  "source": "j2497",
+  "timestamp": 0.0,
+  "payload": {
+    "checksum_valid": true,
+    "data": "2c01",
+    "mid": 137,
+    "name": "Brakes - Trailer #1 (ABS)"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mid` | int | Source MID (0–255) from the J2497 frame. |
+| `data` | string | Message-data bytes (between the MID and the checksum) as hex. |
+| `name` | string \| null | ECU name from the bundled MID catalog, or `null` if unknown. |
+| `checksum_valid` | bool | Whether the frame's byte-sum checksum was valid. |
+
+---
+
 ### `uds_transaction`
 
 A UDS request/response pair observed during a scan or trace.

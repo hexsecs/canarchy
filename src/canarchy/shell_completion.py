@@ -42,6 +42,7 @@ SUBCOMMANDS: list[tuple[str, str]] = [
     ("uds", "UDS diagnostic workflows"),
     ("xcp", "XCP measurement/calibration workflows"),
     ("j1587", "J1587/J1708 legacy heavy-vehicle workflows"),
+    ("j2497", "J2497 (PLC4TRUCKS) trailer power-line workflows"),
     ("re", "reverse-engineering helpers"),
     ("fuzz", "active-transmit fuzzing workflows"),
     ("config", "inspect CANarchy configuration"),

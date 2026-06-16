@@ -1,0 +1,10 @@
+{
+  "128": {"name": "Engine #1"},
+  "130": {"name": "Transmission"},
+  "136": {"name": "Brakes - Power Unit (Tractor ABS)"},
+  "137": {"name": "Brakes - Trailer #1 (ABS)"},
+  "138": {"name": "Brakes - Trailer #2 (ABS)"},
+  "139": {"name": "Brakes - Trailer #3 (ABS)"},
+  "140": {"name": "Instrument Cluster"},
+  "142": {"name": "Vehicle Management System"}
+}
