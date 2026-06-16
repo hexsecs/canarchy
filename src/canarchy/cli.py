@@ -5741,9 +5741,7 @@ def j2497_payload(
         return ({"mode": "reference", "mid_count": len(mids), "mids": mids}, [], [])
 
     try:
-        messages = list(
-            iter_j2497_frames_from_file(args.file, **j1939_file_analysis_kwargs(args))
-        )
+        messages = list(iter_j2497_frames_from_file(args.file, **j1939_file_analysis_kwargs(args)))
     except TransportError as exc:
         raise CommandError(
             command=args.command,
@@ -8250,9 +8248,7 @@ def format_j2497_table(result: CommandResult) -> list[str]:
         payload = event["payload"]
         name = payload["name"] or "unknown"
         checksum_suffix = "" if payload["checksum_valid"] else " checksum=invalid"
-        lines.append(
-            f"- mid={payload['mid']} name={name} data={payload['data']}{checksum_suffix}"
-        )
+        lines.append(f"- mid={payload['mid']} name={name} data={payload['data']}{checksum_suffix}")
     return lines
 
 
