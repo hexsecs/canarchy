@@ -2578,6 +2578,8 @@ def validate_args(args: argparse.Namespace) -> None:
         "j1939 summary",
         "j1939 inventory",
         "j1939 compare",
+        "j1587 decode",
+        "j2497 decode",
     }:
         max_frames = getattr(args, "max_frames", None)
         seconds = getattr(args, "seconds", None)

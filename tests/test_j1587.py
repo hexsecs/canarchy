@@ -386,6 +386,38 @@ class J1587CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["message_count"], 1)
 
+    def test_decode_rejects_zero_max_frames(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "j1587",
+            "decode",
+            "--file",
+            str(FIXTURES / "j1708_sample.j1708"),
+            "--max-frames",
+            "0",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_MAX_FRAMES")
+
+    def test_decode_rejects_negative_seconds(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "j1587",
+            "decode",
+            "--file",
+            str(FIXTURES / "j1708_sample.j1708"),
+            "--seconds",
+            "-1",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_ANALYSIS_SECONDS")
+
     def test_decode_missing_file_returns_structured_error(self) -> None:
         exit_code, stdout, _ = run_cli(
             "j1587", "decode", "--file", "/tmp/does-not-exist.j1708", "--json"
