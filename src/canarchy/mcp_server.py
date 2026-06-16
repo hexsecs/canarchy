@@ -933,6 +933,41 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="j2497_decode",
+        description=(
+            "Decode a J2497 (PLC4TRUCKS trailer power-line) capture file into frames "
+            "(MID, message data, checksum validity). Use max_frames or seconds to limit "
+            "processing on large captures."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to a J2497 capture file"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
+        name="j2497_mids",
+        description="List the bundled J2497/J1587 MID catalog with ECU names.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
         name="config_show",
         description="Show the effective CANarchy transport configuration.",
         inputSchema={
@@ -2154,6 +2189,17 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "j1587_pids":
             return ["j1587", "pids", "--json"]
+        case "j2497_decode":
+            argv = ["j2497", "decode", "--file", a["file"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
+        case "j2497_mids":
+            return ["j2497", "mids", "--json"]
         case "config_show":
             return ["config", "show", "--json"]
         case "doctor":

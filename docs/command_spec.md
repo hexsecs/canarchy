@@ -22,6 +22,7 @@ Implemented and verified in the current codebase:
 * UDS `scan`, `trace`, and `services`
 * XCP (measurement/calibration) `scan`, `trace`, `read`, and `commands` for XCP-on-CAN
 * J1587/J1708 `decode` and `pids` for legacy heavy-vehicle diagnostic captures
+* J2497 (PLC4TRUCKS) `decode` and `mids` for passive trailer power-line frame captures
 * `config show` for effective transport configuration inspection
 * `re signals`, `re counters`, `re entropy`, `re correlate`, and `re anomalies` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
@@ -1124,6 +1125,41 @@ Notes:
 * this is a reference command and does not require a capture file
 * output includes each PID's name, data length, resolution, offset, units, and byte order
 
+### j2497 decode
+
+Decode a J2497 (PLC4TRUCKS trailer power-line) capture file into frames.
+
+```bash
+canarchy j2497 decode --file <path> [--offset N] [--max-frames N] [--seconds N] [--json|--jsonl|--text]
+```
+
+```bash
+canarchy j2497 decode --file tests/fixtures/j2497_sample.j2497 --json
+```
+
+Notes:
+
+* each line of the capture file must read `(timestamp) j2497 <hex>`, where `<hex>` is the full raw frame (source MID, message data, and a trailing checksum byte)
+* emits one `j2497_message` event per frame, with `mid`, `name`, `data`, `checksum_valid`, and `timestamp`; MIDs are resolved against the bundled `resources/j2497/mids.json` catalog (override via `CANARCHY_J2497_MID_OVERRIDES` or `~/.canarchy/j2497_mids.json`)
+* J2497 reuses the J1708/J1587 frame format; the `data` bytes follow the J1587 PID framing rules, so feed the same byte format to `j1587 decode` for PID-level resolution
+* `data` reports `mode: "passive"`, `file`, `frame_count`, and `checksum_failures`
+* `--offset` / `--max-frames` / `--seconds` apply to the frame stream the same way they do for `j1939 decode`
+* live J2497 / power-line access requires a power-line carrier modem and external hardware and is not provided; this command is decode-only over captured frames
+* a missing `--file` returns `J2497_SOURCE_UNAVAILABLE`; a line that does not match the expected format, has an odd number of hex digits, or is too short to be a frame returns `J2497_SOURCE_INVALID` (exit code 1)
+
+### j2497 mids
+
+Inspect the built-in J2497/J1587 MID catalog.
+
+```bash
+canarchy j2497 mids [--json|--jsonl|--text]
+```
+
+Notes:
+
+* this is a reference command and does not require a capture file
+* output includes each MID's ECU name (trailer ABS controllers and related units)
+
 ### re counters
 
 Rank likely counter fields from recorded CAN traffic.
@@ -1514,6 +1550,7 @@ Implemented commands currently emit these event types:
 * `signal`
 * `j1939_pgn`
 * `j1587_parameter`
+* `j2497_message`
 * `uds_transaction`
 * `xcp_transaction`
 * `xcp_measurement`

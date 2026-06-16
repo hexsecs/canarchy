@@ -90,6 +90,8 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `j1939 compare` | `j1939_compare` |
 | `j1587 decode` | `j1587_decode` |
 | `j1587 pids` | `j1587_pids` |
+| `j2497 decode` | `j2497_decode` |
+| `j2497 mids` | `j2497_mids` |
 | `uds scan` | `uds_scan` |
 | `uds trace` | `uds_trace` |
 | `uds services` | `uds_services` |
@@ -148,6 +150,7 @@ landing here.
 | Plugin inspection (`plugins list`, `plugins info`) | Read-only discovery and metadata inspection with bounded JSON envelopes. |
 | J1939 analysis (`j1939 decode/pgn/spn/tp sessions/tp compare/dm1/faults/summary/inventory/compare/monitor`) | File-backed analysis commands are safe, bounded, and deterministic. |
 | J1587/J1708 (`j1587 decode`, `j1587 pids`) | File-backed legacy heavy-vehicle decoding and a static PID catalog; safe, bounded, and deterministic. |
+| J2497/PLC4TRUCKS (`j2497 decode`, `j2497 mids`) | File-backed trailer power-line frame decoding and a static MID catalog; safe, bounded, and deterministic. Live PLC access requires external hardware and is not exposed. |
 | Reverse-engineering helpers (`re signals/counters/entropy/correlate/anomalies/match-dbc/shortlist-dbc`, and `re suggest` heuristic path) | File-backed analysis commands are safe and deterministic. `re_suggest` exposes the offline heuristic path only; the external `--llm` enrichment is a CLI-only operator action behind explicit confirmation. |
 | Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`), XCP (`xcp trace/read/commands`) | Bounded, non-interactive envelopes. |
 

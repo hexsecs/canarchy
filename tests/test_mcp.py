@@ -57,6 +57,8 @@ _EXPECTED_TOOLS = {
     "xcp_commands",
     "j1587_decode",
     "j1587_pids",
+    "j2497_decode",
+    "j2497_mids",
     "config_show",
     "doctor",
     "datasets_provider_list",
@@ -290,6 +292,27 @@ def test_call_tool_j1587_pids():
     payload = json.loads(results[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "j1587 pids"
+    assert payload["data"]["mode"] == "reference"
+
+
+def test_call_tool_j2497_decode_uses_file_flag():
+    results = asyncio.run(
+        handle_call_tool("j2497_decode", {"file": str(FIXTURES / "j2497_sample.j2497")})
+    )
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "j2497 decode"
+    assert payload["data"]["frame_count"] == 6
+    assert payload["data"]["checksum_failures"] == 1
+
+
+def test_call_tool_j2497_mids():
+    results = asyncio.run(handle_call_tool("j2497_mids", {}))
+    assert len(results) == 1
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["command"] == "j2497 mids"
     assert payload["data"]["mode"] == "reference"
 
 
@@ -662,6 +685,35 @@ def test_build_argv_j1587_decode_with_bounds():
 def test_build_argv_j1587_pids():
     argv = _build_argv("j1587_pids", {})
     assert argv == ["j1587", "pids", "--json"]
+
+
+def test_build_argv_j2497_decode_uses_file_flag():
+    argv = _build_argv("j2497_decode", {"file": "trace.j2497"})
+    assert argv == ["j2497", "decode", "--file", "trace.j2497", "--json"]
+
+
+def test_build_argv_j2497_decode_with_bounds():
+    argv = _build_argv(
+        "j2497_decode", {"file": "trace.j2497", "offset": 2, "max_frames": 5, "seconds": 1.5}
+    )
+    assert argv == [
+        "j2497",
+        "decode",
+        "--file",
+        "trace.j2497",
+        "--offset",
+        "2",
+        "--max-frames",
+        "5",
+        "--seconds",
+        "1.5",
+        "--json",
+    ]
+
+
+def test_build_argv_j2497_mids():
+    argv = _build_argv("j2497_mids", {})
+    assert argv == ["j2497", "mids", "--json"]
 
 
 def test_build_argv_j1939_decode_uses_file_flag():
