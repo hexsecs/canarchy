@@ -1323,6 +1323,79 @@ class CliTests(unittest.TestCase):
         self.assertIn("component_ids=ENGINE1", stdout)
         self.assertIn("component_ids=TRANS01", stdout)
 
+    def test_j1939_map_json_builds_nodes_and_edges(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "map",
+            "--file",
+            str(FIXTURES / "j1939_map.candump"),
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "j1939 map")
+        data = payload["data"]
+        self.assertEqual(data["mode"], "passive")
+        self.assertEqual(data["node_count"], 2)
+        self.assertEqual(data["address_claim_count"], 2)
+
+        nodes = {node["source_address"]: node for node in data["nodes"]}
+        # Address Claimed NAME fields are decoded onto the claiming node.
+        self.assertEqual(nodes[0]["name"]["manufacturer_code"], 100)
+        self.assertEqual(nodes[0]["name"]["function"], 130)
+        self.assertEqual(nodes[0]["name"]["identity_number"], 74565)
+        self.assertTrue(nodes[0]["name"]["arbitrary_address_capable"])
+        self.assertEqual(nodes[0]["source_address_name"], "Engine #1")
+        self.assertEqual(nodes[3]["name"]["manufacturer_code"], 200)
+        self.assertFalse(nodes[3]["name"]["arbitrary_address_capable"])
+
+        # A directed PDU1 request (SA 0 -> DA 3) yields a non-broadcast edge.
+        directed = [e for e in data["edges"] if not e["broadcast"]]
+        self.assertEqual(len(directed), 1)
+        self.assertEqual(directed[0]["source_address"], 0)
+        self.assertEqual(directed[0]["destination_address"], 3)
+        self.assertEqual(directed[0]["destination_address_name"], "Transmission #1")
+        self.assertEqual(directed[0]["pgn"], 59904)
+
+        # Broadcast PGN flows are present and aggregate repeated frames.
+        eec1 = [e for e in data["edges"] if e["pgn"] == 61444]
+        self.assertEqual(len(eec1), 1)
+        self.assertTrue(eec1[0]["broadcast"])
+        self.assertEqual(eec1[0]["frame_count"], 2)
+
+    def test_j1939_map_text_output_is_pretty_printed(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "j1939",
+            "map",
+            "--file",
+            str(FIXTURES / "j1939_map.candump"),
+            "--text",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        self.assertIn("command: j1939 map", stdout)
+        self.assertIn("nodes: 2 edges:", stdout)
+        self.assertIn("sa=0x00 [Engine #1]", stdout)
+        self.assertIn("name=mfr=100 fn=130 id=74565", stdout)
+        self.assertIn("da=0x03 pgn=59904", stdout)
+        self.assertIn("da=broadcast", stdout)
+
+    def test_j1939_map_empty_capture_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            empty = Path(temp_dir) / "empty.candump"
+            empty.write_text("")
+            exit_code, stdout, _ = run_cli("j1939", "map", "--file", str(empty), "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["node_count"], 0)
+        self.assertEqual(payload["data"]["edge_count"], 0)
+        self.assertTrue(
+            any("No J1939 network map" in w for w in payload["warnings"]),
+            payload["warnings"],
+        )
+
     def test_j1939_compare_requires_multiple_files(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",

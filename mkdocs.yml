@@ -123,6 +123,7 @@ nav:
           - Standalone ISO-TP Utility Commands: design/isotp-utility-commands.md
           - Expanded J1939 Workflows: design/j1939-expanded-workflows.md
           - J1939 Monitor Command: design/j1939-monitor-command.md
+          - J1939 Map Command: design/j1939-map-command.md
           - Scapy Diagnostic Integration: design/scapy-diagnostic-integration.md
           - Skill Manifest Schema: design/skill-manifest-schema.md
           - Skills Agent MCP Integration: design/skills-agent-mcp-integration.md
@@ -159,6 +160,7 @@ nav:
           - Standalone ISO-TP Utility Commands: tests/isotp-utility-commands.md
           - Expanded J1939 Workflows: tests/j1939-expanded-workflows.md
           - J1939 Monitor Command: tests/j1939-monitor-command.md
+          - J1939 Map Command: tests/j1939-map-command.md
           - Scapy Diagnostic Integration: tests/scapy-diagnostic-integration.md
           - Skill Manifest Schema: tests/skill-manifest-schema.md
           - Skills Agent MCP Integration: tests/skills-agent-mcp-integration.md

@@ -133,6 +133,7 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `j1939_tp_compare` | `canarchy j1939 tp compare` |
 | `j1939_faults` | `canarchy j1939 faults` |
 | `j1939_compare` | `canarchy j1939 compare` |
+| `j1939_map` | `canarchy j1939 map` |
 | `re_signals` | `canarchy re signals` |
 | `re_corpus` | `canarchy re corpus` |
 | `re_suggest` | `canarchy re suggest` (heuristic path only) |

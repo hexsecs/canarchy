@@ -131,6 +131,7 @@ J1939_COMMANDS = {
     "j1939 summary",
     "j1939 inventory",
     "j1939 compare",
+    "j1939 map",
 }
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
@@ -1147,6 +1148,14 @@ def build_parser() -> CanarchyArgumentParser:
     add_j1939_file_analysis_arguments(j1939_compare)
     add_output_arguments(j1939_compare)
     j1939_compare.set_defaults(command="j1939 compare")
+
+    j1939_map = j1939_subparsers.add_parser(
+        "map", help="build a J1939 network-topology map (nodes/edges) from a capture"
+    )
+    j1939_map.add_argument("--file", required=True, help="path to candump capture file")
+    add_j1939_file_analysis_arguments(j1939_map)
+    add_output_arguments(j1939_map)
+    j1939_map.set_defaults(command="j1939 map")
 
     uds = subparsers.add_parser("uds", help="UDS protocol workflows")
     uds_subparsers = uds.add_subparsers(dest="uds_action", required=True)
@@ -2578,6 +2587,7 @@ def validate_args(args: argparse.Namespace) -> None:
         "j1939 summary",
         "j1939 inventory",
         "j1939 compare",
+        "j1939 map",
         "j1587 decode",
         "j2497 decode",
     }:
@@ -3158,6 +3168,125 @@ def _j1939_inventory(
         },
         warnings,
     )
+
+
+ADDRESS_CLAIMED_PGN = 0x00EE00
+
+
+def _decode_j1939_name(data: bytes) -> dict[str, Any]:
+    """Decode the 64-bit J1939 NAME carried by an Address Claimed (PGN 60928).
+
+    The eight data bytes are a little-endian bit field (SAE J1939-81 §4.2).
+    """
+    value = int.from_bytes(data[:8], "little")
+    return {
+        "identity_number": value & 0x1FFFFF,
+        "manufacturer_code": (value >> 21) & 0x7FF,
+        "ecu_instance": (value >> 32) & 0x7,
+        "function_instance": (value >> 35) & 0x1F,
+        "function": (value >> 40) & 0xFF,
+        "vehicle_system": (value >> 49) & 0x7F,
+        "vehicle_system_instance": (value >> 56) & 0xF,
+        "industry_group": (value >> 60) & 0x7,
+        "arbitrary_address_capable": bool((value >> 63) & 0x1),
+    }
+
+
+def _j1939_map(
+    frames: list[CanFrame], *, file: str, decoder: Any
+) -> tuple[dict[str, Any], list[str]]:
+    """Build a passive J1939 network map (nodes/edges) from a capture.
+
+    Reuses the inventory machinery for per-source identification strings and
+    layers in Address Claimed NAME fields plus observed PGN flows. No active
+    probing: every value is derived purely from the captured frames.
+    """
+    inventory_data, warnings = _j1939_inventory(frames, file=file, decoder=decoder)
+
+    # Address Claimed NAME fields, keyed by the claiming source address.
+    name_by_sa: dict[int, dict[str, Any]] = {}
+    for frame in frames:
+        if not frame.is_extended_id:
+            continue
+        identifier = decompose_arbitration_id(frame.arbitration_id)
+        if identifier.pgn != ADDRESS_CLAIMED_PGN or len(frame.data) < 8:
+            continue
+        # The latest claim wins; a node re-announces with the same NAME.
+        name_by_sa[identifier.source_address] = _decode_j1939_name(bytes(frame.data[:8]))
+
+    nodes: list[dict[str, Any]] = []
+    for inv_node in inventory_data["nodes"]:
+        source_address = int(inv_node["source_address"])
+        nodes.append(
+            {
+                "source_address": source_address,
+                "source_address_name": inv_node.get("source_address_name"),
+                "frame_count": inv_node["frame_count"],
+                "name": name_by_sa.get(source_address),
+                "component_identifications": [
+                    entry["text"] for entry in inv_node.get("component_identifications", [])
+                ],
+                "vehicle_identifications": [
+                    entry["text"] for entry in inv_node.get("vehicle_identifications", [])
+                ],
+                "dm1_present": bool(inv_node["dm1"]["present"]),
+            }
+        )
+
+    # Edges: observed PGN flows from a source address to a destination. PDU1
+    # traffic addressed to the global address (0xFF) is a broadcast, the same
+    # as every PDU2 message, so both collapse to destination=None.
+    edge_counts: defaultdict[tuple[int, int | None, int], int] = defaultdict(int)
+    for frame in frames:
+        if not frame.is_extended_id:
+            continue
+        identifier = decompose_arbitration_id(frame.arbitration_id)
+        destination = identifier.destination_address
+        if destination == 0xFF:
+            destination = None
+        edge_counts[(identifier.source_address, destination, identifier.pgn)] += 1
+
+    edges: list[dict[str, Any]] = []
+    for (source_address, destination, pgn), count in sorted(
+        edge_counts.items(),
+        key=lambda item: (item[0][0], -1 if item[0][1] is None else item[0][1], item[0][2]),
+    ):
+        meta = pgn_lookup(pgn)
+        edges.append(
+            {
+                "source_address": source_address,
+                "source_address_name": source_address_lookup(source_address),
+                "destination_address": destination,
+                "destination_address_name": (
+                    source_address_lookup(destination) if destination is not None else None
+                ),
+                "broadcast": destination is None,
+                "pgn": pgn,
+                "pgn_label": meta["label"] if meta else None,
+                "frame_count": count,
+            }
+        )
+
+    data = {
+        "mode": "passive",
+        "file": file,
+        "total_frames": inventory_data["total_frames"],
+        "interfaces": inventory_data["interfaces"],
+        "first_timestamp": inventory_data["first_timestamp"],
+        "last_timestamp": inventory_data["last_timestamp"],
+        "duration_seconds": inventory_data["duration_seconds"],
+        "j1939_frame_count": inventory_data["j1939_frame_count"],
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "address_claim_count": len(name_by_sa),
+        "nodes": nodes,
+        "edges": edges,
+    }
+    if not nodes and not edges:
+        message = "No J1939 network map could be built from the capture window."
+        if message not in warnings:
+            warnings = [*warnings, message]
+    return data, warnings
 
 
 def _format_pgn_entry(pgn: int) -> dict[str, Any]:
@@ -4373,6 +4502,17 @@ def j1939_payload(
             captures.append(capture_data)
             warnings.extend(f"{Path(file).name}: {warning}" for warning in capture_warnings)
         return (_j1939_compare(captures), [], warnings)
+    if args.command == "j1939 map":
+        auto_warnings = []
+        decoder = get_j1939_decoder()
+        data, warnings = _j1939_map(
+            transport.frames_from_file(
+                args.file, **_large_file_kwargs(args, args.file, auto_warnings)
+            ),
+            file=args.file,
+            decoder=decoder,
+        )
+        return (data, [], auto_warnings + warnings)
     raise AssertionError(f"unsupported j1939 command: {args.command}")
 
 
@@ -7937,6 +8077,57 @@ def format_j1939_table(result: CommandResult) -> list[str]:
             )
         return lines
 
+    if result.command == "j1939 map":
+        lines.append(f"file: {result.data['file']}")
+        lines.append(
+            f"nodes: {result.data['node_count']} "
+            f"edges: {result.data['edge_count']} "
+            f"address_claims: {result.data['address_claim_count']}"
+        )
+        nodes = result.data.get("nodes", [])
+        edges = result.data.get("edges", [])
+        lines.append("nodes:")
+        if not nodes:
+            lines.append("- no j1939 nodes")
+        for node in nodes:
+            source_address = node["source_address"]
+            source_name = node.get("source_address_name")
+            source_label = f" [{source_name}]" if source_name else ""
+            name = node.get("name")
+            if name:
+                name_text = (
+                    f"mfr={name['manufacturer_code']} "
+                    f"fn={name['function']} "
+                    f"id={name['identity_number']}"
+                )
+            else:
+                name_text = "none"
+            component_text = ",".join(node.get("component_identifications", [])) or "none"
+            vehicle_text = ",".join(node.get("vehicle_identifications", [])) or "none"
+            lines.append(
+                "- "
+                f"sa=0x{source_address:02X}{source_label} "
+                f"frames={node['frame_count']} "
+                f"name={name_text} "
+                f"component_ids={component_text} "
+                f"vehicle_ids={vehicle_text}"
+            )
+        lines.append("edges:")
+        if not edges:
+            lines.append("- no j1939 edges")
+        for edge in edges:
+            destination = edge["destination_address"]
+            destination_text = "broadcast" if edge["broadcast"] else f"0x{destination:02X}"
+            pgn_label = f"[{edge['pgn_label']}]" if edge.get("pgn_label") else ""
+            lines.append(
+                "- "
+                f"sa=0x{edge['source_address']:02X} "
+                f"da={destination_text} "
+                f"pgn={edge['pgn']}{pgn_label} "
+                f"frames={edge['frame_count']}"
+            )
+        return lines
+
     if result.command == "j1939 compare":
         lines.append("files:")
         for file in result.data.get("files", []):
@@ -9310,6 +9501,7 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         "j1939 summary",
         "j1939 inventory",
         "j1939 compare",
+        "j1939 map",
     }
     if output_format == "json":
         data = payload.get("data", {})
