@@ -17,7 +17,7 @@ Implemented and exercised in the current codebase:
 * file-backed `filter`, `stats`, `decode`, `j1939 decode`, and `replay` using candump logs
 * DBC-backed `decode`, `encode`, and `dbc inspect`, including provider-ref resolution and `dbc_source` provenance in structured output
 * DBC provider and cache workflows for catalog search, fetch, and refresh through the optional opendbc integration
-* J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, and `compare`
+* J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, `compare`, and `map`
 * UDS `scan`, `trace`, and `services`
 * `re signals` for file-backed signal candidate inference
 * `re counters` for file-backed likely-counter detection

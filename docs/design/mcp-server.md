@@ -32,7 +32,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-09` | Ubiquitous | The `mcp` package shall be declared as a project dependency in `pyproject.toml`. |
 | `REQ-MCP-10` | Ubiquitous | The server shall not expose `shell` or `tui` as MCP tools; those are interactive front-end commands with no RPC equivalent. |
 | `REQ-MCP-11` | Event-driven | The `call_tool` handler shall execute `execute_command` in a thread pool via `asyncio.to_thread` so that the asyncio event loop is not blocked during file I/O or analysis, preventing MCP keepalive timeouts on large captures. |
-| `REQ-MCP-12` | Ubiquitous | File-backed J1939 tools (`j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_tp_compare`, `j1939_dm1`, `j1939_faults`, `j1939_summary`, `j1939_inventory`, `j1939_compare`) shall expose optional `max_frames` (integer) and `seconds` (number) parameters that bound analysis to the first N frames or first T seconds of the capture, respectively. |
+| `REQ-MCP-12` | Ubiquitous | File-backed J1939 tools (`j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_tp_compare`, `j1939_dm1`, `j1939_faults`, `j1939_summary`, `j1939_inventory`, `j1939_compare`, `j1939_map`) shall expose optional `max_frames` (integer) and `seconds` (number) parameters that bound analysis to the first N frames or first T seconds of the capture, respectively. |
 | `REQ-MCP-13` | Ubiquitous | Dataset provider workflows selected for MCP shall expose provider list, search, inspect, fetch, cache list, cache refresh, conversion, replay file listing, and safe replay planning tools while excluding streaming dataset frame output. |
 | `REQ-MCP-14` | Ubiquitous | Skills provider workflows selected for MCP shall expose provider list, search, fetch, cache list, and cache refresh tools while preserving the same CLI result envelope. |
 | `REQ-MCP-15` | Ubiquitous | Reverse-engineering helpers selected for MCP shall include `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, `re shortlist-dbc`, and `re suggest` (heuristic path only; the external `--llm` enrichment is CLI-only). |
@@ -88,6 +88,7 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `j1939 summary` | `j1939_summary` |
 | `j1939 inventory` | `j1939_inventory` |
 | `j1939 compare` | `j1939_compare` |
+| `j1939 map` | `j1939_map` |
 | `j1587 decode` | `j1587_decode` |
 | `j1587 pids` | `j1587_pids` |
 | `j2497 decode` | `j2497_decode` |
@@ -148,7 +149,7 @@ landing here.
 | `datasets replay --dry-run` (`datasets_replay_plan`) and `--list-files` (`datasets_replay_files`) | Safe planning and manifest inspection do not open or stream remote frame data. |
 | Skills provider/cache/search/fetch | Non-interactive provider workflows with canonical JSON envelopes. |
 | Plugin inspection (`plugins list`, `plugins info`) | Read-only discovery and metadata inspection with bounded JSON envelopes. |
-| J1939 analysis (`j1939 decode/pgn/spn/tp sessions/tp compare/dm1/faults/summary/inventory/compare/monitor`) | File-backed analysis commands are safe, bounded, and deterministic. |
+| J1939 analysis (`j1939 decode/pgn/spn/tp sessions/tp compare/dm1/faults/summary/inventory/compare/map/monitor`) | File-backed analysis commands are safe, bounded, and deterministic; `j1939_map` returns passive nodes/edges topology data derived only from the capture. |
 | J1587/J1708 (`j1587 decode`, `j1587 pids`) | File-backed legacy heavy-vehicle decoding and a static PID catalog; safe, bounded, and deterministic. |
 | J2497/PLC4TRUCKS (`j2497 decode`, `j2497 mids`) | File-backed trailer power-line frame decoding and a static MID catalog; safe, bounded, and deterministic. Live PLC access requires external hardware and is not exposed. |
 | Reverse-engineering helpers (`re signals/counters/entropy/correlate/anomalies/match-dbc/shortlist-dbc`, and `re suggest` heuristic path) | File-backed analysis commands are safe and deterministic. `re_suggest` exposes the offline heuristic path only; the external `--llm` enrichment is a CLI-only operator action behind explicit confirmation. |

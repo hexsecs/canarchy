@@ -856,7 +856,7 @@ Notes:
 
 * without an interface, this command uses an explicit sample/reference provider
 * with an interface, this command captures from the selected transport backend and filters to J1939 extended-ID traffic
-* `j1939 decode`, `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 summary`, `j1939 inventory`, and `j1939 compare` remain file-backed
+* `j1939 decode`, `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 summary`, `j1939 inventory`, `j1939 compare`, and `j1939 map` remain file-backed
 
 ### j1939 decode
 
@@ -974,6 +974,27 @@ Notes:
 * `--max-frames`, `--seconds`, and `--offset` apply independently to each compared capture file
 * DM1 differences are grouped by source address and surface active-fault or lamp-state changes when present
 * printable TP component-identification and vehicle-identification payloads are compared by source address and payload label
+
+### j1939 map
+
+Build a passive network-topology map from a J1939 capture file: nodes (one per source address, carrying the SA name, decoded Address Claimed NAME fields when present, and component/vehicle identification strings) and edges (observed PGN flows from a source address to a destination, or to the broadcast/global address). The map is derived purely from captured frames — there is no active probing or address-claim solicitation.
+
+```bash
+canarchy j1939 map --file <file> [--json|--jsonl|--text]
+```
+
+Example:
+
+```bash
+canarchy j1939 map --file tests/fixtures/j1939_map.candump --json
+```
+
+Notes:
+
+* nodes reuse the `j1939 inventory` machinery, so identification strings and source-address names match between the two commands
+* the 64-bit NAME from an Address Claimed message (PGN 60928) is decoded into its constituent fields (manufacturer code, function, identity number, industry group, arbitrary-address-capable flag, and the instance fields) when address-claim traffic is present in the capture
+* edges aggregate repeated frames into a single per-(source, destination, PGN) flow with a frame count; PDU1 traffic addressed to the global address (0xFF) is reported as a broadcast, the same as PDU2 traffic
+* the structured `nodes`/`edges` output is suitable for graphing and diffing
 
 ### tui
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import concurrent.futures
 import json
 import os
 import socket
@@ -207,8 +208,12 @@ def test_ws_text_frame_round_trip() -> None:
         encoded = encode_ws_text_frame(payload)
         left, right = socket.socketpair()
         try:
-            left.sendall(encoded)
-            opcode, decoded = read_ws_frame(right)
+            left.settimeout(5)
+            right.settimeout(5)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                send = executor.submit(left.sendall, encoded)
+                opcode, decoded = read_ws_frame(right)
+                send.result(timeout=5)
             assert opcode == 0x1
             assert decoded.decode("utf-8") == payload
         finally:

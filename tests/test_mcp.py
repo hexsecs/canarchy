@@ -48,6 +48,7 @@ _EXPECTED_TOOLS = {
     "j1939_summary",
     "j1939_inventory",
     "j1939_compare",
+    "j1939_map",
     "uds_scan",
     "uds_trace",
     "uds_services",
@@ -1045,6 +1046,15 @@ def test_build_argv_j1939_inventory_max_frames():
     assert argv[-1] == "--json"
 
 
+def test_build_argv_j1939_map_max_frames():
+    argv = _build_argv("j1939_map", {"file": "big.log", "max_frames": 5000})
+    assert argv[:3] == ["j1939", "map", "--file"]
+    assert "big.log" in argv
+    assert "--max-frames" in argv
+    assert "5000" in argv
+    assert argv[-1] == "--json"
+
+
 def test_build_argv_j1939_decode_max_frames():
     argv = _build_argv("j1939_decode", {"file": "big.log", "max_frames": 1000})
     assert "--max-frames" in argv
@@ -1140,6 +1150,7 @@ def test_j1939_tool_schemas_have_frame_limit_params():
         "j1939_summary",
         "j1939_inventory",
         "j1939_compare",
+        "j1939_map",
     ]
     for tool_name in file_tools:
         schema = tools_by_name[tool_name].inputSchema

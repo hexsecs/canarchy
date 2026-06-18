@@ -786,6 +786,29 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name="j1939_map",
+        description="Build a passive J1939 network-topology map from a capture file: nodes (source addresses with SA names, Address Claimed NAME fields, and identification strings) and edges (observed PGN flows from source to destination/broadcast). No active probing. Use max_frames or seconds to limit processing on large captures.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file": {"type": "string", "description": "Path to candump capture file"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from the capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames (useful for large captures)",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of the capture",
+                },
+            },
+            "required": ["file"],
+        },
+    ),
+    types.Tool(
         name="uds_scan",
         description="Scan for UDS responders on a CAN interface.",
         inputSchema={
@@ -2128,6 +2151,15 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "j1939_compare":
             argv = ["j1939", "compare"] + [str(file) for file in a["files"]]
+            if a.get("offset") is not None and a["offset"] > 0:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
+        case "j1939_map":
+            argv = ["j1939", "map", "--file", a["file"]]
             if a.get("offset") is not None and a["offset"] > 0:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
