@@ -26,6 +26,60 @@ class J1939Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "29-bit"):
             decompose_arbitration_id(0x3FFFFFFF)
 
+    def test_decompose_matches_canj1939_reference(self) -> None:
+        """The arithmetic decoder must match the can-j1939 library bit-for-bit.
+
+        Guards the performance rewrite in issue #441 against semantic drift.
+        """
+        import j1939 as can_j1939
+
+        def reference(arbitration_id: int) -> tuple[int, ...]:
+            mid = can_j1939.MessageId(can_id=arbitration_id)
+            pgn = can_j1939.ParameterGroupNumber()
+            pgn.from_message_id(mid)
+            if pgn.is_pdu1_format:
+                pgn_value = (pgn.data_page << 16) | (pgn.pdu_format << 8)
+                destination = pgn.pdu_specific
+            else:
+                pgn_value = pgn.value
+                destination = None
+            return (
+                mid.priority,
+                pgn.data_page,
+                pgn.pdu_format,
+                pgn.pdu_specific,
+                mid.source_address,
+                pgn_value,
+                destination if destination is not None else -1,
+            )
+
+        sample_ids = [
+            0x00000000,
+            0x1FFFFFFF,
+            0x18FEEE31,
+            0x18EAFF31,
+            0x18EBFF31,
+            0x0CF00400,
+            0x18FECA31,
+            0x10ECFF00,
+        ]
+        sample_ids += [(idx * 2654435761) & 0x1FFFFFFF for idx in range(2000)]
+
+        for arbitration_id in sample_ids:
+            identifier = decompose_arbitration_id(arbitration_id)
+            got = (
+                identifier.priority,
+                identifier.data_page,
+                identifier.pdu_format,
+                identifier.pdu_specific,
+                identifier.source_address,
+                identifier.pgn,
+                identifier.destination_address
+                if identifier.destination_address is not None
+                else -1,
+            )
+            self.assertEqual(got, reference(arbitration_id), hex(arbitration_id))
+
 
 class SpnObservationsTests(unittest.TestCase):
     # SPN 175 (Engine Oil Temperature 1): PGN 65262, start byte 2, length 2 bytes,

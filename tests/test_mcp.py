@@ -1137,6 +1137,95 @@ def test_build_argv_j1939_summary_no_limits():
 # --- TEST-MCP-17: file-based J1939 tool schemas expose max_frames/seconds --
 
 
+def _collect_command_options() -> dict[tuple[str, ...], set[str]]:
+    """Map every leaf command path to the option strings its parser accepts."""
+    import argparse
+
+    from canarchy.cli import build_parser
+
+    result: dict[tuple[str, ...], set[str]] = {}
+
+    def walk(parser: argparse.ArgumentParser, prefix: tuple[str, ...]) -> None:
+        subparser_actions = [
+            action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+        ]
+        if not subparser_actions:
+            options: set[str] = set()
+            for action in parser._actions:
+                options.update(action.option_strings)
+            result[prefix] = options
+            return
+        for action in subparser_actions:
+            for name, subparser in action.choices.items():
+                walk(subparser, prefix + (name,))
+
+    walk(build_parser(), ())
+    return result
+
+
+def _dummy_arguments(schema: dict) -> dict:
+    """Build a fully-populated argument dict from a tool input schema."""
+    arguments: dict = {}
+    for name, spec in schema.get("properties", {}).items():
+        kind = spec.get("type")
+        if "enum" in spec:
+            arguments[name] = spec["enum"][0]
+        elif kind == "integer":
+            arguments[name] = 1
+        elif kind == "number":
+            arguments[name] = 1.0
+        elif kind == "boolean":
+            arguments[name] = True
+        elif kind == "array":
+            item_kind = spec.get("items", {}).get("type")
+            arguments[name] = [1] if item_kind == "integer" else ["x"]
+        else:
+            arguments[name] = "x"
+    return arguments
+
+
+# Output flags are attached to every subcommand parser uniformly; they are not
+# part of the per-command parameter contract under test here.
+_OUTPUT_FLAGS = {"--json", "--jsonl", "--text", "--table"}
+
+
+def test_mcp_tool_flags_map_to_real_cli_flags():
+    """Every flag an MCP tool forwards must be accepted by the target CLI command.
+
+    Guards against schema/CLI drift (issue #439): a tool advertising a parameter
+    that the underlying CLI command rejects with ``unrecognized arguments``.
+    """
+    command_options = _collect_command_options()
+    command_paths = sorted(command_options, key=len, reverse=True)
+
+    failures: list[str] = []
+    for tool in _TOOLS:
+        argv = _build_argv(tool.name, _dummy_arguments(tool.inputSchema))
+
+        # Resolve the longest known command path that prefixes the argv.
+        path: tuple[str, ...] | None = next(
+            (
+                candidate
+                for candidate in command_paths
+                if tuple(argv[: len(candidate)]) == candidate
+            ),
+            None,
+        )
+        if path is None:
+            failures.append(f"{tool.name}: no CLI command matches argv {argv}")
+            continue
+
+        known = command_options[path]
+        emitted = {token for token in argv[len(path) :] if token.startswith("--")}
+        unknown = emitted - known - _OUTPUT_FLAGS
+        if unknown:
+            failures.append(
+                f"{tool.name} -> {' '.join(path)}: CLI does not accept {sorted(unknown)}"
+            )
+
+    assert not failures, "MCP/CLI flag drift detected:\n" + "\n".join(failures)
+
+
 def test_j1939_tool_schemas_have_frame_limit_params():
     tools_by_name = {t.name: t for t in asyncio.run(handle_list_tools())}
     file_tools = [

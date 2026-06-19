@@ -5009,6 +5009,48 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["total_frames"], 0)
         self.assertEqual(payload["data"]["unique_arbitration_ids"], 0)
 
+    def test_unparseable_capture_emits_parse_warning(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as handle:
+            handle.write("this is not a candump line\ngarbage\n")
+            bad_path = handle.name
+        try:
+            exit_code, stdout, stderr = run_cli("stats", "--file", bad_path, "--json")
+        finally:
+            os.unlink(bad_path)
+
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["total_frames"], 0)
+        self.assertTrue(
+            any("0 of 2 lines matched candump format" in w for w in payload["warnings"]),
+            payload["warnings"],
+        )
+
+    def test_valid_capture_emits_no_parse_warning(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "stats", "--file", str(FIXTURES / "sample.candump"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertFalse(
+            any("matched candump format" in w for w in payload["warnings"]),
+            payload["warnings"],
+        )
+
+    def test_stats_filters_by_pgn_and_source_address(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli("stats", "--file", capture, "--sa", "0x31", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["sa_filter"], [0x31])
+
+        exit_code, stdout, _ = run_cli("stats", "--file", capture, "--pgn", "0xABCDE", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        # A PGN that does not appear filters every frame out.
+        self.assertEqual(payload["data"]["total_frames"], 0)
+        self.assertEqual(payload["data"]["pgn_filter"], 0xABCDE)
+
     def test_unsupported_capture_file_format_returns_transport_error(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "stats", "--file", str(FIXTURES / "sample.dbc"), "--json"

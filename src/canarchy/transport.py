@@ -8,6 +8,7 @@ import random
 import re
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, NoReturn, Protocol
@@ -1187,6 +1188,93 @@ class LocalTransport:
         return events
 
 
+@dataclass
+class CandumpParseReport:
+    """Line-level parse statistics for a single candump read.
+
+    ``total_lines`` counts non-empty lines actually consumed from the source;
+    ``parsed_lines`` counts those that matched a candump frame format. A read
+    that stops early (``max_frames``/``seconds``) only reflects the lines it
+    consumed before stopping.
+    """
+
+    path: str
+    total_lines: int = 0
+    parsed_lines: int = 0
+
+
+_parse_recorder = threading.local()
+
+
+@contextmanager
+def collect_parse_reports() -> "Iterator[list[CandumpParseReport]]":
+    """Collect :class:`CandumpParseReport` entries for candump reads in scope.
+
+    Any call to :func:`iter_candump_file` that runs (and is consumed) inside the
+    ``with`` block appends a report to the yielded list, letting callers surface
+    parse-quality warnings without threading state through every read site.
+    """
+
+    previous = getattr(_parse_recorder, "reports", None)
+    reports: list[CandumpParseReport] = []
+    _parse_recorder.reports = reports
+    try:
+        yield reports
+    finally:
+        _parse_recorder.reports = previous
+
+
+def reset_parse_reports() -> list[CandumpParseReport]:
+    """Start a fresh parse-report collection for the current thread.
+
+    Returns the list that subsequent :func:`iter_candump_file` reads append to.
+    Calling this again (e.g. at the start of each command) discards any prior
+    collection, so a leaked collection from an aborted command cannot bleed into
+    the next one.
+    """
+
+    reports: list[CandumpParseReport] = []
+    _parse_recorder.reports = reports
+    return reports
+
+
+def _record_parse_report(path: Path | None, total_lines: int, parsed_lines: int) -> None:
+    sink = getattr(_parse_recorder, "reports", None)
+    if sink is None:
+        return
+    sink.append(
+        CandumpParseReport(
+            path=str(path) if path is not None else "-",
+            total_lines=total_lines,
+            parsed_lines=parsed_lines,
+        )
+    )
+
+
+def candump_parse_warnings(reports: list[CandumpParseReport]) -> list[str]:
+    """Build human-readable warnings for low-quality candump parses.
+
+    Emits a warning when a non-empty source produced zero parseable frames,
+    signalling a malformed file or wrong format rather than an idle bus. Each
+    distinct path is reported once.
+    """
+
+    warnings: list[str] = []
+    seen: set[str] = set()
+    for report in reports:
+        if report.total_lines == 0 or report.parsed_lines > 0:
+            continue
+        if report.path in seen:
+            continue
+        seen.add(report.path)
+        source = "stdin" if report.path == "-" else report.path
+        warnings.append(
+            f"0 of {report.total_lines} lines matched candump format in {source}; "
+            "the file may be malformed or not a candump capture."
+        )
+    return warnings
+
+
 def iter_candump_file(
     path: Path | None,
     *,
@@ -1196,6 +1284,7 @@ def iter_candump_file(
 ) -> Iterator[CanFrame]:
     yielded = 0
     parsed_count = 0
+    total_lines = 0
     start_timestamp: float | None = None
 
     if path is None:
@@ -1213,6 +1302,7 @@ def iter_candump_file(
             stripped = raw_line.strip()
             if not stripped:
                 continue
+            total_lines += 1
             try:
                 frame = parse_candump_line(stripped, path=path_for_parse, line_number=line_number)
             except TransportError:
@@ -1235,6 +1325,7 @@ def iter_candump_file(
     finally:
         if path is not None:
             handle.close()
+        _record_parse_report(path, total_lines, parsed_count)
 
 
 def load_candump_file(path: Path) -> list[CanFrame]:

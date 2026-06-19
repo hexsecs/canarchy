@@ -24,6 +24,39 @@ def test_load_runtime_database_reads_sample_fixture() -> None:
     assert message.frame_id == 0x18FEEE31
 
 
+def test_load_runtime_database_caches_by_path_and_mtime(monkeypatch) -> None:
+    """Repeated loads of an unchanged file must parse it only once (issue #441)."""
+    import canarchy.dbc_runtime as dr
+
+    dr._DATABASE_CACHE.clear()
+    calls = {"count": 0}
+    real_load = dr.cantools.database.load_file
+
+    def counting_load(path, *args, **kwargs):
+        calls["count"] += 1
+        return real_load(path, *args, **kwargs)
+
+    monkeypatch.setattr(dr.cantools.database, "load_file", counting_load)
+
+    path = str(FIXTURES / "sample.dbc")
+    first = load_runtime_database(path)
+    second = load_runtime_database(path)
+    assert first is second
+    assert calls["count"] == 1
+
+
+def test_lookup_j1939_spn_metadata_uses_cached_index() -> None:
+    """SPN lookups reuse one index pass instead of re-scanning per call."""
+    from canarchy.dbc_runtime import lookup_j1939_spn_metadata_runtime
+
+    path = str(FIXTURES / "j1939_sample.dbc")
+    metadata = lookup_j1939_spn_metadata_runtime(path, 190)
+    assert metadata is not None
+    assert metadata["signal_name"] == "EngineSpeed"
+    # An unknown SPN resolves to None without raising.
+    assert lookup_j1939_spn_metadata_runtime(path, 999999) is None
+
+
 def test_inspect_database_runtime_returns_normalized_metadata() -> None:
     inspection = inspect_database_runtime(str(FIXTURES / "sample.dbc"))
 
