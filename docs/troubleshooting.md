@@ -79,10 +79,14 @@ work explicitly instead of waiting.
    canarchy j1939 dm1    --file big.candump --seconds 30 --json
    ```
 
-3. **Auto-cap safety net.** File-backed J1939 analysis automatically caps at
-   500,000 frames on captures larger than 50 MB and adds a `truncated`
-   warning, so a naive full-file run cannot block indefinitely. Override the
-   cap by passing your own `--max-frames`/`--seconds`.
+3. **Auto-cap safety net (some commands).** `j1939 dm1`, `j1939 faults`,
+   `j1939 summary`, `j1939 inventory`, `j1939 compare`, and `j1939 map`
+   automatically cap at 500,000 frames on captures larger than 50 MB and add a
+   `truncated` warning. Other file-backed commands — `j1939 decode`,
+   `j1939 pgn`, `j1939 spn`, `j1939 tp sessions`, `stats`, `filter` — are **not**
+   auto-capped, so on a large file bound them yourself with `--max-frames` /
+   `--seconds`. Either way, passing your own `--max-frames`/`--seconds` overrides
+   the cap.
 
 `--offset N` skips the first N frames, which—combined with `--max-frames`—lets
 you window through a large capture in chunks.

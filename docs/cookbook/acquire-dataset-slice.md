@@ -31,7 +31,7 @@ Two footguns trip up first-time users and agents:
    ```
 
 3. **Acquire a bounded, fast slice.** Crank `--rate` and cap with
-   `--max-frames` (or `--seconds`) so the run finishes promptly:
+   `--max-frames` (or `--max-seconds`) so the run finishes promptly:
 
    ```bash
    # To a file
