@@ -121,6 +121,7 @@ DATASETS_COMMANDS = {
     "datasets search",
     "datasets inspect",
     "datasets fetch",
+    "datasets download",
     "datasets cache list",
     "datasets cache refresh",
     "datasets convert",
@@ -898,10 +899,32 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(datasets_inspect)
     datasets_inspect.set_defaults(command="datasets inspect")
 
-    datasets_fetch = datasets_subparsers.add_parser("fetch", help="record provenance for a dataset")
+    datasets_fetch = datasets_subparsers.add_parser(
+        "fetch",
+        help="record dataset provenance only (does NOT download data; use `datasets download`)",
+    )
     datasets_fetch.add_argument("ref", help="dataset ref (e.g. catalog:road)")
     add_output_arguments(datasets_fetch)
     datasets_fetch.set_defaults(command="datasets fetch")
+
+    datasets_download = datasets_subparsers.add_parser(
+        "download", help="download a dataset's actual data file to disk"
+    )
+    datasets_download.add_argument(
+        "source", help="dataset ref (e.g. catalog:candid) or remote candump URL"
+    )
+    datasets_download.add_argument(
+        "--out", required=True, help="output path to write the downloaded dataset file"
+    )
+    datasets_download.add_argument(
+        "--file", dest="replay_file", help="file id or name from the dataset manifest"
+    )
+    datasets_download.add_argument(
+        "--platform",
+        help="dataset-specific platform filter for dynamic manifests (e.g. TESLA_MODEL_3)",
+    )
+    add_output_arguments(datasets_download)
+    datasets_download.set_defaults(command="datasets download")
 
     datasets_cache = datasets_subparsers.add_parser("cache", help="manage the local datasets cache")
     datasets_cache_subparsers = datasets_cache.add_subparsers(
@@ -5319,6 +5342,56 @@ def datasets_payload(
                 "is_index": is_index,
                 "index_instructions": index_instructions if is_index else None,
                 "download_instructions": download_instructions,
+                "next_steps": (
+                    "Provenance only — no data was downloaded. "
+                    f"Run `canarchy datasets download {args.ref} --out <path>` to retrieve the "
+                    "data, or `canarchy datasets replay <ref>` to stream it."
+                ),
+            },
+            [],
+            [],
+        )
+
+    if args.command == "datasets download":
+        from canarchy.dataset_convert import ConversionError, download_to_file
+
+        try:
+            source = resolve_dataset_replay_source(
+                args.source,
+                registry,
+                replay_file=getattr(args, "replay_file", None),
+                platform=getattr(args, "platform", None),
+            )
+            if source.get("dynamic_manifest") == "comma-car-segments":
+                from canarchy.comma_segments import resolve_lfs_url
+
+                source["download_url"] = resolve_lfs_url(source["download_url"])
+            result = download_to_file(source["download_url"], args.out)
+        except ConversionError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        except DatasetError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        return (
+            {
+                "source": args.source,
+                "ref": source.get("ref"),
+                "source_format": source.get("source_format"),
+                "replay_file": source.get("replay_file"),
+                **result,
+                "next_steps": (
+                    f"Saved {result['bytes_written']} bytes to {result['out_path']}. "
+                    f"Analyze it with `canarchy stats {result['out_path']}` or "
+                    f"`canarchy datasets convert {result['out_path']} --source-format "
+                    f"{source.get('source_format')} --format candump`."
+                ),
             },
             [],
             [],
@@ -9125,8 +9198,29 @@ def format_datasets_fetch(result: CommandResult) -> list[str]:
     )
     for part in (instruction or "").split("\n"):
         lines.append(f"  {part}" if part.strip() else "")
+    if not is_index and data.get("next_steps"):
+        lines.append(f"  {data['next_steps']}")
     lines.append("")
 
+    return lines
+
+
+def format_datasets_download(result: CommandResult) -> list[str]:
+    """Format human-readable output for datasets download."""
+    data = result.data
+    lines = [f"Downloaded: {data.get('ref') or data.get('source', '')}"]
+    lines.append("")
+    lines.append(f"  Source URL: {data.get('source_url', '')}")
+    if data.get("replay_file"):
+        lines.append(f"  File: {data['replay_file']}")
+    lines.append(f"  Format: {data.get('source_format', '')}")
+    lines.append(f"  Saved to: {data.get('out_path', '')}")
+    lines.append(f"  Bytes: {data.get('bytes_written', 0)}")
+    lines.append("")
+    if data.get("next_steps"):
+        lines.append("Next steps")
+        lines.append(f"  {data['next_steps']}")
+        lines.append("")
     return lines
 
 
@@ -9857,6 +9951,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "text" and result.ok and result.command == "datasets fetch":
         for line in format_datasets_fetch(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "datasets download":
+        for line in format_datasets_download(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

@@ -351,6 +351,46 @@ def stream_replay(
     }
 
 
+def download_to_file(
+    source_url: str,
+    out_path: str,
+    *,
+    chunk_size: int = 1 << 16,
+) -> dict[str, object]:
+    """Stream the bytes at ``source_url`` to ``out_path`` on disk.
+
+    Unlike :func:`stream_replay` (which decodes/paces frames), this writes the
+    dataset's native file verbatim, so callers get the real artifact for offline
+    analysis. Returns the resolved path and byte count.
+    """
+    target = Path(out_path)
+    if target.parent and not target.parent.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+    bytes_written = 0
+    try:
+        with requests.get(source_url, stream=True) as resp:
+            resp.raise_for_status()
+            with target.open("wb") as handle:
+                for chunk in resp.iter_content(chunk_size=chunk_size):
+                    if not chunk:
+                        continue
+                    handle.write(chunk)
+                    bytes_written += len(chunk)
+    except requests.RequestException as exc:
+        raise ConversionError(
+            code="DATASET_DOWNLOAD_FAILED",
+            message=f"Failed to download dataset source: {source_url}",
+            hint="Check the dataset download URL, network connectivity, and provider availability.",
+        ) from exc
+
+    return {
+        "source_url": source_url,
+        "out_path": str(target),
+        "bytes_written": bytes_written,
+    }
+
+
 def _silence_broken_stdout(output: IO[str]) -> None:
     """Prevent Python shutdown from printing a second BrokenPipeError."""
     if output is not sys.stdout:

@@ -45,6 +45,23 @@ class FakeStreamingResponse:
             yield line.encode()
 
 
+class FakeContentResponse:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+
+    def __enter__(self) -> "FakeContentResponse":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        return None
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def iter_content(self, chunk_size: int = 0):
+        yield from self.chunks
+
+
 class BrokenPipeWriter(io.StringIO):
     def write(self, s: str) -> int:
         raise BrokenPipeError("closed pipe")
@@ -688,6 +705,50 @@ class CliIntegrationTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertIn("provenance", data["data"])
         self.assertIn("download_instructions", data["data"])
+
+    def test_datasets_fetch_next_steps_cross_links_download(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
+                code, out, _ = run_cli("datasets", "fetch", "catalog:road", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)["data"]
+        self.assertIn("next_steps", data)
+        self.assertIn("datasets download", data["next_steps"])
+
+    def test_datasets_download_writes_file_from_direct_url(self) -> None:
+        response = FakeContentResponse(
+            [b"(0.0) can0 18FEEE31#0102\n", b"(0.1) can0 18FEEE31#0304\n"]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "out.log")
+            with patch("canarchy.dataset_convert.requests.get", return_value=response):
+                code, out, _ = run_cli(
+                    "datasets",
+                    "download",
+                    "https://example.invalid/data.log",
+                    "--out",
+                    dest,
+                    "--json",
+                )
+            self.assertEqual(code, 0)
+            data = json.loads(out)["data"]
+            self.assertTrue(Path(dest).exists())
+            self.assertEqual(data["bytes_written"], Path(dest).stat().st_size)
+            self.assertEqual(data["out_path"], dest)
+            self.assertIn("datasets convert", data["next_steps"])
+
+    def test_datasets_download_network_failure_is_structured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "out.log")
+            with patch(
+                "canarchy.dataset_convert.requests.get",
+                side_effect=requests.ConnectionError("offline"),
+            ):
+                code, out, _ = run_cli(
+                    "datasets", "download", "https://example.invalid/x.log", "--out", dest, "--json"
+                )
+        self.assertNotEqual(code, 0)
+        self.assertEqual(json.loads(out)["errors"][0]["code"], "DATASET_DOWNLOAD_FAILED")
 
     def test_datasets_cache_list(self) -> None:
         code, out, _ = run_cli("datasets", "cache", "list", "--json")

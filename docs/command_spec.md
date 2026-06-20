@@ -708,8 +708,25 @@ canarchy datasets fetch <provider>:<dataset> [--json|--jsonl|--text]
 
 Notes:
 
-* normal dataset entries return `download_instructions` that point operators to the source URL for manual download
+* `datasets fetch` records provenance **only** — it does not download data. Use `datasets download` to retrieve the actual file, or `datasets replay` to stream it.
+* normal dataset entries return `download_instructions` plus a `next_steps` cross-link to `datasets download`/`datasets replay`
 * curated index entries return `is_index=true` and `index_instructions`; there is no single dataset payload to download
+
+### datasets download
+
+Download a dataset's actual data file to disk (where the manifest exposes a direct URL). Reuses the same manifest resolution as `datasets replay`, but writes the native file verbatim rather than streaming decoded frames.
+
+```bash
+canarchy datasets download <provider>:<dataset> --out <path> [--file <name>] [--platform <p>] [--json|--jsonl|--text]
+canarchy datasets download <https-url> --out <path> [--json|--jsonl|--text]
+```
+
+Notes:
+
+* `--file` selects a specific file from a multi-file dataset manifest (id or name); `--platform` filters dynamic manifests
+* reports `out_path`, `bytes_written`, `source_format`, and a `next_steps` hint for `stats`/`datasets convert`
+* a download/network failure returns a structured `DATASET_DOWNLOAD_FAILED` error; a non-replayable index returns `DATASET_INDEX_NOT_REPLAYABLE`
+* CLI-only operator action (writes bulk bytes to an arbitrary host path); not exposed as an MCP tool
 
 ### datasets cache list
 
