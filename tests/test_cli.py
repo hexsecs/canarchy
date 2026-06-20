@@ -1618,10 +1618,27 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["data"]["mode"], "reference")
+        self.assertEqual(payload["data"]["source"], "catalog")
         self.assertEqual(payload["data"]["spn"], 110)
         self.assertEqual(payload["data"]["name"], "Engine Coolant Temperature")
         self.assertEqual(payload["data"]["pgn"], 65262)
         self.assertEqual(payload["data"]["units"], "degC")
+
+    def test_j1939_spn_reference_resolves_oem_spn_from_dbc(self) -> None:
+        # SPN 9999 is absent from the bundled catalog but defined by the DBC;
+        # reference mode must use the DBC definition, not return null fields.
+        exit_code, stdout, _ = run_cli(
+            "j1939", "spn", "9999", "--dbc", str(FIXTURES / "j1939_oem_spn.dbc"), "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["mode"], "reference")
+        self.assertEqual(payload["data"]["source"], "dbc")
+        self.assertEqual(payload["data"]["name"], "OemBoostPressure")
+        self.assertEqual(payload["data"]["units"], "kPa")
+        self.assertEqual(payload["data"]["resolution"], 0.25)
+        self.assertEqual(payload["data"]["length"], 16)
 
     def test_j1939_spn_unknown_without_file_returns_structured_error(self) -> None:
         exit_code, stdout, _ = run_cli("j1939", "spn", "999999", "--json")

@@ -3341,13 +3341,36 @@ def _j1939_pgn_reference(pgn: int) -> tuple[dict[str, Any], list[dict[str, Any]]
     return data, [], warnings
 
 
-def _j1939_spn_reference(spn: int) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
-    """Built-in reference definition for an SPN, used when no capture is given (#442)."""
-    meta = spn_lookup(spn) or {}
+def _j1939_spn_reference(
+    spn: int, dbc_ref: str | None = None
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    """Built-in reference definition for an SPN, used when no capture is given (#442).
+
+    The bundled catalog is authoritative; for an OEM/proprietary SPN that is not
+    catalogued but is defined by a supplied/configured DBC, the definition is
+    resolved from that DBC instead (so the validated DBC path is not ignored).
+    """
+    meta = spn_lookup(spn)
+    source = "catalog"
+    if meta is None and dbc_ref:
+        dbc_meta = lookup_j1939_spn_metadata(dbc_ref, spn)
+        if dbc_meta is not None:
+            source = "dbc"
+            meta = {
+                "name": dbc_meta.get("signal_name"),
+                "pgn": decompose_arbitration_id(int(dbc_meta["frame_id"])).pgn,
+                "start": dbc_meta.get("start"),
+                "length": dbc_meta.get("length"),
+                "resolution": dbc_meta.get("resolution"),
+                "offset": dbc_meta.get("offset"),
+                "units": dbc_meta.get("units"),
+            }
+    meta = meta or {}
     pgn = meta.get("pgn")
     pgn_meta = pgn_lookup(int(pgn)) if pgn is not None else None
     data: dict[str, Any] = {
         "mode": "reference",
+        "source": source,
         "spn": spn,
         "name": meta.get("name"),
         "pgn": pgn,
@@ -4430,7 +4453,7 @@ def j1939_payload(
         )
     if args.command == "j1939 spn":
         if not getattr(args, "file", None):
-            return _j1939_spn_reference(args.spn)
+            return _j1939_spn_reference(args.spn, getattr(args, "dbc", None) or default_j1939_dbc())
         decoder = get_j1939_decoder()
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
         analysis_kwargs = j1939_file_analysis_kwargs(args)

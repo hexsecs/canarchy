@@ -856,7 +856,7 @@ Notes:
 
 * without an interface, this command uses an explicit sample/reference provider
 * with an interface, this command captures from the selected transport backend and filters to J1939 extended-ID traffic
-* `j1939 decode`, `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 summary`, `j1939 inventory`, `j1939 compare`, and `j1939 map` remain file-backed
+* `j1939 decode`, `j1939 tp sessions`, `j1939 dm1`, `j1939 summary`, `j1939 inventory`, `j1939 compare`, and `j1939 map` remain file-backed; `j1939 pgn` and `j1939 spn` accept an optional `--file` and otherwise perform a built-in reference lookup
 
 ### j1939 decode
 
@@ -874,29 +874,31 @@ Notes:
 
 ### j1939 pgn
 
-Inspect events for a specific PGN from a capture file.
+Inspect a specific PGN. With `--file`, reports matching events from the capture; without `--file`, returns the built-in reference definition (name, label, description, and the catalogued SPNs the PGN carries).
 
 ```bash
-canarchy j1939 pgn <pgn> --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--text]
+canarchy j1939 pgn <pgn> [--file <file>] [--dbc <path|provider-ref>] [--json|--jsonl|--text]
 ```
 
 Example:
 
 ```bash
+canarchy j1939 pgn 61444 --json
 canarchy j1939 pgn 65262 --file tests/fixtures/sample.candump --json
 ```
 
 ### j1939 spn
 
-Inspect a curated SPN decoder over recorded J1939 traffic.
+Inspect a specific SPN. With `--file`, runs the curated/DBC SPN decoder over recorded J1939 traffic; without `--file`, returns the built-in reference definition (name, owning PGN, units, resolution, offset, bit layout). An OEM SPN absent from the bundled catalog is resolved from a supplied/configured DBC.
 
 ```bash
-canarchy j1939 spn <spn> --file <file> [--dbc <path|provider-ref>] [--json|--jsonl|--text]
+canarchy j1939 spn <spn> [--file <file>] [--dbc <path|provider-ref>] [--json|--jsonl|--text]
 ```
 
 Example:
 
 ```bash
+canarchy j1939 spn 190 --json
 canarchy j1939 spn 110 --file tests/fixtures/sample.candump --json
 ```
 

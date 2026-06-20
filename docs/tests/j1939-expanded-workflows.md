@@ -14,7 +14,7 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 
 ## Coverage Requirements
 
-* `j1939 spn` capture-file requirement
+* `j1939 spn` / `j1939 pgn` offline reference lookup without `--file`
 * `j1939 spn` structured value extraction from a supported SPN
 * `j1939 tp sessions` BAM session summary and reassembly
 * `j1939 dm1` parsing for both direct and TP-reassembled messages
@@ -31,9 +31,10 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 | `REQ-J1939-03` | `TEST-J1939-03` |
 | `REQ-J1939-04` | `TEST-J1939-04` |
 | `REQ-J1939-05` | `TEST-J1939-02`, `TEST-J1939-03`, `TEST-J1939-04`, `TEST-J1939-05`, `TEST-J1939-06`, `TEST-J1939-07` |
-| `REQ-J1939-06` | `TEST-J1939-01` |
+| `REQ-J1939-06` | `TEST-J1939-01`, `TEST-J1939-15` |
 | `REQ-J1939-07` | Deferred |
-| `REQ-J1939-08` | Deferred |
+| `REQ-J1939-08` | `TEST-J1939-16` |
+| `REQ-J1939-21` | `TEST-J1939-17` |
 | `REQ-J1939-09` | `TEST-J1939-06`, `TEST-J1939-07` |
 | `REQ-J1939-10` | `TEST-J1939-06`, `TEST-J1939-07` |
 | `REQ-J1939-11` | `TEST-J1939-08`, `TEST-J1939-09` |
@@ -48,16 +49,17 @@ Validate that the expanded J1939 workflows preserve protocol-first behavior and 
 
 ## Representative Test Cases
 
-### `TEST-J1939-01` — SPN capture-file requirement
+### `TEST-J1939-01` — SPN reference lookup without a capture
 
 ```gherkin
 Given  no capture file is provided
 When   the operator runs `canarchy j1939 spn 110 --json`
-Then   the command shall exit with code `1`
-And    `errors[0].code` shall equal `"CAPTURE_FILE_REQUIRED"`
+Then   the command shall exit with code `0`
+And    `data.mode` shall equal `"reference"` with `source` `"catalog"`
+And    `data` shall report the SPN name, owning PGN, and units from the bundled catalog
 ```
 
-**Fixture:** none required.
+**Test:** `test_j1939_spn_without_file_returns_reference_definition`. **Fixture:** none required.
 
 ---
 
@@ -259,3 +261,44 @@ And    bundled entries (e.g. SPN 175) shall remain resolvable
 ```
 
 **Fixture:** temporary overrides file.
+
+---
+
+### `TEST-J1939-15` — SPN reference resolves an OEM SPN from a supplied DBC (`REQ-J1939-06`)
+
+```gherkin
+Given  SPN 9999 is absent from the bundled catalog but defined by a DBC
+When   the operator runs `canarchy j1939 spn 9999 --dbc <dbc> --json` without `--file`
+Then   the command shall exit with code `0`
+And    `data.mode` shall equal `"reference"` with `source` `"dbc"`
+And    `data` shall report the DBC signal name, units, resolution, and bit layout
+```
+
+**Test:** `test_j1939_spn_reference_resolves_oem_spn_from_dbc`. **Fixture:** `tests/fixtures/j1939_oem_spn.dbc`.
+
+---
+
+### `TEST-J1939-16` — Unknown SPN without catalog or DBC entry errors (`REQ-J1939-08`)
+
+```gherkin
+Given  SPN 999999 is absent from the catalog and no DBC is supplied
+When   the operator runs `canarchy j1939 spn 999999 --json` without `--file`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"J1939_SPN_UNSUPPORTED"`
+```
+
+**Test:** `test_j1939_spn_unknown_without_file_returns_structured_error`. **Fixture:** none.
+
+---
+
+### `TEST-J1939-17` — PGN reference lookup without a capture (`REQ-J1939-21`)
+
+```gherkin
+Given  no capture file is provided
+When   the operator runs `canarchy j1939 pgn 61444 --json`
+Then   the command shall exit with code `0`
+And    `data.mode` shall equal `"reference"` with label `"EEC1"`
+And    `data.spns` shall list the catalogued SPNs the PGN carries (including SPN 190)
+```
+
+**Test:** `test_j1939_pgn_without_file_returns_reference_definition`. **Fixture:** none.
