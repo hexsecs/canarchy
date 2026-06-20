@@ -121,6 +121,7 @@ DATASETS_COMMANDS = {
     "datasets search",
     "datasets inspect",
     "datasets fetch",
+    "datasets download",
     "datasets cache list",
     "datasets cache refresh",
     "datasets convert",
@@ -360,6 +361,42 @@ def _add_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_capture_path_argument(
+    parser: argparse.ArgumentParser,
+    *,
+    help_text: str = "path to candump capture file (use - for stdin)",
+) -> None:
+    """Add an optional positional capture path plus an equivalent ``--file`` flag.
+
+    Both forms resolve onto the ``file`` destination in :func:`_normalize_file_arguments`,
+    letting capture-consuming commands accept ``cmd <path>`` as well as ``cmd --file <path>``
+    (#445). The command must be registered in ``_FILE_FLAG_SINGLE_COMMANDS``.
+    """
+    parser.add_argument("file", nargs="?", default=None, help=help_text)
+    parser.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help=f"{help_text} (equivalent to the positional form)",
+    )
+
+
+def _suppress_child_defaults(parser: argparse.ArgumentParser) -> None:
+    """Set ``SUPPRESS`` defaults on a child subparser's options.
+
+    When a parent parser carries the same option destinations so a default-action
+    form parses (e.g. ``j1939 tp --file X`` → the ``sessions`` action), an explicit
+    child action would otherwise overwrite parent-supplied values with its own
+    defaults whenever those options preceded the action token (``j1939 tp --file X
+    sessions``). ``SUPPRESS`` means "do not write a default into the namespace", so
+    the accepted parent values survive (#445 review). Pass options explicitly to the
+    child to override.
+    """
+    for action in parser._actions:
+        if action.dest != "help":
+            action.default = argparse.SUPPRESS
+
+
 LOG_LEVEL_CHOICES = ("debug", "info", "warn", "error")
 
 
@@ -589,9 +626,7 @@ def build_parser() -> CanarchyArgumentParser:
     filter_parser.set_defaults(command="filter")
 
     stats = subparsers.add_parser("stats", help="summarize traffic statistics")
-    stats.add_argument(
-        "--file", required=True, help="path to candump capture file (use - for stdin)"
-    )
+    _add_capture_path_argument(stats)
     stats.add_argument(
         "--top",
         type=int,
@@ -898,10 +933,32 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(datasets_inspect)
     datasets_inspect.set_defaults(command="datasets inspect")
 
-    datasets_fetch = datasets_subparsers.add_parser("fetch", help="record provenance for a dataset")
+    datasets_fetch = datasets_subparsers.add_parser(
+        "fetch",
+        help="record dataset provenance only (does NOT download data; use `datasets download`)",
+    )
     datasets_fetch.add_argument("ref", help="dataset ref (e.g. catalog:road)")
     add_output_arguments(datasets_fetch)
     datasets_fetch.set_defaults(command="datasets fetch")
+
+    datasets_download = datasets_subparsers.add_parser(
+        "download", help="download a dataset's actual data file to disk"
+    )
+    datasets_download.add_argument(
+        "source", help="dataset ref (e.g. catalog:candid) or remote candump URL"
+    )
+    datasets_download.add_argument(
+        "--out", required=True, help="output path to write the downloaded dataset file"
+    )
+    datasets_download.add_argument(
+        "--file", dest="replay_file", help="file id or name from the dataset manifest"
+    )
+    datasets_download.add_argument(
+        "--platform",
+        help="dataset-specific platform filter for dynamic manifests (e.g. TESLA_MODEL_3)",
+    )
+    add_output_arguments(datasets_download)
+    datasets_download.set_defaults(command="datasets download")
 
     datasets_cache = datasets_subparsers.add_parser("cache", help="manage the local datasets cache")
     datasets_cache_subparsers = datasets_cache.add_subparsers(
@@ -1100,27 +1157,44 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(j1939_spn)
     j1939_spn.set_defaults(command="j1939 spn")
 
+    def _add_tp_session_filters(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--pgn", type=lambda x: int(x, 0), default=None, help="filter by transfer PGN"
+        )
+        parser.add_argument(
+            "--sa", default=None, help="filter by source address (comma-separated hex or decimal)"
+        )
+        add_j1939_file_analysis_arguments(parser)
+        add_output_arguments(parser)
+
     j1939_tp = j1939_subparsers.add_parser("tp", help="inspect J1939 transport protocol sessions")
-    j1939_tp_subparsers = j1939_tp.add_subparsers(dest="tp_action", required=True)
+    # `j1939 tp` defaults to the `sessions` action so `j1939 tp --file X` works like the
+    # other file-direct siblings (`dm1`, `faults`, ...); `sessions`/`compare` remain explicit.
+    j1939_tp.add_argument(
+        "--file",
+        dest="file_opt",
+        metavar="PATH",
+        help="path to candump capture file (defaults to the `sessions` action)",
+    )
+    _add_tp_session_filters(j1939_tp)
+    j1939_tp.set_defaults(command="j1939 tp sessions", tp_action="sessions")
+    j1939_tp_subparsers = j1939_tp.add_subparsers(dest="tp_action", required=False)
 
     j1939_tp_sessions = j1939_tp_subparsers.add_parser(
         "sessions", help="list reassembled TP sessions"
     )
-    j1939_tp_sessions.add_argument("--file", required=True, help="path to candump capture file")
-    j1939_tp_sessions.add_argument(
-        "--pgn", type=lambda x: int(x, 0), default=None, help="filter by transfer PGN"
-    )
-    j1939_tp_sessions.add_argument(
-        "--sa", default=None, help="filter by source address (comma-separated hex or decimal)"
-    )
-    add_j1939_file_analysis_arguments(j1939_tp_sessions)
-    add_output_arguments(j1939_tp_sessions)
+    _add_capture_path_argument(j1939_tp_sessions, help_text="path to candump capture file")
+    _add_tp_session_filters(j1939_tp_sessions)
+    # The parent `tp` parser carries the same options for the default-action form;
+    # suppress child defaults so parent values survive options placed before the
+    # explicit `sessions` token (#445 review).
+    _suppress_child_defaults(j1939_tp_sessions)
     j1939_tp_sessions.set_defaults(command="j1939 tp sessions")
 
     j1939_tp_compare = j1939_tp_subparsers.add_parser(
         "compare", help="compare TP sessions across source addresses"
     )
-    j1939_tp_compare.add_argument("--file", required=True, help="path to candump capture file")
+    _add_capture_path_argument(j1939_tp_compare, help_text="path to candump capture file")
     j1939_tp_compare.add_argument(
         "--sa", required=True, help="comma-separated source addresses to compare (hex or decimal)"
     )
@@ -1129,10 +1203,11 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_j1939_file_analysis_arguments(j1939_tp_compare)
     add_output_arguments(j1939_tp_compare)
+    _suppress_child_defaults(j1939_tp_compare)
     j1939_tp_compare.set_defaults(command="j1939 tp compare")
 
     j1939_dm1 = j1939_subparsers.add_parser("dm1", help="inspect J1939 DM1 traffic")
-    j1939_dm1.add_argument("--file", required=True, help="path to candump capture file")
+    _add_capture_path_argument(j1939_dm1, help_text="path to candump capture file")
     j1939_dm1.add_argument(
         "--dbc", help="enrich DM1 DTC names with a local DBC path or provider ref"
     )
@@ -1141,7 +1216,7 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_dm1.set_defaults(command="j1939 dm1")
 
     j1939_faults = j1939_subparsers.add_parser("faults", help="summarize J1939 DM1 faults by ECU")
-    j1939_faults.add_argument("--file", required=True, help="path to candump capture file")
+    _add_capture_path_argument(j1939_faults, help_text="path to candump capture file")
     j1939_faults.add_argument(
         "--dbc", help="enrich DTC names with a local DBC path or provider ref"
     )
@@ -1150,7 +1225,7 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_faults.set_defaults(command="j1939 faults")
 
     j1939_summary = j1939_subparsers.add_parser("summary", help="summarize J1939 capture content")
-    j1939_summary.add_argument("--file", required=True, help="path to candump capture file")
+    _add_capture_path_argument(j1939_summary, help_text="path to candump capture file")
     add_j1939_file_analysis_arguments(j1939_summary)
     add_output_arguments(j1939_summary)
     j1939_summary.set_defaults(command="j1939 summary")
@@ -1158,7 +1233,7 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_inventory = j1939_subparsers.add_parser(
         "inventory", help="build a J1939 ECU inventory from a capture"
     )
-    j1939_inventory.add_argument("--file", required=True, help="path to candump capture file")
+    _add_capture_path_argument(j1939_inventory, help_text="path to candump capture file")
     add_j1939_file_analysis_arguments(j1939_inventory)
     add_output_arguments(j1939_inventory)
     j1939_inventory.set_defaults(command="j1939 inventory")
@@ -1181,7 +1256,7 @@ def build_parser() -> CanarchyArgumentParser:
     j1939_map = j1939_subparsers.add_parser(
         "map", help="build a J1939 network-topology map (nodes/edges) from a capture"
     )
-    j1939_map.add_argument("--file", required=True, help="path to candump capture file")
+    _add_capture_path_argument(j1939_map, help_text="path to candump capture file")
     add_j1939_file_analysis_arguments(j1939_map)
     add_output_arguments(j1939_map)
     j1939_map.set_defaults(command="j1939 map")
@@ -1252,7 +1327,7 @@ def build_parser() -> CanarchyArgumentParser:
     j1587_subparsers = j1587.add_subparsers(dest="j1587_action", required=True)
 
     j1587_decode = j1587_subparsers.add_parser("decode", help="decode J1708 capture traffic")
-    j1587_decode.add_argument("--file", required=True, help="path to a J1708 capture file")
+    _add_capture_path_argument(j1587_decode, help_text="path to a J1708 capture file")
     add_j1939_file_analysis_arguments(j1587_decode)
     add_output_arguments(j1587_decode)
     j1587_decode.set_defaults(command="j1587 decode")
@@ -1265,7 +1340,7 @@ def build_parser() -> CanarchyArgumentParser:
     j2497_subparsers = j2497.add_subparsers(dest="j2497_action", required=True)
 
     j2497_decode = j2497_subparsers.add_parser("decode", help="decode J2497 capture frames")
-    j2497_decode.add_argument("--file", required=True, help="path to a J2497 capture file")
+    _add_capture_path_argument(j2497_decode, help_text="path to a J2497 capture file")
     add_j1939_file_analysis_arguments(j2497_decode)
     add_output_arguments(j2497_decode)
     j2497_decode.set_defaults(command="j2497 decode")
@@ -2088,6 +2163,17 @@ _FILE_FLAG_SINGLE_COMMANDS = {
     "re suggest": "file",
     "re match-dbc": "capture",
     "re shortlist-dbc": "capture",
+    # Passive analysis commands that accept a positional capture path or --file (#445).
+    "stats": "file",
+    "j1939 summary": "file",
+    "j1939 faults": "file",
+    "j1939 dm1": "file",
+    "j1939 inventory": "file",
+    "j1939 map": "file",
+    "j1939 tp sessions": "file",
+    "j1939 tp compare": "file",
+    "j1587 decode": "file",
+    "j2497 decode": "file",
 }
 _FILE_FLAG_MULTI_COMMANDS = {"re corpus", "j1939 compare"}
 
@@ -2832,6 +2918,23 @@ def _extract_printable_text(payload: bytes) -> str | None:
     return text or None
 
 
+# J1939 component/vehicle/software identification strings (PGN 65259/65260/65242)
+# are '*'-delimited (Make*Model*Serial*Unit). A short trailing run of delimiters
+# denotes empty trailing fields and is normal; some ECUs additionally pad the
+# fixed buffer with a long run of '*', which swamps the meaningful fields in text
+# output (#448). Trailing runs longer than this are treated as padding and dropped.
+_IDENT_DELIMITER = "*"
+_IDENT_PADDING_MAX_TRAILING = 4
+
+
+def _collapse_identification_padding(text: str) -> str:
+    """Drop a pathological trailing run of the J1939 ``*`` field delimiter."""
+    core = text.rstrip(_IDENT_DELIMITER)
+    if len(text) - len(core) > _IDENT_PADDING_MAX_TRAILING:
+        return core
+    return text
+
+
 def _top_counts(counter: Counter[int], *, limit: int = 5) -> list[dict[str, int]]:
     return [{"value": value, "frame_count": count} for value, count in counter.most_common(limit)]
 
@@ -2873,6 +2976,11 @@ def _enrich_tp_session(session: dict[str, Any]) -> dict[str, Any]:
     if text is None:
         return enriched
 
+    # Only the '*'-delimited identification PGNs (component/vehicle/software ID)
+    # carry the padding tail; collapsing it for arbitrary printable TP payloads
+    # could corrupt data that legitimately ends in '*' (#448 review).
+    if enriched["payload_label"] is not None:
+        text = _collapse_identification_padding(text)
     enriched["decoded_text"] = text
     enriched["decoded_text_encoding"] = "ascii"
     enriched["decoded_text_heuristic"] = True
@@ -5319,6 +5427,56 @@ def datasets_payload(
                 "is_index": is_index,
                 "index_instructions": index_instructions if is_index else None,
                 "download_instructions": download_instructions,
+                "next_steps": (
+                    "Provenance only — no data was downloaded. "
+                    f"Run `canarchy datasets download {args.ref} --out <path>` to retrieve the "
+                    "data, or `canarchy datasets replay <ref>` to stream it."
+                ),
+            },
+            [],
+            [],
+        )
+
+    if args.command == "datasets download":
+        from canarchy.dataset_convert import ConversionError, download_to_file
+
+        try:
+            source = resolve_dataset_replay_source(
+                args.source,
+                registry,
+                replay_file=getattr(args, "replay_file", None),
+                platform=getattr(args, "platform", None),
+            )
+            if source.get("dynamic_manifest") == "comma-car-segments":
+                from canarchy.comma_segments import resolve_lfs_url
+
+                source["download_url"] = resolve_lfs_url(source["download_url"])
+            result = download_to_file(source["download_url"], args.out)
+        except ConversionError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        except DatasetError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            ) from exc
+        return (
+            {
+                "source": args.source,
+                "ref": source.get("ref"),
+                "source_format": source.get("source_format"),
+                "replay_file": source.get("replay_file"),
+                **result,
+                "next_steps": (
+                    f"Saved {result['bytes_written']} bytes to {result['out_path']}. "
+                    f"Analyze it with `canarchy stats --file {result['out_path']}` or "
+                    f"`canarchy datasets convert {result['out_path']} --source-format "
+                    f"{source.get('source_format')} --format candump`."
+                ),
             },
             [],
             [],
@@ -9125,8 +9283,29 @@ def format_datasets_fetch(result: CommandResult) -> list[str]:
     )
     for part in (instruction or "").split("\n"):
         lines.append(f"  {part}" if part.strip() else "")
+    if not is_index and data.get("next_steps"):
+        lines.append(f"  {data['next_steps']}")
     lines.append("")
 
+    return lines
+
+
+def format_datasets_download(result: CommandResult) -> list[str]:
+    """Format human-readable output for datasets download."""
+    data = result.data
+    lines = [f"Downloaded: {data.get('ref') or data.get('source', '')}"]
+    lines.append("")
+    lines.append(f"  Source URL: {data.get('source_url', '')}")
+    if data.get("replay_file"):
+        lines.append(f"  File: {data['replay_file']}")
+    lines.append(f"  Format: {data.get('source_format', '')}")
+    lines.append(f"  Saved to: {data.get('out_path', '')}")
+    lines.append(f"  Bytes: {data.get('bytes_written', 0)}")
+    lines.append("")
+    if data.get("next_steps"):
+        lines.append("Next steps")
+        lines.append(f"  {data['next_steps']}")
+        lines.append("")
     return lines
 
 
@@ -9857,6 +10036,13 @@ def emit_result(result: CommandResult, output_format: str) -> None:
 
     if output_format == "text" and result.ok and result.command == "datasets fetch":
         for line in format_datasets_fetch(result):
+            print(line)
+        for warning in payload["warnings"]:
+            print(f"warning: {warning}")
+        return
+
+    if output_format == "text" and result.ok and result.command == "datasets download":
+        for line in format_datasets_download(result):
             print(line)
         for warning in payload["warnings"]:
             print(f"warning: {warning}")

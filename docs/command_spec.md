@@ -173,12 +173,15 @@ Notes:
 
 ### stats
 
-Summarize a capture source.
+Summarize a capture source. The capture path may be given positionally or via `--file` (equivalent).
 
 ```bash
+canarchy stats <path> [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
 canarchy stats --file <path> [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
 canarchy stats --file - [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
 ```
+
+The following passive analysis commands likewise accept a positional capture path as an alias for `--file`: `stats`, `j1939 summary`, `j1939 faults`, `j1939 dm1`, `j1939 inventory`, `j1939 map`, `j1939 tp sessions`, `j1939 tp compare`, `j1587 decode`, `j2497 decode`. Supplying both forms with different paths returns `CONFLICTING_FILE_ARGUMENTS`.
 
 Notes:
 
@@ -708,8 +711,25 @@ canarchy datasets fetch <provider>:<dataset> [--json|--jsonl|--text]
 
 Notes:
 
-* normal dataset entries return `download_instructions` that point operators to the source URL for manual download
+* `datasets fetch` records provenance **only** — it does not download data. Use `datasets download` to retrieve the actual file, or `datasets replay` to stream it.
+* normal dataset entries return `download_instructions` plus a `next_steps` cross-link to `datasets download`/`datasets replay`
 * curated index entries return `is_index=true` and `index_instructions`; there is no single dataset payload to download
+
+### datasets download
+
+Download a dataset's actual data file to disk (where the manifest exposes a direct URL). Reuses the same manifest resolution as `datasets replay`, but writes the native file verbatim rather than streaming decoded frames.
+
+```bash
+canarchy datasets download <provider>:<dataset> --out <path> [--file <name>] [--platform <p>] [--json|--jsonl|--text]
+canarchy datasets download <https-url> --out <path> [--json|--jsonl|--text]
+```
+
+Notes:
+
+* `--file` selects a specific file from a multi-file dataset manifest (id or name); `--platform` filters dynamic manifests
+* reports `out_path`, `bytes_written`, `source_format`, and a `next_steps` hint for `stats`/`datasets convert`
+* a download/network failure returns a structured `DATASET_DOWNLOAD_FAILED` error; a non-replayable index returns `DATASET_INDEX_NOT_REPLAYABLE`
+* CLI-only operator action (writes bulk bytes to an arbitrary host path); not exposed as an MCP tool
 
 ### datasets cache list
 
@@ -910,15 +930,17 @@ Notes:
 
 ### j1939 tp sessions
 
-Summarize J1939 transport-protocol sessions from a capture file.
+Summarize J1939 transport-protocol sessions from a capture file. `sessions` is the default `tp` action, so `j1939 tp --file <file>` is equivalent to `j1939 tp sessions --file <file>`.
 
 ```bash
-canarchy j1939 tp sessions --file <file> [--json|--jsonl|--text]
+canarchy j1939 tp [sessions] <file> [--json|--jsonl|--text]
+canarchy j1939 tp [sessions] --file <file> [--json|--jsonl|--text]
 ```
 
 Notes:
 
 * the implementation handles BAM and RTS/CTS transport sessions with packet reassembly
+* `j1939 tp --file <file>` defaults to the `sessions` action; a bare positional path (`j1939 tp <file>`) must still be disambiguated via the explicit `sessions`/`compare` action or `--file`, since the next token is interpreted as the sub-action
 
 ### j1939 dm1
 
