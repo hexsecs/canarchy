@@ -173,12 +173,15 @@ Notes:
 
 ### stats
 
-Summarize a capture source.
+Summarize a capture source. The capture path may be given positionally or via `--file` (equivalent).
 
 ```bash
+canarchy stats <path> [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
 canarchy stats --file <path> [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
 canarchy stats --file - [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <seconds>] [--json|--jsonl|--text]
 ```
+
+The following passive analysis commands likewise accept a positional capture path as an alias for `--file`: `stats`, `j1939 summary`, `j1939 faults`, `j1939 dm1`, `j1939 inventory`, `j1939 map`, `j1939 tp sessions`, `j1939 tp compare`, `j1587 decode`, `j2497 decode`. Supplying both forms with different paths returns `CONFLICTING_FILE_ARGUMENTS`.
 
 Notes:
 
@@ -910,15 +913,17 @@ Notes:
 
 ### j1939 tp sessions
 
-Summarize J1939 transport-protocol sessions from a capture file.
+Summarize J1939 transport-protocol sessions from a capture file. `sessions` is the default `tp` action, so `j1939 tp --file <file>` is equivalent to `j1939 tp sessions --file <file>`.
 
 ```bash
-canarchy j1939 tp sessions --file <file> [--json|--jsonl|--text]
+canarchy j1939 tp [sessions] <file> [--json|--jsonl|--text]
+canarchy j1939 tp [sessions] --file <file> [--json|--jsonl|--text]
 ```
 
 Notes:
 
 * the implementation handles BAM and RTS/CTS transport sessions with packet reassembly
+* `j1939 tp --file <file>` defaults to the `sessions` action; a bare positional path (`j1939 tp <file>`) must still be disambiguated via the explicit `sessions`/`compare` action or `--file`, since the next token is interpreted as the sub-action
 
 ### j1939 dm1
 

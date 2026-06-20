@@ -5070,6 +5070,49 @@ class CliTests(unittest.TestCase):
             payload["warnings"],
         )
 
+    def test_stats_accepts_positional_capture_path(self) -> None:
+        capture = str(FIXTURES / "sample.candump")
+        pos_code, pos_out, _ = run_cli("stats", capture, "--json")
+        flag_code, flag_out, _ = run_cli("stats", "--file", capture, "--json")
+        self.assertEqual(pos_code, EXIT_OK)
+        self.assertEqual(flag_code, EXIT_OK)
+        self.assertEqual(
+            json.loads(pos_out)["data"]["total_frames"],
+            json.loads(flag_out)["data"]["total_frames"],
+        )
+
+    def test_positional_and_file_flag_conflict_is_structured(self) -> None:
+        capture = str(FIXTURES / "sample.candump")
+        exit_code, stdout, _ = run_cli("stats", capture, "--file", "other.log", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "CONFLICTING_FILE_ARGUMENTS")
+
+    def test_analysis_commands_missing_file_is_structured(self) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "summary", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "CAPTURE_FILE_REQUIRED")
+
+    def test_j1939_summary_accepts_positional_capture_path(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli("j1939", "summary", capture, "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["command"], "j1939 summary")
+
+    def test_j1939_tp_defaults_to_sessions_action(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        # `j1939 tp --file X` (no sub-action) resolves to the sessions action.
+        exit_code, stdout, _ = run_cli("j1939", "tp", "--file", capture, "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "j1939 tp sessions")
+        self.assertIn("sessions", payload["data"])
+
+    def test_j1939_tp_sessions_positional_path(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli("j1939", "tp", "sessions", capture, "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["command"], "j1939 tp sessions")
+
     def test_stats_filters_by_pgn_and_source_address(self) -> None:
         capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
         exit_code, stdout, _ = run_cli("stats", "--file", capture, "--sa", "0x31", "--json")
