@@ -1610,13 +1610,24 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(decoded_events), 2)
         self.assertEqual(decoded_events[0]["payload"]["message_name"], "EngineTemperature1")
 
-    def test_j1939_spn_requires_capture_file(self) -> None:
+    def test_j1939_spn_without_file_returns_reference_definition(self) -> None:
         exit_code, stdout, stderr = run_cli("j1939", "spn", "110", "--json")
-        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
         payload = json.loads(stdout)
-        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_FILE_REQUIRED")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["mode"], "reference")
+        self.assertEqual(payload["data"]["spn"], 110)
+        self.assertEqual(payload["data"]["name"], "Engine Coolant Temperature")
+        self.assertEqual(payload["data"]["pgn"], 65262)
+        self.assertEqual(payload["data"]["units"], "degC")
+
+    def test_j1939_spn_unknown_without_file_returns_structured_error(self) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "spn", "999999", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "J1939_SPN_UNSUPPORTED")
 
     def test_j1939_spn_returns_structured_observations(self) -> None:
         exit_code, stdout, stderr = run_cli(
@@ -3479,13 +3490,18 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         self.assertIn("error: INVALID_PGN: J1939 PGN must be between 0 and 262143.", stdout)
 
-    def test_j1939_pgn_requires_capture_file(self) -> None:
-        exit_code, stdout, stderr = run_cli("j1939", "pgn", "65262", "--json")
-        self.assertEqual(exit_code, EXIT_USER_ERROR)
+    def test_j1939_pgn_without_file_returns_reference_definition(self) -> None:
+        exit_code, stdout, stderr = run_cli("j1939", "pgn", "61444", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(stderr, "")
 
         payload = json.loads(stdout)
-        self.assertEqual(payload["errors"][0]["code"], "CAPTURE_FILE_REQUIRED")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["mode"], "reference")
+        self.assertEqual(payload["data"]["pgn"], 61444)
+        self.assertEqual(payload["data"]["label"], "EEC1")
+        spns = {entry["spn"] for entry in payload["data"]["spns"]}
+        self.assertIn(190, spns)
 
     def test_j1939_pgn_uses_real_capture_file(self) -> None:
         exit_code, stdout, stderr = run_cli(

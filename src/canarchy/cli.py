@@ -41,7 +41,13 @@ from canarchy.j2497 import decode_events as decode_j2497_events
 from canarchy.j2497 import iter_j2497_frames_from_file, j2497_mids_payload
 from canarchy.j1939 import TP_CM_PGN, TP_DT_PGN, decompose_arbitration_id
 from canarchy.j1939_decoder import get_j1939_decoder
-from canarchy.j1939_metadata import pgn_lookup, source_address_lookup
+from canarchy.j1939_metadata import (
+    decodable_spns,
+    pgn_lookup,
+    source_address_lookup,
+    spn_lookup,
+    spns_for_pgn,
+)
 from canarchy import pretty_j1939_support
 from canarchy.models import (
     AlertEvent,
@@ -1064,9 +1070,14 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(j1939_decode)
     j1939_decode.set_defaults(command="j1939 decode")
 
-    j1939_pgn = j1939_subparsers.add_parser("pgn", help="inspect a J1939 PGN")
+    j1939_pgn = j1939_subparsers.add_parser(
+        "pgn", help="inspect a J1939 PGN (reference lookup, or within a capture via --file)"
+    )
     j1939_pgn.add_argument("pgn", type=int)
-    j1939_pgn.add_argument("--file", help="inspect the PGN within a capture file")
+    j1939_pgn.add_argument(
+        "--file",
+        help="inspect the PGN within a capture file (omit for a built-in reference lookup)",
+    )
     j1939_pgn.add_argument(
         "--dbc", help="enrich J1939 results with a local DBC path or provider ref"
     )
@@ -1074,9 +1085,14 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(j1939_pgn)
     j1939_pgn.set_defaults(command="j1939 pgn")
 
-    j1939_spn = j1939_subparsers.add_parser("spn", help="inspect a J1939 SPN")
+    j1939_spn = j1939_subparsers.add_parser(
+        "spn", help="inspect a J1939 SPN (reference lookup, or within a capture via --file)"
+    )
     j1939_spn.add_argument("spn", type=int)
-    j1939_spn.add_argument("--file", help="inspect the SPN within a capture file")
+    j1939_spn.add_argument(
+        "--file",
+        help="inspect the SPN within a capture file (omit for a built-in reference lookup)",
+    )
     j1939_spn.add_argument(
         "--dbc", help="enrich J1939 results with a local DBC path or provider ref"
     )
@@ -2527,20 +2543,6 @@ def validate_args(args: argparse.Namespace) -> None:
                 data={"pgn": args.pgn},
             )
 
-    if args.command == "j1939 pgn" and not getattr(args, "file", None):
-        raise CommandError(
-            command=args.command,
-            exit_code=EXIT_USER_ERROR,
-            errors=[
-                ErrorDetail(
-                    code="CAPTURE_FILE_REQUIRED",
-                    message="J1939 PGN inspection requires a capture file.",
-                    hint="Pass `--file <capture.candump>` to inspect a PGN in recorded traffic.",
-                )
-            ],
-            data={"pgn": args.pgn},
-        )
-
     if args.command == "j1939 spn" and args.spn < 0:
         raise CommandError(
             command=args.command,
@@ -2555,23 +2557,13 @@ def validate_args(args: argparse.Namespace) -> None:
             data={"spn": args.spn},
         )
 
-    if args.command == "j1939 spn" and not getattr(args, "file", None):
-        raise CommandError(
-            command=args.command,
-            exit_code=EXIT_USER_ERROR,
-            errors=[
-                ErrorDetail(
-                    code="CAPTURE_FILE_REQUIRED",
-                    message="J1939 SPN inspection requires a capture file.",
-                    hint="Pass `--file <capture.candump>` to inspect SPN values in recorded traffic.",
-                )
-            ],
-            data={"spn": args.spn},
-        )
-
     if args.command == "j1939 spn" and args.spn not in get_j1939_decoder().supported_spns():
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
         if dbc_ref and dbc_supports_spn(dbc_ref, args.spn):
+            return
+        # Reference mode (no capture): any catalog entry — even a name-only one
+        # without full decode fields — is enough to describe the SPN (#442).
+        if not getattr(args, "file", None) and spn_lookup(args.spn) is not None:
             return
         raise CommandError(
             command=args.command,
@@ -3314,6 +3306,61 @@ def _format_pgn_entry(pgn: int) -> dict[str, Any]:
         "pgn": pgn,
         "label": meta["label"] if meta else None,
     }
+
+
+def _j1939_pgn_reference(pgn: int) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    """Built-in reference definition for a PGN, used when no capture is given (#442)."""
+    meta = pgn_lookup(pgn) or {}
+    spns = [
+        {
+            "spn": entry["spn"],
+            "name": entry.get("name"),
+            "start": entry.get("start"),
+            "length": entry.get("length"),
+            "resolution": entry.get("resolution"),
+            "offset": entry.get("offset"),
+            "units": entry.get("units"),
+        }
+        for entry in spns_for_pgn(pgn)
+    ]
+    data: dict[str, Any] = {
+        "mode": "reference",
+        "pgn": pgn,
+        "name": meta.get("name"),
+        "label": meta.get("label"),
+        "description": meta.get("description"),
+        "spns": spns,
+        "spn_count": len(spns),
+    }
+    warnings: list[str] = []
+    if not meta:
+        warnings.append(
+            f"PGN {pgn} is not in the built-in catalog; only the numeric id and any "
+            "catalogued SPNs are reported."
+        )
+    return data, [], warnings
+
+
+def _j1939_spn_reference(spn: int) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    """Built-in reference definition for an SPN, used when no capture is given (#442)."""
+    meta = spn_lookup(spn) or {}
+    pgn = meta.get("pgn")
+    pgn_meta = pgn_lookup(int(pgn)) if pgn is not None else None
+    data: dict[str, Any] = {
+        "mode": "reference",
+        "spn": spn,
+        "name": meta.get("name"),
+        "pgn": pgn,
+        "pgn_label": pgn_meta["label"] if pgn_meta else None,
+        "pgn_name": pgn_meta["name"] if pgn_meta else None,
+        "start": meta.get("start"),
+        "length": meta.get("length"),
+        "resolution": meta.get("resolution"),
+        "offset": meta.get("offset"),
+        "units": meta.get("units"),
+        "decodable": spn in decodable_spns(),
+    }
+    return data, [], []
 
 
 def _format_source_address_entry(source_address: int) -> dict[str, Any]:
@@ -4348,6 +4395,8 @@ def j1939_payload(
             warnings,
         )
     if args.command == "j1939 pgn":
+        if not getattr(args, "file", None):
+            return _j1939_pgn_reference(args.pgn)
         decoder = get_j1939_decoder()
         event_objects = decoder.decode_pgn_events(
             transport.iter_frames_from_file(args.file, **j1939_file_analysis_kwargs(args)),
@@ -4380,6 +4429,8 @@ def j1939_payload(
             dbc_warnings,
         )
     if args.command == "j1939 spn":
+        if not getattr(args, "file", None):
+            return _j1939_spn_reference(args.spn)
         decoder = get_j1939_decoder()
         dbc_ref = getattr(args, "dbc", None) or default_j1939_dbc()
         analysis_kwargs = j1939_file_analysis_kwargs(args)
@@ -7891,9 +7942,38 @@ def format_j1939_table(result: CommandResult) -> list[str]:
         lines.append(f"file: {result.data['file']}")
     if result.command == "j1939 pgn":
         lines.append(f"pgn: {result.data['pgn']}")
+        if result.data.get("mode") == "reference":
+            lines.append(f"name: {result.data.get('name')}")
+            lines.append(f"label: {result.data.get('label')}")
+            lines.append(f"description: {result.data.get('description')}")
+            spns = result.data.get("spns", [])
+            lines.append(f"spns ({result.data.get('spn_count', 0)}):")
+            if not spns:
+                lines.append("- no catalogued spns")
+            for spn in spns:
+                lines.append(
+                    f"- spn={spn['spn']} name={spn.get('name')} "
+                    f"units={spn.get('units')} "
+                    f"start={spn.get('start')} length={spn.get('length')}"
+                )
+            return lines
 
     if result.command == "j1939 spn":
         lines.append(f"spn: {result.data['spn']}")
+        if result.data.get("mode") == "reference":
+            lines.append(f"name: {result.data.get('name')}")
+            pgn = result.data.get("pgn")
+            pgn_label = result.data.get("pgn_label")
+            pgn_suffix = f" [{pgn_label}]" if pgn_label else ""
+            lines.append(f"pgn: {pgn}{pgn_suffix}")
+            lines.append(f"units: {result.data.get('units')}")
+            lines.append(f"resolution: {result.data.get('resolution')}")
+            lines.append(f"offset: {result.data.get('offset')}")
+            lines.append(
+                f"bit_layout: start={result.data.get('start')} length={result.data.get('length')}"
+            )
+            lines.append(f"decodable: {result.data.get('decodable')}")
+            return lines
         lines.append(f"file: {result.data['file']}")
         lines.append("observations:")
         observations = result.data.get("observations", [])

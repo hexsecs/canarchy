@@ -553,12 +553,16 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name="j1939_pgn",
-        description="Inspect a specific J1939 PGN within a capture file. Use max_frames or seconds to limit processing on large captures.",
+        description="Inspect a specific J1939 PGN. Omit `file` for a built-in reference lookup (name/label/description and catalogued SPNs); pass `file` to inspect the PGN within a capture. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
             "type": "object",
             "properties": {
                 "pgn": {"type": "integer", "description": "J1939 PGN value (0–262143)"},
-                "file": {"type": "string", "description": "Path to candump capture file"},
+                "file": {
+                    "type": "string",
+                    "description": "Path to candump capture file "
+                    "(omit for a built-in reference lookup)",
+                },
                 "dbc": {
                     "type": "string",
                     "description": "Enrich results with a local DBC path or provider ref",
@@ -576,17 +580,21 @@ _TOOLS: list[types.Tool] = [
                     "description": "Limit analysis to the first T seconds of the capture",
                 },
             },
-            "required": ["pgn", "file"],
+            "required": ["pgn"],
         },
     ),
     types.Tool(
         name="j1939_spn",
-        description="Inspect a specific J1939 SPN within a capture file. Use max_frames or seconds to limit processing on large captures.",
+        description="Inspect a specific J1939 SPN. Omit `file` for a built-in reference lookup (name, PGN, units, resolution, bit layout); pass `file` to inspect SPN values within a capture. Use max_frames or seconds to limit processing on large captures.",
         inputSchema={
             "type": "object",
             "properties": {
                 "spn": {"type": "integer", "description": "J1939 SPN value (non-negative integer)"},
-                "file": {"type": "string", "description": "Path to candump capture file"},
+                "file": {
+                    "type": "string",
+                    "description": "Path to candump capture file "
+                    "(omit for a built-in reference lookup)",
+                },
                 "dbc": {
                     "type": "string",
                     "description": "Enrich results with a local DBC path or provider ref",
@@ -604,7 +612,7 @@ _TOOLS: list[types.Tool] = [
                     "description": "Limit analysis to the first T seconds of the capture",
                 },
             },
-            "required": ["spn", "file"],
+            "required": ["spn"],
         },
     ),
     types.Tool(
@@ -2064,7 +2072,9 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_pgn":
-            argv = ["j1939", "pgn", str(a["pgn"]), "--file", a["file"]]
+            argv = ["j1939", "pgn", str(a["pgn"])]
+            if a.get("file"):
+                argv += ["--file", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
             if a.get("offset") is not None and a["offset"] > 0:
@@ -2075,7 +2085,9 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "j1939_spn":
-            argv = ["j1939", "spn", str(a["spn"]), "--file", a["file"]]
+            argv = ["j1939", "spn", str(a["spn"])]
+            if a.get("file"):
+                argv += ["--file", a["file"]]
             if a.get("dbc"):
                 argv += ["--dbc", a["dbc"]]
             if a.get("offset") is not None and a["offset"] > 0:

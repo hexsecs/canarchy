@@ -659,6 +659,33 @@ def test_build_argv_j1939_pgn():
     assert argv[-1] == "--json"
 
 
+def test_j1939_pgn_spn_schemas_make_file_optional():
+    tools = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    assert tools["j1939_pgn"].inputSchema["required"] == ["pgn"]
+    assert tools["j1939_spn"].inputSchema["required"] == ["spn"]
+
+
+def test_build_argv_j1939_pgn_reference_omits_file():
+    argv = _build_argv("j1939_pgn", {"pgn": 61444})
+    assert argv == ["j1939", "pgn", "61444", "--json"]
+
+
+def test_call_tool_j1939_pgn_reference_lookup():
+    results = asyncio.run(handle_call_tool("j1939_pgn", {"pgn": 61444}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["mode"] == "reference"
+    assert payload["data"]["label"] == "EEC1"
+
+
+def test_call_tool_j1939_spn_reference_lookup():
+    results = asyncio.run(handle_call_tool("j1939_spn", {"spn": 190}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["mode"] == "reference"
+    assert payload["data"]["units"] == "rpm"
+
+
 def test_build_argv_j1587_decode_uses_file_flag():
     argv = _build_argv("j1587_decode", {"file": "trace.j1708"})
     assert argv == ["j1587", "decode", "--file", "trace.j1708", "--json"]
