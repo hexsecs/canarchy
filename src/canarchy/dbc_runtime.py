@@ -423,6 +423,10 @@ def _spn_metadata_index(database: cantools.database.Database) -> dict[int, dict[
                 "signal_name": signal.name,
                 "units": signal.unit or None,
                 "frame_id": int(message.frame_id),
+                "start": int(signal.start),
+                "length": int(signal.length),
+                "resolution": normalize_value(signal.scale),
+                "offset": normalize_value(signal.offset),
             }
     _SPN_INDEX_CACHE[database] = index
     return index

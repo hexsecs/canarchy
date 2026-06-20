@@ -93,6 +93,18 @@ def pgn_lookup(pgn: int) -> dict[str, Any] | None:
     return _pgn_data().get(pgn)
 
 
+def spns_for_pgn(pgn: int) -> list[dict[str, Any]]:
+    """Return built-in SPN definitions carried by the given PGN, sorted by SPN.
+
+    Each entry is the SPN's catalog metadata with its ``spn`` number included.
+    """
+    return [
+        {"spn": spn, **entry}
+        for spn, entry in sorted(_spn_data().items())
+        if entry.get("pgn") == pgn
+    ]
+
+
 def source_address_lookup(addr: int) -> str | None:
     """Return the standard name for the given J1939 source address, or None."""
     return _source_address_data().get(addr)

@@ -221,7 +221,10 @@ tool: uds_services {}
 → {"ok": true, "command": "uds services", "data": {"service_count": 26, ...}}
 
 tool: j1939_spn {"spn": 190, "file": "trace.candump"}
-→ {"ok": true, "command": "j1939 spn", "data": {"observations": [...]}}
+→ {"ok": true, "command": "j1939 spn", "data": {"mode": "passive", "observations": [...]}}
+
+tool: j1939_spn {"spn": 190}   # no file → built-in reference lookup
+→ {"ok": true, "command": "j1939 spn", "data": {"mode": "reference", "name": "Engine Speed", "pgn": 61444, "units": "rpm", ...}}
 
 tool: send {"interface": "vcan0", "frame_id": "0x7DF", "data": "0201F1", "ack_active": true}
 → {"ok": true, "command": "send", "data": {"frame": {...}, "mode": "dry_run"}}
