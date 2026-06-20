@@ -131,6 +131,7 @@ _MCP_EXCLUDED_COMMANDS = {
     "cannelloni send",  # active UDP egress to an arbitrary host; CLI-only operator action
     "completion",
     "datasets stream",
+    "datasets download",  # writes bulk dataset bytes to an arbitrary host path; CLI operator action
     "dbc generate-c",  # file generation is a developer action, not an agent tool call
     "plugins enable",  # writes user config; kept CLI-only
     "plugins disable",  # writes user config; kept CLI-only

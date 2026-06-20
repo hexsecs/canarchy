@@ -36,7 +36,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-13` | Ubiquitous | Dataset provider workflows selected for MCP shall expose provider list, search, inspect, fetch, cache list, cache refresh, conversion, replay file listing, and safe replay planning tools while excluding streaming dataset frame output. |
 | `REQ-MCP-14` | Ubiquitous | Skills provider workflows selected for MCP shall expose provider list, search, fetch, cache list, and cache refresh tools while preserving the same CLI result envelope. |
 | `REQ-MCP-15` | Ubiquitous | Reverse-engineering helpers selected for MCP shall include `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, `re shortlist-dbc`, and `re suggest` (heuristic path only; the external `--llm` enrichment is CLI-only). |
-| `REQ-MCP-16` | Ubiquitous | Every implemented CLI command shall be either exposed as an MCP tool or listed in the documented exclusion set (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`, `dbc generate-c`); a test shall enforce this invariant so new commands cannot silently drift out of coverage. |
+| `REQ-MCP-16` | Ubiquitous | Every implemented CLI command shall be either exposed as an MCP tool or listed in the documented exclusion set (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`, `datasets download`, `dbc generate-c`); a test shall enforce this invariant so new commands cannot silently drift out of coverage. |
 | `REQ-MCP-20` | Ubiquitous | No tool response shall exceed the configured output cap (`CANARCHY_MCP_MAX_RESPONSE_BYTES`, default 512000 bytes). Oversized list-shaped data shall be truncated with `data.truncated: true` and a `data.truncation` block recording, per trimmed list, the original `total_items` and `returned_items`, plus a hint pointing at the CLI for the full result; data that cannot be reduced by list truncation shall be replaced by a stub that preserves the envelope. |
 | `REQ-MCP-21` | Unwanted behaviour | If a tool call raises an unexpected exception, the server shall return a canonical envelope with error code `TOOL_EXECUTION_ERROR` instead of propagating the exception to the stdio transport, so one failing or oversized call never makes the remaining tools unavailable for the session. |
 | `REQ-MCP-22` | Ubiquitous | A tool's parameter surface shall match the underlying CLI command's flags: every flag `_build_argv` forwards shall be a real option of the target command (enforced by a contract test over all tools), and the `stats` tool shall expose the same `top`/`sa`/`pgn` knobs the CLI offers. |
@@ -170,6 +170,7 @@ landing here.
 | `dbc generate-c` | Generates C source/header files to disk — a developer action, not an agent tool call. |
 | `completion` | Emits a raw shell script, not a JSON envelope. |
 | `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
+| `datasets download` | Writes bulk dataset bytes to an arbitrary host path — a CLI-only operator action. `datasets fetch` (provenance) and `datasets replay --dry-run`/`--list-files` (metadata) are exposed. |
 
 The `uds_scan` / `uds_trace` tools are exposed for CAN interfaces, but a
 `doip://` target is a **target-level exclusion**: DoIP routes the workflow over
