@@ -380,6 +380,22 @@ def _add_capture_path_argument(
     )
 
 
+def _suppress_child_defaults(parser: argparse.ArgumentParser) -> None:
+    """Set ``SUPPRESS`` defaults on a child subparser's options.
+
+    When a parent parser carries the same option destinations so a default-action
+    form parses (e.g. ``j1939 tp --file X`` → the ``sessions`` action), an explicit
+    child action would otherwise overwrite parent-supplied values with its own
+    defaults whenever those options preceded the action token (``j1939 tp --file X
+    sessions``). ``SUPPRESS`` means "do not write a default into the namespace", so
+    the accepted parent values survive (#445 review). Pass options explicitly to the
+    child to override.
+    """
+    for action in parser._actions:
+        if action.dest != "help":
+            action.default = argparse.SUPPRESS
+
+
 LOG_LEVEL_CHOICES = ("debug", "info", "warn", "error")
 
 
@@ -1146,6 +1162,10 @@ def build_parser() -> CanarchyArgumentParser:
     )
     _add_capture_path_argument(j1939_tp_sessions, help_text="path to candump capture file")
     _add_tp_session_filters(j1939_tp_sessions)
+    # The parent `tp` parser carries the same options for the default-action form;
+    # suppress child defaults so parent values survive options placed before the
+    # explicit `sessions` token (#445 review).
+    _suppress_child_defaults(j1939_tp_sessions)
     j1939_tp_sessions.set_defaults(command="j1939 tp sessions")
 
     j1939_tp_compare = j1939_tp_subparsers.add_parser(
@@ -1160,6 +1180,7 @@ def build_parser() -> CanarchyArgumentParser:
     )
     add_j1939_file_analysis_arguments(j1939_tp_compare)
     add_output_arguments(j1939_tp_compare)
+    _suppress_child_defaults(j1939_tp_compare)
     j1939_tp_compare.set_defaults(command="j1939 tp compare")
 
     j1939_dm1 = j1939_subparsers.add_parser("dm1", help="inspect J1939 DM1 traffic")

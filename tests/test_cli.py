@@ -5113,6 +5113,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_OK)
         self.assertEqual(json.loads(stdout)["command"], "j1939 tp sessions")
 
+    def test_j1939_tp_parent_file_survives_explicit_action(self) -> None:
+        # Options before an explicit sub-action must not be clobbered by the
+        # child parser's defaults (#445 review).
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli("j1939", "tp", "--file", capture, "sessions", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["command"], "j1939 tp sessions")
+
+        exit_code, stdout, _ = run_cli(
+            "j1939", "tp", "--file", capture, "compare", "--sa", "0x31", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["command"], "j1939 tp compare")
+
+    def test_j1939_tp_filter_before_explicit_action_survives(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli(
+            "j1939", "tp", "--file", capture, "--max-frames", "5", "sessions", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["data"]["max_frames"], 5)
+
     def test_stats_filters_by_pgn_and_source_address(self) -> None:
         capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
         exit_code, stdout, _ = run_cli("stats", "--file", capture, "--sa", "0x31", "--json")
