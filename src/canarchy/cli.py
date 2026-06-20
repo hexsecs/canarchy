@@ -2645,7 +2645,13 @@ def validate_args(args: argparse.Namespace) -> None:
                 ],
             )
 
-    if args.command in {"j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults"}:
+    if args.command in {
+        "stats",
+        "j1939 tp sessions",
+        "j1939 tp compare",
+        "j1939 dm1",
+        "j1939 faults",
+    }:
         sa_arg = getattr(args, "sa", None)
         if sa_arg is not None:
             for token in sa_arg.split(","):

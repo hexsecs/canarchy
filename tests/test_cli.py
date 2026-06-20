@@ -5051,6 +5051,15 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["total_frames"], 0)
         self.assertEqual(payload["data"]["pgn_filter"], 0xABCDE)
 
+    def test_stats_invalid_source_address_returns_structured_error(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, stderr = run_cli("stats", "--file", capture, "--sa", "foo", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "INVALID_SOURCE_ADDRESS")
+
     def test_unsupported_capture_file_format_returns_transport_error(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "stats", "--file", str(FIXTURES / "sample.dbc"), "--json"
