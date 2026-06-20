@@ -1923,6 +1923,37 @@ class CliTests(unittest.TestCase):
         self.assertIn("text=VIN1234", stdout)
         self.assertIn("hash=", stdout)
 
+    def test_collapse_identification_padding_drops_long_delimiter_run(self) -> None:
+        from canarchy.cli import _collapse_identification_padding
+
+        # A long trailing run of the '*' field delimiter is buffer padding (#448).
+        self.assertEqual(
+            _collapse_identification_padding("CMMNS*6B u13D0670000000*73550042" + "*" * 60),
+            "CMMNS*6B u13D0670000000*73550042",
+        )
+        # Short trailing runs are legitimate empty-field markers and are kept.
+        self.assertEqual(
+            _collapse_identification_padding("ALLSN*2100-2200 RDS***"),
+            "ALLSN*2100-2200 RDS***",
+        )
+        self.assertEqual(_collapse_identification_padding("VIN1234"), "VIN1234")
+
+    def test_enrich_tp_session_collapses_component_id_padding(self) -> None:
+        from canarchy.cli import _enrich_tp_session
+
+        payload = ("CMMNS*MODEL123*SER999" + "*" * 50).encode("ascii").hex()
+        session = {
+            "transfer_pgn": 65259,
+            "reassembled_data": payload,
+            "complete": True,
+            "source_address": 0,
+            "destination_address": 255,
+            "session_type": "BAM",
+            "timestamp": 0.0,
+        }
+        enriched = _enrich_tp_session(session)
+        self.assertEqual(enriched["decoded_text"], "CMMNS*MODEL123*SER999")
+
     def test_j1939_tp_sessions_pgn_filter_limits_results(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",

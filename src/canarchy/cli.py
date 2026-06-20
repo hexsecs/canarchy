@@ -2832,6 +2832,23 @@ def _extract_printable_text(payload: bytes) -> str | None:
     return text or None
 
 
+# J1939 component/vehicle/software identification strings (PGN 65259/65260/65242)
+# are '*'-delimited (Make*Model*Serial*Unit). A short trailing run of delimiters
+# denotes empty trailing fields and is normal; some ECUs additionally pad the
+# fixed buffer with a long run of '*', which swamps the meaningful fields in text
+# output (#448). Trailing runs longer than this are treated as padding and dropped.
+_IDENT_DELIMITER = "*"
+_IDENT_PADDING_MAX_TRAILING = 4
+
+
+def _collapse_identification_padding(text: str) -> str:
+    """Drop a pathological trailing run of the J1939 ``*`` field delimiter."""
+    core = text.rstrip(_IDENT_DELIMITER)
+    if len(text) - len(core) > _IDENT_PADDING_MAX_TRAILING:
+        return core
+    return text
+
+
 def _top_counts(counter: Counter[int], *, limit: int = 5) -> list[dict[str, int]]:
     return [{"value": value, "frame_count": count} for value, count in counter.most_common(limit)]
 
@@ -2873,6 +2890,7 @@ def _enrich_tp_session(session: dict[str, Any]) -> dict[str, Any]:
     if text is None:
         return enriched
 
+    text = _collapse_identification_padding(text)
     enriched["decoded_text"] = text
     enriched["decoded_text_encoding"] = "ascii"
     enriched["decoded_text_heuristic"] = True
