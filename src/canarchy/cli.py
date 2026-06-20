@@ -15,7 +15,7 @@ import sys
 import time
 import uuid
 from collections import Counter, defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -9660,6 +9660,51 @@ def emit_web_serve(args: argparse.Namespace, output_format: str) -> int:
     return EXIT_OK
 
 
+def _format_text_value_lines(key: str, value: Any, indent: int = 0) -> Iterator[str]:
+    """Render a key/value pair as readable indented text lines.
+
+    Nested dicts become indented key/value blocks and lists of dicts become
+    per-item `-` blocks, rather than falling through to Python `repr()` of the
+    container (#443). Scalars and lists of scalars stay on a single line.
+    """
+    pad = "  " * indent
+    if isinstance(value, dict):
+        if not value:
+            yield f"{pad}{key}: {{}}"
+            return
+        yield f"{pad}{key}:"
+        for sub_key, sub_value in value.items():
+            yield from _format_text_value_lines(str(sub_key), sub_value, indent + 1)
+        return
+    if isinstance(value, list):
+        if not value:
+            yield f"{pad}{key}: []"
+            return
+        if all(not isinstance(item, (dict, list)) for item in value):
+            yield f"{pad}{key}: [{', '.join(str(item) for item in value)}]"
+            return
+        yield f"{pad}{key}:"
+        for item in value:
+            if isinstance(item, dict) and item:
+                entries = list(item.items())
+                first_key, first_value = entries[0]
+                if isinstance(first_value, (dict, list)):
+                    yield f"{pad}  -"
+                    for entry_key, entry_value in entries:
+                        yield from _format_text_value_lines(str(entry_key), entry_value, indent + 2)
+                else:
+                    yield f"{pad}  - {first_key}: {first_value}"
+                    for entry_key, entry_value in entries[1:]:
+                        yield from _format_text_value_lines(str(entry_key), entry_value, indent + 2)
+            elif isinstance(item, (dict, list)):
+                # Empty dict or a nested list element.
+                yield f"{pad}  - {item if item else ('{}' if isinstance(item, dict) else '[]')}"
+            else:
+                yield f"{pad}  - {item}"
+        return
+    yield f"{pad}{key}: {value}"
+
+
 def emit_result(result: CommandResult, output_format: str) -> None:
     payload = result.to_payload()
     _J1939_SESSION_COMMANDS = {
@@ -9954,7 +9999,8 @@ def emit_result(result: CommandResult, output_format: str) -> None:
         print(f"command: {result.command}", file=stream)
 
     for key, value in result.data.items():
-        print(f"{key}: {value}", file=stream)
+        for line in _format_text_value_lines(key, value):
+            print(line, file=stream)
     for warning in payload["warnings"]:
         print(f"warning: {warning}", file=stream)
     for error in payload["errors"]:

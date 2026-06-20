@@ -5093,6 +5093,23 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["errors"][0]["code"], "INVALID_SOURCE_ADDRESS")
 
+    def test_stats_text_renders_nested_data_as_blocks_not_repr(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, stderr = run_cli("stats", "--file", capture, "--top", "2", "--text")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(stderr, "")
+        lines = stdout.splitlines()
+        # No Python repr of dicts/lists leaks into text output (#443).
+        self.assertNotIn("dlc_distribution: {", stdout)
+        self.assertNotIn("top_ids: [{", stdout)
+        self.assertNotIn("'arbitration_id'", stdout)
+        # Nested dict becomes an indented block ...
+        self.assertIn("bus_load:", lines)
+        self.assertTrue(any(line.startswith("  total_bits_estimate:") for line in lines), stdout)
+        # ... and a list of dicts becomes per-item `-` blocks.
+        self.assertIn("top_ids:", lines)
+        self.assertTrue(any(line.startswith("  - arbitration_id:") for line in lines), stdout)
+
     def test_unsupported_capture_file_format_returns_transport_error(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "stats", "--file", str(FIXTURES / "sample.dbc"), "--json"
@@ -7109,6 +7126,41 @@ class PluginsCliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, EXIT_USER_ERROR)
         self.assertEqual(json.loads(stdout)["errors"][0]["code"], "PLUGIN_NOT_FOUND")
+
+
+class TextValueRenderingTests(unittest.TestCase):
+    def _render(self, key, value):
+        from canarchy.cli import _format_text_value_lines
+
+        return list(_format_text_value_lines(key, value))
+
+    def test_scalar(self):
+        self.assertEqual(self._render("k", 5), ["k: 5"])
+
+    def test_empty_containers_stay_inline(self):
+        self.assertEqual(self._render("d", {}), ["d: {}"])
+        self.assertEqual(self._render("l", []), ["l: []"])
+
+    def test_list_of_scalars_stays_inline(self):
+        self.assertEqual(self._render("dlcs", [8, 3]), ["dlcs: [8, 3]"])
+
+    def test_nested_dict_becomes_indented_block(self):
+        self.assertEqual(
+            self._render("bus_load", {"total": 920, "rate": 1.5}),
+            ["bus_load:", "  total: 920", "  rate: 1.5"],
+        )
+
+    def test_list_of_dicts_becomes_dash_blocks(self):
+        self.assertEqual(
+            self._render("top_ids", [{"id": 1, "hex": "0x1"}, {"id": 2, "hex": "0x2"}]),
+            ["top_ids:", "  - id: 1", "    hex: 0x1", "  - id: 2", "    hex: 0x2"],
+        )
+
+    def test_deeply_nested_structure(self):
+        self.assertEqual(
+            self._render("a", {"b": [{"x": 1}]}),
+            ["a:", "  b:", "    - x: 1"],
+        )
 
 
 if __name__ == "__main__":
