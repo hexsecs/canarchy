@@ -37,12 +37,85 @@ first.
 * **Large captures need bounds.** File-backed J1939 analysis caps at
   500,000 frames on captures larger than 50 MB and emits a warning.
   Override with `--max-frames` or `--seconds` for full-file analysis.
+  See [Working with large captures](#working-with-large-captures) below.
+
+* **`datasets replay` is real-time by default.** It paces output at
+  `--rate 1.0` (wall-clock = capture time), so streaming N frames takes
+  the original capture's duration. To acquire data quickly, raise the
+  rate and bound the run: `--rate 1000 --max-frames 10000`.
+
+* **`datasets fetch` does not download data.** It records a provenance
+  JSON only. Use `datasets replay` to actually retrieve frames. See
+  [Acquiring dataset data](#acquiring-dataset-data) below.
 
 * **Stdin and `--file` cannot both be specified.** Use one or the other:
 
   ```bash
   canarchy stats --file - < capture.candump
   ```
+
+---
+
+## Working with large captures
+
+Per-frame decoders (`j1939 faults`, `j1939 dm1`, `decode`) process the whole
+file before printing, so a large capture can look like it has hung. Bound the
+work explicitly instead of waiting.
+
+1. **Inspect first — never decode blind.** `capture-info` reads only the file's
+   head and tail, so it returns instantly even on multi-GB captures and tells
+   you how big the job is. It also suggests bounds:
+
+   ```bash
+   canarchy capture-info --file big.candump --json
+   # → frame_count, duration_seconds, suggested_max_frames, suggested_seconds
+   ```
+
+2. **Run bounded.** Pass `--max-frames` (first N frames) or `--seconds` (first
+   T seconds from the capture start). Start from the `suggested_*` values:
+
+   ```bash
+   canarchy j1939 faults --file big.candump --max-frames 10000 --json
+   canarchy j1939 dm1    --file big.candump --seconds 30 --json
+   ```
+
+3. **Auto-cap safety net.** File-backed J1939 analysis automatically caps at
+   500,000 frames on captures larger than 50 MB and adds a `truncated`
+   warning, so a naive full-file run cannot block indefinitely. Override the
+   cap by passing your own `--max-frames`/`--seconds`.
+
+`--offset N` skips the first N frames, which—combined with `--max-frames`—lets
+you window through a large capture in chunks.
+
+## Acquiring dataset data
+
+The dataset verbs do different things; pick by intent:
+
+| Verb | What it does |
+|------|--------------|
+| `datasets search` / `datasets inspect` | Discover datasets and inspect a manifest — no data transfer. |
+| `datasets fetch <ref>` | Record a **provenance JSON only** (source URL, cache path). It does **not** download frames. |
+| `datasets replay <ref>` | **Retrieve the data** — stream frames from the resolved manifest to stdout (or send to an interface). |
+
+`datasets replay` defaults to `--rate 1.0` (real-time pacing), so acquiring a
+fixed number of frames quickly means cranking the rate and bounding the run:
+
+```bash
+# Discover → inspect → list files → acquire a bounded, fast slice
+canarchy datasets search candid --json
+canarchy datasets inspect catalog:candid --json
+canarchy datasets replay catalog:candid --list-files --json
+canarchy datasets replay catalog:candid --file 2_driving_CAN.log \
+  --rate 1000 --max-frames 10000 > slice.candump
+
+# Or pipe straight into analysis without a temp file
+canarchy datasets replay catalog:candid --rate 1000 --max-frames 10000 \
+  | canarchy stats --file - --json
+```
+
+> `j1939 pgn`/`j1939 spn` no longer require a capture: with no `--file` they
+> return the built-in reference definition (name, units, bit layout). Pass
+> `--file` only when you want capture-derived values.
 
 ---
 

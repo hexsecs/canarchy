@@ -292,6 +292,9 @@ canarchy datasets replay catalog:candid --file 2_indicator_CAN.log --rate 1000 -
 
 Remote replay writes candump or JSONL records to stdout unless `--json` is requested. Use `--list-files --json` to inspect the embedded CANdid replay manifest, then pass `--file <id-or-name>` to select a specific replay file.
 
+!!! tip "Acquire quickly, analyze bounded"
+    `datasets replay` is **real-time by default** (`--rate 1.0`), and `datasets fetch` records provenance only — it does not download frames. To pull a fast, bounded slice raise `--rate` and cap with `--max-frames`/`--seconds`. For per-frame decoders on large files, run `capture-info` first and pass its `suggested_max_frames`/`suggested_seconds`. See [Working with large captures](troubleshooting.md#working-with-large-captures) and [Acquiring dataset data](troubleshooting.md#acquiring-dataset-data).
+
 You can also pipe remote candump replay directly into stdin-aware analysis commands without creating a temporary file:
 
 ```bash
