@@ -1954,6 +1954,26 @@ class CliTests(unittest.TestCase):
         enriched = _enrich_tp_session(session)
         self.assertEqual(enriched["decoded_text"], "CMMNS*MODEL123*SER999")
 
+    def test_enrich_tp_session_preserves_non_identification_payload(self) -> None:
+        from canarchy.cli import _enrich_tp_session
+
+        # A non-identification transfer PGN (no payload_label) whose printable
+        # payload legitimately ends in '*' must NOT be collapsed (#448 review).
+        text = "DATA****"
+        payload = text.encode("ascii").hex()
+        session = {
+            "transfer_pgn": 64000,
+            "reassembled_data": payload,
+            "complete": True,
+            "source_address": 0,
+            "destination_address": 255,
+            "session_type": "BAM",
+            "timestamp": 0.0,
+        }
+        enriched = _enrich_tp_session(session)
+        self.assertIsNone(enriched["payload_label"])
+        self.assertEqual(enriched["decoded_text"], text)
+
     def test_j1939_tp_sessions_pgn_filter_limits_results(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",

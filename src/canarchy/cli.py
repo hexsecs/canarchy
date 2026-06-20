@@ -2890,7 +2890,11 @@ def _enrich_tp_session(session: dict[str, Any]) -> dict[str, Any]:
     if text is None:
         return enriched
 
-    text = _collapse_identification_padding(text)
+    # Only the '*'-delimited identification PGNs (component/vehicle/software ID)
+    # carry the padding tail; collapsing it for arbitrary printable TP payloads
+    # could corrupt data that legitimately ends in '*' (#448 review).
+    if enriched["payload_label"] is not None:
+        text = _collapse_identification_padding(text)
     enriched["decoded_text"] = text
     enriched["decoded_text_encoding"] = "ascii"
     enriched["decoded_text_heuristic"] = True
