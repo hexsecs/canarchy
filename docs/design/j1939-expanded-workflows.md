@@ -36,15 +36,16 @@ Heavy-vehicle workflows should remain PGN and SPN first rather than forcing oper
 | `REQ-J1939-17` | Optional feature | Where DM1 traffic is present in any compared capture, the system shall surface per-source-address DM1 differences when the active fault set or lamp summary changes across captures. |
 | `REQ-J1939-18` | Optional feature | Where printable TP component-identification or vehicle-identification payloads differ across compared captures, the system shall report those source-address and payload-label differences in structured output. |
 | `REQ-J1939-19` | Unwanted behaviour | If `j1939 compare` is invoked with fewer than two capture files, the system shall return a structured error with code `J1939_COMPARE_REQUIRES_MULTIPLE_FILES` and exit code `1`. |
-| `REQ-J1939-06` | Unwanted behaviour | If `j1939 spn` is invoked without `--file`, the system shall return a structured error with code `CAPTURE_FILE_REQUIRED` and exit code 1. |
+| `REQ-J1939-06` | Event-driven | When `j1939 spn <spn>` is invoked without `--file`, the system shall return the built-in reference definition for the SPN (name, owning PGN with label, units, resolution, offset, and bit layout) marked `mode: "reference"`, rather than requiring a capture file. |
 | `REQ-J1939-07` | Unwanted behaviour | If `j1939 spn` is invoked with a negative SPN value, the system shall return a structured error with code `INVALID_SPN` and exit code 1. |
-| `REQ-J1939-08` | Unwanted behaviour | If the requested SPN is not in the curated decoder map, the system shall return a structured error with code `J1939_SPN_UNSUPPORTED` and exit code 1. |
+| `REQ-J1939-08` | Unwanted behaviour | If the requested SPN is absent from the curated catalog (and unresolved by any supplied DBC), the system shall return a structured error with code `J1939_SPN_UNSUPPORTED` and exit code 1, in both reference and capture modes. |
+| `REQ-J1939-21` | Event-driven | When `j1939 pgn <pgn>` is invoked without `--file`, the system shall return the built-in reference definition for the PGN (name, label, description, and the catalogued SPNs it carries) marked `mode: "reference"`, rather than requiring a capture file. |
 | `REQ-J1939-20` | Ubiquitous | DM1 DTCs and `j1939 faults` entries shall resolve `fmi` to an `fmi_description` from the bundled SAE J1939-73 FMI catalog, and SPN `name` resolution shall support operator-supplied OEM/proprietary extensions via `$CANARCHY_J1939_SPN_OVERRIDES` (or `~/.canarchy/j1939_spns.json`) merged over the bundled SPN catalog. |
 
 ## Command Surface
 
 ```text
-canarchy j1939 spn <spn> --file <capture>
+canarchy j1939 spn <spn> [--file <capture>]
 canarchy j1939 tp sessions --file <capture>
 canarchy j1939 dm1 --file <capture>
 canarchy j1939 inventory --file <capture>
@@ -70,7 +71,11 @@ Out of scope:
 
 ## `j1939 spn`
 
-The initial implementation uses a curated SPN decoder map rather than a general J1939 database.
+`--file` is optional. Without a capture, the command performs a built-in **reference
+lookup** (`mode: "reference"`): it returns the SPN's name, owning PGN (with label),
+units, resolution, offset, and bit layout from the bundled catalog. With `--file`, it
+performs the capture-aware observation extraction below (`mode: "passive"`). The
+initial implementation uses a curated SPN decoder map rather than a general J1939 database.
 
 ### Supported SPNs
 
@@ -229,9 +234,8 @@ For `j1939 spn`, `j1939 tp sessions`, `j1939 dm1`, `j1939 inventory`, and `j1939
 
 | Code | Trigger | Exit code |
 |------|---------|-----------|
-| `CAPTURE_FILE_REQUIRED` | `j1939 spn` is run without `--file` | 1 |
 | `INVALID_SPN` | requested SPN is negative | 1 |
-| `J1939_SPN_UNSUPPORTED` | requested SPN is not in the curated decoder map | 1 |
+| `J1939_SPN_UNSUPPORTED` | requested SPN is absent from the catalog and unresolved by any supplied DBC | 1 |
 | `J1939_COMPARE_REQUIRES_MULTIPLE_FILES` | `j1939 compare` is run with fewer than two capture files | 1 |
 
 ## Deferred Decisions

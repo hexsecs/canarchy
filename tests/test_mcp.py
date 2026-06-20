@@ -275,6 +275,31 @@ def test_call_tool_stats_uses_file_flag():
     assert payload["data"]["unique_arbitration_ids"] == 3
 
 
+def test_stats_schema_exposes_top_param():
+    tools = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    assert "top" in tools["stats"].inputSchema["properties"]
+
+
+def test_call_tool_stats_top_limits_detailed_ids():
+    results = asyncio.run(
+        handle_call_tool("stats", {"file": str(FIXTURES / "sample.candump"), "top": 1})
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["top_ids_returned"] == 1
+
+
+def test_parse_level_error_envelope_carries_tool_name():
+    # A non-integer `pgn` makes the CLI argparse type converter fail before a
+    # subcommand resolves, so the CLI reports command "cli"; the MCP layer must
+    # relabel it with the invoked tool name for attribution (#446).
+    results = asyncio.run(handle_call_tool("stats", {"file": "x", "pgn": "notanint"}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["command"] == "stats"
+    assert payload["errors"][0]["code"] == "INVALID_ARGUMENTS"
+
+
 def test_call_tool_j1587_decode_uses_file_flag():
     results = asyncio.run(
         handle_call_tool("j1587_decode", {"file": str(FIXTURES / "j1708_sample.j1708")})
@@ -657,6 +682,33 @@ def test_build_argv_j1939_pgn():
     assert "--file" in argv
     assert "trace.candump" in argv
     assert argv[-1] == "--json"
+
+
+def test_j1939_pgn_spn_schemas_make_file_optional():
+    tools = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    assert tools["j1939_pgn"].inputSchema["required"] == ["pgn"]
+    assert tools["j1939_spn"].inputSchema["required"] == ["spn"]
+
+
+def test_build_argv_j1939_pgn_reference_omits_file():
+    argv = _build_argv("j1939_pgn", {"pgn": 61444})
+    assert argv == ["j1939", "pgn", "61444", "--json"]
+
+
+def test_call_tool_j1939_pgn_reference_lookup():
+    results = asyncio.run(handle_call_tool("j1939_pgn", {"pgn": 61444}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["mode"] == "reference"
+    assert payload["data"]["label"] == "EEC1"
+
+
+def test_call_tool_j1939_spn_reference_lookup():
+    results = asyncio.run(handle_call_tool("j1939_spn", {"spn": 190}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["mode"] == "reference"
+    assert payload["data"]["units"] == "rpm"
 
 
 def test_build_argv_j1587_decode_uses_file_flag():
