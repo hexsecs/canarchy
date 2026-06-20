@@ -33,6 +33,8 @@
 | REQ-MCP-19 | `datasets convert` and `datasets replay --list-files` shall be exposed as MCP tools | TEST-MCP-37, TEST-MCP-38 |
 | REQ-MCP-20 | Tool responses are bounded by the output cap with explicit truncation markers and totals | TEST-MCP-39, TEST-MCP-40, TEST-MCP-41, TEST-MCP-42 |
 | REQ-MCP-21 | An in-tool exception returns a `TOOL_EXECUTION_ERROR` envelope and leaves the session usable | TEST-MCP-43 |
+| REQ-MCP-22 | Every flag an MCP tool forwards maps to a real CLI flag; `stats` exposes the same `top` knob on both surfaces | TEST-MCP-44, TEST-MCP-45, TEST-MCP-46 |
+| REQ-MCP-23 | A parse-level CLI failure relayed over MCP carries the invoked tool name, not the generic `cli` | TEST-MCP-47 |
 
 ## Representative Test Cases
 
@@ -545,3 +547,54 @@ Then   the call shall succeed with `ok: true`
 ```
 
 **Fixture:** none.
+
+---
+
+### `TEST-MCP-44` — Every MCP tool flag maps to a real CLI flag
+
+```gherkin
+Given  the registered MCP tools and the CLI argument parser
+When   `_build_argv` is invoked for each tool with a fully populated argument set
+Then   every `--flag` it emits shall be an accepted option of the resolved CLI command
+And    no tool shall forward a flag the CLI rejects with `unrecognized arguments`
+```
+
+**Test:** `test_mcp_tool_flags_map_to_real_cli_flags`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-45` — `stats` schema exposes the `top` parameter
+
+```gherkin
+Given  the registered MCP tool schemas
+When   the `stats` tool input schema is inspected
+Then   its properties shall include `top`, matching the CLI `--top` flag
+```
+
+**Test:** `test_stats_schema_exposes_top_param`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-46` — `stats` `top` limits the detailed-id list end-to-end
+
+```gherkin
+Given  a candump capture fixture
+When   `handle_call_tool("stats", {"file": ..., "top": 1})` is called
+Then   the envelope shall be `ok: true`
+And    `data.top_ids_returned` shall equal `1`
+```
+
+**Test:** `test_call_tool_stats_top_limits_detailed_ids`. **Fixture:** `sample.candump`.
+
+---
+
+### `TEST-MCP-47` — Parse-level error envelope carries the invoked tool name
+
+```gherkin
+Given  a `stats` call whose `pgn` value fails the CLI argparse type converter
+When   `handle_call_tool("stats", {"file": "x", "pgn": "notanint"})` is called
+Then   the envelope shall be `ok: false` with error code `INVALID_ARGUMENTS`
+And    `command` shall be `stats`, not the generic `cli`
+```
+
+**Test:** `test_parse_level_error_envelope_carries_tool_name`. **Fixture:** none.
