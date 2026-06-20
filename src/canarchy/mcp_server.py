@@ -314,6 +314,11 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "top": {
+                    "type": "integer",
+                    "description": "Number of highest-frequency arbitration ids to detail "
+                    "(default: 20)",
+                },
                 "pgn": {"type": "integer", "description": "Filter by transfer PGN"},
                 "sa": {
                     "type": "string",
@@ -1989,6 +1994,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "stats":
             argv = ["stats", "--file", a["file"]]
+            if a.get("top") is not None:
+                argv += ["--top", str(a["top"])]
             if a.get("pgn") is not None:
                 argv += ["--pgn", str(a["pgn"])]
             if a.get("sa"):
@@ -2799,6 +2806,12 @@ async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[
             }
         else:
             payload = result.to_payload()
+        # A parse-level CLI failure (e.g. INVALID_ARGUMENTS) is reported by the
+        # CLI under the generic command name "cli", since argparse failed before
+        # a subcommand was resolved. Relabel it with the tool the agent actually
+        # invoked so errors are attributable programmatically (#446).
+        if isinstance(payload, dict) and payload.get("command") == "cli":
+            payload["command"] = name
         payload = bound_payload(payload, _response_byte_limit())
     except Exception as exc:  # noqa: BLE001 - isolation boundary by design
         payload = _tool_execution_error_payload(name, exc)
