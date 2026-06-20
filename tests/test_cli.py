@@ -1923,6 +1923,57 @@ class CliTests(unittest.TestCase):
         self.assertIn("text=VIN1234", stdout)
         self.assertIn("hash=", stdout)
 
+    def test_collapse_identification_padding_drops_long_delimiter_run(self) -> None:
+        from canarchy.cli import _collapse_identification_padding
+
+        # A long trailing run of the '*' field delimiter is buffer padding (#448).
+        self.assertEqual(
+            _collapse_identification_padding("CMMNS*6B u13D0670000000*73550042" + "*" * 60),
+            "CMMNS*6B u13D0670000000*73550042",
+        )
+        # Short trailing runs are legitimate empty-field markers and are kept.
+        self.assertEqual(
+            _collapse_identification_padding("ALLSN*2100-2200 RDS***"),
+            "ALLSN*2100-2200 RDS***",
+        )
+        self.assertEqual(_collapse_identification_padding("VIN1234"), "VIN1234")
+
+    def test_enrich_tp_session_collapses_component_id_padding(self) -> None:
+        from canarchy.cli import _enrich_tp_session
+
+        payload = ("CMMNS*MODEL123*SER999" + "*" * 50).encode("ascii").hex()
+        session = {
+            "transfer_pgn": 65259,
+            "reassembled_data": payload,
+            "complete": True,
+            "source_address": 0,
+            "destination_address": 255,
+            "session_type": "BAM",
+            "timestamp": 0.0,
+        }
+        enriched = _enrich_tp_session(session)
+        self.assertEqual(enriched["decoded_text"], "CMMNS*MODEL123*SER999")
+
+    def test_enrich_tp_session_preserves_non_identification_payload(self) -> None:
+        from canarchy.cli import _enrich_tp_session
+
+        # A non-identification transfer PGN (no payload_label) whose printable
+        # payload legitimately ends in '*' must NOT be collapsed (#448 review).
+        text = "DATA****"
+        payload = text.encode("ascii").hex()
+        session = {
+            "transfer_pgn": 64000,
+            "reassembled_data": payload,
+            "complete": True,
+            "source_address": 0,
+            "destination_address": 255,
+            "session_type": "BAM",
+            "timestamp": 0.0,
+        }
+        enriched = _enrich_tp_session(session)
+        self.assertIsNone(enriched["payload_label"])
+        self.assertEqual(enriched["decoded_text"], text)
+
     def test_j1939_tp_sessions_pgn_filter_limits_results(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "j1939",
@@ -5069,6 +5120,71 @@ class CliTests(unittest.TestCase):
             any("matched candump format" in w for w in payload["warnings"]),
             payload["warnings"],
         )
+
+    def test_stats_accepts_positional_capture_path(self) -> None:
+        capture = str(FIXTURES / "sample.candump")
+        pos_code, pos_out, _ = run_cli("stats", capture, "--json")
+        flag_code, flag_out, _ = run_cli("stats", "--file", capture, "--json")
+        self.assertEqual(pos_code, EXIT_OK)
+        self.assertEqual(flag_code, EXIT_OK)
+        self.assertEqual(
+            json.loads(pos_out)["data"]["total_frames"],
+            json.loads(flag_out)["data"]["total_frames"],
+        )
+
+    def test_positional_and_file_flag_conflict_is_structured(self) -> None:
+        capture = str(FIXTURES / "sample.candump")
+        exit_code, stdout, _ = run_cli("stats", capture, "--file", "other.log", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "CONFLICTING_FILE_ARGUMENTS")
+
+    def test_analysis_commands_missing_file_is_structured(self) -> None:
+        exit_code, stdout, _ = run_cli("j1939", "summary", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "CAPTURE_FILE_REQUIRED")
+
+    def test_j1939_summary_accepts_positional_capture_path(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli("j1939", "summary", capture, "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["command"], "j1939 summary")
+
+    def test_j1939_tp_defaults_to_sessions_action(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        # `j1939 tp --file X` (no sub-action) resolves to the sessions action.
+        exit_code, stdout, _ = run_cli("j1939", "tp", "--file", capture, "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "j1939 tp sessions")
+        self.assertIn("sessions", payload["data"])
+
+    def test_j1939_tp_sessions_positional_path(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli("j1939", "tp", "sessions", capture, "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["command"], "j1939 tp sessions")
+
+    def test_j1939_tp_parent_file_survives_explicit_action(self) -> None:
+        # Options before an explicit sub-action must not be clobbered by the
+        # child parser's defaults (#445 review).
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli("j1939", "tp", "--file", capture, "sessions", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["command"], "j1939 tp sessions")
+
+        exit_code, stdout, _ = run_cli(
+            "j1939", "tp", "--file", capture, "compare", "--sa", "0x31", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["command"], "j1939 tp compare")
+
+    def test_j1939_tp_filter_before_explicit_action_survives(self) -> None:
+        capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
+        exit_code, stdout, _ = run_cli(
+            "j1939", "tp", "--file", capture, "--max-frames", "5", "sessions", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertEqual(json.loads(stdout)["data"]["max_frames"], 5)
 
     def test_stats_filters_by_pgn_and_source_address(self) -> None:
         capture = str(FIXTURES / "j1939_heavy_vehicle.candump")
