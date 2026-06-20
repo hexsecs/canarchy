@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import j1939 as can_j1939
-
 from canarchy.j1939_metadata import fmi_lookup, spn_lookup
 from canarchy.models import CanFrame
 
@@ -55,22 +53,22 @@ def decompose_arbitration_id(arbitration_id: int) -> J1939Identifier:
     if arbitration_id < 0 or arbitration_id > 0x1FFFFFFF:
         raise ValueError("J1939 arbitration_id must be a 29-bit CAN identifier")
 
-    message_id = can_j1939.MessageId(can_id=arbitration_id)
-    parameter_group_number = can_j1939.ParameterGroupNumber()
-    parameter_group_number.from_message_id(message_id)
-
-    priority = message_id.priority
+    # Decode the 29-bit identifier with pure bit arithmetic. This mirrors the
+    # can-j1939 MessageId/ParameterGroupNumber layout exactly but avoids the
+    # per-call object construction that dominated the DM1/fault decode hot path.
+    source_address = arbitration_id & 0xFF
+    parameter_group_number = (arbitration_id >> 8) & 0x3FFFF
+    priority = (arbitration_id >> 26) & 0x7
     reserved = 0
-    data_page = parameter_group_number.data_page
-    pdu_format = parameter_group_number.pdu_format
-    pdu_specific = parameter_group_number.pdu_specific
-    source_address = message_id.source_address
+    data_page = (parameter_group_number >> 16) & 0x01
+    pdu_format = (parameter_group_number >> 8) & 0xFF
+    pdu_specific = parameter_group_number & 0xFF
 
-    if parameter_group_number.is_pdu1_format:
+    if pdu_format <= 239:  # PDU1: peer-to-peer, PS carries the destination address
         pgn = (data_page << 16) | (pdu_format << 8)
         destination_address = pdu_specific
-    else:
-        pgn = parameter_group_number.value
+    else:  # PDU2: broadcast, PS is part of the PGN
+        pgn = (data_page << 16) | (pdu_format << 8) | pdu_specific
         destination_address = None
 
     return J1939Identifier(

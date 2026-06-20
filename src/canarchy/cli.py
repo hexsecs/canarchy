@@ -64,10 +64,12 @@ from canarchy.transport import (
     LocalTransport,
     TransportError,
     active_ack_required,
+    candump_parse_warnings,
     config_show_payload,
     default_can_interface,
     default_j1939_dbc,
     generate_frames,
+    reset_parse_reports,
 )
 from canarchy.tui import run_tui
 from canarchy.doip import is_doip_target
@@ -589,6 +591,17 @@ def build_parser() -> CanarchyArgumentParser:
         type=int,
         default=20,
         help="number of highest-frequency arbitration ids to detail (default: 20)",
+    )
+    stats.add_argument(
+        "--pgn",
+        type=lambda x: int(x, 0),
+        default=None,
+        help="filter to frames whose J1939 PGN matches",
+    )
+    stats.add_argument(
+        "--sa",
+        default=None,
+        help="filter to frames whose J1939 source address matches (comma-separated hex or decimal)",
     )
     _add_file_analysis_arguments(stats)
     add_output_arguments(stats)
@@ -2632,7 +2645,13 @@ def validate_args(args: argparse.Namespace) -> None:
                 ],
             )
 
-    if args.command in {"j1939 tp sessions", "j1939 tp compare", "j1939 dm1", "j1939 faults"}:
+    if args.command in {
+        "stats",
+        "j1939 tp sessions",
+        "j1939 tp compare",
+        "j1939 dm1",
+        "j1939 faults",
+    }:
         sa_arg = getattr(args, "sa", None)
         if sa_arg is not None:
             for token in sa_arg.split(","):
@@ -3618,6 +3637,42 @@ def _parse_sa_list(sa_arg: str | None) -> frozenset[int] | None:
     return frozenset(result) if result else None
 
 
+def _j1939_filter_payload(pgn: int | None, sa_filter: frozenset[int] | None) -> dict[str, Any]:
+    """Echo applied J1939 filters into the payload for transparency."""
+    payload: dict[str, Any] = {}
+    if pgn is not None:
+        payload["pgn_filter"] = pgn
+    if sa_filter is not None:
+        payload["sa_filter"] = sorted(sa_filter)
+    return payload
+
+
+def _filter_frames_by_j1939(
+    frames: list[CanFrame],
+    *,
+    pgn: int | None,
+    sa_filter: frozenset[int] | None,
+) -> list[CanFrame]:
+    """Filter frames by J1939 PGN and/or source address.
+
+    Only extended-ID frames carry a J1939 identifier; standard frames are
+    dropped whenever a J1939 filter is requested.
+    """
+    if pgn is None and sa_filter is None:
+        return frames
+    matched: list[CanFrame] = []
+    for frame in frames:
+        if not frame.is_extended_id:
+            continue
+        identifier = decompose_arbitration_id(frame.arbitration_id)
+        if pgn is not None and identifier.pgn != pgn:
+            continue
+        if sa_filter is not None and identifier.source_address not in sa_filter:
+            continue
+        matched.append(frame)
+    return matched
+
+
 def _j1939_tp_compare(
     sessions: list[dict[str, Any]],
     *,
@@ -4044,6 +4099,9 @@ def transport_payload(
             # Calculate stats
             from canarchy.transport import detailed_frame_stats
 
+            sa_filter = _parse_sa_list(getattr(args, "sa", None))
+            pgn_filter = getattr(args, "pgn", None)
+            frames = _filter_frames_by_j1939(frames, pgn=pgn_filter, sa_filter=sa_filter)
             unique_ids = len(set(f.arbitration_id for f in frames))
             interfaces = list(set(f.interface for f in frames))
             stats = TransportStats(
@@ -4055,6 +4113,7 @@ def transport_payload(
                     "file": "-",
                     "status": "implemented",
                     "implementation": "stdin-analysis",
+                    **_j1939_filter_payload(pgn_filter, sa_filter),
                     **stats.to_payload(),
                     **detailed_frame_stats(frames, top=getattr(args, "top", 20)),
                 },
@@ -4066,6 +4125,9 @@ def transport_payload(
         frames = transport.frames_from_file(
             args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
         )
+        sa_filter = _parse_sa_list(getattr(args, "sa", None))
+        pgn_filter = getattr(args, "pgn", None)
+        frames = _filter_frames_by_j1939(frames, pgn=pgn_filter, sa_filter=sa_filter)
         stats = _TransportStats(
             total_frames=len(frames),
             unique_arbitration_ids=len({frame.arbitration_id for frame in frames}),
@@ -4075,6 +4137,7 @@ def transport_payload(
             {
                 "mode": "passive",
                 "file": args.file,
+                **_j1939_filter_payload(pgn_filter, sa_filter),
                 **stats.to_payload(),
                 **detailed_frame_stats(frames, top=getattr(args, "top", 20)),
                 "status": "implemented",
@@ -7670,6 +7733,7 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def build_result(args: argparse.Namespace) -> CommandResult:
+    parse_reports = reset_parse_reports()
     warnings = (
         []
         if args.command in IMPLEMENTED_COMMANDS
@@ -7810,6 +7874,7 @@ def build_result(args: argparse.Namespace) -> CommandResult:
     if args.command not in IMPLEMENTED_COMMANDS:
         data["status"] = "planned"
         data["implementation"] = "command surface scaffold"
+    warnings.extend(candump_parse_warnings(parse_reports))
     return CommandResult(
         command=args.command,
         data=data,

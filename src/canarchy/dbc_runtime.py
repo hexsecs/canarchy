@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from weakref import WeakKeyDictionary
 
 import cantools
 from cantools.database.utils import create_encode_decode_formats, decode_data
@@ -40,6 +41,12 @@ def detect_database_format(path: str) -> str:
     return _DATABASE_FORMATS.get(Path(path).suffix.lower(), "dbc")
 
 
+# Parsed databases are cached by resolved path and file mtime so repeated
+# lookups (e.g. per-DTC J1939 SPN resolution over a whole capture) parse each
+# DBC at most once instead of re-reading it from disk on every access.
+_DATABASE_CACHE: dict[str, tuple[float, int, cantools.database.Database]] = {}
+
+
 def load_runtime_database(dbc_path: str) -> cantools.database.Database:
     from canarchy.dbc_provider import resolve_dbc_ref
 
@@ -47,7 +54,14 @@ def load_runtime_database(dbc_path: str) -> cantools.database.Database:
     path = Path(resolved)
 
     try:
-        return cantools.database.load_file(str(path))
+        stat = path.stat()
+        cache_key = str(path)
+        cached = _DATABASE_CACHE.get(cache_key)
+        if cached is not None and cached[0] == stat.st_mtime and cached[1] == stat.st_size:
+            return cached[2]
+        database = cantools.database.load_file(str(path))
+        _DATABASE_CACHE[cache_key] = (stat.st_mtime, stat.st_size, database)
+        return database
     except DbcError:
         raise
     except Exception as exc:  # pragma: no cover
@@ -386,19 +400,37 @@ def dbc_supports_spn_runtime(dbc_path: str, spn: int) -> bool:
     return False
 
 
-def lookup_j1939_spn_metadata_runtime(dbc_path: str, spn: int) -> dict[str, Any] | None:
-    database = load_runtime_database(dbc_path)
+# SPN -> metadata indexes keyed (weakly) by the database object, so a single
+# linear pass over the DBC is reused across every per-DTC lookup and the index
+# is dropped automatically when the database is evicted/garbage-collected.
+_SPN_INDEX_CACHE: "WeakKeyDictionary[cantools.database.Database, dict[int, dict[str, Any]]]" = (
+    WeakKeyDictionary()
+)
+
+
+def _spn_metadata_index(database: cantools.database.Database) -> dict[int, dict[str, Any]]:
+    cached = _SPN_INDEX_CACHE.get(database)
+    if cached is not None:
+        return cached
+    index: dict[int, dict[str, Any]] = {}
     for message in database.messages:
         for signal in message.signals:
-            if getattr(signal, "spn", None) != spn:
+            spn = getattr(signal, "spn", None)
+            if spn is None or spn in index:
                 continue
-            return {
+            index[spn] = {
                 "message_name": message.name,
                 "signal_name": signal.name,
                 "units": signal.unit or None,
                 "frame_id": int(message.frame_id),
             }
-    return None
+    _SPN_INDEX_CACHE[database] = index
+    return index
+
+
+def lookup_j1939_spn_metadata_runtime(dbc_path: str, spn: int) -> dict[str, Any] | None:
+    database = load_runtime_database(dbc_path)
+    return _spn_metadata_index(database).get(spn)
 
 
 def decode_j1939_spn_runtime(
