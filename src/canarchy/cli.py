@@ -5388,7 +5388,7 @@ def datasets_payload(
                 **result,
                 "next_steps": (
                     f"Saved {result['bytes_written']} bytes to {result['out_path']}. "
-                    f"Analyze it with `canarchy stats {result['out_path']}` or "
+                    f"Analyze it with `canarchy stats --file {result['out_path']}` or "
                     f"`canarchy datasets convert {result['out_path']} --source-format "
                     f"{source.get('source_format')} --format candump`."
                 ),

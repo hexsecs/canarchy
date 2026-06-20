@@ -736,6 +736,8 @@ class CliIntegrationTests(unittest.TestCase):
             self.assertEqual(data["bytes_written"], Path(dest).stat().st_size)
             self.assertEqual(data["out_path"], dest)
             self.assertIn("datasets convert", data["next_steps"])
+            # The stats hint must be runnable: `stats` requires --file.
+            self.assertIn(f"canarchy stats --file {dest}", data["next_steps"])
 
     def test_datasets_download_network_failure_is_structured(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
