@@ -161,6 +161,7 @@ RE_COMMANDS = {
     "re suggest",
 }
 CANNELLONI_COMMANDS = {"cannelloni decode", "cannelloni send"}
+COMPARE_COMMANDS = {"compare"}
 
 ACTIVE_TRANSMIT_COMMANDS = {
     "send",
@@ -208,6 +209,7 @@ IMPLEMENTED_COMMANDS = (
     | FUZZ_GUIDED_COMMANDS
     | SEQUENCE_COMMANDS
     | CANNELLONI_COMMANDS
+    | COMPARE_COMMANDS
     | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export", "plot", "web serve"}
 )
 
@@ -359,6 +361,23 @@ def _add_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
         type=float,
         help="limit analysis to the first N seconds from capture start",
     )
+
+
+def _add_candidate_limit_argument(parser: argparse.ArgumentParser) -> None:
+    """Shared --top cap for `re` candidate output, matching `stats --top` (#459)."""
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=20,
+        help="number of highest-ranked candidates to return (default: 20; 0 for all)",
+    )
+
+
+def _apply_candidate_top(candidates: list[Any], top: int | None) -> list[Any]:
+    """Cap a ranked candidate list to ``top`` entries; ``top<=0``/None means all."""
+    if top is None or top <= 0:
+        return list(candidates)
+    return list(candidates[:top])
 
 
 def _add_capture_path_argument(
@@ -647,6 +666,38 @@ def build_parser() -> CanarchyArgumentParser:
     _add_file_analysis_arguments(stats)
     add_output_arguments(stats)
     stats.set_defaults(command="stats")
+
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="diff frame-count/rate, cycle-time, and payload-entropy per ID across captures",
+    )
+    compare_parser.add_argument(
+        "files",
+        nargs="*",
+        metavar="FILE",
+        help="capture files to compare (the first, or --baseline, is the reference)",
+    )
+    compare_parser.add_argument(
+        "--file",
+        dest="file_opt",
+        action="append",
+        metavar="PATH",
+        help="capture file to compare (repeatable; equivalent to the positional form)",
+    )
+    compare_parser.add_argument(
+        "--baseline",
+        metavar="PATH",
+        help="capture to treat as the reference (default: the first file)",
+    )
+    compare_parser.add_argument(
+        "--top",
+        type=int,
+        default=20,
+        help="number of most-changed arbitration ids to detail (default: 20; 0 for all)",
+    )
+    _add_file_analysis_arguments(compare_parser)
+    add_output_arguments(compare_parser)
+    compare_parser.set_defaults(command="compare")
 
     capture_info = subparsers.add_parser(
         "capture-info", help="show capture file metadata without loading frames"
@@ -1360,6 +1411,7 @@ def build_parser() -> CanarchyArgumentParser:
         metavar="PATH",
         help="path to capture file (equivalent to the positional form)",
     )
+    _add_candidate_limit_argument(re_signals)
     add_output_arguments(re_signals)
     re_signals.set_defaults(command="re signals")
 
@@ -1371,6 +1423,7 @@ def build_parser() -> CanarchyArgumentParser:
         metavar="PATH",
         help="path to capture file (equivalent to the positional form)",
     )
+    _add_candidate_limit_argument(re_counters)
     add_output_arguments(re_counters)
     re_counters.set_defaults(command="re counters")
 
@@ -1382,6 +1435,7 @@ def build_parser() -> CanarchyArgumentParser:
         metavar="PATH",
         help="path to capture file (equivalent to the positional form)",
     )
+    _add_candidate_limit_argument(re_entropy)
     add_output_arguments(re_entropy)
     re_entropy.set_defaults(command="re entropy")
 
@@ -1443,6 +1497,23 @@ def build_parser() -> CanarchyArgumentParser:
         "(default: 3 with a baseline, 10 without one; sparser IDs are reported "
         "as low-rate instead of ranked)",
     )
+    re_anomalies.add_argument(
+        "--entropy-drop",
+        type=float,
+        default=0.5,
+        help="flag an ID when its input/baseline mean-byte-entropy ratio falls to or "
+        "below this value (default: 0.5); catches plateau/frozen-value attacks "
+        "(baseline only)",
+    )
+    re_anomalies.add_argument(
+        "--rate-drop",
+        type=float,
+        default=0.5,
+        help="flag an ID when its input/baseline frame-rate ratio falls to or below "
+        "this value (default: 0.5), or rises to or above its reciprocal; catches "
+        "suppression/injection of a known ID (baseline only)",
+    )
+    _add_candidate_limit_argument(re_anomalies)
     _add_file_analysis_arguments(re_anomalies)
     add_output_arguments(re_anomalies)
     re_anomalies.set_defaults(command="re anomalies")
@@ -2175,7 +2246,7 @@ _FILE_FLAG_SINGLE_COMMANDS = {
     "j1587 decode": "file",
     "j2497 decode": "file",
 }
-_FILE_FLAG_MULTI_COMMANDS = {"re corpus", "j1939 compare"}
+_FILE_FLAG_MULTI_COMMANDS = {"re corpus", "j1939 compare", "compare"}
 
 
 def _normalize_file_arguments(args: argparse.Namespace) -> None:
@@ -7637,12 +7708,16 @@ def reverse_engineering_payload(
                 ],
             )
         result = processor.process(frames)
+        top = getattr(args, "top", 20)
+        shown = _apply_candidate_top(result.candidates, top)
         return (
             {
                 "mode": "passive",
                 "file": args.file,
                 **result.metadata,
-                "candidates": result.candidates,
+                "candidates": shown,
+                "returned_count": len(shown),
+                "top": top,
             },
             [],
             result.warnings,
@@ -7663,12 +7738,16 @@ def reverse_engineering_payload(
                 ],
             )
         result = processor.process(frames)
+        top = getattr(args, "top", 20)
+        shown = _apply_candidate_top(result.candidates, top)
         return (
             {
                 "mode": "passive",
                 "file": args.file,
                 **result.metadata,
-                "candidates": result.candidates,
+                "candidates": shown,
+                "returned_count": len(shown),
+                "top": top,
             },
             [],
             result.warnings,
@@ -7689,12 +7768,16 @@ def reverse_engineering_payload(
                 ],
             )
         result = processor.process(frames)
+        top = getattr(args, "top", 20)
+        shown = _apply_candidate_top(result.candidates, top)
         return (
             {
                 "mode": "passive",
                 "file": args.file,
                 **result.metadata,
-                "candidates": result.candidates,
+                "candidates": shown,
+                "returned_count": len(shown),
+                "top": top,
             },
             [],
             result.warnings,
@@ -7797,6 +7880,8 @@ def reverse_engineering_payload(
             cv_max=args.cv_max,
             dbc_timing=dbc_timing,
             min_samples=getattr(args, "min_samples", None),
+            entropy_drop=getattr(args, "entropy_drop", 0.5),
+            rate_drop=getattr(args, "rate_drop", 0.5),
         )
         anomaly_warnings: list[str] = []
         if analysis["candidate_count"] == 0:
@@ -7809,6 +7894,8 @@ def reverse_engineering_payload(
                 "statistics. Diffing against a known-good capture via --baseline gives "
                 "far more reliable results."
             )
+        top = getattr(args, "top", 20)
+        shown = _apply_candidate_top(analysis["candidates"], top)
         return (
             {
                 "mode": analysis["mode"],
@@ -7818,10 +7905,14 @@ def reverse_engineering_payload(
                 "z_threshold": analysis["z_threshold"],
                 "cv_max": analysis["cv_max"],
                 "min_samples": analysis["min_samples"],
+                "entropy_drop": analysis["entropy_drop"],
+                "rate_drop": analysis["rate_drop"],
                 "timing_source": analysis["timing_source"],
                 "analysis": "anomalies",
                 "candidate_count": analysis["candidate_count"],
-                "candidates": analysis["candidates"],
+                "candidates": shown,
+                "returned_count": len(shown),
+                "top": top,
                 "cyclic_ids": analysis["cyclic_ids"],
                 "event_ids": analysis["event_ids"],
                 "low_rate_ids": analysis["low_rate_ids"],
@@ -7905,6 +7996,97 @@ def reverse_engineering_payload(
     raise AssertionError(f"unsupported reverse-engineering command: {args.command}")
 
 
+def compare_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy.compare import compare_captures
+
+    files: list[str] = list(getattr(args, "files", []) or [])
+    baseline = getattr(args, "baseline", None)
+    # A baseline outside the compared set is still a valid reference: fold it in
+    # as the first file so it participates in the per-id comparison.
+    if baseline is not None and baseline not in files:
+        files = [baseline, *files]
+    if len(files) < 2:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="COMPARE_NEEDS_FILES",
+                    message="compare requires at least two capture files.",
+                    hint="Pass two or more capture paths positionally or via repeated --file.",
+                )
+            ],
+        )
+    offset = getattr(args, "offset", 0) or 0
+    max_frames = getattr(args, "max_frames", None)
+    seconds = getattr(args, "seconds", None)
+    if offset < 0:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_ANALYSIS_OFFSET",
+                    message="Frame offset must be zero or greater.",
+                    hint="Pass a non-negative integer to --offset.",
+                )
+            ],
+        )
+    if max_frames is not None and max_frames < 1:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_MAX_FRAMES",
+                    message="Maximum frame bound must be at least 1.",
+                    hint="Pass a positive integer to --max-frames.",
+                )
+            ],
+        )
+    if seconds is not None and seconds < 0:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="INVALID_ANALYSIS_SECONDS",
+                    message="Analysis time bound must be zero or greater.",
+                    hint="Pass a non-negative value to --seconds.",
+                )
+            ],
+        )
+    result = compare_captures(
+        files,
+        baseline=baseline,
+        offset=offset,
+        max_frames=max_frames,
+        seconds=seconds,
+        top=getattr(args, "top", 20),
+    )
+    warnings: list[str] = []
+    summary = result.get("summary", {})
+    changed = any(
+        summary.get(key)
+        for key in (
+            "new_ids",
+            "dropped_ids",
+            "rate_drop_ids",
+            "rate_spike_ids",
+            "entropy_collapse_ids",
+            "timing_drift_ids",
+        )
+    )
+    if not changed:
+        warnings.append(
+            "No frame-count, rate, cycle-time, or payload-entropy differences crossed "
+            "the comparison thresholds between these captures."
+        )
+    return (result, [], warnings)
+
+
 def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.command in TRANSPORT_COMMANDS:
         _, events, _ = transport_payload(args)
@@ -7938,6 +8120,9 @@ def build_events(args: argparse.Namespace) -> list[dict[str, Any]]:
         return events
     if args.command in RE_COMMANDS:
         _, events, _ = reverse_engineering_payload(args)
+        return events
+    if args.command in COMPARE_COMMANDS:
+        _, events, _ = compare_payload(args)
         return events
     if args.command in CANNELLONI_COMMANDS:
         _, events, _ = cannelloni_payload(args)
@@ -8062,6 +8247,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(re_data)
         data["events"] = re_events
         warnings.extend(re_warnings)
+    elif args.command in COMPARE_COMMANDS:
+        compare_data, compare_events, compare_warnings = compare_payload(args)
+        data.update(compare_data)
+        data["events"] = compare_events
+        warnings.extend(compare_warnings)
     elif args.command in CANNELLONI_COMMANDS:
         can_data, can_events, can_warnings = cannelloni_payload(args)
         data.update(can_data)

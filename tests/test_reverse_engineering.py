@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from canarchy.models import CanFrame
 from canarchy.reverse_engineering import (
     ReferenceSeriesError,
     anomaly_candidates,
@@ -518,6 +519,83 @@ class AnomalyCandidatesTests(unittest.TestCase):
         flagged = {c["arbitration_id"] for c in result["candidates"] if c["kind"] == "timing"}
         self.assertIn(0x100, flagged)
         self.assertNotIn(0x400, flagged)
+
+
+class AnomalyAvailabilityTests(unittest.TestCase):
+    """Rate-drop/spike and entropy-collapse detection vs a baseline (#457)."""
+
+    @staticmethod
+    def _varying(arb_id: int, count: int, period: float, *, start: float = 0.0):
+        # Frames whose payload changes every frame (high byte entropy).
+        return [
+            CanFrame(
+                arbitration_id=arb_id,
+                data=bytes(((i * 37 + b * 53) & 0xFF) for b in range(8)),
+                timestamp=start + i * period,
+            )
+            for i in range(count)
+        ]
+
+    @staticmethod
+    def _frozen(arb_id: int, count: int, period: float, *, start: float = 0.0):
+        # Frames whose payload never changes (zero byte entropy).
+        return [
+            CanFrame(
+                arbitration_id=arb_id,
+                data=b"\xde\xad\xbe\xef\x00\x00\x00\x00",
+                timestamp=start + i * period,
+            )
+            for i in range(count)
+        ]
+
+    def test_entropy_collapse_flags_frozen_payload(self) -> None:
+        baseline = self._varying(0x300, 100, 0.05)
+        attack = self._frozen(0x300, 100, 0.05)
+        result = anomaly_candidates(attack, baseline=baseline)
+
+        collapse = [c for c in result["candidates"] if c["kind"] == "entropy-collapse"]
+        self.assertEqual(len(collapse), 1)
+        self.assertEqual(collapse[0]["arbitration_id"], 0x300)
+        self.assertGreater(collapse[0]["score"], 0.0)
+
+    def test_no_entropy_collapse_when_payload_unchanged(self) -> None:
+        baseline = self._varying(0x300, 100, 0.05)
+        attack = self._varying(0x300, 100, 0.05)
+        result = anomaly_candidates(attack, baseline=baseline)
+        self.assertFalse(any(c["kind"] == "entropy-collapse" for c in result["candidates"]))
+
+    def test_rate_drop_flags_suppressed_id(self) -> None:
+        baseline = self._varying(0x200, 240, 0.02)  # ~50 Hz over ~4.8 s
+        attack = self._varying(0x200, 80, 0.06)  # ~16.6 Hz over ~4.7 s
+        result = anomaly_candidates(attack, baseline=baseline)
+
+        drops = [c for c in result["candidates"] if c["kind"] == "rate-drop"]
+        self.assertEqual(len(drops), 1)
+        self.assertEqual(drops[0]["arbitration_id"], 0x200)
+
+    def test_rate_spike_flags_injected_id(self) -> None:
+        baseline = self._varying(0x200, 50, 0.1)  # ~10 Hz
+        attack = self._varying(0x200, 250, 0.02)  # ~50 Hz
+        result = anomaly_candidates(attack, baseline=baseline)
+
+        spikes = [c for c in result["candidates"] if c["kind"] == "rate-spike"]
+        self.assertEqual(len(spikes), 1)
+        self.assertEqual(spikes[0]["arbitration_id"], 0x200)
+
+    def test_availability_anomalies_require_baseline(self) -> None:
+        # Self-consistency mode emits neither rate nor entropy anomalies.
+        attack = self._frozen(0x300, 100, 0.05)
+        result = anomaly_candidates(attack)
+        kinds = {c["kind"] for c in result["candidates"]}
+        self.assertNotIn("entropy-collapse", kinds)
+        self.assertNotIn("rate-drop", kinds)
+        self.assertNotIn("rate-spike", kinds)
+
+    def test_thresholds_echoed_in_result(self) -> None:
+        baseline = self._varying(0x100, 50, 0.05)
+        result = anomaly_candidates(baseline, baseline=baseline, entropy_drop=0.3, rate_drop=0.25)
+        self.assertEqual(result["entropy_drop"], 0.3)
+        self.assertEqual(result["rate_drop"], 0.25)
 
 
 class AnomaliesCliTests(unittest.TestCase):

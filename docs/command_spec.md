@@ -189,6 +189,24 @@ Notes:
 * beyond `total_frames` / `unique_arbitration_ids`, the payload reports `duration_seconds`, first/last timestamps, a `dlc_distribution`, and a `bus_load` block with total bits, bits/s, and load percentages at 250 k / 500 k / 1 M bit/s (frame overhead without stuff bits; a lower-bound estimate)
 * `top_ids` details the highest-frequency arbitration ids (default 20, bounded by `--top`): `arbitration_id_hex`, `frame_count`, `share`, `rate_hz`, mean/min/max inter-frame gap, `gap_jitter_ms`, observed DLCs, and first/last seen
 
+### compare
+
+Diff two or more plain CAN captures per arbitration ID against a baseline, the generic-CAN analogue of `j1939 compare`.
+
+```bash
+canarchy compare (<file> <file> [<file> ...] | --file <file> --file <file> ...) [--baseline <path>] \
+    [--top <n>] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* this command is passive and file-backed; it accepts two or more captures positionally or via repeatable `--file`, and requires at least two (`COMPARE_NEEDS_FILES` otherwise)
+* the baseline is the first file unless `--baseline <path>` designates another; a `--baseline` outside the compared set is folded in as the reference
+* each `comparison` entry reports, per arbitration ID, the per-file `frame_counts`, `rates_hz`, `mean_gap_ms`, and `mean_byte_entropy` arrays, the `frame_count_delta` / `rate_ratio` / `entropy_delta` versus the baseline, a `cycle_time_drift_ratio` (reusing the `re corpus` drift formulation), a combined `change_score`, and a `flags` list (`new-vs-baseline`, `dropped-vs-baseline`, `rate-drop`, `rate-spike`, `entropy-collapse`, `timing-drift`)
+* entries are ranked by `change_score` and capped at `--top` (default 20; `0` for all); `id_count` reports the full total and `returned_count` the number returned
+* the `summary` block lists the affected IDs by category (`new_ids`, `dropped_ids`, `rate_drop_ids`, `rate_spike_ids`, `entropy_collapse_ids`, `timing_drift_ids`); J1939 ids are annotated with `pgn`, `pgn_label`, and `source_address_name`
+* `--offset`, `--max-frames`, and `--seconds` bound each capture independently
+
 ### generate
 
 Generate CAN frames from explicit, random, or incrementing inputs.
@@ -1210,7 +1228,7 @@ Notes:
 Rank likely counter fields from recorded CAN traffic.
 
 ```bash
-canarchy re counters (<file> | --file <file>) [--json|--jsonl|--text]
+canarchy re counters (<file> | --file <file>) [--top <n>] [--json|--jsonl|--text]
 ```
 
 Notes:
@@ -1220,13 +1238,14 @@ Notes:
 * candidates are ranked by monotonicity evidence and explicit rollover detection
 * J1939 transport-protocol IDs (TP.CM / TP.DT / ETP.CM / ETP.DT) are excluded — their sequence numbers are protocol plumbing, not application counters — and reported in metadata as `excluded_transport_ids`
 * J1939 candidates carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`; every candidate carries `arbitration_id_hex`
+* `--top` caps the returned `candidates` array (default 20; `0` for all); `candidate_count` reports the full total and `returned_count` the number returned
 
 ### re signals
 
 Rank likely signal fields from recorded CAN traffic.
 
 ```bash
-canarchy re signals (<file> | --file <file>) [--json|--jsonl|--text]
+canarchy re signals (<file> | --file <file>) [--top <n>] [--json|--jsonl|--text]
 ```
 
 Notes:
@@ -1237,6 +1256,7 @@ Notes:
 * J1939 transport-protocol IDs (TP.CM / TP.DT / ETP.CM / ETP.DT) are excluded from signal inference and reported under `excluded_transport_ids`
 * J1939 candidates carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`; every candidate carries `arbitration_id_hex`
 * arbitration IDs with fewer than 5 frames are omitted from the candidate list and reported in `low_sample_ids`
+* `--top` caps the returned `candidates` array (default 20; `0` for all); `candidate_count` reports the full total and `returned_count` the number returned
 
 ### re correlate
 
@@ -1259,18 +1279,21 @@ Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs.
 
 ```bash
 canarchy re anomalies (<file> | --file <file>) [--baseline <ref>] [--dbc <ref>] [--z-threshold <z>] \
-    [--cv-max <cv>] [--min-samples <n>] [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
+    [--cv-max <cv>] [--min-samples <n>] [--entropy-drop <r>] [--rate-drop <r>] [--top <n>] \
+    [--offset <n>] [--max-frames <n>] [--seconds <s>] [--json|--jsonl|--text]
 ```
 
 Notes:
 
 * this command is passive and file-backed; it honors the standard `--offset`, `--max-frames`, and `--seconds` window flags
 * with `--baseline`, per-ID timing statistics and the expected ID set are learned from the reference capture and the input is scored against them; without it, each ID is scored against its own statistics (self-consistency), ID-presence anomalies are not emitted, and a warning nudges the operator toward supplying a baseline
-* anomalies carry `arbitration_id`, `kind` (`timing` / `unknown-id` / `dropped-id`), `score`, `z_score`, `z_score_capped`, `sample_count`, `timestamp`, and a `rationale`, ranked by score; J1939 candidates additionally carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`
+* anomalies carry `arbitration_id`, `kind` (`timing` / `unknown-id` / `dropped-id` / `rate-drop` / `rate-spike` / `entropy-collapse`), `score`, `z_score`, `z_score_capped`, `sample_count`, `timestamp`, and a `rationale`, ranked by score; J1939 candidates additionally carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`
+* against a `--baseline`, IDs present in both captures are additionally checked for two attack classes that pure timing analysis misses: a `rate-drop` / `rate-spike` when an ID's time-normalised frame rate falls to `--rate-drop` of (default 0.5; suppression) or rises to its reciprocal above (injection) the baseline rate, and an `entropy-collapse` when an ID's mean per-byte payload entropy falls to `--entropy-drop` of (default 0.5) a baseline that itself carried meaningful entropy (plateau / frozen-value attacks)
 * **only IDs judged cyclic are timing-checked, so event-based and event-periodic messages are not falsely flagged.** Classification is authoritative from the database when `--dbc` is supplied (a message's `cycle_time` / send type decides cyclic vs event); otherwise a robust coefficient of variation (scaled median-absolute-deviation over the median inter-frame gap) is compared against `--cv-max` (default 0.5)
 * timing statistics use the median and MAD rather than mean and standard deviation, so a minority of outlier gaps cannot inflate the spread and mask themselves
 * a cyclic-looking ID needs at least `--min-samples` inter-frame gaps before its timing is scored (default 10 without a baseline, 3 with one); sparser IDs are listed under `low_rate_ids` with classification source `low-sample` instead of being ranked, and reported z-scores are capped at ±100σ
-* the payload also reports `mode`, `timing_source` (`dbc` / `observed`), `min_samples`, `cyclic_ids`, `event_ids` (timing skipped), `low_rate_ids`, and a per-ID `classifications` list
+* `--top` caps the ranked `candidates` array (default 20; `0` for all) for agent-friendly output; `candidate_count` always reports the full total and `returned_count` the number returned
+* the payload also reports `mode`, `timing_source` (`dbc` / `observed`), `min_samples`, `entropy_drop`, `rate_drop`, `cyclic_ids`, `event_ids` (timing skipped), `low_rate_ids`, and a per-ID `classifications` list
 
 ### re corpus
 
@@ -1293,7 +1316,7 @@ Notes:
 Rank arbitration IDs and byte positions by Shannon entropy over recorded CAN traffic.
 
 ```bash
-canarchy re entropy (<file> | --file <file>) [--json|--jsonl|--text]
+canarchy re entropy (<file> | --file <file>) [--top <n>] [--json|--jsonl|--text]
 ```
 
 Notes:
@@ -1303,6 +1326,7 @@ Notes:
 * IDs with fewer than 10 observed frames are retained and marked with `low_sample: true`
 * J1939 transport-protocol IDs are retained but labeled with `j1939_transport: true` and a rationale note, so TP framing is not mistaken for an application signal
 * J1939 candidates carry `pgn`, `pgn_label`, `source_address`, and `source_address_name`; every candidate carries `arbitration_id_hex`
+* `--top` caps the returned `candidates` array (default 20; `0` for all); `candidate_count` reports the full total and `returned_count` the number returned
 
 ### re match-dbc
 

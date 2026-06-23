@@ -223,7 +223,9 @@ class CorrelationCandidate:
 @dataclass(slots=True, frozen=True)
 class AnomalyCandidate:
     arbitration_id: int
-    kind: str  # "timing" | "unknown-id" | "dropped-id"
+    # "timing" | "unknown-id" | "dropped-id" | "rate-drop" | "rate-spike" |
+    # "entropy-collapse"
+    kind: str
     score: float
     z_score: float
     sample_count: int
@@ -907,6 +909,18 @@ _ANOMALY_DEFAULT_CV_MAX = 0.5
 # When a DBC declares a cycle time but the capture lacks the jitter to estimate
 # a spread, allow deviations up to this fraction of the declared period.
 _ANOMALY_PERIOD_TOLERANCE = 0.1
+# At or below this baseline->input mean-byte-entropy ratio an id's payload is
+# treated as collapsed/frozen (plateau or stuck-value attacks), provided the
+# baseline itself carried meaningful entropy (#457).
+_ANOMALY_DEFAULT_ENTROPY_DROP = 0.5
+_ANOMALY_ENTROPY_MIN_BASELINE = 1.0
+# At or below this input/baseline frame-rate ratio an id's availability is
+# treated as suppressed; at or above its reciprocal it is treated as injected
+# (#457). Time-normalised when capture spans are measurable, else raw counts.
+_ANOMALY_DEFAULT_RATE_DROP = 0.5
+# Minimum baseline frames before rate / entropy deviations are scored, so sparse
+# event ids do not produce noisy availability anomalies.
+_ANOMALY_AVAILABILITY_MIN_FRAMES = 8
 
 
 def _id_timestamps(frames: list[CanFrame]) -> dict[int, list[float]]:
@@ -923,6 +937,42 @@ def _id_timestamps(frames: list[CanFrame]) -> dict[int, list[float]]:
 
 def _inter_frame_gaps(timestamps: list[float]) -> list[float]:
     return [b - a for a, b in zip(timestamps, timestamps[1:]) if b - a >= 0]
+
+
+def _id_payload_frames(frames: list[CanFrame]) -> dict[int, list[CanFrame]]:
+    """Group data frames (skipping remote/error/empty) per arbitration id."""
+    grouped: dict[int, list[CanFrame]] = defaultdict(list)
+    for frame in frames:
+        if frame.is_remote_frame or frame.is_error_frame or not frame.data:
+            continue
+        grouped[frame.arbitration_id].append(frame)
+    return grouped
+
+
+def _group_mean_byte_entropy(group: list[CanFrame]) -> float | None:
+    """Mean per-byte Shannon entropy across a group's common payload width."""
+    if not group:
+        return None
+    byte_count = min(len(frame.data) for frame in group)
+    if byte_count == 0:
+        return None
+    entropies = [
+        _entropy_byte_summary(group, 0, position).entropy for position in range(byte_count)
+    ]
+    return sum(entropies) / len(entropies)
+
+
+def _capture_span_seconds(frames: list[CanFrame]) -> float | None:
+    """Wall-clock span of a capture's data frames, or None if not measurable."""
+    timestamps = [
+        float(frame.timestamp)
+        for frame in frames
+        if not frame.is_remote_frame and not frame.is_error_frame and frame.timestamp is not None
+    ]
+    if len(timestamps) < 2:
+        return None
+    span = max(timestamps) - min(timestamps)
+    return span if span > 0 else None
 
 
 def _robust_gap_statistics(gaps: list[float]) -> tuple[float, float]:
@@ -1022,8 +1072,10 @@ def anomaly_candidates(
     cv_max: float = _ANOMALY_DEFAULT_CV_MAX,
     dbc_timing: dict[int, dict[str, Any]] | None = None,
     min_samples: int | None = None,
+    entropy_drop: float = _ANOMALY_DEFAULT_ENTROPY_DROP,
+    rate_drop: float = _ANOMALY_DEFAULT_RATE_DROP,
 ) -> dict[str, Any]:
-    """Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs.
+    """Flag timing, availability, and payload anomalies across arbitration IDs.
 
     With ``baseline``, per-id gap statistics and the expected id set are learned
     from the reference capture and the input is scored against them. Without a
@@ -1037,6 +1089,14 @@ def anomaly_candidates(
     messages are not falsely flagged. Classification uses the DBC ``cycle_time`` /
     send type when ``dbc_timing`` is supplied (authoritative), and otherwise the
     observed coefficient of variation against ``cv_max``.
+
+    Against a baseline the detector additionally flags, for ids present in both
+    captures, two attack classes that pure timing analysis misses (#457):
+    ``rate-drop`` / ``rate-spike`` when an id's (time-normalised) frame rate falls
+    to ``rate_drop`` of, or rises to its reciprocal above, the baseline rate
+    (suppression / injection of a known id), and ``entropy-collapse`` when an id's
+    mean per-byte payload entropy falls to ``entropy_drop`` of a baseline that
+    itself carried meaningful entropy (plateau / frozen-value attacks).
     """
     input_ts = _id_timestamps(frames)
     baseline_ts = _id_timestamps(baseline) if baseline is not None else input_ts
@@ -1140,6 +1200,90 @@ def anomaly_candidates(
                 )
             )
 
+        # Availability / payload anomalies for ids present in both captures:
+        # rate drop/spike (suppression or injection of a known id) and payload
+        # entropy collapse (plateau / frozen value). These complement the
+        # timing-only checks above, which miss both classes (#457).
+        assert baseline is not None
+        input_payload = _id_payload_frames(frames)
+        baseline_payload = _id_payload_frames(baseline)
+        input_span = _capture_span_seconds(frames)
+        baseline_span = _capture_span_seconds(baseline)
+        rate_spike = (1.0 / rate_drop) if rate_drop > 0 else float("inf")
+        for arb_id in sorted(input_ids & baseline_ids):
+            input_count = len(input_ts[arb_id])
+            baseline_count = len(baseline_ts[arb_id])
+            if baseline_count < _ANOMALY_AVAILABILITY_MIN_FRAMES:
+                continue
+
+            # Frame-rate deviation, time-normalised when spans are measurable.
+            if input_span and baseline_span:
+                input_rate = input_count / input_span
+                baseline_rate = baseline_count / baseline_span
+                basis = "rate"
+            else:
+                input_rate = float(input_count)
+                baseline_rate = float(baseline_count)
+                basis = "count"
+            if baseline_rate > 0:
+                ratio = input_rate / baseline_rate
+                if ratio <= rate_drop:
+                    candidates.append(
+                        AnomalyCandidate(
+                            arbitration_id=arb_id,
+                            kind="rate-drop",
+                            score=round((1.0 - ratio) * 10.0, 3),
+                            z_score=0.0,
+                            sample_count=input_count,
+                            timestamp=input_ts[arb_id][0],
+                            rationale=(
+                                f"frame {basis} fell to {round(ratio, 3)}x baseline "
+                                f"({input_count} vs {baseline_count} frames); possible suppression"
+                            ),
+                        )
+                    )
+                elif ratio >= rate_spike:
+                    candidates.append(
+                        AnomalyCandidate(
+                            arbitration_id=arb_id,
+                            kind="rate-spike",
+                            score=round(min(ratio - 1.0, _ANOMALY_Z_CAP), 3),
+                            z_score=0.0,
+                            sample_count=input_count,
+                            timestamp=input_ts[arb_id][0],
+                            rationale=(
+                                f"frame {basis} rose to {round(ratio, 3)}x baseline "
+                                f"({input_count} vs {baseline_count} frames); possible injection"
+                            ),
+                        )
+                    )
+
+            # Payload-entropy collapse (plateau / frozen-value attacks).
+            baseline_entropy = _group_mean_byte_entropy(baseline_payload.get(arb_id, []))
+            input_entropy = _group_mean_byte_entropy(input_payload.get(arb_id, []))
+            if (
+                baseline_entropy is not None
+                and input_entropy is not None
+                and baseline_entropy >= _ANOMALY_ENTROPY_MIN_BASELINE
+            ):
+                entropy_ratio = input_entropy / baseline_entropy
+                if entropy_ratio <= entropy_drop:
+                    candidates.append(
+                        AnomalyCandidate(
+                            arbitration_id=arb_id,
+                            kind="entropy-collapse",
+                            score=round(baseline_entropy - input_entropy, 3),
+                            z_score=0.0,
+                            sample_count=input_count,
+                            timestamp=input_ts[arb_id][0],
+                            rationale=(
+                                f"mean byte entropy collapsed from {round(baseline_entropy, 3)} "
+                                f"to {round(input_entropy, 3)} bits ({round(entropy_ratio, 3)}x); "
+                                "possible frozen/plateaued payload"
+                            ),
+                        )
+                    )
+
     candidates.sort(
         key=lambda candidate: (
             -candidate.score,
@@ -1167,6 +1311,8 @@ def anomaly_candidates(
         "z_threshold": z_threshold,
         "cv_max": cv_max,
         "min_samples": min_samples,
+        "entropy_drop": entropy_drop,
+        "rate_drop": rate_drop,
         "timing_source": "dbc" if dbc_timing else "observed",
         "cyclic_ids": cyclic_ids,
         "event_ids": event_ids,
