@@ -53,6 +53,7 @@ Fully implemented and tested:
 _Transport_
 
 * `capture`, `send`, `filter`, `stats` — transport workflows with live `python-can` and deterministic scaffold backends; `stats` reports per-ID frequency/timing, DLC distribution, and a bus-load estimate
+* `compare` — diff two or more plain CAN captures per arbitration ID in one call: frame-count/rate deltas, cycle-time drift, and payload-entropy deltas against a baseline, each ID flagged (rate-drop, rate-spike, entropy-collapse, timing-drift, new/dropped); the generic-CAN analogue of `j1939 compare`
 * `capture-info` — fast capture metadata without loading every frame
 * `generate` — cangen-style frame generation (fixed, random, incrementing modes)
 * `simulate` — deterministic, profile-driven mix of classic CAN, J1939, and DM1 traffic (no hardware needed)
@@ -79,7 +80,7 @@ _Reverse engineering_
 
 * `re signals`, `re counters`, `re entropy` — file-backed signal/counter/entropy candidate ranking, annotated with J1939 PGN/source-address context and transport-protocol aware
 * `re correlate` — correlation of candidate fields against timestamped reference series
-* `re anomalies` — inter-frame-timing and unexpected/dropped-ID anomaly detection, with optional baseline
+* `re anomalies` — inter-frame-timing and unexpected/dropped-ID anomaly detection, with optional baseline; against a baseline it also flags per-ID frame-rate drop/spike (suppression/injection) and payload-entropy collapse (plateau/frozen-value attacks)
 * `re corpus` — cross-capture coverage, cycle-time drift, and signal-stability analysis
 * `re match-dbc`, `re shortlist-dbc` — provider-backed DBC candidate ranking against captures
 

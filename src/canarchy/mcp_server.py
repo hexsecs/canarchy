@@ -1331,6 +1331,11 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "top": {
+                    "type": "integer",
+                    "description": "Number of highest-ranked candidates to return (default 20; 0 for all)",
+                    "default": 20,
+                },
             },
             "required": ["file"],
         },
@@ -1354,7 +1359,9 @@ _TOOLS: list[types.Tool] = [
         name="re_anomalies",
         description=(
             "Flag inter-frame-timing outliers and unexpected/dropped arbitration IDs "
-            "in a capture, optionally against a baseline capture."
+            "in a capture, optionally against a baseline capture. With a baseline, also "
+            "flags per-ID frame-rate drop/spike (suppression/injection) and payload-entropy "
+            "collapse (plateau/frozen-value attacks)."
         ),
         inputSchema={
             "type": "object",
@@ -1386,6 +1393,29 @@ _TOOLS: list[types.Tool] = [
                         "reported as low-rate instead of ranked)"
                     ),
                 },
+                "entropy_drop": {
+                    "type": "number",
+                    "description": (
+                        "Flag an ID when its input/baseline mean-byte-entropy ratio falls "
+                        "to or below this value (catches plateau/frozen-value attacks; "
+                        "baseline only)"
+                    ),
+                    "default": 0.5,
+                },
+                "rate_drop": {
+                    "type": "number",
+                    "description": (
+                        "Flag an ID when its input/baseline frame-rate ratio falls to or "
+                        "below this value, or rises to or above its reciprocal (catches "
+                        "suppression/injection of a known ID; baseline only)"
+                    ),
+                    "default": 0.5,
+                },
+                "top": {
+                    "type": "integer",
+                    "description": "Number of highest-ranked anomaly candidates to return (default 20; 0 for all)",
+                    "default": 20,
+                },
                 "offset": {"type": "integer", "description": "Skip the first N frames"},
                 "max_frames": {
                     "type": "integer",
@@ -1406,6 +1436,11 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "top": {
+                    "type": "integer",
+                    "description": "Number of highest-ranked candidates to return (default 20; 0 for all)",
+                    "default": 20,
+                },
             },
             "required": ["file"],
         },
@@ -1417,6 +1452,11 @@ _TOOLS: list[types.Tool] = [
             "type": "object",
             "properties": {
                 "file": {"type": "string", "description": "Path to candump capture file"},
+                "top": {
+                    "type": "integer",
+                    "description": "Number of highest-ranked candidates to return (default 20; 0 for all)",
+                    "default": 20,
+                },
             },
             "required": ["file"],
         },
@@ -1477,6 +1517,48 @@ _TOOLS: list[types.Tool] = [
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Paths to candump or PCAP capture files",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip the first N frames from each capture file",
+                },
+                "max_frames": {
+                    "type": "integer",
+                    "description": "Limit analysis to the first N frames per capture",
+                },
+                "seconds": {
+                    "type": "number",
+                    "description": "Limit analysis to the first T seconds of each capture",
+                },
+            },
+            "required": ["files"],
+        },
+    ),
+    types.Tool(
+        name="compare",
+        description=(
+            "Diff two or more plain CAN captures per arbitration ID in one call: "
+            "frame-count/rate deltas, cycle-time drift, and payload-entropy deltas "
+            "versus a baseline capture, each ID flagged (rate-drop, rate-spike, "
+            "entropy-collapse, timing-drift, new/dropped). The generic-CAN analogue "
+            "of j1939_compare; bundles what otherwise needs stats + re_anomalies + re_corpus."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Paths to candump/PCAP captures to compare (the first, or baseline, is the reference)",
+                },
+                "baseline": {
+                    "type": "string",
+                    "description": "Capture to treat as the reference (default: the first file)",
+                },
+                "top": {
+                    "type": "integer",
+                    "description": "Number of most-changed arbitration IDs to detail (default 20; 0 for all)",
+                    "default": 20,
                 },
                 "offset": {
                     "type": "integer",
@@ -2356,7 +2438,10 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--provider", a["provider"]]
             return argv + ["--json"]
         case "re_signals":
-            return ["re", "signals", a["file"], "--json"]
+            argv = ["re", "signals", a["file"]]
+            if a.get("top") is not None:
+                argv += ["--top", str(a["top"])]
+            return argv + ["--json"]
         case "re_correlate":
             return ["re", "correlate", a["file"], "--reference", a["reference"], "--json"]
         case "re_anomalies":
@@ -2371,6 +2456,12 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--cv-max", str(a["cv_max"])]
             if a.get("min_samples") is not None:
                 argv += ["--min-samples", str(a["min_samples"])]
+            if "entropy_drop" in a:
+                argv += ["--entropy-drop", str(a["entropy_drop"])]
+            if "rate_drop" in a:
+                argv += ["--rate-drop", str(a["rate_drop"])]
+            if a.get("top") is not None:
+                argv += ["--top", str(a["top"])]
             if a.get("offset"):
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
@@ -2379,9 +2470,15 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--seconds", str(a["seconds"])]
             return argv + ["--json"]
         case "re_counters":
-            return ["re", "counters", a["file"], "--json"]
+            argv = ["re", "counters", a["file"]]
+            if a.get("top") is not None:
+                argv += ["--top", str(a["top"])]
+            return argv + ["--json"]
         case "re_entropy":
-            return ["re", "entropy", a["file"], "--json"]
+            argv = ["re", "entropy", a["file"]]
+            if a.get("top") is not None:
+                argv += ["--top", str(a["top"])]
+            return argv + ["--json"]
         case "re_match_dbc":
             argv = ["re", "match-dbc", a["capture"]]
             if a.get("provider"):
@@ -2398,6 +2495,19 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
             return argv + ["--json"]
         case "re_corpus":
             argv = ["re", "corpus"] + a["files"]
+            if a.get("offset") is not None:
+                argv += ["--offset", str(a["offset"])]
+            if a.get("max_frames") is not None:
+                argv += ["--max-frames", str(a["max_frames"])]
+            if a.get("seconds") is not None:
+                argv += ["--seconds", str(a["seconds"])]
+            return argv + ["--json"]
+        case "compare":
+            argv = ["compare"] + a["files"]
+            if a.get("baseline"):
+                argv += ["--baseline", a["baseline"]]
+            if a.get("top") is not None:
+                argv += ["--top", str(a["top"])]
             if a.get("offset") is not None:
                 argv += ["--offset", str(a["offset"])]
             if a.get("max_frames") is not None:
