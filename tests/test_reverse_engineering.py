@@ -652,6 +652,42 @@ class AnomaliesCliTests(unittest.TestCase):
         self.assertEqual(result.data["timing_source"], "dbc")
         self.assertIn(0x400, result.data["event_ids"])
 
+    def test_cli_rejects_out_of_range_rate_drop(self) -> None:
+        from canarchy.cli import execute_command
+
+        exit_code, result = execute_command(
+            [
+                "re",
+                "anomalies",
+                str(FIXTURES / "anomaly_input.candump"),
+                "--rate-drop",
+                "1.5",
+                "--json",
+            ]
+        )
+        self.assertNotEqual(exit_code, 0)
+        assert result is not None
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0]["code"], "INVALID_RATE_DROP")
+
+    def test_cli_rejects_out_of_range_entropy_drop(self) -> None:
+        from canarchy.cli import execute_command
+
+        exit_code, result = execute_command(
+            [
+                "re",
+                "anomalies",
+                str(FIXTURES / "anomaly_input.candump"),
+                "--entropy-drop",
+                "0",
+                "--json",
+            ]
+        )
+        self.assertNotEqual(exit_code, 0)
+        assert result is not None
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0]["code"], "INVALID_ENTROPY_DROP")
+
 
 class J1939AnnotationTests(unittest.TestCase):
     """RE results carry PGN / source-address annotation for J1939 frames (#406)."""

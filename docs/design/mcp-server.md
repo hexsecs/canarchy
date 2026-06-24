@@ -63,6 +63,7 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `replay` | `replay` |
 | `filter` | `filter` |
 | `stats` | `stats` |
+| `compare` | `compare` |
 | `capture-info` | `capture_info` |
 | `decode` | `decode` |
 | `encode` | `encode` |
@@ -144,6 +145,7 @@ landing here.
 | CLI surface | Rationale |
 |-------------|-----------|
 | Transport reads (`capture`, `filter`, `stats`, `capture-info`, `decode`, `encode`) | Non-interactive commands with bounded JSON envelopes. |
+| `compare` | File-backed, multi-capture frame-rate/entropy/cycle-time diff against a baseline; same safety profile as `stats`/`re anomalies`, no transmit. |
 | MCP-gated active transmit (`send`, `generate`, `gateway`, `replay`, `sequence replay`, `xcp scan`) | In `_ACTIVE_TRANSMIT_TOOLS`: schemas require `ack_active=true` and default `dry_run=true`. `xcp scan` transmits an XCP CONNECT, so its MCP tool is gated and `--dry-run` plans the frame without sending. |
 | Fuzzing (`fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz signal`, `fuzz spn`, `fuzz guided`) | In `_ACTIVE_TRANSMIT_TOOLS`: mandatory `ack_active=true`, default `dry_run=true`. `fuzz guided` is response-feedback guided fuzzing — active transmit, gated the same way. |
 | DBC + DBC provider (`dbc inspect`, `dbc signals`, `dbc convert`, `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list/prune/refresh`) | Bounded inspection, conversion, and provider/cache workflows. `dbc_inspect.layout=true` exposes cantools-rendered bit layouts without ANSI parsing; `dbc_convert` returns the serialized database (or writes it to `out`) — file generation is a developer action, so no active-transmit gate applies. |

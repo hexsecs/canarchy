@@ -7862,6 +7862,34 @@ def reverse_engineering_payload(
     if args.command == "re anomalies":
         from canarchy.reverse_engineering import anomaly_candidates
 
+        entropy_drop = getattr(args, "entropy_drop", 0.5)
+        rate_drop = getattr(args, "rate_drop", 0.5)
+        if not 0 < entropy_drop < 1:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_ENTROPY_DROP",
+                        message="Entropy-drop ratio must be strictly between 0 and 1.",
+                        hint="Pass a value like 0.5 to --entropy-drop.",
+                    )
+                ],
+                data={"entropy_drop": entropy_drop},
+            )
+        if not 0 < rate_drop < 1:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="INVALID_RATE_DROP",
+                        message="Rate-drop ratio must be strictly between 0 and 1.",
+                        hint="Pass a value like 0.5 to --rate-drop.",
+                    )
+                ],
+                data={"rate_drop": rate_drop},
+            )
         frames = transport.frames_from_file(
             args.file, offset=args.offset, max_frames=args.max_frames, seconds=args.seconds
         )
@@ -7880,8 +7908,8 @@ def reverse_engineering_payload(
             cv_max=args.cv_max,
             dbc_timing=dbc_timing,
             min_samples=getattr(args, "min_samples", None),
-            entropy_drop=getattr(args, "entropy_drop", 0.5),
-            rate_drop=getattr(args, "rate_drop", 0.5),
+            entropy_drop=entropy_drop,
+            rate_drop=rate_drop,
         )
         anomaly_warnings: list[str] = []
         if analysis["candidate_count"] == 0:
