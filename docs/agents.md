@@ -166,6 +166,7 @@ Current exclusions:
 * `completion`, which emits a raw shell script rather than a JSON envelope
 * `dbc generate-c`, which generates C source/header files to disk and is a developer action
 * `plugins enable` and `plugins disable`, which write user plugin configuration
+* `fuzz identify`, a stateful multi-round human-in-the-loop replay/narrowing workflow (one bisected window replayed per invocation); CLI-only operator action
 
 The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred, with rationale) lives in [`docs/design/mcp-server.md`](design/mcp-server.md#mcp-coverage-decisions); a test guard (`test_every_cli_command_is_exposed_or_documented`) fails the build if a new command drifts out of coverage.
 

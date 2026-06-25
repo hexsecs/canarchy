@@ -129,6 +129,9 @@ _MCP_EXCLUDED_COMMANDS = {
     "mcp install",
     "web serve",  # long-running HTTP/WebSocket front end, like shell/tui
     "cannelloni send",  # active UDP egress to an arbitrary host; CLI-only operator action
+    # Stateful, multi-round human-in-the-loop replay/narrowing workflow that
+    # transmits a bisected window each invocation; CLI-only operator action.
+    "fuzz identify",
     "completion",
     "datasets stream",
     "datasets download",  # writes bulk dataset bytes to an arbitrary host path; CLI operator action

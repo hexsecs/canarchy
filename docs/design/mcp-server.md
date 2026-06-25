@@ -173,6 +173,7 @@ landing here.
 | `completion` | Emits a raw shell script, not a JSON envelope. |
 | `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
 | `datasets download` | Writes bulk dataset bytes to an arbitrary host path — a CLI-only operator action. `datasets fetch` (provenance) and `datasets replay --dry-run`/`--list-files` (metadata) are exposed. |
+| `fuzz identify` | Stateful, multi-round human-in-the-loop replay/narrowing workflow: each invocation replays a bisected window and the operator records an effect/no-effect observation before re-invoking. Does not map to a single buffered tool call; kept CLI-only behind the active-transmit gate (`docs/design/fuzz-identify.md`). |
 
 The `uds_scan` / `uds_trace` tools are exposed for CAN interfaces, but a
 `doip://` target is a **target-level exclusion**: DoIP routes the workflow over

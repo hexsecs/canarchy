@@ -177,6 +177,7 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "fuzz signal",
     "fuzz spn",
     "fuzz guided",
+    "fuzz identify",
     "replay",
     "sequence replay",
 }
@@ -188,6 +189,7 @@ FUZZ_COMMANDS = {
     "fuzz spn",
 }
 FUZZ_GUIDED_COMMANDS = {"fuzz guided"}
+FUZZ_IDENTIFY_COMMANDS = {"fuzz identify"}
 SEQUENCE_COMMANDS = {"sequence replay"}
 IMPLEMENTED_COMMANDS = (
     TRANSPORT_COMMANDS
@@ -207,6 +209,7 @@ IMPLEMENTED_COMMANDS = (
     | RE_COMMANDS
     | FUZZ_COMMANDS
     | FUZZ_GUIDED_COMMANDS
+    | FUZZ_IDENTIFY_COMMANDS
     | SEQUENCE_COMMANDS
     | CANNELLONI_COMMANDS
     | COMPARE_COMMANDS
@@ -1918,6 +1921,47 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(fuzz_guided)
     fuzz_guided.set_defaults(command="fuzz guided")
 
+    fuzz_identify = fuzz_subparsers.add_parser(
+        "identify",
+        help="narrow a fuzz log to the culprit frame by replaying bisected windows",
+    )
+    fuzz_identify.add_argument(
+        "log", help="candump capture or JSONL fuzz log / replay plan to bisect"
+    )
+    fuzz_identify.add_argument(
+        "--interface", default=None, help="target interface for replay (omit for analysis only)"
+    )
+    fuzz_identify.add_argument(
+        "--observations",
+        default=None,
+        help="JSON file of recorded effect/no-effect observations (one per completed round)",
+    )
+    fuzz_identify.add_argument(
+        "--observe",
+        dest="observe",
+        action="append",
+        default=None,
+        metavar="effect|no-effect",
+        help="inline observation for a completed round (repeatable; appended after --observations)",
+    )
+    fuzz_identify.add_argument(
+        "--rate", type=float, default=100.0, help="frames per second for the replayed window"
+    )
+    fuzz_identify.add_argument(
+        "--max-window",
+        type=int,
+        default=None,
+        help="cap the number of frames replayed in one round",
+    )
+    fuzz_identify.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="report the narrowing plan and next window without transmitting",
+    )
+    add_active_ack_argument(fuzz_identify)
+    add_output_arguments(fuzz_identify)
+    fuzz_identify.set_defaults(command="fuzz identify")
+
     config = subparsers.add_parser("config", help="inspect CANarchy configuration")
     config_subparsers = config.add_subparsers(dest="config_action", required=True)
     config_show = config_subparsers.add_parser(
@@ -2153,6 +2197,11 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"`{args.interface}` and observe the target's responses; "
             "use intentionally on a controlled bus."
         )
+    if args.command == "fuzz identify":
+        return (
+            f"warning: `fuzz identify` will replay a window of fuzz frames on interface "
+            f"`{args.interface}`; use intentionally on a controlled bus."
+        )
     if args.command == "replay":
         return (
             f"warning: `replay` will transmit recorded frames on interface `{args.interface}`; "
@@ -2194,6 +2243,8 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return f"confirm: type YES to fuzz `{sub}` on `{target}`: "
     if args.command == "fuzz guided":
         return f"confirm: type YES to run guided fuzzing on `{args.interface}`: "
+    if args.command == "fuzz identify":
+        return f"confirm: type YES to replay the fuzz window on `{args.interface}`: "
     if args.command == "replay":
         return f"confirm: type YES to replay frames on `{args.interface}`: "
     if args.command == "sequence replay":
@@ -7009,6 +7060,114 @@ def _fuzz_guided_initial_seeds(args: argparse.Namespace) -> list[bytes]:
     return seeds or [bytes(8)]
 
 
+def fuzz_identify_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy import fuzz_identify as fi
+
+    def _user_error(exc: fi.FuzzIdentifyError) -> CommandError:
+        return CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+        )
+
+    try:
+        frames = fi.load_identify_frames(args.log)
+        observations: list[bool] = []
+        if getattr(args, "observations", None):
+            observations.extend(fi.load_observations_file(args.observations))
+        for token in getattr(args, "observe", None) or []:
+            observations.append(fi.parse_observation(token))
+        state = fi.narrow(len(frames), observations)
+    except fi.FuzzIdentifyError as exc:
+        raise _user_error(exc) from exc
+
+    candidate_cap = 64
+    candidate_frames = [
+        fi.frame_record(frames, index)
+        for index in range(
+            state.candidate_lo, min(state.candidate_hi + 1, state.candidate_lo + candidate_cap)
+        )
+    ]
+
+    next_window: dict[str, Any] | None = None
+    if state.next_window is not None:
+        lo, hi = state.next_window
+        next_window = {"lo": lo, "hi": hi, "frame_count": hi - lo + 1}
+
+    base = {
+        "source": args.log,
+        "frame_count": len(frames),
+        "planned_rounds": state.planned_rounds,
+        "rounds_completed": state.rounds_completed,
+        "observations": ["effect" if obs else "no-effect" for obs in observations],
+        "candidate_lo": state.candidate_lo,
+        "candidate_hi": state.candidate_hi,
+        "candidate_count": state.candidate_count,
+        "candidate_frames": candidate_frames,
+        "resolved": state.resolved,
+        "culprit": fi.frame_record(frames, state.culprit) if state.resolved else None,
+        "next_window": next_window,
+        "confidence": state.confidence,
+        "rationale": state.rationale,
+    }
+
+    if state.resolved:
+        return ({**base, "mode": "resolved"}, [], [])
+
+    interface = getattr(args, "interface", None)
+    dry_run = bool(getattr(args, "dry_run", False))
+    max_window = getattr(args, "max_window", None)
+
+    if (
+        max_window is not None
+        and next_window is not None
+        and next_window["frame_count"] > max_window
+    ):
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="FUZZ_IDENTIFY_WINDOW_TOO_LARGE",
+                    message=(
+                        f"The next replay window has {next_window['frame_count']} frames, over "
+                        f"--max-window {max_window}."
+                    ),
+                    hint="Raise --max-window or record more observations to narrow the window first.",
+                )
+            ],
+        )
+
+    if dry_run or not interface:
+        mode = "dry_run" if dry_run else "analysis"
+        warnings: list[str] = []
+        if next_window is not None:
+            warnings.append(
+                f"ACTIVE_TRANSMIT_DRY_RUN: next replay window is frames "
+                f"{next_window['lo']}-{next_window['hi']} ({next_window['frame_count']} frame(s)); "
+                "no frame sent."
+            )
+        return ({**base, "mode": mode}, [], warnings)
+
+    enforce_active_transmit_safety(args)
+    window_frames = [frames[index] for index in range(next_window["lo"], next_window["hi"] + 1)]
+    rate = float(getattr(args, "rate", 100.0) or 100.0)
+    gap_ms = 1000.0 / rate if rate > 0 else 0.0
+    transport = LocalTransport()
+    try:
+        events = transport.generate_events(interface, window_frames, gap_ms=gap_ms)
+    except TransportError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_TRANSPORT_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+            data={**base, "mode": "active"},
+        ) from exc
+    return ({**base, "mode": "active", "replayed_window": next_window}, events, [])
+
+
 def fuzz_guided_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -8319,6 +8478,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(guided_data)
         data["events"] = guided_events
         warnings.extend(guided_warnings)
+    elif args.command in FUZZ_IDENTIFY_COMMANDS:
+        identify_data, identify_events, identify_warnings = fuzz_identify_payload(args)
+        data.update(identify_data)
+        data["events"] = identify_events
+        warnings.extend(identify_warnings)
     else:
         data["events"] = build_events(args)
     if args.command not in IMPLEMENTED_COMMANDS:
