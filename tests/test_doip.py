@@ -21,15 +21,23 @@ from canarchy.doip import (
     PT_DIAGNOSTIC_MESSAGE_NACK,
     PT_ROUTING_ACTIVATION_REQUEST,
     PT_ROUTING_ACTIVATION_RESPONSE,
+    PT_VEHICLE_IDENTIFICATION_RESPONSE,
     DoipConnection,
     DoipError,
     decode_message,
+    discover_entities,
+    doip_dump_dids,
+    doip_ecu_reset,
+    doip_security_seed,
+    doip_services,
+    doip_tester_present,
     encode_diagnostic_message,
     encode_message,
     encode_routing_activation_request,
     is_doip_target,
     parse_diagnostic_message,
     parse_doip_target,
+    parse_vehicle_identification_response,
 )
 
 
@@ -59,12 +67,14 @@ class DoipResponder:
         activation_code: int = 0x10,
         silent: tuple[bytes, ...] = (),
         nack_requests: tuple[bytes, ...] = (),
+        default_response: bytes | None = None,
     ) -> None:
         self.responses = responses
         self.entity_address = entity_address
         self.activation_code = activation_code
         self.silent = set(silent)
         self.nack_requests = set(nack_requests)
+        self.default_response = default_response
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind(("127.0.0.1", 0))
@@ -119,7 +129,7 @@ class DoipResponder:
                         continue
                     if request in self.silent:
                         continue
-                    response = self.responses.get(request)
+                    response = self.responses.get(request, self.default_response)
                     if response is not None:
                         conn.send_raw(
                             encode_diagnostic_message(self.entity_address, tester, response)
@@ -335,3 +345,207 @@ class DoipMcpExclusionTests(unittest.TestCase):
                 payload = json.loads(result[0].text)
                 self.assertFalse(payload["ok"])
                 self.assertEqual(payload["errors"][0]["code"], "DOIP_MCP_EXCLUDED")
+
+
+def _vir_payload(vin: str, logical_address: int) -> bytes:
+    return (
+        vin.encode("ascii").ljust(17, b"\x00")[:17]
+        + logical_address.to_bytes(2, "big")
+        + bytes(range(6))  # EID
+        + bytes(range(6, 12))  # GID
+        + b"\x00"  # further action required
+    )
+
+
+class DoipVehicleIdentificationTests(unittest.TestCase):
+    def test_parse_vehicle_identification_response(self) -> None:
+        entity = parse_vehicle_identification_response(
+            "10.0.0.5", _vir_payload("WVWZZZ1KZAW000001", 0x0E80)
+        )
+        self.assertEqual(entity.host, "10.0.0.5")
+        self.assertEqual(entity.vin, "WVWZZZ1KZAW000001")
+        self.assertEqual(entity.logical_address, 0x0E80)
+        self.assertEqual(entity.eid, "000102030405")
+
+    def test_parse_rejects_short_payload(self) -> None:
+        with self.assertRaises(DoipError) as ctx:
+            parse_vehicle_identification_response("h", b"\x00" * 10)
+        self.assertEqual(ctx.exception.code, "DOIP_PROTOCOL_ERROR")
+
+    def test_discover_entities_uses_sender(self) -> None:
+        def fake_sender(host, port, timeout):
+            return [
+                (
+                    "10.0.0.5",
+                    PT_VEHICLE_IDENTIFICATION_RESPONSE,
+                    _vir_payload("VIN0000000000000A", 0x0E80),
+                ),
+                ("10.0.0.6", 0x0002, b""),  # wrong payload type, ignored
+            ]
+
+        entities = discover_entities("255.255.255.255", sender=fake_sender)
+        self.assertEqual(len(entities), 1)
+        self.assertEqual(entities[0].logical_address, 0x0E80)
+
+    def test_discover_rejects_bad_timeout(self) -> None:
+        with self.assertRaises(DoipError):
+            discover_entities("h", timeout=0)
+
+
+class DoipWorkflowTests(unittest.TestCase):
+    def _target(self, port: int):
+        # A short client timeout keeps the silent-probe path deterministic: the
+        # client times out (-> DOIP_TIMEOUT -> no_response) well before the
+        # loopback responder's own 2s socket timeout closes the connection.
+        return parse_doip_target(f"doip://127.0.0.1:{port}?logical_address=0x0E80&timeout=0.5")
+
+    def test_services_classifies_support(self) -> None:
+        responses = {
+            bytes([0x10]): bytes.fromhex("7F1013"),  # NRC length -> supported
+            bytes([0x22]): bytes.fromhex("6201"),  # positive -> supported
+            bytes([0x27]): bytes.fromhex("7F2711"),  # serviceNotSupported -> unsupported
+            bytes([0x31]): bytes.fromhex("7F317F"),  # NotSupportedInActiveSession -> supported
+        }
+        with DoipResponder(responses, default_response=bytes.fromhex("7F0011")) as server:
+            records, events = doip_services(self._target(server.port))
+        by_service = {r["service"]: r["supported"] for r in records}
+        self.assertTrue(by_service[0x10])
+        self.assertTrue(by_service[0x22])
+        self.assertFalse(by_service[0x27])
+        # NRC 0x7F (serviceNotSupportedInActiveSession) means the service exists.
+        self.assertTrue(by_service[0x31])
+        self.assertTrue(len(events) >= 3)
+
+    def test_ecu_reset(self) -> None:
+        with DoipResponder({b"\x11\x01": bytes.fromhex("5101")}) as server:
+            record, events = doip_ecu_reset(self._target(server.port), reset_type=0x01)
+        self.assertEqual(record["status"], "positive")
+        self.assertEqual(len(events), 1)
+
+    def test_tester_present_suppress_is_silent(self) -> None:
+        with DoipResponder({}, silent=(b"\x3e\x80",)) as server:
+            record, events = doip_tester_present(self._target(server.port), suppress_response=True)
+        self.assertEqual(record["status"], "no_response")
+        self.assertEqual(events, [])
+
+    def test_security_seed_collects(self) -> None:
+        responses = {
+            b"\x10\x03": bytes.fromhex("5003"),
+            b"\x27\x01": bytes.fromhex("6701DEAD"),
+        }
+        with DoipResponder(responses) as server:
+            data, events = doip_security_seed(
+                self._target(server.port), level=0x01, session=0x03, count=2
+            )
+        self.assertEqual(data["collected"], 2)
+        self.assertEqual(data["seeds"][0]["seed"], "dead")
+        self.assertIsNotNone(data["session_response"])
+
+    def test_dump_dids(self) -> None:
+        responses = {b"\x22\xf1\x90": bytes.fromhex("62f190" + b"VIN".hex())}
+        with DoipResponder(responses, default_response=bytes.fromhex("7F2231")) as server:
+            records, _events = doip_dump_dids(
+                self._target(server.port), did_start=0xF18F, did_end=0xF191
+            )
+        present = {r["did"]: r["value"] for r in records if r["present"]}
+        self.assertEqual(present, {0xF190: b"VIN".hex()})
+
+
+class DoipWorkflowCliTests(unittest.TestCase):
+    def _target(self, port: int) -> str:
+        return f"doip://127.0.0.1:{port}?logical_address=0x0E80"
+
+    def test_services_cli_over_loopback(self) -> None:
+        responses = {
+            bytes([0x10]): bytes.fromhex("7F1013"),
+            bytes([0x22]): bytes.fromhex("6201"),
+        }
+        with DoipResponder(responses, default_response=bytes.fromhex("7F0011")) as server:
+            exit_code, stdout, stderr = run_cli(
+                "doip", "services", self._target(server.port), "--json"
+            )
+        self.assertEqual(exit_code, 0, stdout)
+        self.assertIn("will transmit DoIP requests", stderr)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "active")
+        found = {s["service"] for s in data["supported_services"]}
+        self.assertEqual(found, {0x10, 0x22})
+
+    def test_discovery_dry_run(self) -> None:
+        exit_code, stdout, _ = run_cli("doip", "discovery", "192.0.2.1", "--dry-run", "--json")
+        self.assertEqual(exit_code, 0)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "dry_run")
+
+    def test_services_dry_run_needs_no_network(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "doip", "services", "doip://198.51.100.9?logical_address=0x0E80", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(json.loads(stdout)["data"]["mode"], "dry_run")
+
+    def test_discovery_rejects_out_of_range_port(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "doip", "discovery", "192.0.2.1", "--port", "70000", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_VALUE")
+
+    def test_security_seed_rejects_non_positive_count(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "doip",
+            "security-seed",
+            "doip://198.51.100.9?logical_address=0x0E80",
+            "--count",
+            "0",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_VALUE")
+
+    def test_dump_dids_rejects_non_positive_limit(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "doip",
+            "dump-dids",
+            "doip://198.51.100.9?logical_address=0x0E80",
+            "--limit",
+            "0",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_VALUE")
+
+    def test_invalid_target_user_error(self) -> None:
+        exit_code, stdout, _ = run_cli("doip", "services", "http://bad", "--json")
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_TARGET")
+
+    def test_requires_ack_when_configured(self) -> None:
+        from unittest.mock import patch
+
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={"CANARCHY_REQUIRE_ACTIVE_ACK": "1"},
+        ):
+            exit_code, stdout, _ = run_cli(
+                "doip", "ecu-reset", "doip://198.51.100.9?logical_address=0x0E80", "--json"
+            )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "ACTIVE_ACK_REQUIRED")
+
+
+class DoipWorkflowMcpExclusionTests(unittest.TestCase):
+    def test_doip_workflows_are_documented_exclusions(self) -> None:
+        from tests.test_mcp import _MCP_EXCLUDED_COMMANDS
+
+        for command in (
+            "doip discovery",
+            "doip services",
+            "doip ecu-reset",
+            "doip tester-present",
+            "doip security-seed",
+            "doip dump-dids",
+        ):
+            self.assertIn(command, _MCP_EXCLUDED_COMMANDS)

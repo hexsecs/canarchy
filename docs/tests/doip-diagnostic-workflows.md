@@ -22,8 +22,22 @@
 | `REQ-DOIP-08` | Diagnostic NACK / protocol errors | `TEST-DOIP-07`, `TEST-DOIP-02` |
 | `REQ-DOIP-09` | UDS negative responses are transactions, not errors | `TEST-DOIP-03` |
 | `REQ-DOIP-10` | MCP rejects `doip://` targets | `TEST-DOIP-09` |
+| `REQ-DOIP-11` | `doip discovery` vehicle identification | `TEST-DOIP-10`, `TEST-DOIP-11` |
+| `REQ-DOIP-12` | `doip services` enumeration over DoIP | `TEST-DOIP-12`, `TEST-DOIP-15` |
+| `REQ-DOIP-13` | `doip` ecu-reset / tester-present / security-seed / dump-dids | `TEST-DOIP-13` |
+| `REQ-DOIP-14` | Active-transmit safety + dry-run on `doip` workflows | `TEST-DOIP-16`, `TEST-DOIP-17` |
+| `REQ-DOIP-15` | `doip` command group is an MCP exclusion | `TEST-DOIP-18`, `test_every_cli_command_is_exposed_or_documented` |
 
 ## Test Cases
+
+> New `doip`-group coverage lives in `tests/test_doip.py`:
+> `DoipVehicleIdentificationTests` (TEST-DOIP-10/11 — VIR codec parse, short-payload
+> rejection, `discover_entities` with an injected sender, bad-timeout guard),
+> `DoipWorkflowTests` (TEST-DOIP-12/13 — services classification, ecu-reset,
+> suppressed tester-present silence, security-seed collection, dump-dids over the
+> loopback `DoipResponder`), `DoipWorkflowCliTests` (TEST-DOIP-15/16/17 — services
+> CLI over loopback, discovery/services dry-run, invalid target, ack gating), and
+> `DoipWorkflowMcpExclusionTests` (TEST-DOIP-18).
 
 ### TEST-DOIP-01 — Codec round-trips routing activation and diagnostic messages
 
@@ -141,8 +155,14 @@ request. All network activity is on `127.0.0.1`; no live hardware or external
 network is touched. The unreachable-endpoint case binds and closes an ephemeral
 port to guarantee a refused connection.
 
+The `doip discovery` UDP path is tested at the codec + `discover_entities` seam
+with an injected sender (no real UDP broadcast); the active `doip` diagnostic
+workflows run over the loopback `DoipResponder`, which gains an optional
+`default_response` so catalog-wide probing returns a quick NRC instead of
+deadlocking on a per-probe read timeout.
+
 ## Explicit Non-Coverage
 
-* UDP DoIP vehicle discovery / announcement messages (out of scope for v1).
+* Real UDP broadcast discovery against a physical network (the sender is injected).
 * TLS-secured DoIP and authentication handshakes.
 * Real-hardware gateway interoperability, which requires a physical DoIP entity.

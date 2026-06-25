@@ -1088,16 +1088,90 @@ Notes:
 
 ### uds services
 
-Inspect the built-in UDS service catalog.
+Inspect the built-in UDS service catalog, or actively probe which services an ECU supports.
 
 ```bash
-canarchy uds services [--json|--jsonl|--text]
+canarchy uds services [<interface>] [--request-id 0x7E0] [--response-id 0x7E8] \
+    [--probe-start 0x00 --probe-end 0xFF] [--max-requests N] [--timeout S] \
+    [--dry-run] [--ack-active] [--json|--jsonl|--text]
 ```
 
 Notes:
 
-* this is a reference command and does not require an interface
-* output includes service identifier, positive-response identifier, category, and subfunction expectations
+* without an interface this is a reference command (`mode: reference`): output includes service identifier, positive-response identifier, category, and subfunction expectations
+* with an interface this becomes an active probe (`mode: active`, gated by the active-transmit safety model): each candidate service id is sent once to `--request-id`, and a service is reported `supported` when it answers positively or with any negative response code other than `ServiceNotSupported` / `ServiceNotSupportedInActiveSession`
+* `--probe-start`/`--probe-end` probe a raw service-id range instead of the catalog; `--max-requests` caps the probe count
+
+### uds subservices
+
+Enumerate which subfunctions of a UDS service an ECU supports.
+
+```bash
+canarchy uds subservices <interface> --service 0x19 [--sub-start 0x00] [--sub-end 0xFF] \
+    [--request-id 0x7E0] [--response-id 0x7E8] [--timeout S] [--dry-run] [--ack-active] [--json|--jsonl|--text]
+```
+
+### uds ecu-reset / uds tester-present
+
+Send a single ECUReset (`0x11`) or TesterPresent (`0x3E`) request.
+
+```bash
+canarchy uds ecu-reset <interface> [--reset-type 0x01] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+canarchy uds tester-present <interface> [--suppress] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+### uds security-seed
+
+Collect SecurityAccess (`0x27`) seeds for an explicit session and level.
+
+```bash
+canarchy uds security-seed <interface> [--level 0x01] [--session 0x03] [--count N] \
+    [--max-duration S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* `--level` must be odd (the requestSeed subfunction); `--session` optionally enters a diagnostic session first
+* output reports `collected`, `distinct_seeds`, and the per-request seed bytes
+
+### uds dump-dids
+
+Read a range of DataIdentifiers via ReadDataByIdentifier (`0x22`).
+
+```bash
+canarchy uds dump-dids <interface> [--did-start 0xF180] [--did-end 0xF1FF] [--limit 256] \
+    [--max-duration S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+### uds read-memory
+
+Read a bounded memory range via ReadMemoryByAddress (`0x23`).
+
+```bash
+canarchy uds read-memory <interface> --address 0x080000 --size N [--chunk-size 4] \
+    [--address-bytes N] [--size-bytes N] [--output PATH] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* the request is chunked by `--chunk-size`; the total size is bounded (max 65536 bytes)
+* `--output` writes the reassembled memory bytes to a file when any bytes were read; provenance (`address`, `size`, `chunk_size`, request/response ids) is in the result data
+
+### uds auto
+
+Bounded zero-knowledge active diagnostic reconnaissance: discover responders, probe services, optionally probe a bounded DID range.
+
+```bash
+canarchy uds auto <interface> [--request-start 0x7E0] [--request-end 0x7E7] [--no-services] \
+    [--probe-dids --did-start 0xF190 --did-end 0xF19F --did-limit 16] [--response-id ID] \
+    [--max-duration S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* discovery sends a DiagnosticSessionControl request to each id in `[--request-start, --request-end]` and notes responders; `--response-id` is auto (any responder id) unless pinned
+* per responder it enumerates supported services (unless `--no-services`) and, with `--probe-dids`, reads a bounded DID range; the result reports `complete` for the scan budget
+* all `uds` active workflows (everything except the reference `uds services` catalog) are CLI-only operator actions and are not exposed as MCP tools
 
 ### xcp scan
 
@@ -1114,6 +1188,38 @@ Notes:
 * this is an active command honouring the active-transmit safety model; `--ack-active` requests an interactive `YES` confirmation before the CONNECT is sent; `--dry-run` plans the CONNECT frame (reported as `planned_frame`, `mode: dry_run`) without opening the transport or transmitting
 * `--request-id` / `--response-id` accept decimal or `0x` hex CAN ids (defaults 0x3E0 / 0x3E1; an extended 29-bit request id is transmitted as an extended frame); a malformed id returns `XCP_INVALID_ID`
 * the `xcp_scan` MCP tool is gated like other active-transmit tools: mandatory `ack_active=true` with `dry_run` defaulting to true
+
+### xcp info
+
+Connect to an XCP slave and report its basic capabilities.
+
+```bash
+canarchy xcp info <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--timeout S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* sends CONNECT, then the optional GET_STATUS, GET_COMM_MODE_INFO, and GET_ID commands; the `capabilities` block reports the parsed CONNECT info (resources, max-CTO/DTO, byte order, versions) plus session status, comm-mode info, and identification mode/length
+* optional commands the slave does not implement are reported per-command as `status: unsupported` rather than failing the whole command
+* active command honouring the active-transmit safety model; `--dry-run` plans the four commands without transmitting and needs no interface
+* a silent slave returns `XCP_NO_RESPONSE` and a CONNECT rejection returns `XCP_ERROR_RESPONSE` (exit 2)
+
+### xcp dump
+
+Upload a bounded XCP memory range.
+
+```bash
+canarchy xcp dump <interface> --address 0x08000000 --size N [--chunk-size 4] [--address-extension 0x00] \
+    [--short-upload] [--output PATH] [--timeout S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* CONNECT, then uploads the range in `--chunk-size` chunks (1–7 bytes, bounded by the slave's MAX_CTO-1) via SET_MTA + UPLOAD, or SHORT_UPLOAD with `--short-upload`
+* the total size is bounded (max 65536 bytes); `--output` writes the assembled bytes when any were read; the envelope reports `bytes_read`, `complete`, the per-chunk records, and the assembled `memory` hex
+* address byte order follows the slave's CONNECT comm-mode-basic byte order
+* bounds errors (`XCP_INVALID_VALUE`, `XCP_DUMP_TOO_LARGE`, `XCP_INVALID_CHUNK_SIZE`, `XCP_CHUNK_EXCEEDS_MAX_CTO`) exit 1; `XCP_NO_RESPONSE` / `XCP_ERROR_RESPONSE` exit 2
+* `xcp info` and `xcp dump` are CLI-only operator actions and are not exposed as MCP tools
 
 ### xcp trace
 
@@ -1153,6 +1259,41 @@ Notes:
 
 * this is a reference command and does not require an interface
 * output includes the command code, name, and category (standard / calibration / daq / programming)
+
+### doip discovery
+
+Discover reachable DoIP entities via a UDP vehicle-identification broadcast.
+
+```bash
+canarchy doip discovery [host] [--port 13400] [--timeout 2.0] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* broadcasts a DoIP VehicleIdentificationRequest (default host `255.255.255.255`) and reports each responding entity's VIN, logical address, EID, and GID
+* active network egress honouring the active-transmit safety model; `--dry-run` plans the broadcast without transmitting
+* a send failure returns `DOIP_CONNECTION_FAILED` (exit 2)
+
+### doip services / ecu-reset / tester-present / security-seed / dump-dids
+
+Active UDS diagnostic workflows over a DoIP session, addressing the ECU by logical address.
+
+```bash
+canarchy doip services       <doip-uri> [--ack-active] [--dry-run] [--json|--jsonl|--text]
+canarchy doip ecu-reset      <doip-uri> [--reset-type 0x01] [--ack-active] [--dry-run] ...
+canarchy doip tester-present <doip-uri> [--suppress] [--ack-active] [--dry-run] ...
+canarchy doip security-seed  <doip-uri> [--level 0x01] [--session 0x03] [--count N] [--ack-active] [--dry-run] ...
+canarchy doip dump-dids      <doip-uri> [--did-start 0xF180] [--did-end 0xF1FF] [--limit N] [--ack-active] [--dry-run] ...
+```
+
+Where `<doip-uri>` is `doip://<host>:<port>?logical_address=0x0E80` (same query parameters as `uds scan` over DoIP).
+
+Notes:
+
+* each workflow activates routing, then runs the relevant UDS requests over the DoIP session, emitting `uds_transaction` events with negative-response decoding plus per-request `status`
+* `services` reports which UDS services the ECU supports; `security-seed` requires an odd `--level`; `dump-dids` reads a bounded DID range
+* all `doip` commands honour the active-transmit safety model and support `--dry-run` request plans; bounds/validation errors (`DOIP_INVALID_VALUE`, `DOIP_INVALID_SECURITY_LEVEL`, `DOIP_INVALID_DID_RANGE`) exit 1 and DoIP transport/protocol errors exit 2
+* the `doip` command group is CLI-only and is not exposed as MCP tools (active network egress to an arbitrary host)
 
 ### j1587 decode
 

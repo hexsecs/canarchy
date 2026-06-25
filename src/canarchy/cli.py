@@ -80,7 +80,7 @@ from canarchy.transport import (
 from canarchy.tui import run_tui
 from canarchy.doip import is_doip_target
 from canarchy.fuzz_feedback import SIGNAL_CATEGORIES
-from canarchy.uds import uds_decoder_backend, uds_services_payload
+from canarchy.uds import UDS_SERVICE_CATALOG, uds_decoder_backend, uds_services_payload
 from canarchy.xcp import (
     XCP_DEFAULT_REQUEST_ID,
     XCP_DEFAULT_RESPONSE_ID,
@@ -143,8 +143,19 @@ J1939_COMMANDS = {
     "j1939 map",
 }
 SESSION_COMMANDS = {"session save", "session load", "session show"}
-UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
-XCP_COMMANDS = {"xcp scan", "xcp trace", "xcp read", "xcp commands"}
+UDS_ACTIVE_COMMANDS = {
+    "uds subservices",
+    "uds ecu-reset",
+    "uds tester-present",
+    "uds security-seed",
+    "uds dump-dids",
+    "uds read-memory",
+    "uds auto",
+}
+# `uds services` is reference-only without an interface and active with one, so
+# it is gated dynamically in the payload rather than listed unconditionally.
+UDS_COMMANDS = {"uds scan", "uds trace", "uds services"} | UDS_ACTIVE_COMMANDS
+XCP_COMMANDS = {"xcp scan", "xcp trace", "xcp read", "xcp commands", "xcp info", "xcp dump"}
 J1587_COMMANDS = {"j1587 decode", "j1587 pids"}
 J2497_COMMANDS = {"j2497 decode", "j2497 mids"}
 CONFIG_COMMANDS = {"config show"}
@@ -161,6 +172,14 @@ RE_COMMANDS = {
     "re suggest",
 }
 CANNELLONI_COMMANDS = {"cannelloni decode", "cannelloni send"}
+DOIP_COMMANDS = {
+    "doip discovery",
+    "doip services",
+    "doip ecu-reset",
+    "doip tester-present",
+    "doip security-seed",
+    "doip dump-dids",
+}
 COMPARE_COMMANDS = {"compare"}
 
 ACTIVE_TRANSMIT_COMMANDS = {
@@ -170,7 +189,23 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "gateway",
     "cannelloni send",
     "uds scan",
+    "uds services",
+    "uds subservices",
+    "uds ecu-reset",
+    "uds tester-present",
+    "uds security-seed",
+    "uds dump-dids",
+    "uds read-memory",
+    "uds auto",
     "xcp scan",
+    "xcp info",
+    "xcp dump",
+    "doip discovery",
+    "doip services",
+    "doip ecu-reset",
+    "doip tester-present",
+    "doip security-seed",
+    "doip dump-dids",
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
@@ -212,6 +247,7 @@ IMPLEMENTED_COMMANDS = (
     | FUZZ_IDENTIFY_COMMANDS
     | SEQUENCE_COMMANDS
     | CANNELLONI_COMMANDS
+    | DOIP_COMMANDS
     | COMPARE_COMMANDS
     | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export", "plot", "web serve"}
 )
@@ -325,6 +361,43 @@ def _add_xcp_id_arguments(parser: argparse.ArgumentParser) -> None:
         default=hex(XCP_DEFAULT_RESPONSE_ID),
         help=f"slave response CAN id (default: {hex(XCP_DEFAULT_RESPONSE_ID)})",
     )
+
+
+def _add_uds_active_arguments(
+    parser: argparse.ArgumentParser, *, response_default: str | None = "0x7E8"
+) -> None:
+    """Common request/response/timeout/dry-run options for active UDS commands."""
+    parser.add_argument(
+        "interface",
+        nargs="?",
+        help="CAN interface (required unless --dry-run)",
+    )
+    parser.add_argument(
+        "--request-id",
+        default="0x7E0",
+        help="diagnostic request CAN id (default: 0x7E0)",
+    )
+    parser.add_argument(
+        "--response-id",
+        default=response_default,
+        help=(
+            "expected response CAN id"
+            + (f" (default: {response_default})" if response_default else "; omit to accept any")
+        ),
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=0.2,
+        help="per-request response timeout in seconds (default: 0.2)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="emit the request plan without opening the transport or transmitting",
+    )
+    add_active_ack_argument(parser)
+    add_output_arguments(parser)
 
 
 def add_j1939_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1338,9 +1411,120 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(uds_trace)
     uds_trace.set_defaults(command="uds trace")
 
-    uds_services = uds_subparsers.add_parser("services", help="list UDS services")
-    add_output_arguments(uds_services)
+    uds_services = uds_subparsers.add_parser(
+        "services",
+        help="list the UDS service catalog, or actively probe supported services",
+    )
+    _add_uds_active_arguments(uds_services)
+    uds_services.add_argument(
+        "--probe-start", help="probe a raw service-id range start instead of the catalog"
+    )
+    uds_services.add_argument(
+        "--probe-end", help="probe a raw service-id range end instead of the catalog"
+    )
+    uds_services.add_argument("--max-requests", type=int, help="cap the number of probe requests")
     uds_services.set_defaults(command="uds services")
+
+    uds_subservices = uds_subparsers.add_parser(
+        "subservices", help="enumerate supported subfunctions of a UDS service"
+    )
+    _add_uds_active_arguments(uds_subservices)
+    uds_subservices.add_argument(
+        "--service", required=True, help="UDS service id to enumerate subfunctions for (e.g. 0x19)"
+    )
+    uds_subservices.add_argument("--sub-start", default="0x00", help="subfunction range start")
+    uds_subservices.add_argument("--sub-end", default="0xFF", help="subfunction range end")
+    uds_subservices.set_defaults(command="uds subservices")
+
+    uds_ecu_reset = uds_subparsers.add_parser("ecu-reset", help="send an ECUReset (0x11) request")
+    _add_uds_active_arguments(uds_ecu_reset)
+    uds_ecu_reset.add_argument(
+        "--reset-type", default="0x01", help="ECUReset subfunction (default: 0x01 hardReset)"
+    )
+    uds_ecu_reset.set_defaults(command="uds ecu-reset")
+
+    uds_tester_present = uds_subparsers.add_parser(
+        "tester-present", help="send a TesterPresent (0x3E) request"
+    )
+    _add_uds_active_arguments(uds_tester_present)
+    uds_tester_present.add_argument(
+        "--suppress",
+        action="store_true",
+        help="set the suppressPosRspMsgIndicationBit (subfunction 0x80)",
+    )
+    uds_tester_present.set_defaults(command="uds tester-present")
+
+    uds_security_seed = uds_subparsers.add_parser(
+        "security-seed", help="collect SecurityAccess (0x27) seeds"
+    )
+    _add_uds_active_arguments(uds_security_seed)
+    uds_security_seed.add_argument(
+        "--level", default="0x01", help="requestSeed security level, odd (default: 0x01)"
+    )
+    uds_security_seed.add_argument(
+        "--session", help="optional DiagnosticSessionControl session to enter first (e.g. 0x03)"
+    )
+    uds_security_seed.add_argument(
+        "--count", type=int, default=1, help="number of seeds to request (default: 1)"
+    )
+    uds_security_seed.add_argument(
+        "--max-duration", type=float, help="stop collecting after N seconds"
+    )
+    uds_security_seed.set_defaults(command="uds security-seed")
+
+    uds_dump_dids = uds_subparsers.add_parser(
+        "dump-dids", help="read a range of DataIdentifiers via ReadDataByIdentifier (0x22)"
+    )
+    _add_uds_active_arguments(uds_dump_dids)
+    uds_dump_dids.add_argument("--did-start", default="0xF180", help="first DID (default: 0xF180)")
+    uds_dump_dids.add_argument("--did-end", default="0xF1FF", help="last DID (default: 0xF1FF)")
+    uds_dump_dids.add_argument(
+        "--limit", type=int, default=256, help="maximum DIDs to read (default: 256)"
+    )
+    uds_dump_dids.add_argument("--max-duration", type=float, help="stop after N seconds")
+    uds_dump_dids.set_defaults(command="uds dump-dids")
+
+    uds_read_memory = uds_subparsers.add_parser(
+        "read-memory", help="read a memory range via ReadMemoryByAddress (0x23)"
+    )
+    _add_uds_active_arguments(uds_read_memory)
+    uds_read_memory.add_argument("--address", required=True, help="start address (e.g. 0x080000)")
+    uds_read_memory.add_argument("--size", required=True, help="number of bytes to read")
+    uds_read_memory.add_argument(
+        "--chunk-size", type=int, default=4, help="bytes per request (default: 4)"
+    )
+    uds_read_memory.add_argument(
+        "--address-bytes", type=int, help="addressAndLengthFormatId address width (auto by default)"
+    )
+    uds_read_memory.add_argument(
+        "--size-bytes", type=int, help="addressAndLengthFormatId size width (auto by default)"
+    )
+    uds_read_memory.add_argument("--output", help="write reassembled memory bytes to this file")
+    uds_read_memory.set_defaults(command="uds read-memory")
+
+    uds_auto = uds_subparsers.add_parser(
+        "auto", help="bounded zero-knowledge active diagnostic reconnaissance"
+    )
+    _add_uds_active_arguments(uds_auto, response_default=None)
+    uds_auto.add_argument(
+        "--request-start", default="0x7E0", help="discovery request-id range start (default: 0x7E0)"
+    )
+    uds_auto.add_argument(
+        "--request-end", default="0x7E7", help="discovery request-id range end (default: 0x7E7)"
+    )
+    uds_auto.add_argument(
+        "--no-services", action="store_true", help="skip per-responder service enumeration"
+    )
+    uds_auto.add_argument(
+        "--probe-dids", action="store_true", help="probe a bounded DID range per responder"
+    )
+    uds_auto.add_argument("--did-start", default="0xF190", help="DID range start (default: 0xF190)")
+    uds_auto.add_argument("--did-end", default="0xF19F", help="DID range end (default: 0xF19F)")
+    uds_auto.add_argument(
+        "--did-limit", type=int, default=16, help="max DIDs per responder (default: 16)"
+    )
+    uds_auto.add_argument("--max-duration", type=float, help="overall scan budget in seconds")
+    uds_auto.set_defaults(command="uds auto")
 
     xcp = subparsers.add_parser("xcp", help="XCP measurement/calibration workflows")
     xcp_subparsers = xcp.add_subparsers(dest="xcp_action", required=True)
@@ -1373,9 +1557,136 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(xcp_read)
     xcp_read.set_defaults(command="xcp read")
 
+    xcp_info = xcp_subparsers.add_parser(
+        "info", help="connect to an XCP slave and report its basic capabilities"
+    )
+    xcp_info.add_argument("interface", nargs="?", help="CAN interface (required unless --dry-run)")
+    _add_xcp_id_arguments(xcp_info)
+    xcp_info.add_argument(
+        "--timeout", type=float, default=0.2, help="per-command response timeout (default: 0.2)"
+    )
+    xcp_info.add_argument(
+        "--dry-run", action="store_true", help="plan the command frames without transmitting"
+    )
+    add_active_ack_argument(xcp_info)
+    add_output_arguments(xcp_info)
+    xcp_info.set_defaults(command="xcp info")
+
+    xcp_dump = xcp_subparsers.add_parser(
+        "dump", help="upload a bounded XCP memory range (SET_MTA + UPLOAD / SHORT_UPLOAD)"
+    )
+    xcp_dump.add_argument("interface", nargs="?", help="CAN interface (required unless --dry-run)")
+    _add_xcp_id_arguments(xcp_dump)
+    xcp_dump.add_argument("--address", required=True, help="start address (e.g. 0x08000000)")
+    xcp_dump.add_argument("--size", required=True, help="number of bytes to upload")
+    xcp_dump.add_argument(
+        "--chunk-size", type=int, default=4, help="bytes per CTO (1-7, default: 4)"
+    )
+    xcp_dump.add_argument(
+        "--address-extension", default="0x00", help="XCP address extension (default: 0x00)"
+    )
+    xcp_dump.add_argument(
+        "--short-upload",
+        action="store_true",
+        help="use SHORT_UPLOAD per chunk instead of SET_MTA + UPLOAD",
+    )
+    xcp_dump.add_argument("--output", help="write the uploaded bytes to this file")
+    xcp_dump.add_argument(
+        "--timeout", type=float, default=0.2, help="per-command response timeout (default: 0.2)"
+    )
+    xcp_dump.add_argument(
+        "--dry-run", action="store_true", help="plan the command frames without transmitting"
+    )
+    add_active_ack_argument(xcp_dump)
+    add_output_arguments(xcp_dump)
+    xcp_dump.set_defaults(command="xcp dump")
+
     xcp_commands = xcp_subparsers.add_parser("commands", help="list the XCP command catalog")
     add_output_arguments(xcp_commands)
     xcp_commands.set_defaults(command="xcp commands")
+
+    doip = subparsers.add_parser("doip", help="DoIP (Diagnostic over IP) workflows")
+    doip_subparsers = doip.add_subparsers(dest="doip_action", required=True)
+
+    doip_discovery = doip_subparsers.add_parser(
+        "discovery", help="discover reachable DoIP entities via vehicle identification"
+    )
+    doip_discovery.add_argument(
+        "host",
+        nargs="?",
+        default="255.255.255.255",
+        help="target host or broadcast address (default: 255.255.255.255)",
+    )
+    doip_discovery.add_argument(
+        "--port", type=int, default=13400, help="DoIP UDP port (default: 13400)"
+    )
+    doip_discovery.add_argument(
+        "--timeout", type=float, default=2.0, help="discovery window in seconds (default: 2.0)"
+    )
+    doip_discovery.add_argument(
+        "--dry-run", action="store_true", help="plan the discovery without transmitting"
+    )
+    add_active_ack_argument(doip_discovery)
+    add_output_arguments(doip_discovery)
+    doip_discovery.set_defaults(command="doip discovery")
+
+    def _add_doip_target_arguments(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("target", help="doip://<host>:<port>?logical_address=0x0E80 endpoint")
+        parser.add_argument(
+            "--dry-run", action="store_true", help="plan the request without transmitting"
+        )
+        add_active_ack_argument(parser)
+        add_output_arguments(parser)
+
+    doip_services = doip_subparsers.add_parser(
+        "services", help="enumerate supported UDS services over DoIP"
+    )
+    _add_doip_target_arguments(doip_services)
+    doip_services.set_defaults(command="doip services")
+
+    doip_ecu_reset = doip_subparsers.add_parser(
+        "ecu-reset", help="send an ECUReset (0x11) request over DoIP"
+    )
+    _add_doip_target_arguments(doip_ecu_reset)
+    doip_ecu_reset.add_argument(
+        "--reset-type", default="0x01", help="ECUReset subfunction (default: 0x01 hardReset)"
+    )
+    doip_ecu_reset.set_defaults(command="doip ecu-reset")
+
+    doip_tester_present = doip_subparsers.add_parser(
+        "tester-present", help="send a TesterPresent (0x3E) request over DoIP"
+    )
+    _add_doip_target_arguments(doip_tester_present)
+    doip_tester_present.add_argument(
+        "--suppress", action="store_true", help="set the suppressPosRspMsgIndicationBit"
+    )
+    doip_tester_present.set_defaults(command="doip tester-present")
+
+    doip_security_seed = doip_subparsers.add_parser(
+        "security-seed", help="collect SecurityAccess (0x27) seeds over DoIP"
+    )
+    _add_doip_target_arguments(doip_security_seed)
+    doip_security_seed.add_argument(
+        "--level", default="0x01", help="requestSeed security level, odd (default: 0x01)"
+    )
+    doip_security_seed.add_argument(
+        "--session", help="optional DiagnosticSessionControl session to enter first"
+    )
+    doip_security_seed.add_argument(
+        "--count", type=int, default=1, help="number of seeds to request (default: 1)"
+    )
+    doip_security_seed.set_defaults(command="doip security-seed")
+
+    doip_dump_dids = doip_subparsers.add_parser(
+        "dump-dids", help="read a range of DataIdentifiers (0x22) over DoIP"
+    )
+    _add_doip_target_arguments(doip_dump_dids)
+    doip_dump_dids.add_argument("--did-start", default="0xF180", help="first DID (default: 0xF180)")
+    doip_dump_dids.add_argument("--did-end", default="0xF1FF", help="last DID (default: 0xF1FF)")
+    doip_dump_dids.add_argument(
+        "--limit", type=int, default=256, help="maximum DIDs to read (default: 256)"
+    )
+    doip_dump_dids.set_defaults(command="doip dump-dids")
 
     j1587 = subparsers.add_parser("j1587", help="J1587/J1708 legacy truck-bus workflows")
     j1587_subparsers = j1587.add_subparsers(dest="j1587_action", required=True)
@@ -2169,14 +2480,32 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `{args.command}` will open a DoIP session and transmit diagnostic "
             f"requests to `{args.interface}`; use intentionally against a controlled endpoint."
         )
+    if args.command in DOIP_COMMANDS:
+        target = getattr(args, "target", None) or getattr(args, "host", "<target>")
+        return (
+            f"warning: `{args.command}` will transmit DoIP requests over the network to "
+            f"`{target}`; use intentionally against a controlled endpoint."
+        )
     if args.command == "uds scan":
         return (
             f"warning: `uds scan` will transmit diagnostic requests on interface `{args.interface}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command in UDS_ACTIVE_COMMANDS or args.command == "uds services":
+        sub = args.command.removeprefix("uds ")
+        return (
+            f"warning: `uds {sub}` will transmit diagnostic requests on interface "
+            f"`{args.interface}`; use intentionally on a controlled bus."
+        )
     if args.command == "xcp scan":
         return (
             f"warning: `xcp scan` will transmit an XCP CONNECT request on interface "
+            f"`{args.interface}`; use intentionally on a controlled bus."
+        )
+    if args.command in ("xcp info", "xcp dump"):
+        sub = args.command.removeprefix("xcp ")
+        return (
+            f"warning: `xcp {sub}` will transmit XCP commands on interface "
             f"`{args.interface}`; use intentionally on a controlled bus."
         )
     if args.command == "gateway":
@@ -2231,10 +2560,19 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return (
             f"confirm: type YES to run `{args.command}` against DoIP endpoint `{args.interface}`: "
         )
+    if args.command in DOIP_COMMANDS:
+        target = getattr(args, "target", None) or getattr(args, "host", "<target>")
+        return f"confirm: type YES to run `{args.command}` against `{target}`: "
     if args.command == "uds scan":
         return f"confirm: type YES to run UDS scan on `{args.interface}`: "
+    if args.command in UDS_ACTIVE_COMMANDS or args.command == "uds services":
+        sub = args.command.removeprefix("uds ")
+        return f"confirm: type YES to run `uds {sub}` on `{args.interface}`: "
     if args.command == "xcp scan":
         return f"confirm: type YES to run XCP scan on `{args.interface}`: "
+    if args.command in ("xcp info", "xcp dump"):
+        sub = args.command.removeprefix("xcp ")
+        return f"confirm: type YES to run `xcp {sub}` on `{args.interface}`: "
     if args.command == "gateway":
         return f"confirm: type YES to forward traffic from `{args.src}` to `{args.dst}`: "
     if args.command in FUZZ_COMMANDS:
@@ -2262,7 +2600,17 @@ INTERFACE_FALLBACK_COMMANDS = {
     "j1939 monitor",
     "uds scan",
     "uds trace",
+    "uds services",
+    "uds subservices",
+    "uds ecu-reset",
+    "uds tester-present",
+    "uds security-seed",
+    "uds dump-dids",
+    "uds read-memory",
+    "uds auto",
     "xcp scan",
+    "xcp info",
+    "xcp dump",
     "xcp trace",
     "xcp read",
     "fuzz guided",
@@ -2409,6 +2757,13 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "send" and getattr(args, "dry_run", False):
         return
     if args.command == "xcp scan" and getattr(args, "dry_run", False):
+        return
+    if args.command in ("xcp info", "xcp dump") and getattr(args, "dry_run", False):
+        return
+    # `uds services` without an interface lists the static catalog (reference mode).
+    if args.command == "uds services":
+        return
+    if args.command in UDS_ACTIVE_COMMANDS and getattr(args, "dry_run", False):
         return
     if args.command == "fuzz guided" and getattr(args, "dry_run", False):
         return
@@ -6067,6 +6422,656 @@ def _doip_uds_payload(
     )
 
 
+def _parse_uds_int(
+    value: object,
+    *,
+    command: str,
+    name: str,
+    lo: int,
+    hi: int,
+    code: str = "UDS_INVALID_VALUE",
+) -> int:
+    try:
+        parsed = int(str(value), 0)
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {value!r} is not a valid integer.",
+                    hint="Pass a decimal or 0x-prefixed value.",
+                )
+            ],
+        ) from exc
+    if not lo <= parsed <= hi:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {parsed} is outside the allowed range [{lo}, {hi}].",
+                    hint=f"Pass {name} within [{lo}, {hi}].",
+                )
+            ],
+        )
+    return parsed
+
+
+def _uds_events_from_exchanges(exchanges: list[Any], *, source: str) -> list[dict[str, Any]]:
+    from canarchy.uds import enrich_uds_transactions
+    from canarchy.uds_active import exchange_to_transaction
+
+    transactions = [
+        txn
+        for txn in (exchange_to_transaction(exchange, source=source) for exchange in exchanges)
+        if txn is not None
+    ]
+    return serialize_events(enrich_uds_transactions(transactions))
+
+
+def _uds_dry_run_result(
+    base_meta: dict[str, Any],
+    command: str,
+    *,
+    planned_requests: int,
+    first_request: str | None,
+    extra: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    sub = command.removeprefix("uds ")
+    data = {
+        **base_meta,
+        "mode": "dry_run",
+        "planned_requests": planned_requests,
+        "first_request": first_request,
+    }
+    if extra:
+        data.update(extra)
+    interface = base_meta.get("interface") or "<interface>"
+    return (
+        data,
+        [],
+        [
+            f"ACTIVE_TRANSMIT_DRY_RUN: planned {planned_requests} `uds {sub}` request(s) to id "
+            f"0x{base_meta['request_id']:X} on `{interface}`; no frame sent."
+        ],
+    )
+
+
+def _uds_active_payload(
+    args: argparse.Namespace,
+    transport: "LocalTransport",
+    backend_metadata: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy import uds_active as ua
+    from canarchy.uds import UDS_SERVICE_CATALOG
+
+    command = args.command
+    request_id = _parse_can_id(
+        getattr(args, "request_id", "0x7E0") or "0x7E0",
+        command=command,
+        name="--request-id",
+        code="UDS_INVALID_ID",
+    )
+    response_raw = getattr(args, "response_id", None)
+    response_id = (
+        None
+        if response_raw in (None, "", "any")
+        else _parse_can_id(
+            response_raw, command=command, name="--response-id", code="UDS_INVALID_ID"
+        )
+    )
+    timeout = float(getattr(args, "timeout", 0.2) or 0.2)
+    dry_run = bool(getattr(args, "dry_run", False))
+    interface = getattr(args, "interface", None)
+    is_scaffold = backend_metadata["transport_backend"] == "scaffold"
+
+    base_meta: dict[str, Any] = {
+        "interface": interface,
+        "request_id": request_id,
+        "response_id": response_id,
+        "protocol_decoder": uds_decoder_backend(),
+        **backend_metadata,
+    }
+
+    def make_client() -> ua.UdsClient:
+        if is_scaffold:
+            return ua.SilentUdsClient()
+        return ua.TransportUdsClient(transport=transport, interface=interface)
+
+    def run_active(workflow):
+        enforce_active_transmit_safety(args)
+        try:
+            return workflow(make_client())
+        except ua.UdsActiveError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ) from exc
+
+    def validate(call):
+        try:
+            return call()
+        except ua.UdsActiveError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ) from exc
+
+    if command == "uds services":
+        probe_start = getattr(args, "probe_start", None)
+        probe_end = getattr(args, "probe_end", None)
+        services_arg: range | None = None
+        if probe_start is not None or probe_end is not None:
+            if probe_start is None or probe_end is None:
+                raise CommandError(
+                    command=command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="UDS_INVALID_RANGE",
+                            message="--probe-start and --probe-end must be supplied together.",
+                            hint="Pass both ends of the raw service-id range, or neither.",
+                        )
+                    ],
+                )
+            ps = _parse_uds_int(probe_start, command=command, name="--probe-start", lo=0, hi=0xFF)
+            pe = _parse_uds_int(probe_end, command=command, name="--probe-end", lo=0, hi=0xFF)
+            if pe < ps:
+                raise CommandError(
+                    command=command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="UDS_INVALID_RANGE",
+                            message=f"--probe-end 0x{pe:02X} is below --probe-start 0x{ps:02X}.",
+                            hint="Pass --probe-start <= --probe-end.",
+                        )
+                    ],
+                )
+            services_arg = range(ps, pe + 1)
+        max_requests = getattr(args, "max_requests", None)
+        candidate_ids = (
+            list(services_arg)
+            if services_arg is not None
+            else [service.service for service in UDS_SERVICE_CATALOG]
+        )
+        if max_requests is not None:
+            candidate_ids = candidate_ids[:max_requests]
+        if dry_run:
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=len(candidate_ids),
+                first_request=bytes([candidate_ids[0]]).hex() if candidate_ids else None,
+                extra={"probe_mode": "range" if services_arg is not None else "catalog"},
+            )
+        probes = run_active(
+            lambda client: ua.enumerate_services(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                services=services_arg,
+                timeout=timeout,
+                max_requests=max_requests,
+            )
+        )
+        events = _uds_events_from_exchanges(
+            [probe.exchange for probe in probes], source="cli.uds.services"
+        )
+        supported = [probe.to_record() for probe in probes if probe.supported]
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "probe_count": len(probes),
+                "supported_count": len(supported),
+                "supported_services": supported,
+                "probes": [probe.to_record() for probe in probes],
+            },
+            events,
+            [],
+        )
+
+    if command == "uds subservices":
+        service = _parse_uds_int(
+            getattr(args, "service"), command=command, name="--service", lo=0, hi=0xFF
+        )
+        sub_start = _parse_uds_int(
+            getattr(args, "sub_start", "0x00"), command=command, name="--sub-start", lo=0, hi=0xFF
+        )
+        sub_end = _parse_uds_int(
+            getattr(args, "sub_end", "0xFF"), command=command, name="--sub-end", lo=0, hi=0xFF
+        )
+        if sub_end < sub_start:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="UDS_INVALID_RANGE",
+                        message=f"--sub-end 0x{sub_end:02X} is below --sub-start 0x{sub_start:02X}.",
+                        hint="Pass --sub-start <= --sub-end.",
+                    )
+                ],
+            )
+        if dry_run:
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=sub_end - sub_start + 1,
+                first_request=bytes([service, sub_start]).hex(),
+                extra={"service": service},
+            )
+        probes = run_active(
+            lambda client: ua.enumerate_subservices(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                service=service,
+                sub_start=sub_start,
+                sub_end=sub_end,
+                timeout=timeout,
+            )
+        )
+        events = _uds_events_from_exchanges(
+            [probe.exchange for probe in probes], source="cli.uds.subservices"
+        )
+        supported = [probe.to_record() for probe in probes if probe.supported]
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "service": service,
+                "probe_count": len(probes),
+                "supported_count": len(supported),
+                "supported_subfunctions": supported,
+                "probes": [probe.to_record() for probe in probes],
+            },
+            events,
+            [],
+        )
+
+    if command in ("uds ecu-reset", "uds tester-present"):
+        if command == "uds ecu-reset":
+            reset_type = _parse_uds_int(
+                getattr(args, "reset_type", "0x01"),
+                command=command,
+                name="--reset-type",
+                lo=0,
+                hi=0xFF,
+            )
+            first_request = bytes([ua.SID_ECU_RESET, reset_type]).hex()
+            workflow = lambda client: ua.ecu_reset(  # noqa: E731
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                reset_type=reset_type,
+                timeout=timeout,
+            )
+            extra = {"reset_type": reset_type}
+        else:
+            suppress = bool(getattr(args, "suppress", False))
+            first_request = bytes([ua.SID_TESTER_PRESENT, 0x80 if suppress else 0x00]).hex()
+            workflow = lambda client: ua.tester_present(  # noqa: E731
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                suppress_response=suppress,
+                timeout=timeout,
+            )
+            extra = {"suppress": suppress}
+        if dry_run:
+            return _uds_dry_run_result(
+                base_meta, command, planned_requests=1, first_request=first_request, extra=extra
+            )
+        exchange = run_active(workflow)
+        events = _uds_events_from_exchanges([exchange], source=f"cli.{command.replace(' ', '.')}")
+        return (
+            {**base_meta, "mode": "active", **extra, "result": exchange.to_record()},
+            events,
+            [],
+        )
+
+    if command == "uds security-seed":
+        level = _parse_uds_int(
+            getattr(args, "level", "0x01"), command=command, name="--level", lo=1, hi=0xFF
+        )
+        session_raw = getattr(args, "session", None)
+        session = (
+            None
+            if session_raw is None
+            else _parse_uds_int(session_raw, command=command, name="--session", lo=0, hi=0xFF)
+        )
+        count = int(getattr(args, "count", 1) or 1)
+        max_duration = getattr(args, "max_duration", None)
+        if dry_run:
+            planned = count + (1 if session is not None else 0)
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=planned,
+                first_request=bytes([ua.SID_SECURITY_ACCESS, level]).hex(),
+                extra={"level": level, "session": session, "count": count},
+            )
+        result = run_active(
+            lambda client: ua.security_seed(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                level=level,
+                session=session,
+                count=count,
+                max_duration=max_duration,
+                timeout=timeout,
+            )
+        )
+        exchanges = [obs.exchange for obs in result.seeds]
+        if result.session_exchange is not None:
+            exchanges = [result.session_exchange, *exchanges]
+        events = _uds_events_from_exchanges(exchanges, source="cli.uds.security-seed")
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "level": level,
+                "session": session,
+                "requested": count,
+                "collected": sum(1 for obs in result.seeds if obs.seed is not None),
+                "distinct_seeds": result.distinct_seeds,
+                "session_response": (
+                    result.session_exchange.to_record()
+                    if result.session_exchange is not None
+                    else None
+                ),
+                "seeds": [obs.to_record() for obs in result.seeds],
+            },
+            events,
+            [],
+        )
+
+    if command == "uds dump-dids":
+        did_start = _parse_uds_int(
+            getattr(args, "did_start", "0xF180"),
+            command=command,
+            name="--did-start",
+            lo=0,
+            hi=0xFFFF,
+        )
+        did_end = _parse_uds_int(
+            getattr(args, "did_end", "0xF1FF"),
+            command=command,
+            name="--did-end",
+            lo=0,
+            hi=0xFFFF,
+        )
+        limit = int(getattr(args, "limit", 256) or 256)
+        max_duration = getattr(args, "max_duration", None)
+        if did_end < did_start:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="UDS_INVALID_DID_RANGE",
+                        message=f"--did-end 0x{did_end:04X} is below --did-start 0x{did_start:04X}.",
+                        hint="Pass --did-start <= --did-end.",
+                    )
+                ],
+            )
+        planned = min(limit, did_end - did_start + 1)
+        if dry_run:
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=planned,
+                first_request=bytes(
+                    [ua.SID_READ_DATA_BY_IDENTIFIER, (did_start >> 8) & 0xFF, did_start & 0xFF]
+                ).hex(),
+                extra={"did_start": did_start, "did_end": did_end, "limit": limit},
+            )
+        records = run_active(
+            lambda client: ua.dump_dids(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                did_start=did_start,
+                did_end=did_end,
+                limit=limit,
+                timeout=timeout,
+                max_duration=max_duration,
+            )
+        )
+        events = _uds_events_from_exchanges(
+            [record.exchange for record in records], source="cli.uds.dump-dids"
+        )
+        present = [record.to_record() for record in records if record.present]
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "did_start": did_start,
+                "did_end": did_end,
+                "probe_count": len(records),
+                "present_count": len(present),
+                "complete": len(records) >= planned,
+                "dids": [record.to_record() for record in records],
+            },
+            events,
+            [],
+        )
+
+    if command == "uds read-memory":
+        address = _parse_uds_int(
+            getattr(args, "address"), command=command, name="--address", lo=0, hi=0xFFFFFFFFFFFF
+        )
+        size = _parse_uds_int(
+            getattr(args, "size"),
+            command=command,
+            name="--size",
+            lo=1,
+            hi=ua.MAX_MEMORY_DUMP_BYTES,
+        )
+        chunk_size = int(getattr(args, "chunk_size", 4) or 4)
+        address_bytes = getattr(args, "address_bytes", None)
+        size_bytes = getattr(args, "size_bytes", None)
+        output = getattr(args, "output", None)
+        chunks_plan = validate(lambda: ua.plan_memory_chunks(address, size, chunk_size))
+        if dry_run:
+            first = ua.read_memory_request(
+                chunks_plan[0][0],
+                chunks_plan[0][1],
+                address_bytes=address_bytes or ua._byte_width(address + size),
+                size_bytes=size_bytes or ua._byte_width(chunk_size),
+            )
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=len(chunks_plan),
+                first_request=first.hex(),
+                extra={"address": address, "size": size, "chunk_size": chunk_size},
+            )
+        chunks = run_active(
+            lambda client: ua.read_memory(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                address=address,
+                size=size,
+                chunk_size=chunk_size,
+                address_bytes=address_bytes,
+                size_bytes=size_bytes,
+                timeout=timeout,
+            )
+        )
+        events = _uds_events_from_exchanges(
+            [chunk.exchange for chunk in chunks], source="cli.uds.read-memory"
+        )
+        memory = b"".join(chunk.data for chunk in chunks if chunk.data is not None)
+        complete = all(chunk.data is not None for chunk in chunks)
+        warnings: list[str] = []
+        output_meta: dict[str, Any] = {}
+        if output and memory:
+            try:
+                with open(output, "wb") as handle:
+                    handle.write(memory)
+            except OSError as exc:
+                raise CommandError(
+                    command=command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="UDS_OUTPUT_WRITE_FAILED",
+                            message=f"Could not write memory dump to {output!r}: {exc}.",
+                            hint="Check the path and permissions.",
+                        )
+                    ],
+                ) from exc
+            output_meta = {"output": output, "bytes_written": len(memory)}
+        elif output:
+            warnings.append("No memory bytes were read; output file not written.")
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "address": address,
+                "size": size,
+                "chunk_size": chunk_size,
+                "chunk_count": len(chunks),
+                "bytes_read": len(memory),
+                "complete": complete,
+                "memory": memory.hex(),
+                **output_meta,
+                "chunks": [chunk.to_record() for chunk in chunks],
+            },
+            events,
+            warnings,
+        )
+
+    if command == "uds auto":
+        request_start = _parse_can_id(
+            getattr(args, "request_start", "0x7E0"),
+            command=command,
+            name="--request-start",
+            code="UDS_INVALID_ID",
+        )
+        request_end = _parse_can_id(
+            getattr(args, "request_end", "0x7E7"),
+            command=command,
+            name="--request-end",
+            code="UDS_INVALID_ID",
+        )
+        if request_end < request_start:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="UDS_INVALID_RANGE",
+                        message=f"--request-end 0x{request_end:X} is below --request-start 0x{request_start:X}.",
+                        hint="Pass --request-start <= --request-end.",
+                    )
+                ],
+            )
+        request_ids = list(range(request_start, request_end + 1))
+        probe_services = not bool(getattr(args, "no_services", False))
+        did_range = None
+        if bool(getattr(args, "probe_dids", False)):
+            did_start = _parse_uds_int(
+                getattr(args, "did_start", "0xF190"),
+                command=command,
+                name="--did-start",
+                lo=0,
+                hi=0xFFFF,
+            )
+            did_end = _parse_uds_int(
+                getattr(args, "did_end", "0xF19F"),
+                command=command,
+                name="--did-end",
+                lo=0,
+                hi=0xFFFF,
+            )
+            did_range = (did_start, did_end)
+        did_limit = int(getattr(args, "did_limit", 16) or 16)
+        max_duration = getattr(args, "max_duration", None)
+        auto_meta = {
+            **base_meta,
+            "request_start": request_start,
+            "request_end": request_end,
+            "probe_services": probe_services,
+            "did_range": list(did_range) if did_range else None,
+        }
+        if dry_run:
+            # The discovery sweep is one request per id, but each responder then
+            # triggers up to a full service-catalog probe and a bounded DID
+            # sweep. Report the worst case (every discovery id responds) so the
+            # active-transmit preview does not undercount the real traffic.
+            per_responder_services = len(ua.UDS_SERVICE_CATALOG) if probe_services else 0
+            per_responder_dids = min(did_limit, did_range[1] - did_range[0] + 1) if did_range else 0
+            per_responder = per_responder_services + per_responder_dids
+            worst_case = len(request_ids) + len(request_ids) * per_responder
+            return _uds_dry_run_result(
+                {**auto_meta, "request_id": request_start},
+                command,
+                planned_requests=worst_case,
+                first_request=bytes([ua.SID_DIAGNOSTIC_SESSION_CONTROL, 0x01]).hex(),
+                extra={
+                    "discovery_ids": len(request_ids),
+                    "per_responder_service_probes": per_responder_services,
+                    "per_responder_did_probes": per_responder_dids,
+                    "planned_requests_note": (
+                        "worst case assuming every discovery id responds; actual count "
+                        "depends on how many responders are found"
+                    ),
+                },
+            )
+        report = run_active(
+            lambda client: ua.auto_recon(
+                client,
+                request_ids=request_ids,
+                response_id=response_id,
+                probe_services=probe_services,
+                did_range=did_range,
+                did_limit=did_limit,
+                timeout=timeout,
+                max_duration=max_duration,
+            )
+        )
+        exchanges = [responder.exchange for responder in report.responders]
+        for probes in report.services.values():
+            exchanges.extend(probe.exchange for probe in probes)
+        for records in report.dids.values():
+            exchanges.extend(record.exchange for record in records)
+        events = _uds_events_from_exchanges(exchanges, source="cli.uds.auto")
+        services_report = {
+            f"0x{rid:X}": [probe.to_record() for probe in probes if probe.supported]
+            for rid, probes in report.services.items()
+        }
+        dids_report = {
+            f"0x{rid:X}": [record.to_record() for record in records if record.present]
+            for rid, records in report.dids.items()
+        }
+        return (
+            {
+                **auto_meta,
+                "mode": "active",
+                "responder_count": len(report.responders),
+                "responders": [responder.to_record() for responder in report.responders],
+                "supported_services": services_report,
+                "dids": dids_report,
+                "complete": report.complete,
+            },
+            events,
+            [],
+        )
+
+    raise AssertionError(f"unsupported uds active command: {command}")
+
+
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     target = getattr(args, "interface", None)
     if args.command in ("uds scan", "uds trace") and is_doip_target(target):
@@ -6107,7 +7112,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             events,
             [],
         )
-    if args.command == "uds services":
+    if args.command == "uds services" and not target and not getattr(args, "dry_run", False):
         services = uds_services_payload()
         return (
             {
@@ -6118,6 +7123,8 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             [],
             [],
         )
+    if args.command in UDS_COMMANDS - {"uds scan", "uds trace"}:
+        return _uds_active_payload(args, transport, backend_metadata)
     raise AssertionError(f"unsupported uds command: {args.command}")
 
 
@@ -6149,6 +7156,250 @@ def _parse_can_id(value: str, *, command: str, name: str, code: str = "XCP_INVAL
             ],
         )
     return parsed
+
+
+def _parse_xcp_int(
+    value: object, *, command: str, name: str, lo: int, hi: int, code: str = "XCP_INVALID_VALUE"
+) -> int:
+    try:
+        parsed = int(str(value), 0)
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {value!r} is not a valid integer.",
+                    hint="Pass a decimal or 0x-prefixed value.",
+                )
+            ],
+        ) from exc
+    if not lo <= parsed <= hi:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {parsed} is outside the allowed range [{lo}, {hi}].",
+                    hint=f"Pass {name} within [{lo}, {hi}].",
+                )
+            ],
+        )
+    return parsed
+
+
+def _xcp_active_error(command: str, exc: Any) -> CommandError:
+    user_codes = {
+        "XCP_INVALID_ADDRESS",
+        "XCP_INVALID_SIZE",
+        "XCP_DUMP_TOO_LARGE",
+        "XCP_INVALID_CHUNK_SIZE",
+        "XCP_CHUNK_EXCEEDS_MAX_CTO",
+        "XCP_EMPTY_COMMAND",
+        "XCP_COMMAND_TOO_LONG",
+    }
+    exit_code = EXIT_USER_ERROR if exc.code in user_codes else EXIT_TRANSPORT_ERROR
+    return CommandError(
+        command=command,
+        exit_code=exit_code,
+        errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+    )
+
+
+def _xcp_active_payload(
+    args: argparse.Namespace,
+    transport: "LocalTransport",
+    backend_metadata: dict[str, Any],
+    request_id: int,
+    response_id: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy import xcp_active as xa
+
+    command = args.command
+    timeout = float(getattr(args, "timeout", 0.2) or 0.2)
+    dry_run = bool(getattr(args, "dry_run", False))
+    interface = getattr(args, "interface", None)
+    is_scaffold = backend_metadata["transport_backend"] == "scaffold"
+    base_meta: dict[str, Any] = {
+        "interface": interface,
+        "request_id": request_id,
+        "response_id": response_id,
+        **backend_metadata,
+    }
+
+    def make_client() -> "xa.XcpClient":
+        if is_scaffold:
+            return xa.SilentXcpClient(request_id, response_id)
+        return xa.TransportXcpClient(
+            transport=transport, interface=interface, request_id=request_id, response_id=response_id
+        )
+
+    def events_from(exchanges: list[Any]) -> list[dict[str, Any]]:
+        source = f"cli.{command.replace(' ', '.')}"
+        out = [
+            event.to_event()
+            for event in (exchange.to_event(source=source) for exchange in exchanges)
+            if event is not None
+        ]
+        return serialize_events(out)
+
+    if command == "xcp info":
+        if dry_run:
+            return (
+                {
+                    **base_meta,
+                    "mode": "dry_run",
+                    "planned_requests": 4,
+                    "first_request": "ff00",
+                    "planned_commands": [
+                        "CONNECT",
+                        "GET_STATUS",
+                        "GET_COMM_MODE_INFO",
+                        "GET_ID",
+                    ],
+                },
+                [],
+                [
+                    f"ACTIVE_TRANSMIT_DRY_RUN: planned XCP info exchange to id "
+                    f"0x{request_id:X} on `{interface}`; no frame sent."
+                ],
+            )
+        enforce_active_transmit_safety(args)
+        try:
+            result = xa.info(make_client(), timeout=timeout)
+        except xa.XcpActiveError as exc:
+            raise _xcp_active_error(command, exc) from exc
+        byte_order = "big" if result.connect_info.get("byte_order") == "big" else "little"
+        capabilities = {
+            "connect": result.connect_info,
+            "status": (
+                xa.parse_get_status(result.status.response)
+                if result.status and result.status.positive
+                else None
+            ),
+            "comm_mode": (
+                xa.parse_get_comm_mode_info(result.comm_mode.response)
+                if result.comm_mode and result.comm_mode.positive
+                else None
+            ),
+            "identification": (
+                xa.parse_get_id(result.identification.response, byte_order=byte_order)
+                if result.identification and result.identification.positive
+                else None
+            ),
+        }
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "connected": True,
+                "capabilities": capabilities,
+                "exchanges": [exchange.to_record() for exchange in result.exchanges()],
+            },
+            events_from(result.exchanges()),
+            [],
+        )
+
+    # xcp dump
+    address = _parse_xcp_int(
+        getattr(args, "address"), command=command, name="--address", lo=0, hi=0xFFFFFFFF
+    )
+    size = _parse_xcp_int(
+        getattr(args, "size"), command=command, name="--size", lo=1, hi=xa.MAX_DUMP_BYTES
+    )
+    chunk_size = int(getattr(args, "chunk_size", 4) or 4)
+    address_extension = _parse_xcp_int(
+        getattr(args, "address_extension", "0x00"),
+        command=command,
+        name="--address-extension",
+        lo=0,
+        hi=0xFF,
+    )
+    short_upload = bool(getattr(args, "short_upload", False))
+    output = getattr(args, "output", None)
+    try:
+        chunks_plan = xa.plan_dump_chunks(address, size, chunk_size)
+    except xa.XcpActiveError as exc:
+        raise _xcp_active_error(command, exc) from exc
+    per_chunk = 1 if short_upload else 2
+    dump_meta = {
+        **base_meta,
+        "address": address,
+        "size": size,
+        "chunk_size": chunk_size,
+        "method": "short_upload" if short_upload else "set_mta_upload",
+    }
+    if dry_run:
+        return (
+            {
+                **dump_meta,
+                "mode": "dry_run",
+                "planned_requests": 1 + len(chunks_plan) * per_chunk,
+                "planned_chunks": len(chunks_plan),
+                "first_request": "ff00",
+            },
+            [],
+            [
+                f"ACTIVE_TRANSMIT_DRY_RUN: planned XCP dump of {size} byte(s) in "
+                f"{len(chunks_plan)} chunk(s) on `{interface}`; no frame sent."
+            ],
+        )
+    enforce_active_transmit_safety(args)
+    try:
+        connect_response, chunks = xa.dump(
+            make_client(),
+            address=address,
+            size=size,
+            chunk_size=chunk_size,
+            address_extension=address_extension,
+            short_upload=short_upload,
+            timeout=timeout,
+        )
+    except xa.XcpActiveError as exc:
+        raise _xcp_active_error(command, exc) from exc
+    memory = b"".join(chunk.data for chunk in chunks if chunk.data is not None)
+    complete = len(chunks) == len(chunks_plan) and all(chunk.data is not None for chunk in chunks)
+    exchanges = [connect_response]
+    for chunk in chunks:
+        exchanges.extend(chunk.exchanges)
+    warnings: list[str] = []
+    output_meta: dict[str, Any] = {}
+    if output and memory:
+        try:
+            with open(output, "wb") as handle:
+                handle.write(memory)
+        except OSError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="XCP_OUTPUT_WRITE_FAILED",
+                        message=f"Could not write dump to {output!r}: {exc}.",
+                        hint="Check the path and permissions.",
+                    )
+                ],
+            ) from exc
+        output_meta = {"output": output, "bytes_written": len(memory)}
+    elif output:
+        warnings.append("No bytes were uploaded; output file not written.")
+    return (
+        {
+            **dump_meta,
+            "mode": "active",
+            "connected": True,
+            "chunk_count": len(chunks),
+            "bytes_read": len(memory),
+            "complete": complete,
+            "memory": memory.hex(),
+            **output_meta,
+            "chunks": [chunk.to_record() for chunk in chunks],
+        },
+        events_from(exchanges),
+        warnings,
+    )
 
 
 def xcp_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -6194,6 +7445,9 @@ def xcp_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         command=args.command,
         name="--request-id",
     )
+
+    if args.command in ("xcp info", "xcp dump"):
+        return _xcp_active_payload(args, transport, backend_metadata, request_id, response_id)
 
     if args.command == "xcp scan":
         if getattr(args, "dry_run", False):
@@ -7351,6 +8605,262 @@ def _parse_host_port(target: str, command: str) -> tuple[str, int]:
     return host, port
 
 
+def _parse_doip_int(
+    value: object, *, command: str, name: str, lo: int, hi: int, code: str = "DOIP_INVALID_VALUE"
+) -> int:
+    try:
+        parsed = int(str(value), 0)
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {value!r} is not a valid integer.",
+                    hint="Pass a decimal or 0x-prefixed value.",
+                )
+            ],
+        ) from exc
+    if not lo <= parsed <= hi:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {parsed} is outside the allowed range [{lo}, {hi}].",
+                    hint=f"Pass {name} within [{lo}, {hi}].",
+                )
+            ],
+        )
+    return parsed
+
+
+def doip_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy import doip as doip_mod
+
+    command = args.command
+    dry_run = bool(getattr(args, "dry_run", False))
+
+    if command == "doip discovery":
+        host = getattr(args, "host", "255.255.255.255")
+        port = _parse_doip_int(
+            getattr(args, "port", 13400), command=command, name="--port", lo=1, hi=0xFFFF
+        )
+        timeout = float(getattr(args, "timeout", 2.0) or 2.0)
+        base = {"host": host, "port": port, "transport": "doip"}
+        if dry_run:
+            return (
+                {**base, "mode": "dry_run", "entity_count": 0},
+                [],
+                [
+                    f"ACTIVE_TRANSMIT_DRY_RUN: planned DoIP vehicle-identification broadcast to "
+                    f"`{host}:{port}`; no datagram sent."
+                ],
+            )
+        enforce_active_transmit_safety(args)
+        try:
+            entities = doip_mod.discover_entities(host, port=port, timeout=timeout)
+        except doip_mod.DoipError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_TRANSPORT_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+                data={**base, "mode": "active"},
+            ) from exc
+        return (
+            {
+                **base,
+                "mode": "active",
+                "entity_count": len(entities),
+                "entities": [entity.to_record() for entity in entities],
+            },
+            [],
+            [],
+        )
+
+    # All other DoIP workflows take a doip:// target.
+    target_uri = getattr(args, "target", None)
+    try:
+        target = doip_mod.parse_doip_target(target_uri)
+    except doip_mod.DoipError as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+        ) from exc
+
+    base = {
+        "target": target_uri,
+        "transport": "doip",
+        "host": target.host,
+        "port": target.port,
+        "logical_address": target.logical_address,
+        "source_address": target.source_address,
+        "protocol_decoder": uds_decoder_backend(),
+    }
+
+    # Build the planned first request + count for the dry-run plan, and validate
+    # operator-supplied numeric arguments before any socket is opened.
+    if command == "doip services":
+        first_request = bytes([UDS_SERVICE_CATALOG[0].service]).hex()
+        planned = len(UDS_SERVICE_CATALOG)
+    elif command == "doip ecu-reset":
+        reset_type = _parse_doip_int(
+            getattr(args, "reset_type", "0x01"), command=command, name="--reset-type", lo=0, hi=0xFF
+        )
+        first_request = bytes([0x11, reset_type]).hex()
+        planned = 1
+    elif command == "doip tester-present":
+        suppress = bool(getattr(args, "suppress", False))
+        first_request = bytes([0x3E, 0x80 if suppress else 0x00]).hex()
+        planned = 1
+    elif command == "doip security-seed":
+        level = _parse_doip_int(
+            getattr(args, "level", "0x01"), command=command, name="--level", lo=1, hi=0xFF
+        )
+        if level % 2 == 0:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="DOIP_INVALID_SECURITY_LEVEL",
+                        message=f"SecurityAccess requestSeed level 0x{level:02X} must be odd.",
+                        hint="Odd subfunctions request a seed.",
+                    )
+                ],
+            )
+        session_raw = getattr(args, "session", None)
+        session = (
+            None
+            if session_raw is None
+            else _parse_doip_int(session_raw, command=command, name="--session", lo=0, hi=0xFF)
+        )
+        count = int(getattr(args, "count", 1))
+        if count < 1:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="DOIP_INVALID_VALUE",
+                        message=f"--count {count} must be at least 1.",
+                        hint="Pass --count with a positive bound on active seed requests.",
+                    )
+                ],
+            )
+        first_request = bytes([0x27, level]).hex()
+        planned = count + (1 if session is not None else 0)
+    elif command == "doip dump-dids":
+        did_start = _parse_doip_int(
+            getattr(args, "did_start", "0xF180"),
+            command=command,
+            name="--did-start",
+            lo=0,
+            hi=0xFFFF,
+        )
+        did_end = _parse_doip_int(
+            getattr(args, "did_end", "0xF1FF"), command=command, name="--did-end", lo=0, hi=0xFFFF
+        )
+        if did_end < did_start:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="DOIP_INVALID_DID_RANGE",
+                        message=f"--did-end 0x{did_end:04X} is below --did-start 0x{did_start:04X}.",
+                        hint="Pass --did-start <= --did-end.",
+                    )
+                ],
+            )
+        limit = int(getattr(args, "limit", 256))
+        if limit < 1:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="DOIP_INVALID_VALUE",
+                        message=f"--limit {limit} must be at least 1.",
+                        hint="Pass --limit with a positive bound on active DID reads.",
+                    )
+                ],
+            )
+        first_request = bytes([0x22, (did_start >> 8) & 0xFF, did_start & 0xFF]).hex()
+        planned = min(limit, did_end - did_start + 1)
+    else:  # pragma: no cover - guarded by DOIP_COMMANDS
+        raise AssertionError(f"unsupported doip command: {command}")
+
+    if dry_run:
+        sub = command.removeprefix("doip ")
+        return (
+            {
+                **base,
+                "mode": "dry_run",
+                "planned_requests": planned,
+                "first_request": first_request,
+            },
+            [],
+            [
+                f"ACTIVE_TRANSMIT_DRY_RUN: planned {planned} `doip {sub}` request(s) to "
+                f"`{target_uri}`; no datagram sent."
+            ],
+        )
+
+    enforce_active_transmit_safety(args)
+    try:
+        if command == "doip services":
+            records, events = doip_mod.doip_services(target)
+            supported = [record for record in records if record["supported"]]
+            data = {
+                **base,
+                "mode": "active",
+                "probe_count": len(records),
+                "supported_count": len(supported),
+                "supported_services": supported,
+                "probes": records,
+            }
+        elif command == "doip ecu-reset":
+            record, events = doip_mod.doip_ecu_reset(target, reset_type=reset_type)
+            data = {**base, "mode": "active", "reset_type": reset_type, "result": record}
+        elif command == "doip tester-present":
+            record, events = doip_mod.doip_tester_present(target, suppress_response=suppress)
+            data = {**base, "mode": "active", "suppress": suppress, "result": record}
+        elif command == "doip security-seed":
+            seed_data, events = doip_mod.doip_security_seed(
+                target, level=level, session=session, count=count
+            )
+            data = {**base, "mode": "active", **seed_data}
+        else:  # doip dump-dids
+            records, events = doip_mod.doip_dump_dids(
+                target, did_start=did_start, did_end=did_end, limit=limit
+            )
+            present = [record for record in records if record["present"]]
+            data = {
+                **base,
+                "mode": "active",
+                "did_start": did_start,
+                "did_end": did_end,
+                "probe_count": len(records),
+                "present_count": len(present),
+                "dids": records,
+            }
+    except doip_mod.DoipError as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_TRANSPORT_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            data={**base, "mode": "active"},
+        ) from exc
+
+    return data, serialize_events([event.to_event() for event in events]), []
+
+
 def cannelloni_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -8444,6 +9954,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(can_data)
         data["events"] = can_events
         warnings.extend(can_warnings)
+    elif args.command in DOIP_COMMANDS:
+        doip_data, doip_events, doip_warnings = doip_payload(args)
+        data.update(doip_data)
+        data["events"] = doip_events
+        warnings.extend(doip_warnings)
     elif args.command == "export":
         export_data, export_events, export_warnings = export_payload(args)
         data.update(export_data)
@@ -8962,7 +10477,7 @@ def format_j1939_table(result: CommandResult) -> list[str]:
 
 def format_uds_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
-    if result.command == "uds services":
+    if result.command == "uds services" and result.data.get("mode") == "reference":
         lines.append(f"services: {result.data.get('service_count', 0)}")
         lines.append("catalog:")
         services = result.data.get("services", [])

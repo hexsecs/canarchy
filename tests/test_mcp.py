@@ -129,6 +129,31 @@ _MCP_EXCLUDED_COMMANDS = {
     "mcp install",
     "web serve",  # long-running HTTP/WebSocket front end, like shell/tui
     "cannelloni send",  # active UDP egress to an arbitrary host; CLI-only operator action
+    # Active UDS workflows that transmit invasive diagnostic requests (ECU
+    # reset, seed collection, memory/DID extraction, ranged enumeration, and a
+    # multi-id recon chain). More intrusive than the single-broadcast `uds
+    # scan`; kept CLI-only operator actions. See docs/design/mcp-server.md.
+    "uds subservices",
+    "uds ecu-reset",
+    "uds tester-present",
+    "uds security-seed",
+    "uds dump-dids",
+    "uds read-memory",
+    "uds auto",
+    # Active XCP workflows that connect to a slave and read its memory/capabilities;
+    # more intrusive than the single-broadcast `xcp scan`; kept CLI-only operator
+    # actions. See docs/design/xcp-workflows.md.
+    "xcp info",
+    "xcp dump",
+    # Active DoIP workflows: network egress to an arbitrary host (UDP discovery
+    # broadcast + TCP diagnostic sessions); CLI-only operator actions, like the
+    # doip:// target-level exclusion on uds_scan/uds_trace. See mcp-server.md.
+    "doip discovery",
+    "doip services",
+    "doip ecu-reset",
+    "doip tester-present",
+    "doip security-seed",
+    "doip dump-dids",
     # Stateful, multi-round human-in-the-loop replay/narrowing workflow that
     # transmits a bisected window each invocation; CLI-only operator action.
     "fuzz identify",

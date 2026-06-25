@@ -163,9 +163,12 @@ Current exclusions:
 * interactive or service commands such as `shell`, `tui`, `web serve`, `mcp serve`, and `mcp install`
 * `cannelloni send` — active UDP egress to an arbitrary host:port; CLI-only operator action (`cannelloni decode` is exposed)
 * `doip://` targets on `uds_scan` / `uds_trace` — DoIP routes UDS over active TCP egress to an arbitrary host; the tools stay CAN-interface-only and refuse a `doip://` interface with `DOIP_MCP_EXCLUDED`. Run DoIP scans/traces from the CLI as an operator action
+* the dedicated `doip` command group (`doip discovery`, `doip services`, `doip ecu-reset`, `doip tester-present`, `doip security-seed`, `doip dump-dids`) — active network egress (UDP vehicle-identification discovery + TCP diagnostic sessions), CLI-only operator actions behind the active-transmit gate
 * `completion`, which emits a raw shell script rather than a JSON envelope
 * `dbc generate-c`, which generates C source/header files to disk and is a developer action
 * `plugins enable` and `plugins disable`, which write user plugin configuration
+* the active UDS workflows `uds subservices`, `uds ecu-reset`, `uds tester-present`, `uds security-seed`, `uds dump-dids`, `uds read-memory`, and `uds auto` — they transmit invasive diagnostic requests (ECU reset, seed collection, DID/memory extraction, ranged enumeration, multi-id recon) and stay CLI-only operator actions behind the active-transmit gate. The reference `uds services` catalog stays exposed; its active-probe mode only activates when a CLI caller supplies an interface
+* the active `xcp info` and `xcp dump` workflows — they connect to an XCP slave and read its capabilities / a bounded memory range, so they stay CLI-only operator actions behind the active-transmit gate (the broadcast `xcp scan` stays exposed)
 * `fuzz identify`, a stateful multi-round human-in-the-loop replay/narrowing workflow (one bisected window replayed per invocation); CLI-only operator action
 
 The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred, with rationale) lives in [`docs/design/mcp-server.md`](design/mcp-server.md#mcp-coverage-decisions); a test guard (`test_every_cli_command_is_exposed_or_documented`) fails the build if a new command drifts out of coverage.
