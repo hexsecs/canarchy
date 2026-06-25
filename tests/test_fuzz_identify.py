@@ -111,6 +111,28 @@ class LoadFramesTest(unittest.TestCase):
         self.assertEqual([f.arbitration_id for f in frames], [0x100, 0x101])
         self.assertEqual(frames[1].data, b"\x33")
 
+    def test_load_canonical_frame_event_jsonl(self) -> None:
+        # The shape emitted by `canarchy ... --jsonl`: a FrameEvent whose CAN
+        # frame is nested under payload.frame.
+        from canarchy.models import CanFrame, FrameEvent
+
+        lines = [
+            json.dumps(
+                FrameEvent(frame=CanFrame(arbitration_id=0x244, data=b"\x01\x02"))
+                .to_event()
+                .to_payload()
+            ),
+            json.dumps(
+                FrameEvent(frame=CanFrame(arbitration_id=0x245, data=b"\x03"))
+                .to_event()
+                .to_payload()
+            ),
+        ]
+        path = self._write("events.jsonl", "\n".join(lines) + "\n")
+        frames = load_identify_frames(path)
+        self.assertEqual([f.arbitration_id for f in frames], [0x244, 0x245])
+        self.assertEqual(frames[0].data, b"\x01\x02")
+
     def test_missing_file(self) -> None:
         with self.assertRaises(FuzzIdentifyError) as ctx:
             load_identify_frames(os.path.join(self.tmp, "nope.log"))

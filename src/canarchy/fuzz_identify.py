@@ -85,7 +85,15 @@ def load_observations_file(path: str) -> list[bool]:
 
 
 def _frame_from_json(obj: dict) -> CanFrame | None:
-    source = obj.get("payload") if isinstance(obj.get("payload"), dict) else obj
+    # Accept a bare frame object, a FrameEvent (`{"payload": {"frame": {...}}}`,
+    # as emitted by `canarchy ... --jsonl`), or a `{"payload": {...}}` wrapper.
+    source = obj
+    payload = source.get("payload")
+    if isinstance(payload, dict):
+        source = payload
+    inner_frame = source.get("frame")
+    if isinstance(inner_frame, dict):
+        source = inner_frame
     if "arbitration_id" not in source or "data" not in source:
         return None
     try:
