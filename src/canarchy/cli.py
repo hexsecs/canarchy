@@ -7341,7 +7341,9 @@ def doip_payload(
 
     if command == "doip discovery":
         host = getattr(args, "host", "255.255.255.255")
-        port = int(getattr(args, "port", 13400))
+        port = _parse_doip_int(
+            getattr(args, "port", 13400), command=command, name="--port", lo=1, hi=0xFFFF
+        )
         timeout = float(getattr(args, "timeout", 2.0) or 2.0)
         base = {"host": host, "port": port, "transport": "doip"}
         if dry_run:
@@ -7432,7 +7434,19 @@ def doip_payload(
             if session_raw is None
             else _parse_doip_int(session_raw, command=command, name="--session", lo=0, hi=0xFF)
         )
-        count = int(getattr(args, "count", 1) or 1)
+        count = int(getattr(args, "count", 1))
+        if count < 1:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="DOIP_INVALID_VALUE",
+                        message=f"--count {count} must be at least 1.",
+                        hint="Pass --count with a positive bound on active seed requests.",
+                    )
+                ],
+            )
         first_request = bytes([0x27, level]).hex()
         planned = count + (1 if session is not None else 0)
     elif command == "doip dump-dids":
@@ -7458,7 +7472,19 @@ def doip_payload(
                     )
                 ],
             )
-        limit = int(getattr(args, "limit", 256) or 256)
+        limit = int(getattr(args, "limit", 256))
+        if limit < 1:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="DOIP_INVALID_VALUE",
+                        message=f"--limit {limit} must be at least 1.",
+                        hint="Pass --limit with a positive bound on active DID reads.",
+                    )
+                ],
+            )
         first_request = bytes([0x22, (did_start >> 8) & 0xFF, did_start & 0xFF]).hex()
         planned = min(limit, did_end - did_start + 1)
     else:  # pragma: no cover - guarded by DOIP_COMMANDS

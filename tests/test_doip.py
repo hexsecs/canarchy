@@ -394,13 +394,19 @@ class DoipVehicleIdentificationTests(unittest.TestCase):
 
 class DoipWorkflowTests(unittest.TestCase):
     def _target(self, port: int):
-        return parse_doip_target(f"doip://127.0.0.1:{port}?logical_address=0x0E80")
+        # A short client timeout keeps the silent-probe path deterministic: the
+        # client times out (-> DOIP_TIMEOUT -> no_response) well before the
+        # loopback responder's own 2s socket timeout closes the connection.
+        return parse_doip_target(
+            f"doip://127.0.0.1:{port}?logical_address=0x0E80&timeout=0.5"
+        )
 
     def test_services_classifies_support(self) -> None:
         responses = {
             bytes([0x10]): bytes.fromhex("7F1013"),  # NRC length -> supported
             bytes([0x22]): bytes.fromhex("6201"),  # positive -> supported
             bytes([0x27]): bytes.fromhex("7F2711"),  # serviceNotSupported -> unsupported
+            bytes([0x31]): bytes.fromhex("7F317F"),  # NotSupportedInActiveSession -> supported
         }
         with DoipResponder(responses, default_response=bytes.fromhex("7F0011")) as server:
             records, events = doip_services(self._target(server.port))
@@ -408,6 +414,8 @@ class DoipWorkflowTests(unittest.TestCase):
         self.assertTrue(by_service[0x10])
         self.assertTrue(by_service[0x22])
         self.assertFalse(by_service[0x27])
+        # NRC 0x7F (serviceNotSupportedInActiveSession) means the service exists.
+        self.assertTrue(by_service[0x31])
         self.assertTrue(len(events) >= 3)
 
     def test_ecu_reset(self) -> None:
@@ -477,6 +485,29 @@ class DoipWorkflowCliTests(unittest.TestCase):
         )
         self.assertEqual(exit_code, 0)
         self.assertEqual(json.loads(stdout)["data"]["mode"], "dry_run")
+
+    def test_discovery_rejects_out_of_range_port(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "doip", "discovery", "192.0.2.1", "--port", "70000", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_VALUE")
+
+    def test_security_seed_rejects_non_positive_count(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "doip", "security-seed", "doip://198.51.100.9?logical_address=0x0E80",
+            "--count", "0", "--dry-run", "--json",
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_VALUE")
+
+    def test_dump_dids_rejects_non_positive_limit(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "doip", "dump-dids", "doip://198.51.100.9?logical_address=0x0E80",
+            "--limit", "0", "--dry-run", "--json",
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_VALUE")
 
     def test_invalid_target_user_error(self) -> None:
         exit_code, stdout, _ = run_cli("doip", "services", "http://bad", "--json")

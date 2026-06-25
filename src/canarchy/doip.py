@@ -534,8 +534,10 @@ PT_VEHICLE_IDENTIFICATION_REQUEST = 0x0001
 # A vehicle-identification response and an unsolicited announcement share a type.
 PT_VEHICLE_IDENTIFICATION_RESPONSE = 0x0004
 
-# UDS service ids whose absence (or a not-supported NRC) means "unsupported".
-_SERVICE_ABSENT_NRCS = frozenset({0x11, 0x7F})
+# A service is "absent" only on serviceNotSupported (0x11). NRC 0x7F
+# (serviceNotSupportedInActiveSession) means the service exists but is gated to
+# another diagnostic session, so it still counts as supported.
+_SERVICE_ABSENT_NRCS = frozenset({0x11})
 
 
 @dataclass(slots=True, frozen=True)
