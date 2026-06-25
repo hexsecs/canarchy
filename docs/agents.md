@@ -166,6 +166,7 @@ Current exclusions:
 * `completion`, which emits a raw shell script rather than a JSON envelope
 * `dbc generate-c`, which generates C source/header files to disk and is a developer action
 * `plugins enable` and `plugins disable`, which write user plugin configuration
+* the active UDS workflows `uds subservices`, `uds ecu-reset`, `uds tester-present`, `uds security-seed`, `uds dump-dids`, `uds read-memory`, and `uds auto` — they transmit invasive diagnostic requests (ECU reset, seed collection, DID/memory extraction, ranged enumeration, multi-id recon) and stay CLI-only operator actions behind the active-transmit gate. The reference `uds services` catalog stays exposed; its active-probe mode only activates when a CLI caller supplies an interface
 
 The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred, with rationale) lives in [`docs/design/mcp-server.md`](design/mcp-server.md#mcp-coverage-decisions); a test guard (`test_every_cli_command_is_exposed_or_documented`) fails the build if a new command drifts out of coverage.
 

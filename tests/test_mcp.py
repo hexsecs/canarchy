@@ -129,6 +129,17 @@ _MCP_EXCLUDED_COMMANDS = {
     "mcp install",
     "web serve",  # long-running HTTP/WebSocket front end, like shell/tui
     "cannelloni send",  # active UDP egress to an arbitrary host; CLI-only operator action
+    # Active UDS workflows that transmit invasive diagnostic requests (ECU
+    # reset, seed collection, memory/DID extraction, ranged enumeration, and a
+    # multi-id recon chain). More intrusive than the single-broadcast `uds
+    # scan`; kept CLI-only operator actions. See docs/design/mcp-server.md.
+    "uds subservices",
+    "uds ecu-reset",
+    "uds tester-present",
+    "uds security-seed",
+    "uds dump-dids",
+    "uds read-memory",
+    "uds auto",
     "completion",
     "datasets stream",
     "datasets download",  # writes bulk dataset bytes to an arbitrary host path; CLI operator action

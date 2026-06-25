@@ -143,7 +143,18 @@ J1939_COMMANDS = {
     "j1939 map",
 }
 SESSION_COMMANDS = {"session save", "session load", "session show"}
-UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
+UDS_ACTIVE_COMMANDS = {
+    "uds subservices",
+    "uds ecu-reset",
+    "uds tester-present",
+    "uds security-seed",
+    "uds dump-dids",
+    "uds read-memory",
+    "uds auto",
+}
+# `uds services` is reference-only without an interface and active with one, so
+# it is gated dynamically in the payload rather than listed unconditionally.
+UDS_COMMANDS = {"uds scan", "uds trace", "uds services"} | UDS_ACTIVE_COMMANDS
 XCP_COMMANDS = {"xcp scan", "xcp trace", "xcp read", "xcp commands"}
 J1587_COMMANDS = {"j1587 decode", "j1587 pids"}
 J2497_COMMANDS = {"j2497 decode", "j2497 mids"}
@@ -170,6 +181,14 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "gateway",
     "cannelloni send",
     "uds scan",
+    "uds services",
+    "uds subservices",
+    "uds ecu-reset",
+    "uds tester-present",
+    "uds security-seed",
+    "uds dump-dids",
+    "uds read-memory",
+    "uds auto",
     "xcp scan",
     "fuzz payload",
     "fuzz replay",
@@ -322,6 +341,43 @@ def _add_xcp_id_arguments(parser: argparse.ArgumentParser) -> None:
         default=hex(XCP_DEFAULT_RESPONSE_ID),
         help=f"slave response CAN id (default: {hex(XCP_DEFAULT_RESPONSE_ID)})",
     )
+
+
+def _add_uds_active_arguments(
+    parser: argparse.ArgumentParser, *, response_default: str | None = "0x7E8"
+) -> None:
+    """Common request/response/timeout/dry-run options for active UDS commands."""
+    parser.add_argument(
+        "interface",
+        nargs="?",
+        help="CAN interface (required unless --dry-run)",
+    )
+    parser.add_argument(
+        "--request-id",
+        default="0x7E0",
+        help="diagnostic request CAN id (default: 0x7E0)",
+    )
+    parser.add_argument(
+        "--response-id",
+        default=response_default,
+        help=(
+            "expected response CAN id"
+            + (f" (default: {response_default})" if response_default else "; omit to accept any")
+        ),
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=0.2,
+        help="per-request response timeout in seconds (default: 0.2)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="emit the request plan without opening the transport or transmitting",
+    )
+    add_active_ack_argument(parser)
+    add_output_arguments(parser)
 
 
 def add_j1939_file_analysis_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1335,9 +1391,120 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(uds_trace)
     uds_trace.set_defaults(command="uds trace")
 
-    uds_services = uds_subparsers.add_parser("services", help="list UDS services")
-    add_output_arguments(uds_services)
+    uds_services = uds_subparsers.add_parser(
+        "services",
+        help="list the UDS service catalog, or actively probe supported services",
+    )
+    _add_uds_active_arguments(uds_services)
+    uds_services.add_argument(
+        "--probe-start", help="probe a raw service-id range start instead of the catalog"
+    )
+    uds_services.add_argument(
+        "--probe-end", help="probe a raw service-id range end instead of the catalog"
+    )
+    uds_services.add_argument("--max-requests", type=int, help="cap the number of probe requests")
     uds_services.set_defaults(command="uds services")
+
+    uds_subservices = uds_subparsers.add_parser(
+        "subservices", help="enumerate supported subfunctions of a UDS service"
+    )
+    _add_uds_active_arguments(uds_subservices)
+    uds_subservices.add_argument(
+        "--service", required=True, help="UDS service id to enumerate subfunctions for (e.g. 0x19)"
+    )
+    uds_subservices.add_argument("--sub-start", default="0x00", help="subfunction range start")
+    uds_subservices.add_argument("--sub-end", default="0xFF", help="subfunction range end")
+    uds_subservices.set_defaults(command="uds subservices")
+
+    uds_ecu_reset = uds_subparsers.add_parser("ecu-reset", help="send an ECUReset (0x11) request")
+    _add_uds_active_arguments(uds_ecu_reset)
+    uds_ecu_reset.add_argument(
+        "--reset-type", default="0x01", help="ECUReset subfunction (default: 0x01 hardReset)"
+    )
+    uds_ecu_reset.set_defaults(command="uds ecu-reset")
+
+    uds_tester_present = uds_subparsers.add_parser(
+        "tester-present", help="send a TesterPresent (0x3E) request"
+    )
+    _add_uds_active_arguments(uds_tester_present)
+    uds_tester_present.add_argument(
+        "--suppress",
+        action="store_true",
+        help="set the suppressPosRspMsgIndicationBit (subfunction 0x80)",
+    )
+    uds_tester_present.set_defaults(command="uds tester-present")
+
+    uds_security_seed = uds_subparsers.add_parser(
+        "security-seed", help="collect SecurityAccess (0x27) seeds"
+    )
+    _add_uds_active_arguments(uds_security_seed)
+    uds_security_seed.add_argument(
+        "--level", default="0x01", help="requestSeed security level, odd (default: 0x01)"
+    )
+    uds_security_seed.add_argument(
+        "--session", help="optional DiagnosticSessionControl session to enter first (e.g. 0x03)"
+    )
+    uds_security_seed.add_argument(
+        "--count", type=int, default=1, help="number of seeds to request (default: 1)"
+    )
+    uds_security_seed.add_argument(
+        "--max-duration", type=float, help="stop collecting after N seconds"
+    )
+    uds_security_seed.set_defaults(command="uds security-seed")
+
+    uds_dump_dids = uds_subparsers.add_parser(
+        "dump-dids", help="read a range of DataIdentifiers via ReadDataByIdentifier (0x22)"
+    )
+    _add_uds_active_arguments(uds_dump_dids)
+    uds_dump_dids.add_argument("--did-start", default="0xF180", help="first DID (default: 0xF180)")
+    uds_dump_dids.add_argument("--did-end", default="0xF1FF", help="last DID (default: 0xF1FF)")
+    uds_dump_dids.add_argument(
+        "--limit", type=int, default=256, help="maximum DIDs to read (default: 256)"
+    )
+    uds_dump_dids.add_argument("--max-duration", type=float, help="stop after N seconds")
+    uds_dump_dids.set_defaults(command="uds dump-dids")
+
+    uds_read_memory = uds_subparsers.add_parser(
+        "read-memory", help="read a memory range via ReadMemoryByAddress (0x23)"
+    )
+    _add_uds_active_arguments(uds_read_memory)
+    uds_read_memory.add_argument("--address", required=True, help="start address (e.g. 0x080000)")
+    uds_read_memory.add_argument("--size", required=True, help="number of bytes to read")
+    uds_read_memory.add_argument(
+        "--chunk-size", type=int, default=4, help="bytes per request (default: 4)"
+    )
+    uds_read_memory.add_argument(
+        "--address-bytes", type=int, help="addressAndLengthFormatId address width (auto by default)"
+    )
+    uds_read_memory.add_argument(
+        "--size-bytes", type=int, help="addressAndLengthFormatId size width (auto by default)"
+    )
+    uds_read_memory.add_argument("--output", help="write reassembled memory bytes to this file")
+    uds_read_memory.set_defaults(command="uds read-memory")
+
+    uds_auto = uds_subparsers.add_parser(
+        "auto", help="bounded zero-knowledge active diagnostic reconnaissance"
+    )
+    _add_uds_active_arguments(uds_auto, response_default=None)
+    uds_auto.add_argument(
+        "--request-start", default="0x7E0", help="discovery request-id range start (default: 0x7E0)"
+    )
+    uds_auto.add_argument(
+        "--request-end", default="0x7E7", help="discovery request-id range end (default: 0x7E7)"
+    )
+    uds_auto.add_argument(
+        "--no-services", action="store_true", help="skip per-responder service enumeration"
+    )
+    uds_auto.add_argument(
+        "--probe-dids", action="store_true", help="probe a bounded DID range per responder"
+    )
+    uds_auto.add_argument("--did-start", default="0xF190", help="DID range start (default: 0xF190)")
+    uds_auto.add_argument("--did-end", default="0xF19F", help="DID range end (default: 0xF19F)")
+    uds_auto.add_argument(
+        "--did-limit", type=int, default=16, help="max DIDs per responder (default: 16)"
+    )
+    uds_auto.add_argument("--max-duration", type=float, help="overall scan budget in seconds")
+    uds_auto.set_defaults(command="uds auto")
 
     xcp = subparsers.add_parser("xcp", help="XCP measurement/calibration workflows")
     xcp_subparsers = xcp.add_subparsers(dest="xcp_action", required=True)
@@ -2130,6 +2297,12 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `uds scan` will transmit diagnostic requests on interface `{args.interface}`; "
             "use intentionally on a controlled bus."
         )
+    if args.command in UDS_ACTIVE_COMMANDS or args.command == "uds services":
+        sub = args.command.removeprefix("uds ")
+        return (
+            f"warning: `uds {sub}` will transmit diagnostic requests on interface "
+            f"`{args.interface}`; use intentionally on a controlled bus."
+        )
     if args.command == "xcp scan":
         return (
             f"warning: `xcp scan` will transmit an XCP CONNECT request on interface "
@@ -2184,6 +2357,9 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         )
     if args.command == "uds scan":
         return f"confirm: type YES to run UDS scan on `{args.interface}`: "
+    if args.command in UDS_ACTIVE_COMMANDS or args.command == "uds services":
+        sub = args.command.removeprefix("uds ")
+        return f"confirm: type YES to run `uds {sub}` on `{args.interface}`: "
     if args.command == "xcp scan":
         return f"confirm: type YES to run XCP scan on `{args.interface}`: "
     if args.command == "gateway":
@@ -2211,6 +2387,14 @@ INTERFACE_FALLBACK_COMMANDS = {
     "j1939 monitor",
     "uds scan",
     "uds trace",
+    "uds services",
+    "uds subservices",
+    "uds ecu-reset",
+    "uds tester-present",
+    "uds security-seed",
+    "uds dump-dids",
+    "uds read-memory",
+    "uds auto",
     "xcp scan",
     "xcp trace",
     "xcp read",
@@ -2358,6 +2542,11 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "send" and getattr(args, "dry_run", False):
         return
     if args.command == "xcp scan" and getattr(args, "dry_run", False):
+        return
+    # `uds services` without an interface lists the static catalog (reference mode).
+    if args.command == "uds services":
+        return
+    if args.command in UDS_ACTIVE_COMMANDS and getattr(args, "dry_run", False):
         return
     if args.command == "fuzz guided" and getattr(args, "dry_run", False):
         return
@@ -6016,6 +6205,640 @@ def _doip_uds_payload(
     )
 
 
+def _parse_uds_int(
+    value: object,
+    *,
+    command: str,
+    name: str,
+    lo: int,
+    hi: int,
+    code: str = "UDS_INVALID_VALUE",
+) -> int:
+    try:
+        parsed = int(str(value), 0)
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {value!r} is not a valid integer.",
+                    hint="Pass a decimal or 0x-prefixed value.",
+                )
+            ],
+        ) from exc
+    if not lo <= parsed <= hi:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {parsed} is outside the allowed range [{lo}, {hi}].",
+                    hint=f"Pass {name} within [{lo}, {hi}].",
+                )
+            ],
+        )
+    return parsed
+
+
+def _uds_events_from_exchanges(exchanges: list[Any], *, source: str) -> list[dict[str, Any]]:
+    from canarchy.uds import enrich_uds_transactions
+    from canarchy.uds_active import exchange_to_transaction
+
+    transactions = [
+        txn
+        for txn in (exchange_to_transaction(exchange, source=source) for exchange in exchanges)
+        if txn is not None
+    ]
+    return serialize_events(enrich_uds_transactions(transactions))
+
+
+def _uds_dry_run_result(
+    base_meta: dict[str, Any],
+    command: str,
+    *,
+    planned_requests: int,
+    first_request: str | None,
+    extra: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    sub = command.removeprefix("uds ")
+    data = {
+        **base_meta,
+        "mode": "dry_run",
+        "planned_requests": planned_requests,
+        "first_request": first_request,
+    }
+    if extra:
+        data.update(extra)
+    interface = base_meta.get("interface") or "<interface>"
+    return (
+        data,
+        [],
+        [
+            f"ACTIVE_TRANSMIT_DRY_RUN: planned {planned_requests} `uds {sub}` request(s) to id "
+            f"0x{base_meta['request_id']:X} on `{interface}`; no frame sent."
+        ],
+    )
+
+
+def _uds_active_payload(
+    args: argparse.Namespace,
+    transport: "LocalTransport",
+    backend_metadata: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy import uds_active as ua
+    from canarchy.uds import UDS_SERVICE_CATALOG
+
+    command = args.command
+    request_id = _parse_can_id(
+        getattr(args, "request_id", "0x7E0") or "0x7E0",
+        command=command,
+        name="--request-id",
+        code="UDS_INVALID_ID",
+    )
+    response_raw = getattr(args, "response_id", None)
+    response_id = (
+        None
+        if response_raw in (None, "", "any")
+        else _parse_can_id(
+            response_raw, command=command, name="--response-id", code="UDS_INVALID_ID"
+        )
+    )
+    timeout = float(getattr(args, "timeout", 0.2) or 0.2)
+    dry_run = bool(getattr(args, "dry_run", False))
+    interface = getattr(args, "interface", None)
+    is_scaffold = backend_metadata["transport_backend"] == "scaffold"
+
+    base_meta: dict[str, Any] = {
+        "interface": interface,
+        "request_id": request_id,
+        "response_id": response_id,
+        "protocol_decoder": uds_decoder_backend(),
+        **backend_metadata,
+    }
+
+    def make_client() -> ua.UdsClient:
+        if is_scaffold:
+            return ua.SilentUdsClient()
+        return ua.TransportUdsClient(transport=transport, interface=interface)
+
+    def run_active(workflow):
+        enforce_active_transmit_safety(args)
+        try:
+            return workflow(make_client())
+        except ua.UdsActiveError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ) from exc
+
+    def validate(call):
+        try:
+            return call()
+        except ua.UdsActiveError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ) from exc
+
+    if command == "uds services":
+        probe_start = getattr(args, "probe_start", None)
+        probe_end = getattr(args, "probe_end", None)
+        services_arg: range | None = None
+        if probe_start is not None or probe_end is not None:
+            if probe_start is None or probe_end is None:
+                raise CommandError(
+                    command=command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="UDS_INVALID_RANGE",
+                            message="--probe-start and --probe-end must be supplied together.",
+                            hint="Pass both ends of the raw service-id range, or neither.",
+                        )
+                    ],
+                )
+            ps = _parse_uds_int(probe_start, command=command, name="--probe-start", lo=0, hi=0xFF)
+            pe = _parse_uds_int(probe_end, command=command, name="--probe-end", lo=0, hi=0xFF)
+            if pe < ps:
+                raise CommandError(
+                    command=command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="UDS_INVALID_RANGE",
+                            message=f"--probe-end 0x{pe:02X} is below --probe-start 0x{ps:02X}.",
+                            hint="Pass --probe-start <= --probe-end.",
+                        )
+                    ],
+                )
+            services_arg = range(ps, pe + 1)
+        max_requests = getattr(args, "max_requests", None)
+        candidate_ids = (
+            list(services_arg)
+            if services_arg is not None
+            else [service.service for service in UDS_SERVICE_CATALOG]
+        )
+        if max_requests is not None:
+            candidate_ids = candidate_ids[:max_requests]
+        if dry_run:
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=len(candidate_ids),
+                first_request=bytes([candidate_ids[0]]).hex() if candidate_ids else None,
+                extra={"probe_mode": "range" if services_arg is not None else "catalog"},
+            )
+        probes = run_active(
+            lambda client: ua.enumerate_services(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                services=services_arg,
+                timeout=timeout,
+                max_requests=max_requests,
+            )
+        )
+        events = _uds_events_from_exchanges(
+            [probe.exchange for probe in probes], source="cli.uds.services"
+        )
+        supported = [probe.to_record() for probe in probes if probe.supported]
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "probe_count": len(probes),
+                "supported_count": len(supported),
+                "supported_services": supported,
+                "probes": [probe.to_record() for probe in probes],
+            },
+            events,
+            [],
+        )
+
+    if command == "uds subservices":
+        service = _parse_uds_int(
+            getattr(args, "service"), command=command, name="--service", lo=0, hi=0xFF
+        )
+        sub_start = _parse_uds_int(
+            getattr(args, "sub_start", "0x00"), command=command, name="--sub-start", lo=0, hi=0xFF
+        )
+        sub_end = _parse_uds_int(
+            getattr(args, "sub_end", "0xFF"), command=command, name="--sub-end", lo=0, hi=0xFF
+        )
+        if sub_end < sub_start:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="UDS_INVALID_RANGE",
+                        message=f"--sub-end 0x{sub_end:02X} is below --sub-start 0x{sub_start:02X}.",
+                        hint="Pass --sub-start <= --sub-end.",
+                    )
+                ],
+            )
+        if dry_run:
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=sub_end - sub_start + 1,
+                first_request=bytes([service, sub_start]).hex(),
+                extra={"service": service},
+            )
+        probes = run_active(
+            lambda client: ua.enumerate_subservices(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                service=service,
+                sub_start=sub_start,
+                sub_end=sub_end,
+                timeout=timeout,
+            )
+        )
+        events = _uds_events_from_exchanges(
+            [probe.exchange for probe in probes], source="cli.uds.subservices"
+        )
+        supported = [probe.to_record() for probe in probes if probe.supported]
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "service": service,
+                "probe_count": len(probes),
+                "supported_count": len(supported),
+                "supported_subfunctions": supported,
+                "probes": [probe.to_record() for probe in probes],
+            },
+            events,
+            [],
+        )
+
+    if command in ("uds ecu-reset", "uds tester-present"):
+        if command == "uds ecu-reset":
+            reset_type = _parse_uds_int(
+                getattr(args, "reset_type", "0x01"),
+                command=command,
+                name="--reset-type",
+                lo=0,
+                hi=0xFF,
+            )
+            first_request = bytes([ua.SID_ECU_RESET, reset_type]).hex()
+            workflow = lambda client: ua.ecu_reset(  # noqa: E731
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                reset_type=reset_type,
+                timeout=timeout,
+            )
+            extra = {"reset_type": reset_type}
+        else:
+            suppress = bool(getattr(args, "suppress", False))
+            first_request = bytes([ua.SID_TESTER_PRESENT, 0x80 if suppress else 0x00]).hex()
+            workflow = lambda client: ua.tester_present(  # noqa: E731
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                suppress_response=suppress,
+                timeout=timeout,
+            )
+            extra = {"suppress": suppress}
+        if dry_run:
+            return _uds_dry_run_result(
+                base_meta, command, planned_requests=1, first_request=first_request, extra=extra
+            )
+        exchange = run_active(workflow)
+        events = _uds_events_from_exchanges([exchange], source=f"cli.{command.replace(' ', '.')}")
+        return (
+            {**base_meta, "mode": "active", **extra, "result": exchange.to_record()},
+            events,
+            [],
+        )
+
+    if command == "uds security-seed":
+        level = _parse_uds_int(
+            getattr(args, "level", "0x01"), command=command, name="--level", lo=1, hi=0xFF
+        )
+        session_raw = getattr(args, "session", None)
+        session = (
+            None
+            if session_raw is None
+            else _parse_uds_int(session_raw, command=command, name="--session", lo=0, hi=0xFF)
+        )
+        count = int(getattr(args, "count", 1) or 1)
+        max_duration = getattr(args, "max_duration", None)
+        if dry_run:
+            planned = count + (1 if session is not None else 0)
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=planned,
+                first_request=bytes([ua.SID_SECURITY_ACCESS, level]).hex(),
+                extra={"level": level, "session": session, "count": count},
+            )
+        result = run_active(
+            lambda client: ua.security_seed(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                level=level,
+                session=session,
+                count=count,
+                max_duration=max_duration,
+                timeout=timeout,
+            )
+        )
+        exchanges = [obs.exchange for obs in result.seeds]
+        if result.session_exchange is not None:
+            exchanges = [result.session_exchange, *exchanges]
+        events = _uds_events_from_exchanges(exchanges, source="cli.uds.security-seed")
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "level": level,
+                "session": session,
+                "requested": count,
+                "collected": sum(1 for obs in result.seeds if obs.seed is not None),
+                "distinct_seeds": result.distinct_seeds,
+                "session_response": (
+                    result.session_exchange.to_record()
+                    if result.session_exchange is not None
+                    else None
+                ),
+                "seeds": [obs.to_record() for obs in result.seeds],
+            },
+            events,
+            [],
+        )
+
+    if command == "uds dump-dids":
+        did_start = _parse_uds_int(
+            getattr(args, "did_start", "0xF180"),
+            command=command,
+            name="--did-start",
+            lo=0,
+            hi=0xFFFF,
+        )
+        did_end = _parse_uds_int(
+            getattr(args, "did_end", "0xF1FF"),
+            command=command,
+            name="--did-end",
+            lo=0,
+            hi=0xFFFF,
+        )
+        limit = int(getattr(args, "limit", 256) or 256)
+        max_duration = getattr(args, "max_duration", None)
+        if did_end < did_start:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="UDS_INVALID_DID_RANGE",
+                        message=f"--did-end 0x{did_end:04X} is below --did-start 0x{did_start:04X}.",
+                        hint="Pass --did-start <= --did-end.",
+                    )
+                ],
+            )
+        planned = min(limit, did_end - did_start + 1)
+        if dry_run:
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=planned,
+                first_request=bytes(
+                    [ua.SID_READ_DATA_BY_IDENTIFIER, (did_start >> 8) & 0xFF, did_start & 0xFF]
+                ).hex(),
+                extra={"did_start": did_start, "did_end": did_end, "limit": limit},
+            )
+        records = run_active(
+            lambda client: ua.dump_dids(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                did_start=did_start,
+                did_end=did_end,
+                limit=limit,
+                timeout=timeout,
+                max_duration=max_duration,
+            )
+        )
+        events = _uds_events_from_exchanges(
+            [record.exchange for record in records], source="cli.uds.dump-dids"
+        )
+        present = [record.to_record() for record in records if record.present]
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "did_start": did_start,
+                "did_end": did_end,
+                "probe_count": len(records),
+                "present_count": len(present),
+                "complete": len(records) >= planned,
+                "dids": [record.to_record() for record in records],
+            },
+            events,
+            [],
+        )
+
+    if command == "uds read-memory":
+        address = _parse_uds_int(
+            getattr(args, "address"), command=command, name="--address", lo=0, hi=0xFFFFFFFFFFFF
+        )
+        size = _parse_uds_int(
+            getattr(args, "size"),
+            command=command,
+            name="--size",
+            lo=1,
+            hi=ua.MAX_MEMORY_DUMP_BYTES,
+        )
+        chunk_size = int(getattr(args, "chunk_size", 4) or 4)
+        address_bytes = getattr(args, "address_bytes", None)
+        size_bytes = getattr(args, "size_bytes", None)
+        output = getattr(args, "output", None)
+        chunks_plan = validate(lambda: ua.plan_memory_chunks(address, size, chunk_size))
+        if dry_run:
+            first = ua.read_memory_request(
+                chunks_plan[0][0],
+                chunks_plan[0][1],
+                address_bytes=address_bytes or ua._byte_width(address + size),
+                size_bytes=size_bytes or ua._byte_width(chunk_size),
+            )
+            return _uds_dry_run_result(
+                base_meta,
+                command,
+                planned_requests=len(chunks_plan),
+                first_request=first.hex(),
+                extra={"address": address, "size": size, "chunk_size": chunk_size},
+            )
+        chunks = run_active(
+            lambda client: ua.read_memory(
+                client,
+                request_id=request_id,
+                response_id=response_id,
+                address=address,
+                size=size,
+                chunk_size=chunk_size,
+                address_bytes=address_bytes,
+                size_bytes=size_bytes,
+                timeout=timeout,
+            )
+        )
+        events = _uds_events_from_exchanges(
+            [chunk.exchange for chunk in chunks], source="cli.uds.read-memory"
+        )
+        memory = b"".join(chunk.data for chunk in chunks if chunk.data is not None)
+        complete = all(chunk.data is not None for chunk in chunks)
+        warnings: list[str] = []
+        output_meta: dict[str, Any] = {}
+        if output and memory:
+            try:
+                with open(output, "wb") as handle:
+                    handle.write(memory)
+            except OSError as exc:
+                raise CommandError(
+                    command=command,
+                    exit_code=EXIT_USER_ERROR,
+                    errors=[
+                        ErrorDetail(
+                            code="UDS_OUTPUT_WRITE_FAILED",
+                            message=f"Could not write memory dump to {output!r}: {exc}.",
+                            hint="Check the path and permissions.",
+                        )
+                    ],
+                ) from exc
+            output_meta = {"output": output, "bytes_written": len(memory)}
+        elif output:
+            warnings.append("No memory bytes were read; output file not written.")
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "address": address,
+                "size": size,
+                "chunk_size": chunk_size,
+                "chunk_count": len(chunks),
+                "bytes_read": len(memory),
+                "complete": complete,
+                "memory": memory.hex(),
+                **output_meta,
+                "chunks": [chunk.to_record() for chunk in chunks],
+            },
+            events,
+            warnings,
+        )
+
+    if command == "uds auto":
+        request_start = _parse_can_id(
+            getattr(args, "request_start", "0x7E0"),
+            command=command,
+            name="--request-start",
+            code="UDS_INVALID_ID",
+        )
+        request_end = _parse_can_id(
+            getattr(args, "request_end", "0x7E7"),
+            command=command,
+            name="--request-end",
+            code="UDS_INVALID_ID",
+        )
+        if request_end < request_start:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="UDS_INVALID_RANGE",
+                        message=f"--request-end 0x{request_end:X} is below --request-start 0x{request_start:X}.",
+                        hint="Pass --request-start <= --request-end.",
+                    )
+                ],
+            )
+        request_ids = list(range(request_start, request_end + 1))
+        probe_services = not bool(getattr(args, "no_services", False))
+        did_range = None
+        if bool(getattr(args, "probe_dids", False)):
+            did_start = _parse_uds_int(
+                getattr(args, "did_start", "0xF190"),
+                command=command,
+                name="--did-start",
+                lo=0,
+                hi=0xFFFF,
+            )
+            did_end = _parse_uds_int(
+                getattr(args, "did_end", "0xF19F"),
+                command=command,
+                name="--did-end",
+                lo=0,
+                hi=0xFFFF,
+            )
+            did_range = (did_start, did_end)
+        did_limit = int(getattr(args, "did_limit", 16) or 16)
+        max_duration = getattr(args, "max_duration", None)
+        auto_meta = {
+            **base_meta,
+            "request_start": request_start,
+            "request_end": request_end,
+            "probe_services": probe_services,
+            "did_range": list(did_range) if did_range else None,
+        }
+        if dry_run:
+            return _uds_dry_run_result(
+                {**auto_meta, "request_id": request_start},
+                command,
+                planned_requests=len(request_ids),
+                first_request=bytes([ua.SID_DIAGNOSTIC_SESSION_CONTROL, 0x01]).hex(),
+                extra={"discovery_ids": len(request_ids)},
+            )
+        report = run_active(
+            lambda client: ua.auto_recon(
+                client,
+                request_ids=request_ids,
+                response_id=response_id,
+                probe_services=probe_services,
+                did_range=did_range,
+                did_limit=did_limit,
+                timeout=timeout,
+                max_duration=max_duration,
+            )
+        )
+        exchanges = [responder.exchange for responder in report.responders]
+        for probes in report.services.values():
+            exchanges.extend(probe.exchange for probe in probes)
+        for records in report.dids.values():
+            exchanges.extend(record.exchange for record in records)
+        events = _uds_events_from_exchanges(exchanges, source="cli.uds.auto")
+        services_report = {
+            f"0x{rid:X}": [probe.to_record() for probe in probes if probe.supported]
+            for rid, probes in report.services.items()
+        }
+        dids_report = {
+            f"0x{rid:X}": [record.to_record() for record in records if record.present]
+            for rid, records in report.dids.items()
+        }
+        return (
+            {
+                **auto_meta,
+                "mode": "active",
+                "responder_count": len(report.responders),
+                "responders": [responder.to_record() for responder in report.responders],
+                "supported_services": services_report,
+                "dids": dids_report,
+                "complete": report.complete,
+            },
+            events,
+            [],
+        )
+
+    raise AssertionError(f"unsupported uds active command: {command}")
+
+
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     target = getattr(args, "interface", None)
     if args.command in ("uds scan", "uds trace") and is_doip_target(target):
@@ -6056,7 +6879,7 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             events,
             [],
         )
-    if args.command == "uds services":
+    if args.command == "uds services" and not target and not getattr(args, "dry_run", False):
         services = uds_services_payload()
         return (
             {
@@ -6067,6 +6890,8 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
             [],
             [],
         )
+    if args.command in UDS_COMMANDS - {"uds scan", "uds trace"}:
+        return _uds_active_payload(args, transport, backend_metadata)
     raise AssertionError(f"unsupported uds command: {args.command}")
 
 
@@ -8798,7 +9623,7 @@ def format_j1939_table(result: CommandResult) -> list[str]:
 
 def format_uds_table(result: CommandResult) -> list[str]:
     lines = [f"command: {result.command}"]
-    if result.command == "uds services":
+    if result.command == "uds services" and result.data.get("mode") == "reference":
         lines.append(f"services: {result.data.get('service_count', 0)}")
         lines.append("catalog:")
         services = result.data.get("services", [])
