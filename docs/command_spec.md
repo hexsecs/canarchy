@@ -1260,6 +1260,41 @@ Notes:
 * this is a reference command and does not require an interface
 * output includes the command code, name, and category (standard / calibration / daq / programming)
 
+### doip discovery
+
+Discover reachable DoIP entities via a UDP vehicle-identification broadcast.
+
+```bash
+canarchy doip discovery [host] [--port 13400] [--timeout 2.0] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* broadcasts a DoIP VehicleIdentificationRequest (default host `255.255.255.255`) and reports each responding entity's VIN, logical address, EID, and GID
+* active network egress honouring the active-transmit safety model; `--dry-run` plans the broadcast without transmitting
+* a send failure returns `DOIP_CONNECTION_FAILED` (exit 2)
+
+### doip services / ecu-reset / tester-present / security-seed / dump-dids
+
+Active UDS diagnostic workflows over a DoIP session, addressing the ECU by logical address.
+
+```bash
+canarchy doip services       <doip-uri> [--ack-active] [--dry-run] [--json|--jsonl|--text]
+canarchy doip ecu-reset      <doip-uri> [--reset-type 0x01] [--ack-active] [--dry-run] ...
+canarchy doip tester-present <doip-uri> [--suppress] [--ack-active] [--dry-run] ...
+canarchy doip security-seed  <doip-uri> [--level 0x01] [--session 0x03] [--count N] [--ack-active] [--dry-run] ...
+canarchy doip dump-dids      <doip-uri> [--did-start 0xF180] [--did-end 0xF1FF] [--limit N] [--ack-active] [--dry-run] ...
+```
+
+Where `<doip-uri>` is `doip://<host>:<port>?logical_address=0x0E80` (same query parameters as `uds scan` over DoIP).
+
+Notes:
+
+* each workflow activates routing, then runs the relevant UDS requests over the DoIP session, emitting `uds_transaction` events with negative-response decoding plus per-request `status`
+* `services` reports which UDS services the ECU supports; `security-seed` requires an odd `--level`; `dump-dids` reads a bounded DID range
+* all `doip` commands honour the active-transmit safety model and support `--dry-run` request plans; bounds/validation errors (`DOIP_INVALID_VALUE`, `DOIP_INVALID_SECURITY_LEVEL`, `DOIP_INVALID_DID_RANGE`) exit 1 and DoIP transport/protocol errors exit 2
+* the `doip` command group is CLI-only and is not exposed as MCP tools (active network egress to an arbitrary host)
+
 ### j1587 decode
 
 Decode a J1708 capture file into J1587 PID parameters.

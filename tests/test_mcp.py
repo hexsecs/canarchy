@@ -145,6 +145,15 @@ _MCP_EXCLUDED_COMMANDS = {
     # actions. See docs/design/xcp-workflows.md.
     "xcp info",
     "xcp dump",
+    # Active DoIP workflows: network egress to an arbitrary host (UDP discovery
+    # broadcast + TCP diagnostic sessions); CLI-only operator actions, like the
+    # doip:// target-level exclusion on uds_scan/uds_trace. See mcp-server.md.
+    "doip discovery",
+    "doip services",
+    "doip ecu-reset",
+    "doip tester-present",
+    "doip security-seed",
+    "doip dump-dids",
     "completion",
     "datasets stream",
     "datasets download",  # writes bulk dataset bytes to an arbitrary host path; CLI operator action
