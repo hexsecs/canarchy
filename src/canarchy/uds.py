@@ -227,12 +227,14 @@ def diagnostic_session_control_request_frame(interface: str | None = None) -> Ca
     )
 
 
-def reassemble_uds_pdus(frames: list[CanFrame]) -> list[ReassembledUdsPdu]:
+def reassemble_uds_pdus(
+    frames: list[CanFrame], *, allow_extended: bool = False
+) -> list[ReassembledUdsPdu]:
     sessions: dict[int, _IsoTpReassemblyState] = {}
     pdus: list[ReassembledUdsPdu] = []
 
     for frame in sorted(frames, key=lambda candidate: candidate.timestamp or 0.0):
-        payload = _transport_payload(frame)
+        payload = _transport_payload(frame, allow_extended=allow_extended)
         if payload is None:
             continue
 
@@ -304,8 +306,13 @@ def reassemble_uds_pdus(frames: list[CanFrame]) -> list[ReassembledUdsPdu]:
     return pdus
 
 
-def _transport_payload(frame: CanFrame) -> bytes | None:
-    if frame.is_extended_id or frame.is_remote_frame or frame.is_error_frame or not frame.data:
+def _transport_payload(frame: CanFrame, *, allow_extended: bool = False) -> bytes | None:
+    # Passive scan/trace assume 11-bit OBD addressing and skip extended frames;
+    # the active workflows opt in (``allow_extended``) so 29-bit diagnostic
+    # responses (ISO 15765-2 normal/extended addressing) are reassembled too.
+    if (frame.is_extended_id and not allow_extended) or frame.is_remote_frame:
+        return None
+    if frame.is_error_frame or not frame.data:
         return None
     return frame.data
 

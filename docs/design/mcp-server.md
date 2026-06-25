@@ -173,6 +173,7 @@ landing here.
 | `completion` | Emits a raw shell script, not a JSON envelope. |
 | `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
 | `datasets download` | Writes bulk dataset bytes to an arbitrary host path — a CLI-only operator action. `datasets fetch` (provenance) and `datasets replay --dry-run`/`--list-files` (metadata) are exposed. |
+| `uds subservices`, `uds ecu-reset`, `uds tester-present`, `uds security-seed`, `uds dump-dids`, `uds read-memory`, `uds auto` | Active UDS workflows that transmit invasive diagnostic requests (ECU reset, SecurityAccess seed collection, DID/memory extraction, ranged service/subfunction enumeration, and a multi-id reconnaissance chain). More intrusive than the single-broadcast `uds scan`; kept CLI-only operator actions behind the active-transmit safety gate (`docs/design/uds-active-workflows.md`). The reference `uds services` catalog stays exposed; its active-probe mode only activates when a CLI caller supplies an interface. |
 
 The `uds_scan` / `uds_trace` tools are exposed for CAN interfaces, but a
 `doip://` target is a **target-level exclusion**: DoIP routes the workflow over
