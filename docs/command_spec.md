@@ -1115,6 +1115,38 @@ Notes:
 * `--request-id` / `--response-id` accept decimal or `0x` hex CAN ids (defaults 0x3E0 / 0x3E1; an extended 29-bit request id is transmitted as an extended frame); a malformed id returns `XCP_INVALID_ID`
 * the `xcp_scan` MCP tool is gated like other active-transmit tools: mandatory `ack_active=true` with `dry_run` defaulting to true
 
+### xcp info
+
+Connect to an XCP slave and report its basic capabilities.
+
+```bash
+canarchy xcp info <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--timeout S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* sends CONNECT, then the optional GET_STATUS, GET_COMM_MODE_INFO, and GET_ID commands; the `capabilities` block reports the parsed CONNECT info (resources, max-CTO/DTO, byte order, versions) plus session status, comm-mode info, and identification mode/length
+* optional commands the slave does not implement are reported per-command as `status: unsupported` rather than failing the whole command
+* active command honouring the active-transmit safety model; `--dry-run` plans the four commands without transmitting and needs no interface
+* a silent slave returns `XCP_NO_RESPONSE` and a CONNECT rejection returns `XCP_ERROR_RESPONSE` (exit 2)
+
+### xcp dump
+
+Upload a bounded XCP memory range.
+
+```bash
+canarchy xcp dump <interface> --address 0x08000000 --size N [--chunk-size 4] [--address-extension 0x00] \
+    [--short-upload] [--output PATH] [--timeout S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* CONNECT, then uploads the range in `--chunk-size` chunks (1–7 bytes, bounded by the slave's MAX_CTO-1) via SET_MTA + UPLOAD, or SHORT_UPLOAD with `--short-upload`
+* the total size is bounded (max 65536 bytes); `--output` writes the assembled bytes when any were read; the envelope reports `bytes_read`, `complete`, the per-chunk records, and the assembled `memory` hex
+* address byte order follows the slave's CONNECT comm-mode-basic byte order
+* bounds errors (`XCP_INVALID_VALUE`, `XCP_DUMP_TOO_LARGE`, `XCP_INVALID_CHUNK_SIZE`, `XCP_CHUNK_EXCEEDS_MAX_CTO`) exit 1; `XCP_NO_RESPONSE` / `XCP_ERROR_RESPONSE` exit 2
+* `xcp info` and `xcp dump` are CLI-only operator actions and are not exposed as MCP tools
+
 ### xcp trace
 
 Pair XCP command and response transactions from bus traffic.

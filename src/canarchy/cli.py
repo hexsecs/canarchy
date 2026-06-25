@@ -144,7 +144,7 @@ J1939_COMMANDS = {
 }
 SESSION_COMMANDS = {"session save", "session load", "session show"}
 UDS_COMMANDS = {"uds scan", "uds trace", "uds services"}
-XCP_COMMANDS = {"xcp scan", "xcp trace", "xcp read", "xcp commands"}
+XCP_COMMANDS = {"xcp scan", "xcp trace", "xcp read", "xcp commands", "xcp info", "xcp dump"}
 J1587_COMMANDS = {"j1587 decode", "j1587 pids"}
 J2497_COMMANDS = {"j2497 decode", "j2497 mids"}
 CONFIG_COMMANDS = {"config show"}
@@ -171,6 +171,8 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "cannelloni send",
     "uds scan",
     "xcp scan",
+    "xcp info",
+    "xcp dump",
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
@@ -1370,6 +1372,50 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(xcp_read)
     xcp_read.set_defaults(command="xcp read")
 
+    xcp_info = xcp_subparsers.add_parser(
+        "info", help="connect to an XCP slave and report its basic capabilities"
+    )
+    xcp_info.add_argument("interface", nargs="?", help="CAN interface (required unless --dry-run)")
+    _add_xcp_id_arguments(xcp_info)
+    xcp_info.add_argument(
+        "--timeout", type=float, default=0.2, help="per-command response timeout (default: 0.2)"
+    )
+    xcp_info.add_argument(
+        "--dry-run", action="store_true", help="plan the command frames without transmitting"
+    )
+    add_active_ack_argument(xcp_info)
+    add_output_arguments(xcp_info)
+    xcp_info.set_defaults(command="xcp info")
+
+    xcp_dump = xcp_subparsers.add_parser(
+        "dump", help="upload a bounded XCP memory range (SET_MTA + UPLOAD / SHORT_UPLOAD)"
+    )
+    xcp_dump.add_argument("interface", nargs="?", help="CAN interface (required unless --dry-run)")
+    _add_xcp_id_arguments(xcp_dump)
+    xcp_dump.add_argument("--address", required=True, help="start address (e.g. 0x08000000)")
+    xcp_dump.add_argument("--size", required=True, help="number of bytes to upload")
+    xcp_dump.add_argument(
+        "--chunk-size", type=int, default=4, help="bytes per CTO (1-7, default: 4)"
+    )
+    xcp_dump.add_argument(
+        "--address-extension", default="0x00", help="XCP address extension (default: 0x00)"
+    )
+    xcp_dump.add_argument(
+        "--short-upload",
+        action="store_true",
+        help="use SHORT_UPLOAD per chunk instead of SET_MTA + UPLOAD",
+    )
+    xcp_dump.add_argument("--output", help="write the uploaded bytes to this file")
+    xcp_dump.add_argument(
+        "--timeout", type=float, default=0.2, help="per-command response timeout (default: 0.2)"
+    )
+    xcp_dump.add_argument(
+        "--dry-run", action="store_true", help="plan the command frames without transmitting"
+    )
+    add_active_ack_argument(xcp_dump)
+    add_output_arguments(xcp_dump)
+    xcp_dump.set_defaults(command="xcp dump")
+
     xcp_commands = xcp_subparsers.add_parser("commands", help="list the XCP command catalog")
     add_output_arguments(xcp_commands)
     xcp_commands.set_defaults(command="xcp commands")
@@ -2135,6 +2181,12 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `xcp scan` will transmit an XCP CONNECT request on interface "
             f"`{args.interface}`; use intentionally on a controlled bus."
         )
+    if args.command in ("xcp info", "xcp dump"):
+        sub = args.command.removeprefix("xcp ")
+        return (
+            f"warning: `xcp {sub}` will transmit XCP commands on interface "
+            f"`{args.interface}`; use intentionally on a controlled bus."
+        )
     if args.command == "gateway":
         return (
             f"warning: `gateway` will forward traffic from `{args.src}` to `{args.dst}`; "
@@ -2186,6 +2238,9 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return f"confirm: type YES to run UDS scan on `{args.interface}`: "
     if args.command == "xcp scan":
         return f"confirm: type YES to run XCP scan on `{args.interface}`: "
+    if args.command in ("xcp info", "xcp dump"):
+        sub = args.command.removeprefix("xcp ")
+        return f"confirm: type YES to run `xcp {sub}` on `{args.interface}`: "
     if args.command == "gateway":
         return f"confirm: type YES to forward traffic from `{args.src}` to `{args.dst}`: "
     if args.command in FUZZ_COMMANDS:
@@ -2212,6 +2267,8 @@ INTERFACE_FALLBACK_COMMANDS = {
     "uds scan",
     "uds trace",
     "xcp scan",
+    "xcp info",
+    "xcp dump",
     "xcp trace",
     "xcp read",
     "fuzz guided",
@@ -2358,6 +2415,8 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "send" and getattr(args, "dry_run", False):
         return
     if args.command == "xcp scan" and getattr(args, "dry_run", False):
+        return
+    if args.command in ("xcp info", "xcp dump") and getattr(args, "dry_run", False):
         return
     if args.command == "fuzz guided" and getattr(args, "dry_run", False):
         return
@@ -6100,6 +6159,250 @@ def _parse_can_id(value: str, *, command: str, name: str, code: str = "XCP_INVAL
     return parsed
 
 
+def _parse_xcp_int(
+    value: object, *, command: str, name: str, lo: int, hi: int, code: str = "XCP_INVALID_VALUE"
+) -> int:
+    try:
+        parsed = int(str(value), 0)
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {value!r} is not a valid integer.",
+                    hint="Pass a decimal or 0x-prefixed value.",
+                )
+            ],
+        ) from exc
+    if not lo <= parsed <= hi:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {parsed} is outside the allowed range [{lo}, {hi}].",
+                    hint=f"Pass {name} within [{lo}, {hi}].",
+                )
+            ],
+        )
+    return parsed
+
+
+def _xcp_active_error(command: str, exc: Any) -> CommandError:
+    user_codes = {
+        "XCP_INVALID_ADDRESS",
+        "XCP_INVALID_SIZE",
+        "XCP_DUMP_TOO_LARGE",
+        "XCP_INVALID_CHUNK_SIZE",
+        "XCP_CHUNK_EXCEEDS_MAX_CTO",
+        "XCP_EMPTY_COMMAND",
+        "XCP_COMMAND_TOO_LONG",
+    }
+    exit_code = EXIT_USER_ERROR if exc.code in user_codes else EXIT_TRANSPORT_ERROR
+    return CommandError(
+        command=command,
+        exit_code=exit_code,
+        errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+    )
+
+
+def _xcp_active_payload(
+    args: argparse.Namespace,
+    transport: "LocalTransport",
+    backend_metadata: dict[str, Any],
+    request_id: int,
+    response_id: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy import xcp_active as xa
+
+    command = args.command
+    timeout = float(getattr(args, "timeout", 0.2) or 0.2)
+    dry_run = bool(getattr(args, "dry_run", False))
+    interface = getattr(args, "interface", None)
+    is_scaffold = backend_metadata["transport_backend"] == "scaffold"
+    base_meta: dict[str, Any] = {
+        "interface": interface,
+        "request_id": request_id,
+        "response_id": response_id,
+        **backend_metadata,
+    }
+
+    def make_client() -> "xa.XcpClient":
+        if is_scaffold:
+            return xa.SilentXcpClient(request_id, response_id)
+        return xa.TransportXcpClient(
+            transport=transport, interface=interface, request_id=request_id, response_id=response_id
+        )
+
+    def events_from(exchanges: list[Any]) -> list[dict[str, Any]]:
+        source = f"cli.{command.replace(' ', '.')}"
+        out = [
+            event.to_event()
+            for event in (exchange.to_event(source=source) for exchange in exchanges)
+            if event is not None
+        ]
+        return serialize_events(out)
+
+    if command == "xcp info":
+        if dry_run:
+            return (
+                {
+                    **base_meta,
+                    "mode": "dry_run",
+                    "planned_requests": 4,
+                    "first_request": "ff00",
+                    "planned_commands": [
+                        "CONNECT",
+                        "GET_STATUS",
+                        "GET_COMM_MODE_INFO",
+                        "GET_ID",
+                    ],
+                },
+                [],
+                [
+                    f"ACTIVE_TRANSMIT_DRY_RUN: planned XCP info exchange to id "
+                    f"0x{request_id:X} on `{interface}`; no frame sent."
+                ],
+            )
+        enforce_active_transmit_safety(args)
+        try:
+            result = xa.info(make_client(), timeout=timeout)
+        except xa.XcpActiveError as exc:
+            raise _xcp_active_error(command, exc) from exc
+        byte_order = "big" if result.connect_info.get("byte_order") == "big" else "little"
+        capabilities = {
+            "connect": result.connect_info,
+            "status": (
+                xa.parse_get_status(result.status.response)
+                if result.status and result.status.positive
+                else None
+            ),
+            "comm_mode": (
+                xa.parse_get_comm_mode_info(result.comm_mode.response)
+                if result.comm_mode and result.comm_mode.positive
+                else None
+            ),
+            "identification": (
+                xa.parse_get_id(result.identification.response, byte_order=byte_order)
+                if result.identification and result.identification.positive
+                else None
+            ),
+        }
+        return (
+            {
+                **base_meta,
+                "mode": "active",
+                "connected": True,
+                "capabilities": capabilities,
+                "exchanges": [exchange.to_record() for exchange in result.exchanges()],
+            },
+            events_from(result.exchanges()),
+            [],
+        )
+
+    # xcp dump
+    address = _parse_xcp_int(
+        getattr(args, "address"), command=command, name="--address", lo=0, hi=0xFFFFFFFF
+    )
+    size = _parse_xcp_int(
+        getattr(args, "size"), command=command, name="--size", lo=1, hi=xa.MAX_DUMP_BYTES
+    )
+    chunk_size = int(getattr(args, "chunk_size", 4) or 4)
+    address_extension = _parse_xcp_int(
+        getattr(args, "address_extension", "0x00"),
+        command=command,
+        name="--address-extension",
+        lo=0,
+        hi=0xFF,
+    )
+    short_upload = bool(getattr(args, "short_upload", False))
+    output = getattr(args, "output", None)
+    try:
+        chunks_plan = xa.plan_dump_chunks(address, size, chunk_size)
+    except xa.XcpActiveError as exc:
+        raise _xcp_active_error(command, exc) from exc
+    per_chunk = 1 if short_upload else 2
+    dump_meta = {
+        **base_meta,
+        "address": address,
+        "size": size,
+        "chunk_size": chunk_size,
+        "method": "short_upload" if short_upload else "set_mta_upload",
+    }
+    if dry_run:
+        return (
+            {
+                **dump_meta,
+                "mode": "dry_run",
+                "planned_requests": 1 + len(chunks_plan) * per_chunk,
+                "planned_chunks": len(chunks_plan),
+                "first_request": "ff00",
+            },
+            [],
+            [
+                f"ACTIVE_TRANSMIT_DRY_RUN: planned XCP dump of {size} byte(s) in "
+                f"{len(chunks_plan)} chunk(s) on `{interface}`; no frame sent."
+            ],
+        )
+    enforce_active_transmit_safety(args)
+    try:
+        connect_response, chunks = xa.dump(
+            make_client(),
+            address=address,
+            size=size,
+            chunk_size=chunk_size,
+            address_extension=address_extension,
+            short_upload=short_upload,
+            timeout=timeout,
+        )
+    except xa.XcpActiveError as exc:
+        raise _xcp_active_error(command, exc) from exc
+    memory = b"".join(chunk.data for chunk in chunks if chunk.data is not None)
+    complete = len(chunks) == len(chunks_plan) and all(chunk.data is not None for chunk in chunks)
+    exchanges = [connect_response]
+    for chunk in chunks:
+        exchanges.extend(chunk.exchanges)
+    warnings: list[str] = []
+    output_meta: dict[str, Any] = {}
+    if output and memory:
+        try:
+            with open(output, "wb") as handle:
+                handle.write(memory)
+        except OSError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="XCP_OUTPUT_WRITE_FAILED",
+                        message=f"Could not write dump to {output!r}: {exc}.",
+                        hint="Check the path and permissions.",
+                    )
+                ],
+            ) from exc
+        output_meta = {"output": output, "bytes_written": len(memory)}
+    elif output:
+        warnings.append("No bytes were uploaded; output file not written.")
+    return (
+        {
+            **dump_meta,
+            "mode": "active",
+            "connected": True,
+            "chunk_count": len(chunks),
+            "bytes_read": len(memory),
+            "complete": complete,
+            "memory": memory.hex(),
+            **output_meta,
+            "chunks": [chunk.to_record() for chunk in chunks],
+        },
+        events_from(exchanges),
+        warnings,
+    )
+
+
 def xcp_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     transport = LocalTransport()
     backend_metadata = transport.backend_metadata()
@@ -6143,6 +6446,9 @@ def xcp_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
         command=args.command,
         name="--request-id",
     )
+
+    if args.command in ("xcp info", "xcp dump"):
+        return _xcp_active_payload(args, transport, backend_metadata, request_id, response_id)
 
     if args.command == "xcp scan":
         if getattr(args, "dry_run", False):

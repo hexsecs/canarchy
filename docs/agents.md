@@ -166,6 +166,7 @@ Current exclusions:
 * `completion`, which emits a raw shell script rather than a JSON envelope
 * `dbc generate-c`, which generates C source/header files to disk and is a developer action
 * `plugins enable` and `plugins disable`, which write user plugin configuration
+* the active `xcp info` and `xcp dump` workflows — they connect to an XCP slave and read its capabilities / a bounded memory range, so they stay CLI-only operator actions behind the active-transmit gate (the broadcast `xcp scan` stays exposed)
 
 The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred, with rationale) lives in [`docs/design/mcp-server.md`](design/mcp-server.md#mcp-coverage-decisions); a test guard (`test_every_cli_command_is_exposed_or_documented`) fails the build if a new command drifts out of coverage.
 

@@ -129,6 +129,11 @@ _MCP_EXCLUDED_COMMANDS = {
     "mcp install",
     "web serve",  # long-running HTTP/WebSocket front end, like shell/tui
     "cannelloni send",  # active UDP egress to an arbitrary host; CLI-only operator action
+    # Active XCP workflows that connect to a slave and read its memory/capabilities;
+    # more intrusive than the single-broadcast `xcp scan`; kept CLI-only operator
+    # actions. See docs/design/xcp-workflows.md.
+    "xcp info",
+    "xcp dump",
     "completion",
     "datasets stream",
     "datasets download",  # writes bulk dataset bytes to an arbitrary host path; CLI operator action

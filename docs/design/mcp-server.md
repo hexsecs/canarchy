@@ -173,6 +173,7 @@ landing here.
 | `completion` | Emits a raw shell script, not a JSON envelope. |
 | `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
 | `datasets download` | Writes bulk dataset bytes to an arbitrary host path — a CLI-only operator action. `datasets fetch` (provenance) and `datasets replay --dry-run`/`--list-files` (metadata) are exposed. |
+| `xcp info`, `xcp dump` | Active XCP workflows that connect to a slave and read its capabilities / a bounded memory range. More intrusive than the single-broadcast `xcp scan`; kept CLI-only operator actions behind the active-transmit gate (`docs/design/xcp-workflows.md`). The broadcast `xcp scan` and the passive `xcp trace`/`xcp read`/`xcp commands` stay exposed. |
 
 The `uds_scan` / `uds_trace` tools are exposed for CAN interfaces, but a
 `doip://` target is a **target-level exclusion**: DoIP routes the workflow over
