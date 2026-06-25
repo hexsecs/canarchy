@@ -169,6 +169,7 @@ Current exclusions:
 * `plugins enable` and `plugins disable`, which write user plugin configuration
 * the active UDS workflows `uds subservices`, `uds ecu-reset`, `uds tester-present`, `uds security-seed`, `uds dump-dids`, `uds read-memory`, and `uds auto` — they transmit invasive diagnostic requests (ECU reset, seed collection, DID/memory extraction, ranged enumeration, multi-id recon) and stay CLI-only operator actions behind the active-transmit gate. The reference `uds services` catalog stays exposed; its active-probe mode only activates when a CLI caller supplies an interface
 * the active `xcp info` and `xcp dump` workflows — they connect to an XCP slave and read its capabilities / a bounded memory range, so they stay CLI-only operator actions behind the active-transmit gate (the broadcast `xcp scan` stays exposed)
+* `fuzz identify`, a stateful multi-round human-in-the-loop replay/narrowing workflow (one bisected window replayed per invocation); CLI-only operator action
 
 The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred, with rationale) lives in [`docs/design/mcp-server.md`](design/mcp-server.md#mcp-coverage-decisions); a test guard (`test_every_cli_command_is_exposed_or_documented`) fails the build if a new command drifts out of coverage.
 

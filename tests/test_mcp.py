@@ -154,6 +154,9 @@ _MCP_EXCLUDED_COMMANDS = {
     "doip tester-present",
     "doip security-seed",
     "doip dump-dids",
+    # Stateful, multi-round human-in-the-loop replay/narrowing workflow that
+    # transmits a bisected window each invocation; CLI-only operator action.
+    "fuzz identify",
     "completion",
     "datasets stream",
     "datasets download",  # writes bulk dataset bytes to an arbitrary host path; CLI operator action

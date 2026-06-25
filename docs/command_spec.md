@@ -1648,6 +1648,24 @@ Notes:
 * honours the active-transmit safety model (`--ack-active`, `--rate` pacing); `--dry-run` plans the campaign (planned mutations, `mode: dry_run`) without opening the transport. Structured errors: `FUZZ_GUIDED_INVALID_SIGNALS`, `FUZZ_GUIDED_INVALID_ID` (exit 1), `FUZZ_GUIDED_TRANSPORT_FAILED` (exit 2)
 * the `fuzz_guided` MCP tool is gated like other active tools (mandatory `ack_active=true`, `dry_run` defaulting to true)
 
+### fuzz identify
+
+Narrow a fuzz log to the culprit frame by replaying bisected windows and recording effect/no-effect observations.
+
+```bash
+canarchy fuzz identify <log> [--interface can0] [--observations FILE] [--observe effect|no-effect ...]
+                       [--rate 100] [--max-window N] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* `<log>` is a candump capture or a JSONL fuzz log / replay plan (one CAN-frame object per line, with top-level or `payload`-nested `arbitration_id` + `data`)
+* the workflow bisects the log: each round replays the lower half of the current candidate range, and the operator records whether the effect reproduced. Mark observations non-interactively with `--observe effect|no-effect` (repeatable) and/or a JSON `--observations` file (`["no-effect", "effect", ...]`)
+* one round per invocation: with an `--interface` and without `--dry-run` it replays the next window live (behind the active-transmit safety model), then reports the candidate range / next window so you record an observation and re-invoke. With a full observation sequence supplied up front it resolves the culprit with no transmission
+* JSON output includes `next_window` / `replayed_window`, `observations`, `candidate_lo`/`candidate_hi`/`candidate_frames`, `resolved`/`culprit`, `confidence`, `rationale`, and provenance (`source`, `frame_count`, `planned_rounds`)
+* `--max-window` refuses to replay a window larger than N frames (`FUZZ_IDENTIFY_WINDOW_TOO_LARGE`); invalid logs/observations return `FUZZ_IDENTIFY_LOG_UNAVAILABLE` / `FUZZ_IDENTIFY_INVALID_LOG` / `FUZZ_IDENTIFY_INVALID_OBSERVATION` (exit 1)
+* `fuzz identify` is a CLI-only operator workflow and is not exposed as an MCP tool
+
 ### mcp serve
 
 Start the MCP server over stdio.
