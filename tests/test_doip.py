@@ -397,9 +397,7 @@ class DoipWorkflowTests(unittest.TestCase):
         # A short client timeout keeps the silent-probe path deterministic: the
         # client times out (-> DOIP_TIMEOUT -> no_response) well before the
         # loopback responder's own 2s socket timeout closes the connection.
-        return parse_doip_target(
-            f"doip://127.0.0.1:{port}?logical_address=0x0E80&timeout=0.5"
-        )
+        return parse_doip_target(f"doip://127.0.0.1:{port}?logical_address=0x0E80&timeout=0.5")
 
     def test_services_classifies_support(self) -> None:
         responses = {
@@ -495,16 +493,26 @@ class DoipWorkflowCliTests(unittest.TestCase):
 
     def test_security_seed_rejects_non_positive_count(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "doip", "security-seed", "doip://198.51.100.9?logical_address=0x0E80",
-            "--count", "0", "--dry-run", "--json",
+            "doip",
+            "security-seed",
+            "doip://198.51.100.9?logical_address=0x0E80",
+            "--count",
+            "0",
+            "--dry-run",
+            "--json",
         )
         self.assertEqual(exit_code, 1)
         self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_VALUE")
 
     def test_dump_dids_rejects_non_positive_limit(self) -> None:
         exit_code, stdout, _ = run_cli(
-            "doip", "dump-dids", "doip://198.51.100.9?logical_address=0x0E80",
-            "--limit", "0", "--dry-run", "--json",
+            "doip",
+            "dump-dids",
+            "doip://198.51.100.9?logical_address=0x0E80",
+            "--limit",
+            "0",
+            "--dry-run",
+            "--json",
         )
         self.assertEqual(exit_code, 1)
         self.assertEqual(json.loads(stdout)["errors"][0]["code"], "DOIP_INVALID_VALUE")
