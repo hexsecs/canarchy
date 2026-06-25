@@ -219,7 +219,7 @@ class TransportXcpClient(XcpClient):
     def command(self, payload: bytes, *, timeout: float | None = None) -> XcpResponse:
         frame = command_frame(self.request_id, payload)
         started = time.perf_counter()
-        frames = self.transport.transaction(self.interface, frame)
+        frames = self.transport.transaction(self.interface, frame, timeout=timeout)
         elapsed = time.perf_counter() - started
         response = _select_response(list(frames), self.response_id)
         return XcpResponse(
@@ -372,6 +372,15 @@ def plan_dump_chunks(address: int, total_size: int, chunk_size: int) -> list[tup
             message=f"Dump size {total_size} exceeds the bounded maximum of {MAX_DUMP_BYTES} bytes.",
             hint=f"Upload at most {MAX_DUMP_BYTES} bytes per invocation.",
         )
+    if address + total_size - 1 > 0xFFFFFFFF:
+        raise XcpActiveError(
+            code="XCP_ADDRESS_OUT_OF_RANGE",
+            message=(
+                f"Dump range ends at 0x{address + total_size - 1:X}, beyond the 32-bit XCP "
+                "address space (0xFFFFFFFF)."
+            ),
+            hint="Lower --address or --size so the range stays within 32 bits.",
+        )
     if not 1 <= chunk_size <= MAX_CTO_DATA:
         raise XcpActiveError(
             code="XCP_INVALID_CHUNK_SIZE",
@@ -460,6 +469,10 @@ def dump(
             response = client.command(bytes([CMD_UPLOAD, chunk_len]), timeout=timeout)
             exchanges.append(response)
         data = response.response[1 : 1 + chunk_len] if response.positive else None
+        # A positive response with fewer bytes than requested is a truncated
+        # upload, not a complete chunk; treat it as incomplete and stop.
+        if data is not None and len(data) < chunk_len:
+            data = None
         results.append(DumpChunk(chunk_address, chunk_len, data, exchanges))
         if data is None:
             break

@@ -75,7 +75,7 @@ class CommandFrameTest(unittest.TestCase):
 class TransportClientTest(unittest.TestCase):
     def test_selects_response_on_response_id(self) -> None:
         class T:
-            def transaction(self, _interface, _frame):
+            def transaction(self, _interface, _frame, *, timeout=None):
                 return [
                     CanFrame(arbitration_id=0x111, data=b"\x01\x02"),
                     CanFrame(arbitration_id=0x3E1, data=_connect_response()),
@@ -90,7 +90,7 @@ class TransportClientTest(unittest.TestCase):
 
     def test_no_response(self) -> None:
         class T:
-            def transaction(self, _interface, _frame):
+            def transaction(self, _interface, _frame, *, timeout=None):
                 return []
 
         client = TransportXcpClient(
@@ -99,6 +99,20 @@ class TransportClientTest(unittest.TestCase):
         response = client.command(bytes([0xFF, 0x00]))
         self.assertFalse(response.responded)
         self.assertEqual(response.status, "no_response")
+
+    def test_passes_timeout_through(self) -> None:
+        seen: list[float | None] = []
+
+        class T:
+            def transaction(self, _interface, _frame, *, timeout=None):
+                seen.append(timeout)
+                return []
+
+        client = TransportXcpClient(
+            transport=T(), interface="can0", request_id=0x3E0, response_id=0x3E1
+        )
+        client.command(bytes([0xFF, 0x00]), timeout=1.5)
+        self.assertEqual(seen, [1.5])
 
 
 class ResponseStatusTest(unittest.TestCase):
@@ -171,6 +185,11 @@ class DumpPlanTest(unittest.TestCase):
             plan_dump_chunks(0, 10, 8)
         self.assertEqual(ctx.exception.code, "XCP_INVALID_CHUNK_SIZE")
 
+    def test_rejects_range_beyond_32_bits(self) -> None:
+        with self.assertRaises(XcpActiveError) as ctx:
+            plan_dump_chunks(0xFFFFFFFE, 4, 4)
+        self.assertEqual(ctx.exception.code, "XCP_ADDRESS_OUT_OF_RANGE")
+
     def test_set_mta_encoding(self) -> None:
         self.assertEqual(
             set_mta_request(0x12345678, byte_order="big"),
@@ -216,6 +235,21 @@ class DumpTest(unittest.TestCase):
         self.assertEqual(chunks[0].data, bytes([0xAB] * 4))
         # SHORT_UPLOAD does not issue SET_MTA.
         self.assertFalse(any(call[0] == 0xF6 for call in client.calls))
+
+    def test_dump_truncated_response_is_incomplete(self) -> None:
+        def rule(payload: bytes) -> bytes | None:
+            if payload[0] == 0xFF:
+                return _connect_response()
+            if payload[0] == 0xF6:
+                return bytes([0xFF])
+            if payload[0] == 0xF5:  # UPLOAD: return fewer bytes than requested
+                return bytes([0xFF, 0x01])
+            return _err(0x20)
+
+        _connect, chunks = dump(FakeXcpClient(rule), address=0x2000, size=4, chunk_size=4)
+        self.assertEqual(len(chunks), 1)
+        self.assertIsNone(chunks[0].data)
+        self.assertEqual(chunks[0].to_record()["status"], "incomplete")
 
     def test_dump_stops_on_error(self) -> None:
         def rule(payload: bytes) -> bytes | None:

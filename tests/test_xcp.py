@@ -221,7 +221,7 @@ class XcpActiveInfoDumpCliTests(unittest.TestCase):
     """End-to-end CLI tests for `xcp info` / `xcp dump` via a patched transaction."""
 
     def _run_active(self, argv, responder):
-        def _transaction(_self, _interface, frame):
+        def _transaction(_self, _interface, frame, *, timeout=None):
             response = responder(bytes(frame.data))
             if response is None:
                 return []
