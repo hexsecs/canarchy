@@ -173,6 +173,7 @@ landing here.
 | `completion` | Emits a raw shell script, not a JSON envelope. |
 | `datasets stream`, non-dry-run `datasets replay` | Emit frame records to stdout and need streaming semantics outside MCP's current buffered response model. |
 | `datasets download` | Writes bulk dataset bytes to an arbitrary host path — a CLI-only operator action. `datasets fetch` (provenance) and `datasets replay --dry-run`/`--list-files` (metadata) are exposed. |
+| `doip discovery`, `doip services`, `doip ecu-reset`, `doip tester-present`, `doip security-seed`, `doip dump-dids` | The dedicated DoIP command group is active network egress to an arbitrary host (UDP vehicle-identification discovery + TCP diagnostic sessions), like the `doip://` target exclusion below. Kept CLI-only operator actions behind the active-transmit gate (`docs/design/doip-diagnostic-workflows.md`). |
 
 The `uds_scan` / `uds_trace` tools are exposed for CAN interfaces, but a
 `doip://` target is a **target-level exclusion**: DoIP routes the workflow over

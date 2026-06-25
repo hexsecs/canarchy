@@ -80,7 +80,7 @@ from canarchy.transport import (
 from canarchy.tui import run_tui
 from canarchy.doip import is_doip_target
 from canarchy.fuzz_feedback import SIGNAL_CATEGORIES
-from canarchy.uds import uds_decoder_backend, uds_services_payload
+from canarchy.uds import UDS_SERVICE_CATALOG, uds_decoder_backend, uds_services_payload
 from canarchy.xcp import (
     XCP_DEFAULT_REQUEST_ID,
     XCP_DEFAULT_RESPONSE_ID,
@@ -161,6 +161,14 @@ RE_COMMANDS = {
     "re suggest",
 }
 CANNELLONI_COMMANDS = {"cannelloni decode", "cannelloni send"}
+DOIP_COMMANDS = {
+    "doip discovery",
+    "doip services",
+    "doip ecu-reset",
+    "doip tester-present",
+    "doip security-seed",
+    "doip dump-dids",
+}
 COMPARE_COMMANDS = {"compare"}
 
 ACTIVE_TRANSMIT_COMMANDS = {
@@ -171,6 +179,12 @@ ACTIVE_TRANSMIT_COMMANDS = {
     "cannelloni send",
     "uds scan",
     "xcp scan",
+    "doip discovery",
+    "doip services",
+    "doip ecu-reset",
+    "doip tester-present",
+    "doip security-seed",
+    "doip dump-dids",
     "fuzz payload",
     "fuzz replay",
     "fuzz arbitration-id",
@@ -209,6 +223,7 @@ IMPLEMENTED_COMMANDS = (
     | FUZZ_GUIDED_COMMANDS
     | SEQUENCE_COMMANDS
     | CANNELLONI_COMMANDS
+    | DOIP_COMMANDS
     | COMPARE_COMMANDS
     | {"mcp serve", "mcp install", "replay", "gateway", "shell", "export", "plot", "web serve"}
 )
@@ -1374,6 +1389,89 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(xcp_commands)
     xcp_commands.set_defaults(command="xcp commands")
 
+    doip = subparsers.add_parser("doip", help="DoIP (Diagnostic over IP) workflows")
+    doip_subparsers = doip.add_subparsers(dest="doip_action", required=True)
+
+    doip_discovery = doip_subparsers.add_parser(
+        "discovery", help="discover reachable DoIP entities via vehicle identification"
+    )
+    doip_discovery.add_argument(
+        "host",
+        nargs="?",
+        default="255.255.255.255",
+        help="target host or broadcast address (default: 255.255.255.255)",
+    )
+    doip_discovery.add_argument(
+        "--port", type=int, default=13400, help="DoIP UDP port (default: 13400)"
+    )
+    doip_discovery.add_argument(
+        "--timeout", type=float, default=2.0, help="discovery window in seconds (default: 2.0)"
+    )
+    doip_discovery.add_argument(
+        "--dry-run", action="store_true", help="plan the discovery without transmitting"
+    )
+    add_active_ack_argument(doip_discovery)
+    add_output_arguments(doip_discovery)
+    doip_discovery.set_defaults(command="doip discovery")
+
+    def _add_doip_target_arguments(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("target", help="doip://<host>:<port>?logical_address=0x0E80 endpoint")
+        parser.add_argument(
+            "--dry-run", action="store_true", help="plan the request without transmitting"
+        )
+        add_active_ack_argument(parser)
+        add_output_arguments(parser)
+
+    doip_services = doip_subparsers.add_parser(
+        "services", help="enumerate supported UDS services over DoIP"
+    )
+    _add_doip_target_arguments(doip_services)
+    doip_services.set_defaults(command="doip services")
+
+    doip_ecu_reset = doip_subparsers.add_parser(
+        "ecu-reset", help="send an ECUReset (0x11) request over DoIP"
+    )
+    _add_doip_target_arguments(doip_ecu_reset)
+    doip_ecu_reset.add_argument(
+        "--reset-type", default="0x01", help="ECUReset subfunction (default: 0x01 hardReset)"
+    )
+    doip_ecu_reset.set_defaults(command="doip ecu-reset")
+
+    doip_tester_present = doip_subparsers.add_parser(
+        "tester-present", help="send a TesterPresent (0x3E) request over DoIP"
+    )
+    _add_doip_target_arguments(doip_tester_present)
+    doip_tester_present.add_argument(
+        "--suppress", action="store_true", help="set the suppressPosRspMsgIndicationBit"
+    )
+    doip_tester_present.set_defaults(command="doip tester-present")
+
+    doip_security_seed = doip_subparsers.add_parser(
+        "security-seed", help="collect SecurityAccess (0x27) seeds over DoIP"
+    )
+    _add_doip_target_arguments(doip_security_seed)
+    doip_security_seed.add_argument(
+        "--level", default="0x01", help="requestSeed security level, odd (default: 0x01)"
+    )
+    doip_security_seed.add_argument(
+        "--session", help="optional DiagnosticSessionControl session to enter first"
+    )
+    doip_security_seed.add_argument(
+        "--count", type=int, default=1, help="number of seeds to request (default: 1)"
+    )
+    doip_security_seed.set_defaults(command="doip security-seed")
+
+    doip_dump_dids = doip_subparsers.add_parser(
+        "dump-dids", help="read a range of DataIdentifiers (0x22) over DoIP"
+    )
+    _add_doip_target_arguments(doip_dump_dids)
+    doip_dump_dids.add_argument("--did-start", default="0xF180", help="first DID (default: 0xF180)")
+    doip_dump_dids.add_argument("--did-end", default="0xF1FF", help="last DID (default: 0xF1FF)")
+    doip_dump_dids.add_argument(
+        "--limit", type=int, default=256, help="maximum DIDs to read (default: 256)"
+    )
+    doip_dump_dids.set_defaults(command="doip dump-dids")
+
     j1587 = subparsers.add_parser("j1587", help="J1587/J1708 legacy truck-bus workflows")
     j1587_subparsers = j1587.add_subparsers(dest="j1587_action", required=True)
 
@@ -2125,6 +2223,12 @@ def active_transmit_preflight_warning(args: argparse.Namespace) -> str:
             f"warning: `{args.command}` will open a DoIP session and transmit diagnostic "
             f"requests to `{args.interface}`; use intentionally against a controlled endpoint."
         )
+    if args.command in DOIP_COMMANDS:
+        target = getattr(args, "target", None) or getattr(args, "host", "<target>")
+        return (
+            f"warning: `{args.command}` will transmit DoIP requests over the network to "
+            f"`{target}`; use intentionally against a controlled endpoint."
+        )
     if args.command == "uds scan":
         return (
             f"warning: `uds scan` will transmit diagnostic requests on interface `{args.interface}`; "
@@ -2182,6 +2286,9 @@ def active_transmit_confirmation_prompt(args: argparse.Namespace) -> str:
         return (
             f"confirm: type YES to run `{args.command}` against DoIP endpoint `{args.interface}`: "
         )
+    if args.command in DOIP_COMMANDS:
+        target = getattr(args, "target", None) or getattr(args, "host", "<target>")
+        return f"confirm: type YES to run `{args.command}` against `{target}`: "
     if args.command == "uds scan":
         return f"confirm: type YES to run UDS scan on `{args.interface}`: "
     if args.command == "xcp scan":
@@ -7192,6 +7299,236 @@ def _parse_host_port(target: str, command: str) -> tuple[str, int]:
     return host, port
 
 
+def _parse_doip_int(
+    value: object, *, command: str, name: str, lo: int, hi: int, code: str = "DOIP_INVALID_VALUE"
+) -> int:
+    try:
+        parsed = int(str(value), 0)
+    except (TypeError, ValueError) as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {value!r} is not a valid integer.",
+                    hint="Pass a decimal or 0x-prefixed value.",
+                )
+            ],
+        ) from exc
+    if not lo <= parsed <= hi:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{name} {parsed} is outside the allowed range [{lo}, {hi}].",
+                    hint=f"Pass {name} within [{lo}, {hi}].",
+                )
+            ],
+        )
+    return parsed
+
+
+def doip_payload(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    from canarchy import doip as doip_mod
+
+    command = args.command
+    dry_run = bool(getattr(args, "dry_run", False))
+
+    if command == "doip discovery":
+        host = getattr(args, "host", "255.255.255.255")
+        port = int(getattr(args, "port", 13400))
+        timeout = float(getattr(args, "timeout", 2.0) or 2.0)
+        base = {"host": host, "port": port, "transport": "doip"}
+        if dry_run:
+            return (
+                {**base, "mode": "dry_run", "entity_count": 0},
+                [],
+                [
+                    f"ACTIVE_TRANSMIT_DRY_RUN: planned DoIP vehicle-identification broadcast to "
+                    f"`{host}:{port}`; no datagram sent."
+                ],
+            )
+        enforce_active_transmit_safety(args)
+        try:
+            entities = doip_mod.discover_entities(host, port=port, timeout=timeout)
+        except doip_mod.DoipError as exc:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_TRANSPORT_ERROR,
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+                data={**base, "mode": "active"},
+            ) from exc
+        return (
+            {
+                **base,
+                "mode": "active",
+                "entity_count": len(entities),
+                "entities": [entity.to_record() for entity in entities],
+            },
+            [],
+            [],
+        )
+
+    # All other DoIP workflows take a doip:// target.
+    target_uri = getattr(args, "target", None)
+    try:
+        target = doip_mod.parse_doip_target(target_uri)
+    except doip_mod.DoipError as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+        ) from exc
+
+    base = {
+        "target": target_uri,
+        "transport": "doip",
+        "host": target.host,
+        "port": target.port,
+        "logical_address": target.logical_address,
+        "source_address": target.source_address,
+        "protocol_decoder": uds_decoder_backend(),
+    }
+
+    # Build the planned first request + count for the dry-run plan, and validate
+    # operator-supplied numeric arguments before any socket is opened.
+    if command == "doip services":
+        first_request = bytes([UDS_SERVICE_CATALOG[0].service]).hex()
+        planned = len(UDS_SERVICE_CATALOG)
+    elif command == "doip ecu-reset":
+        reset_type = _parse_doip_int(
+            getattr(args, "reset_type", "0x01"), command=command, name="--reset-type", lo=0, hi=0xFF
+        )
+        first_request = bytes([0x11, reset_type]).hex()
+        planned = 1
+    elif command == "doip tester-present":
+        suppress = bool(getattr(args, "suppress", False))
+        first_request = bytes([0x3E, 0x80 if suppress else 0x00]).hex()
+        planned = 1
+    elif command == "doip security-seed":
+        level = _parse_doip_int(
+            getattr(args, "level", "0x01"), command=command, name="--level", lo=1, hi=0xFF
+        )
+        if level % 2 == 0:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="DOIP_INVALID_SECURITY_LEVEL",
+                        message=f"SecurityAccess requestSeed level 0x{level:02X} must be odd.",
+                        hint="Odd subfunctions request a seed.",
+                    )
+                ],
+            )
+        session_raw = getattr(args, "session", None)
+        session = (
+            None
+            if session_raw is None
+            else _parse_doip_int(session_raw, command=command, name="--session", lo=0, hi=0xFF)
+        )
+        count = int(getattr(args, "count", 1) or 1)
+        first_request = bytes([0x27, level]).hex()
+        planned = count + (1 if session is not None else 0)
+    elif command == "doip dump-dids":
+        did_start = _parse_doip_int(
+            getattr(args, "did_start", "0xF180"),
+            command=command,
+            name="--did-start",
+            lo=0,
+            hi=0xFFFF,
+        )
+        did_end = _parse_doip_int(
+            getattr(args, "did_end", "0xF1FF"), command=command, name="--did-end", lo=0, hi=0xFFFF
+        )
+        if did_end < did_start:
+            raise CommandError(
+                command=command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="DOIP_INVALID_DID_RANGE",
+                        message=f"--did-end 0x{did_end:04X} is below --did-start 0x{did_start:04X}.",
+                        hint="Pass --did-start <= --did-end.",
+                    )
+                ],
+            )
+        limit = int(getattr(args, "limit", 256) or 256)
+        first_request = bytes([0x22, (did_start >> 8) & 0xFF, did_start & 0xFF]).hex()
+        planned = min(limit, did_end - did_start + 1)
+    else:  # pragma: no cover - guarded by DOIP_COMMANDS
+        raise AssertionError(f"unsupported doip command: {command}")
+
+    if dry_run:
+        sub = command.removeprefix("doip ")
+        return (
+            {
+                **base,
+                "mode": "dry_run",
+                "planned_requests": planned,
+                "first_request": first_request,
+            },
+            [],
+            [
+                f"ACTIVE_TRANSMIT_DRY_RUN: planned {planned} `doip {sub}` request(s) to "
+                f"`{target_uri}`; no datagram sent."
+            ],
+        )
+
+    enforce_active_transmit_safety(args)
+    try:
+        if command == "doip services":
+            records, events = doip_mod.doip_services(target)
+            supported = [record for record in records if record["supported"]]
+            data = {
+                **base,
+                "mode": "active",
+                "probe_count": len(records),
+                "supported_count": len(supported),
+                "supported_services": supported,
+                "probes": records,
+            }
+        elif command == "doip ecu-reset":
+            record, events = doip_mod.doip_ecu_reset(target, reset_type=reset_type)
+            data = {**base, "mode": "active", "reset_type": reset_type, "result": record}
+        elif command == "doip tester-present":
+            record, events = doip_mod.doip_tester_present(target, suppress_response=suppress)
+            data = {**base, "mode": "active", "suppress": suppress, "result": record}
+        elif command == "doip security-seed":
+            seed_data, events = doip_mod.doip_security_seed(
+                target, level=level, session=session, count=count
+            )
+            data = {**base, "mode": "active", **seed_data}
+        else:  # doip dump-dids
+            records, events = doip_mod.doip_dump_dids(
+                target, did_start=did_start, did_end=did_end, limit=limit
+            )
+            present = [record for record in records if record["present"]]
+            data = {
+                **base,
+                "mode": "active",
+                "did_start": did_start,
+                "did_end": did_end,
+                "probe_count": len(records),
+                "present_count": len(present),
+                "dids": records,
+            }
+    except doip_mod.DoipError as exc:
+        raise CommandError(
+            command=command,
+            exit_code=EXIT_TRANSPORT_ERROR,
+            errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            data={**base, "mode": "active"},
+        ) from exc
+
+    return data, serialize_events([event.to_event() for event in events]), []
+
+
 def cannelloni_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -8285,6 +8622,11 @@ def build_result(args: argparse.Namespace) -> CommandResult:
         data.update(can_data)
         data["events"] = can_events
         warnings.extend(can_warnings)
+    elif args.command in DOIP_COMMANDS:
+        doip_data, doip_events, doip_warnings = doip_payload(args)
+        data.update(doip_data)
+        data["events"] = doip_events
+        warnings.extend(doip_warnings)
     elif args.command == "export":
         export_data, export_events, export_warnings = export_payload(args)
         data.update(export_data)

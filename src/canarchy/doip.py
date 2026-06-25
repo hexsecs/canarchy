@@ -24,13 +24,21 @@ is a CLI-only operator action (not exposed through the MCP server).
 
 from __future__ import annotations
 
+import contextlib
 import socket
 import struct
+import time
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from urllib.parse import parse_qs, urlsplit
 
 from canarchy.models import UdsTransactionEvent, serialize_events
-from canarchy.uds import enrich_uds_transactions, uds_service_name
+from canarchy.uds import (
+    UDS_NEGATIVE_RESPONSE_CODES,
+    UDS_SERVICE_CATALOG,
+    enrich_uds_transactions,
+    uds_service_name,
+)
 
 DOIP_DEFAULT_PORT = 13400
 DOIP_PROTOCOL_VERSION = 0x02  # ISO 13400-2:2012
@@ -518,3 +526,328 @@ def doip_trace_events(target: DoipTarget, *, connect=_connect) -> list[dict[str,
     return serialize_events(
         [event.to_event() for event in doip_trace_transactions(target, connect=connect)]
     )
+
+
+# --- vehicle identification (UDP discovery) ----------------------------------
+
+PT_VEHICLE_IDENTIFICATION_REQUEST = 0x0001
+# A vehicle-identification response and an unsolicited announcement share a type.
+PT_VEHICLE_IDENTIFICATION_RESPONSE = 0x0004
+
+# UDS service ids whose absence (or a not-supported NRC) means "unsupported".
+_SERVICE_ABSENT_NRCS = frozenset({0x11, 0x7F})
+
+
+@dataclass(slots=True, frozen=True)
+class DoipEntity:
+    """A DoIP entity learned from a vehicle-identification response."""
+
+    host: str
+    logical_address: int
+    vin: str | None
+    eid: str
+    gid: str
+    further_action: int
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "host": self.host,
+            "logical_address": self.logical_address,
+            "vin": self.vin,
+            "eid": self.eid,
+            "gid": self.gid,
+            "further_action": self.further_action,
+        }
+
+
+def encode_vehicle_identification_request() -> bytes:
+    return encode_message(PT_VEHICLE_IDENTIFICATION_REQUEST, b"")
+
+
+def parse_vehicle_identification_response(host: str, payload: bytes) -> DoipEntity:
+    """Parse a VehicleIdentificationResponse / AnnouncementMessage payload."""
+    if len(payload) < 32:
+        raise DoipError(
+            code="DOIP_PROTOCOL_ERROR",
+            message="DoIP vehicle-identification response is too short.",
+            hint="Expected at least 32 bytes (VIN, address, EID, GID, further action).",
+        )
+    vin_bytes = payload[0:17]
+    logical_address = int.from_bytes(payload[17:19], "big")
+    eid = payload[19:25]
+    gid = payload[25:31]
+    further_action = payload[31]
+    vin = vin_bytes.decode("ascii", "replace").strip("\x00").strip() or None
+    return DoipEntity(
+        host=host,
+        logical_address=logical_address,
+        vin=vin,
+        eid=eid.hex(),
+        gid=gid.hex(),
+        further_action=further_action,
+    )
+
+
+# A discovery sender sends the request and returns observed (host, type, payload).
+IdentificationSender = Callable[[str, int, float], Iterable[tuple[str, int, bytes]]]
+
+
+def _udp_identification_sender(
+    host: str, port: int, timeout: float
+) -> list[tuple[str, int, bytes]]:
+    request = encode_vehicle_identification_request()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    with contextlib.suppress(OSError):
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.settimeout(timeout)
+    results: list[tuple[str, int, bytes]] = []
+    try:
+        try:
+            sock.sendto(request, (host, port))
+        except OSError as exc:
+            raise DoipError(
+                code="DOIP_CONNECTION_FAILED",
+                message=f"Could not send DoIP discovery request to {host}:{port}: {exc}.",
+                hint="Confirm the host/broadcast address is reachable on this network.",
+            ) from exc
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                data, addr = sock.recvfrom(4096)
+            except (TimeoutError, OSError):
+                break
+            with contextlib.suppress(DoipError):
+                message, _ = decode_message(data)
+                results.append((addr[0], message.payload_type, message.payload))
+    finally:
+        sock.close()
+    return results
+
+
+def discover_entities(
+    host: str = "255.255.255.255",
+    *,
+    port: int = DOIP_DEFAULT_PORT,
+    timeout: float = DEFAULT_TIMEOUT,
+    sender: IdentificationSender | None = None,
+) -> list[DoipEntity]:
+    """Broadcast a DoIP vehicle-identification request and collect responders."""
+    if timeout <= 0:
+        raise DoipError(
+            code="DOIP_INVALID_TARGET",
+            message="DoIP discovery timeout must be positive.",
+            hint="Pass --timeout greater than zero.",
+        )
+    sender = sender or _udp_identification_sender
+    entities: list[DoipEntity] = []
+    for src_host, payload_type, payload in sender(host, port, timeout):
+        if payload_type != PT_VEHICLE_IDENTIFICATION_RESPONSE:
+            continue
+        entities.append(parse_vehicle_identification_response(src_host, payload))
+    return entities
+
+
+# --- active diagnostic workflows over a DoIP TCP session ---------------------
+
+
+def _collect_exchanges(
+    target: DoipTarget,
+    requests: Sequence[bytes],
+    *,
+    connect=_connect,
+) -> list[tuple[bytes, bytes | None]]:
+    """Activate routing, then run each UDS request, mapping a timeout to None."""
+    sock = connect(target)
+    conn = DoipConnection(sock)
+    results: list[tuple[bytes, bytes | None]] = []
+    try:
+        _activate_routing(conn, target)
+        for request in requests:
+            try:
+                response = _diagnostic_exchange(conn, target, request)
+            except DoipError as exc:
+                if exc.code == "DOIP_TIMEOUT":
+                    response = None
+                else:
+                    raise
+            results.append((bytes(request), response))
+    finally:
+        conn.close()
+    return results
+
+
+def _exchange_status(response: bytes | None) -> tuple[str, int | None, str | None]:
+    if not response:
+        return "no_response", None, None
+    if response[:1] == b"\x7f" and len(response) >= 3:
+        code = response[2]
+        return "negative", code, UDS_NEGATIVE_RESPONSE_CODES.get(code, f"ResponseCode0x{code:02X}")
+    return "positive", None, None
+
+
+def _exchange_record(request: bytes, response: bytes | None) -> dict[str, object]:
+    status, code, name = _exchange_status(response)
+    return {
+        "request": request.hex(),
+        "response": response.hex() if response is not None else None,
+        "status": status,
+        "negative_response_code": code,
+        "negative_response_name": name,
+    }
+
+
+def _exchange_event(
+    target: DoipTarget, request: bytes, response: bytes, *, source: str
+) -> UdsTransactionEvent:
+    service = request[0]
+    return UdsTransactionEvent(
+        request_id=target.source_address,
+        response_id=target.logical_address,
+        service=service,
+        service_name=uds_service_name(service),
+        request_data=request,
+        response_data=response,
+        complete=True,
+        ecu_address=target.logical_address,
+        source=source,
+    )
+
+
+def _events_for(
+    target: DoipTarget, results: Iterable[tuple[bytes, bytes | None]], *, source: str
+) -> list[UdsTransactionEvent]:
+    events = [
+        _exchange_event(target, request, response, source=source)
+        for request, response in results
+        if response is not None
+    ]
+    return enrich_uds_transactions(events)
+
+
+def doip_services(
+    target: DoipTarget,
+    *,
+    services: Sequence[int] | None = None,
+    connect=_connect,
+    source: str = "transport.doip.services",
+) -> tuple[list[dict[str, object]], list[UdsTransactionEvent]]:
+    """Probe each candidate UDS service over DoIP and classify support."""
+    service_ids = (
+        list(services) if services is not None else [s.service for s in UDS_SERVICE_CATALOG]
+    )
+    results = _collect_exchanges(target, [bytes([sid]) for sid in service_ids], connect=connect)
+    records: list[dict[str, object]] = []
+    for (request, response), sid in zip(results, service_ids):
+        status, code, _name = _exchange_status(response)
+        supported = response is not None and (
+            status == "positive" or code not in _SERVICE_ABSENT_NRCS
+        )
+        records.append(
+            {
+                "service": sid,
+                "name": uds_service_name(sid),
+                "supported": supported,
+                **_exchange_record(request, response),
+            }
+        )
+    return records, _events_for(target, results, source=source)
+
+
+def doip_ecu_reset(
+    target: DoipTarget,
+    *,
+    reset_type: int = 0x01,
+    connect=_connect,
+    source: str = "transport.doip.ecu-reset",
+) -> tuple[dict[str, object], list[UdsTransactionEvent]]:
+    results = _collect_exchanges(target, [bytes([0x11, reset_type & 0xFF])], connect=connect)
+    request, response = results[0]
+    return _exchange_record(request, response), _events_for(target, results, source=source)
+
+
+def doip_tester_present(
+    target: DoipTarget,
+    *,
+    suppress_response: bool = False,
+    connect=_connect,
+    source: str = "transport.doip.tester-present",
+) -> tuple[dict[str, object], list[UdsTransactionEvent]]:
+    subfunction = 0x80 if suppress_response else 0x00
+    results = _collect_exchanges(target, [bytes([0x3E, subfunction])], connect=connect)
+    request, response = results[0]
+    return _exchange_record(request, response), _events_for(target, results, source=source)
+
+
+def doip_security_seed(
+    target: DoipTarget,
+    *,
+    level: int = 0x01,
+    session: int | None = None,
+    count: int = 1,
+    connect=_connect,
+    source: str = "transport.doip.security-seed",
+) -> tuple[dict[str, object], list[UdsTransactionEvent]]:
+    requests: list[bytes] = []
+    if session is not None:
+        requests.append(bytes([0x10, session & 0xFF]))
+    requests.extend(bytes([0x27, level & 0xFF]) for _ in range(max(count, 1)))
+    results = _collect_exchanges(target, requests, connect=connect)
+    seeds: list[dict[str, object]] = []
+    session_record: dict[str, object] | None = None
+    index = 0
+    for request, response in results:
+        if request[0] == 0x10:
+            session_record = _exchange_record(request, response)
+            continue
+        status, _code, _name = _exchange_status(response)
+        seed = (
+            response[2:].hex() if status == "positive" and response and len(response) >= 2 else None
+        )
+        seeds.append({"index": index, "seed": seed, **_exchange_record(request, response)})
+        index += 1
+    distinct = len({entry["seed"] for entry in seeds if entry["seed"] is not None})
+    data: dict[str, object] = {
+        "level": level,
+        "session": session,
+        "requested": max(count, 1),
+        "collected": sum(1 for entry in seeds if entry["seed"] is not None),
+        "distinct_seeds": distinct,
+        "session_response": session_record,
+        "seeds": seeds,
+    }
+    return data, _events_for(target, results, source=source)
+
+
+def doip_dump_dids(
+    target: DoipTarget,
+    *,
+    did_start: int,
+    did_end: int,
+    limit: int = 256,
+    connect=_connect,
+    source: str = "transport.doip.dump-dids",
+) -> tuple[list[dict[str, object]], list[UdsTransactionEvent]]:
+    dids = list(range(did_start, did_end + 1))[: max(limit, 1)]
+    requests = [bytes([0x22, (did >> 8) & 0xFF, did & 0xFF]) for did in dids]
+    results = _collect_exchanges(target, requests, connect=connect)
+    records: list[dict[str, object]] = []
+    for (request, response), did in zip(results, dids):
+        status, _code, _name = _exchange_status(response)
+        value = None
+        if (
+            status == "positive"
+            and response
+            and len(response) >= 3
+            and response[1:3] == request[1:3]
+        ):
+            value = response[3:].hex()
+        records.append(
+            {
+                "did": did,
+                "value": value,
+                "present": value is not None,
+                **_exchange_record(request, response),
+            }
+        )
+    return records, _events_for(target, results, source=source)

@@ -5,9 +5,10 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented |
-| Command surface | `canarchy uds scan`, `canarchy uds trace` (DoIP target syntax) |
+| Command surface | `canarchy uds scan`, `canarchy uds trace` (DoIP target syntax); `canarchy doip discovery`, `doip services`, `doip ecu-reset`, `doip tester-present`, `doip security-seed`, `doip dump-dids` |
 | Primary area | Transport, protocol, CLI |
 | Related specs | `docs/design/uds-transaction-workflows.md`, `docs/design/active-transmit-safety.md`, `docs/design/mcp-server.md` |
+| Issues | #326, #465 |
 
 ## Goal
 
@@ -40,13 +41,32 @@ extends CANarchy's protocol breadth without forking the UDS command surface.
 | `REQ-DOIP-08` | Unwanted behaviour | If routing activation is denied, a diagnostic message is negatively acknowledged, or a malformed DoIP message is received, the system shall return `DOIP_ROUTING_ACTIVATION_DENIED`, `DOIP_DIAGNOSTIC_NACK`, or `DOIP_PROTOCOL_ERROR` respectively, with exit code 2. |
 | `REQ-DOIP-09` | Ubiquitous | The system shall surface UDS negative responses (service `0x7F`) as transaction events with `negative_response_code` / `negative_response_name`, not as transport-level errors. |
 | `REQ-DOIP-10` | Unwanted behaviour | If an MCP caller passes a `doip://` interface to the `uds_scan` / `uds_trace` tools, the system shall refuse it with code `DOIP_MCP_EXCLUDED`; DoIP active network egress is a CLI-only operator action. |
+| `REQ-DOIP-11` | Event-driven | When `doip discovery [host]` is invoked, the system shall broadcast a UDP vehicle-identification request and report each responding entity (VIN, logical address, EID, GID) with a bounded `--timeout`. |
+| `REQ-DOIP-12` | Event-driven | When `doip services <doip-uri>` is invoked, the system shall activate routing and probe the UDS service catalog over the DoIP session, reporting supported services as structured output. |
+| `REQ-DOIP-13` | Optional feature | The system shall provide `doip ecu-reset`, `doip tester-present`, `doip security-seed`, and `doip dump-dids` over a DoIP session, each composing the existing diagnostic-exchange primitive and emitting canonical `uds_transaction` events. |
+| `REQ-DOIP-14` | State-driven | While any `doip` workflow is invoked, the system shall apply the active-transmit safety model (preflight warning, `--ack-active`, `YES`/non-interactive ack) before opening any socket, and shall support `--dry-run` request plans that transmit nothing. |
+| `REQ-DOIP-15` | Ubiquitous | The `doip` command group shall be CLI-only and shall not be exposed as MCP tools — DoIP is active network egress to an arbitrary host, consistent with the `doip://` target-level exclusion on `uds_scan` / `uds_trace`. |
 
 ## Command Surface
 
 ```text
 canarchy uds scan  doip://<host>:<port>?logical_address=0x0E80 [--ack-active] [--json|--jsonl|--text]
 canarchy uds trace doip://<host>:<port>?logical_address=0x0E80 [--ack-active] [--json|--jsonl|--text]
+
+canarchy doip discovery [host] [--port 13400] [--timeout 2.0] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+canarchy doip services       <doip-uri> [--ack-active] [--dry-run] [--json|--jsonl|--text]
+canarchy doip ecu-reset      <doip-uri> [--reset-type 0x01] [--ack-active] [--dry-run] ...
+canarchy doip tester-present <doip-uri> [--suppress] [--ack-active] [--dry-run] ...
+canarchy doip security-seed  <doip-uri> [--level 0x01] [--session 0x03] [--count N] [--ack-active] [--dry-run] ...
+canarchy doip dump-dids      <doip-uri> [--did-start 0xF180] [--did-end 0xF1FF] [--limit N] [--ack-active] [--dry-run] ...
 ```
+
+The `doip` workflows reuse the same DoIP TCP session primitives as the `uds`
+DoIP path (`_collect_exchanges` → routing activation + per-request diagnostic
+exchange) and the shared UDS service catalog / NRC decoding. `doip discovery`
+is the UDP vehicle-identification path (payload types `0x0001` / `0x0004`), with
+the socket factored behind an injectable sender so the codec is unit-tested
+without a live network.
 
 Target URI query parameters:
 
@@ -84,13 +104,19 @@ In scope:
   tester-present), reusing `UdsTransactionEvent` and its enrichment
 * active-transmit safety on both DoIP-routed workflows
 
+Now also in scope (#465):
+
+* UDP vehicle-identification discovery (`0x0001` / `0x0004`) via `doip discovery`
+* a dedicated `canarchy doip` command group for service enumeration, ECU reset,
+  TesterPresent, SecurityAccess seed collection, and DID dumping over a DoIP
+  session, each behind the active-transmit safety model with `--dry-run` plans
+
 Out of scope (v1):
 
-* UDP vehicle-discovery / announcement (`0x0001` / `0x0004`) and the UDP entity
-  status messages — the TCP diagnostic path is the common case
+* the UDP entity-status / power-mode messages
 * TLS-secured DoIP (port 3496) and authentication / confirmation handshakes
-* a long-lived interactive DoIP session or full UDS client (read/write by
-  identifier sequences); scan/trace cover discovery and liveness
+* memory reads/writes over DoIP and full read/write-by-identifier sequences;
+  the workflows here cover discovery, enumeration, and bounded extraction
 
 ## Data Model
 
@@ -117,6 +143,9 @@ table. All three are identical in shape to the CAN-backed `uds` output.
 | `DOIP_DIAGNOSTIC_NACK` | gateway returned a diagnostic-message negative ack | 2 |
 | `DOIP_PROTOCOL_ERROR` | malformed header / payload / generic negative ack | 2 |
 | `DOIP_MCP_EXCLUDED` | `doip://` target passed to the MCP `uds_scan` / `uds_trace` tools | n/a (MCP refusal envelope) |
+| `DOIP_INVALID_VALUE` | a `doip` workflow numeric argument out of range | 1 |
+| `DOIP_INVALID_SECURITY_LEVEL` | `doip security-seed --level` is even | 1 |
+| `DOIP_INVALID_DID_RANGE` | `doip dump-dids --did-end` below `--did-start` | 1 |
 
 A per-probe read timeout during `uds scan` is treated as a silent ECU and that
 probe is skipped, not raised — only an initial/total failure surfaces as an
@@ -126,6 +155,5 @@ successful trace.
 
 ## Deferred Decisions
 
-* UDP vehicle discovery to enumerate logical addresses automatically.
-* Whether DoIP warrants its own top-level `canarchy doip` command group if the
-  workflow set grows beyond scan/trace.
+* Memory read/write over DoIP and full read/write-by-identifier client sequences.
+* TLS-secured DoIP (port 3496) and authentication / confirmation handshakes.
