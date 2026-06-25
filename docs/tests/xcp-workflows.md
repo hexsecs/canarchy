@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Design doc | `docs/design/xcp-workflows.md` |
-| Test file | `tests/test_xcp.py` |
+| Test file | `tests/test_xcp.py`, `tests/test_xcp_active.py` |
 
 ## Requirement Traceability
 
@@ -22,8 +22,20 @@
 | `REQ-XCP-07` | Invalid id structured error | `TEST-XCP-09` |
 | `REQ-XCP-08` | Scaffold backend sample data | `TEST-XCP-07`, `TEST-XCP-08` |
 | `REQ-XCP-09` | MCP tool exposure + active gate | `TEST-XCP-12`, `TEST-XCP-14` |
+| `REQ-XCP-10` | `xcp info` capability queries | `TEST-XCP-15`, `TEST-XCP-ACT-*` |
+| `REQ-XCP-11` | `xcp dump` chunked upload + output | `TEST-XCP-17`, `TEST-XCP-ACT-*` |
+| `REQ-XCP-12` | Active info/dump safety + dry-run plans | `TEST-XCP-16`, `TEST-XCP-18`, `TEST-XCP-20` |
+| `REQ-XCP-13` | Info/dump error distinction | `TEST-XCP-19`, `TEST-XCP-21`, `TEST-XCP-ACT-*` |
+| `REQ-XCP-14` | Info/dump MCP exclusion | `test_every_cli_command_is_exposed_or_documented` |
 
 ## Test Cases
+
+> `TEST-XCP-ACT-*`: pure-module workflow tests in `tests/test_xcp_active.py`
+> (CTO framing, response status, `info` capability collection / unsupported /
+> no-connect / connect-error, dump chunk planning, SET_MTA+UPLOAD and
+> SHORT_UPLOAD paths, stop-on-error). CLI tests `TEST-XCP-15`..`21` live in
+> `tests/test_xcp.py::XcpActiveInfoDumpCliTests` and drive the full command
+> through a patched live `transaction()`.
 
 ### TEST-XCP-01 — Command and error code naming
 
@@ -190,6 +202,24 @@ Then   the system shall refuse with `ACTIVE_TRANSMIT_REQUIRES_ACK` before any tr
 ```
 
 **Fixture:** none.
+
+### TEST-XCP-15..21 — Active `xcp info` / `xcp dump` CLI
+
+```gherkin
+Given  a python-can backed transport with transaction() patched to a fake XCP slave
+When   `xcp info` / `xcp dump` are invoked
+Then   info shall report mode active with parsed capabilities (TEST-XCP-15),
+And    info dry-run shall plan four commands without transmitting (TEST-XCP-16),
+And    a silent slave shall return XCP_NO_RESPONSE with exit 2 (TEST-XCP-19),
+And    dump shall upload a bounded range, assemble the bytes, and write --output (TEST-XCP-17),
+And    dump dry-run shall plan connect + chunk requests without transmitting (TEST-XCP-18),
+And    dump without --ack-active under require_active_ack shall return ACTIVE_ACK_REQUIRED (TEST-XCP-20),
+And    an oversize --size shall return XCP_INVALID_VALUE with exit 1 (TEST-XCP-21)
+```
+
+**Fixture:** patched `LocalTransport.transaction`; a temp `--output` file.
+
+---
 
 ## Fixtures And Environment
 

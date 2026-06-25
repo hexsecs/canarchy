@@ -5,9 +5,10 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented |
-| Command surface | `canarchy xcp scan`, `xcp trace`, `xcp read`, `xcp commands` |
+| Command surface | `canarchy xcp scan`, `xcp info`, `xcp dump`, `xcp trace`, `xcp read`, `xcp commands` |
 | Primary area | Protocol, transport, CLI |
 | Related specs | `docs/design/uds-transaction-workflows.md`, `docs/design/active-transmit-safety.md` |
+| Issues | #327, #467 |
 
 ## Goal
 
@@ -42,15 +43,30 @@ JSON/JSONL envelope.
 | `REQ-XCP-07` | Unwanted behaviour | If a supplied request/response id is not a valid CAN id, the system shall return a structured error with code `XCP_INVALID_ID` and exit code 1. |
 | `REQ-XCP-08` | State-driven | While the scaffold transport backend is active, the system shall return deterministic sample XCP transactions/measurements instead of opening a live interface. |
 | `REQ-XCP-09` | Ubiquitous | `xcp scan`, `xcp trace`, `xcp read`, and `xcp commands` shall be exposed as MCP tools (`xcp_scan`, `xcp_trace`, `xcp_read`, `xcp_commands`); the active `xcp_scan` tool shall be in `_ACTIVE_TRANSMIT_TOOLS` with a mandatory `ack_active=true` and `dry_run` defaulting to true. |
+| `REQ-XCP-10` | Event-driven | When `xcp info <interface>` is invoked, the system shall CONNECT to the request/response id pair and report the slave's basic capabilities, additionally querying the optional GET_STATUS, GET_COMM_MODE_INFO, and GET_ID commands. |
+| `REQ-XCP-11` | Event-driven | When `xcp dump <interface> --address --size` is invoked, the system shall CONNECT and upload the address range in `--chunk-size` chunks via SET_MTA + UPLOAD (or SHORT_UPLOAD with `--short-upload`), supporting an `--output` file and reporting `bytes_read` / `complete` progress metadata. |
+| `REQ-XCP-12` | Ubiquitous | `xcp info` and `xcp dump` shall be active-transmit commands honouring the active-transmit safety model with `--dry-run` request plans that need no interface, and shall apply strict bounds (`MAX_DUMP_BYTES`, chunk size ≤ MAX_CTO-1). |
+| `REQ-XCP-13` | Unwanted behaviour | `xcp info` / `xcp dump` errors shall distinguish no response (`XCP_NO_RESPONSE`), protocol error responses (`XCP_ERROR_RESPONSE`), unsupported optional commands (reported per-command as `status: unsupported`), bounds validation (`XCP_INVALID_VALUE` / `XCP_DUMP_TOO_LARGE` / `XCP_INVALID_CHUNK_SIZE`, exit 1), and transport failures (`TRANSPORT_UNAVAILABLE`, exit 2). |
+| `REQ-XCP-14` | Ubiquitous | `xcp info` and `xcp dump` shall be CLI-only operator actions and shall not be exposed as MCP tools. |
 
 ## Command Surface
 
 ```text
 canarchy xcp scan  <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+canarchy xcp info  <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--timeout S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+canarchy xcp dump  <interface> --address 0x08000000 --size N [--chunk-size 4] [--address-extension 0x00]
+                   [--short-upload] [--output PATH] [--timeout S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
 canarchy xcp trace <interface> [--request-id 0x3E0] [--response-id 0x3E1] [--json|--jsonl|--text]
 canarchy xcp read  <interface> [--response-id 0x3E1] [--json|--jsonl|--text]
 canarchy xcp commands [--json|--jsonl|--text]
 ```
+
+`xcp info` and `xcp dump` are implemented in `src/canarchy/xcp_active.py` on a
+small `XcpClient` seam ("send one CTO, observe at most one response CTO"), so the
+workflow logic is unit-tested with an in-memory fake and only `TransportXcpClient`
+touches live hardware. `info` reports `capabilities` (connect / status /
+comm_mode / identification); `dump` reports per-chunk records plus the assembled
+`memory` hex and `complete` flag, and writes `--output` when bytes were read.
 
 ## Wire Model (XCP-on-CAN)
 
@@ -84,17 +100,26 @@ output.
 | Code | Trigger | Exit code |
 |------|---------|-----------|
 | `XCP_INVALID_ID` | `--request-id` / `--response-id` not a valid CAN id | 1 |
-| `ACTIVE_ACK_REQUIRED` | `xcp scan` without `--ack-active` while `[safety].require_active_ack` is set | 1 |
+| `XCP_INVALID_VALUE` | `xcp dump` address/size/extension out of range | 1 |
+| `XCP_DUMP_TOO_LARGE` | `xcp dump --size` over `MAX_DUMP_BYTES` (65536) | 1 |
+| `XCP_INVALID_CHUNK_SIZE` | `xcp dump --chunk-size` outside 1–7 | 1 |
+| `XCP_CHUNK_EXCEEDS_MAX_CTO` | chunk size larger than the slave's MAX_CTO-1 | 1 |
+| `XCP_NO_RESPONSE` | `xcp info` / `xcp dump` got no CONNECT response | 2 |
+| `XCP_ERROR_RESPONSE` | the slave rejected CONNECT | 2 |
+| `ACTIVE_ACK_REQUIRED` | active `xcp` command without `--ack-active` while `[safety].require_active_ack` is set | 1 |
 | `INTERFACE_REQUIRED` | no interface and no configured default | 1 |
 
 ## Responsibilities And Boundaries
 
 In scope: the XCP-on-CAN command parser, scan/trace/read/commands workflows
-through the standard transport, and active-transmit safety on scan.
+through the standard transport, active-transmit safety on scan/info/dump, the
+active `info` capability queries, and bounded `dump` memory upload.
 
 Out of scope (v1): XCP-on-Ethernet (UDP/TCP) and XCP-on-USB transports; A2L-based
 signal decoding of DAQ payloads (raw ODT bytes only); active DAQ configuration
-(ALLOC_DAQ / SET_DAQ_PTR sequences) or calibration writes; seed/key unlock flows.
+(ALLOC_DAQ / SET_DAQ_PTR sequences) or calibration writes; seed/key unlock flows;
+memory *writes* (`dump` is read-only). The active `info`/`dump` workflows are
+CLI-only operator actions (not MCP tools); `dump` uploads a bounded range only.
 
 ## Deferred Decisions
 

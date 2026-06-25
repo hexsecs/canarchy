@@ -140,6 +140,11 @@ _MCP_EXCLUDED_COMMANDS = {
     "uds dump-dids",
     "uds read-memory",
     "uds auto",
+    # Active XCP workflows that connect to a slave and read its memory/capabilities;
+    # more intrusive than the single-broadcast `xcp scan`; kept CLI-only operator
+    # actions. See docs/design/xcp-workflows.md.
+    "xcp info",
+    "xcp dump",
     "completion",
     "datasets stream",
     "datasets download",  # writes bulk dataset bytes to an arbitrary host path; CLI operator action

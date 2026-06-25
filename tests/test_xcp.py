@@ -212,6 +212,146 @@ class XcpTransportTests(unittest.TestCase):
         self.assertEqual(planned["arbitration_id"], 0x18DAF110)
 
 
+def _connect_response_frame() -> CanFrame:
+    # PID_RES, resource=0x14 (daq|pgm), comm_mode_basic=0x00 (little), max_cto=8, max_dto=64
+    return _frame(XCP_DEFAULT_RESPONSE_ID, "FF14000840000101", 0.1)
+
+
+class XcpActiveInfoDumpCliTests(unittest.TestCase):
+    """End-to-end CLI tests for `xcp info` / `xcp dump` via a patched transaction."""
+
+    def _run_active(self, argv, responder):
+        def _transaction(_self, _interface, frame, *, timeout=None):
+            response = responder(bytes(frame.data))
+            if response is None:
+                return []
+            return [_frame(XCP_DEFAULT_RESPONSE_ID, response.hex(), 0.1)]
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                    "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+                },
+            ),
+            patch("canarchy.transport.LocalTransport.transaction", _transaction),
+        ):
+            return run_cli(*argv)
+
+    def test_info_dry_run(self) -> None:
+        exit_code, stdout, _ = run_cli("xcp", "info", "vcan0", "--dry-run", "--json")
+        self.assertEqual(exit_code, 0)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "dry_run")
+        self.assertEqual(data["planned_requests"], 4)
+
+    def test_info_active_reports_capabilities(self) -> None:
+        def responder(payload: bytes) -> bytes | None:
+            cmd = payload[0]
+            if cmd == 0xFF:
+                return bytes.fromhex("FF14000840000101")
+            if cmd == 0xFD:  # GET_STATUS
+                return bytes([0xFF, 0x00, 0x00, 0x00, 0x00, 0x00])
+            if cmd == 0xFB:  # GET_COMM_MODE_INFO
+                return bytes([0xFF, 0x00, 0x01, 0x00, 0x02, 0x05, 0x00, 0x11])
+            if cmd == 0xFA:  # GET_ID
+                return bytes([0xFF, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00])
+            return bytes([0xFE, 0x20])
+
+        exit_code, stdout, stderr = self._run_active(["xcp", "info", "vcan0", "--json"], responder)
+        self.assertEqual(exit_code, 0, stdout)
+        self.assertIn("will transmit XCP commands", stderr)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "active")
+        self.assertTrue(data["connected"])
+        self.assertEqual(data["capabilities"]["connect"]["max_cto"], 8)
+        self.assertEqual(data["capabilities"]["identification"]["length"], 16)
+
+    def test_info_no_connect_is_transport_error(self) -> None:
+        exit_code, stdout, _ = self._run_active(["xcp", "info", "vcan0", "--json"], lambda _p: None)
+        self.assertEqual(exit_code, 2)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "XCP_NO_RESPONSE")
+
+    def test_dump_dry_run(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "xcp",
+            "dump",
+            "vcan0",
+            "--address",
+            "0x8000",
+            "--size",
+            "10",
+            "--chunk-size",
+            "4",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, 0)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "dry_run")
+        self.assertEqual(data["planned_chunks"], 3)
+        self.assertEqual(data["planned_requests"], 7)  # connect + 3 chunks * (set_mta + upload)
+
+    def test_dump_active_writes_output(self) -> None:
+        def responder(payload: bytes) -> bytes | None:
+            cmd = payload[0]
+            if cmd == 0xFF:
+                return bytes.fromhex("FF14000840000101")
+            if cmd == 0xF6:  # SET_MTA
+                return bytes([0xFF])
+            if cmd == 0xF5:  # UPLOAD n
+                return bytes([0xFF]) + bytes(range(payload[1]))
+            return bytes([0xFE, 0x20])
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "dump.bin")
+            exit_code, stdout, _ = self._run_active(
+                [
+                    "xcp",
+                    "dump",
+                    "vcan0",
+                    "--address",
+                    "0x2000",
+                    "--size",
+                    "6",
+                    "--chunk-size",
+                    "4",
+                    "--output",
+                    out,
+                    "--json",
+                ],
+                responder,
+            )
+            self.assertEqual(exit_code, 0, stdout)
+            data = json.loads(stdout)["data"]
+            self.assertEqual(data["bytes_read"], 6)
+            self.assertTrue(data["complete"])
+            with open(out, "rb") as handle:
+                self.assertEqual(handle.read(), bytes(range(4)) + bytes(range(2)))
+
+    def test_dump_requires_ack_when_configured(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"CANARCHY_TRANSPORT_BACKEND": "scaffold", "CANARCHY_REQUIRE_ACTIVE_ACK": "1"},
+        ):
+            exit_code, stdout, _ = run_cli(
+                "xcp", "dump", "vcan0", "--address", "0", "--size", "4", "--json"
+            )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "ACTIVE_ACK_REQUIRED")
+
+    def test_dump_oversize_is_user_error(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "xcp", "dump", "vcan0", "--address", "0", "--size", "0x20000", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(stdout)["errors"][0]["code"], "XCP_INVALID_VALUE")
+
+
 class XcpMcpTests(unittest.TestCase):
     def test_tools_exposed_and_argv(self) -> None:
         from canarchy.mcp_server import _TOOL_NAMES, _build_argv
