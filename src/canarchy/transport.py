@@ -231,7 +231,9 @@ class LiveCanBackend(Protocol):
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame: ...
 
-    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]: ...
+    def transaction(
+        self, interface: str, frame: CanFrame, *, timeout: float | None = None
+    ) -> list[CanFrame]: ...
 
 
 class ScaffoldCanBackend:
@@ -253,7 +255,9 @@ class ScaffoldCanBackend:
         self._require_interface(interface)
         return frame.with_interface(interface)
 
-    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]:
+    def transaction(
+        self, interface: str, frame: CanFrame, *, timeout: float | None = None
+    ) -> list[CanFrame]:
         self._require_interface(interface)
         return [frame.with_interface(interface) for frame in scaffold_transport_frames()[:2]]
 
@@ -323,11 +327,19 @@ class PythonCanBackend:
             bus.shutdown()
         return frame.with_interface(interface).with_timestamp(time.time())
 
-    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]:
+    def transaction(
+        self, interface: str, frame: CanFrame, *, timeout: float | None = None
+    ) -> list[CanFrame]:
         # A single bus serves both directions: it is buffering received frames
         # from the moment it is opened, *before* the request is transmitted, so a
         # fast response cannot arrive before the receive path is active (unlike a
         # send() followed by a separate capture()).
+        #
+        # ``timeout`` bounds the wait for the *first* response frame (so a slow
+        # ECU still gets honoured up to the caller's --timeout); any follow-on
+        # frames are drained at the fast capture timeout so a single request does
+        # not pay the full timeout once per buffered frame.
+        first_timeout = self.capture_timeout if timeout is None else timeout
         frames: list[CanFrame] = []
         bus = self._open_bus(interface)
         try:
@@ -340,7 +352,8 @@ class PythonCanBackend:
                     "Check that the python-can backend is available and the channel is configured.",
                 ) from exc
             while len(frames) < self.capture_limit:
-                message = bus.recv(timeout=self.capture_timeout)
+                recv_timeout = first_timeout if not frames else self.capture_timeout
+                message = bus.recv(timeout=recv_timeout)
                 if message is None:
                     break
                 frames.append(self._decode_message(message, interface))
@@ -656,9 +669,15 @@ class LocalTransport:
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         return self.live_backend.send(interface, frame)
 
-    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]:
-        """Transmit ``frame`` and return the response, receive path active first."""
-        return self.live_backend.transaction(interface, frame)
+    def transaction(
+        self, interface: str, frame: CanFrame, *, timeout: float | None = None
+    ) -> list[CanFrame]:
+        """Transmit ``frame`` and return the response, receive path active first.
+
+        ``timeout`` bounds the wait for the first response frame; ``None`` keeps
+        the backend's default capture timeout.
+        """
+        return self.live_backend.transaction(interface, frame, timeout=timeout)
 
     def gateway_events(
         self,

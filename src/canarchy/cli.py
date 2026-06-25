@@ -6789,12 +6789,28 @@ def _uds_active_payload(
             "did_range": list(did_range) if did_range else None,
         }
         if dry_run:
+            # The discovery sweep is one request per id, but each responder then
+            # triggers up to a full service-catalog probe and a bounded DID
+            # sweep. Report the worst case (every discovery id responds) so the
+            # active-transmit preview does not undercount the real traffic.
+            per_responder_services = len(ua.UDS_SERVICE_CATALOG) if probe_services else 0
+            per_responder_dids = min(did_limit, did_range[1] - did_range[0] + 1) if did_range else 0
+            per_responder = per_responder_services + per_responder_dids
+            worst_case = len(request_ids) + len(request_ids) * per_responder
             return _uds_dry_run_result(
                 {**auto_meta, "request_id": request_start},
                 command,
-                planned_requests=len(request_ids),
+                planned_requests=worst_case,
                 first_request=bytes([ua.SID_DIAGNOSTIC_SESSION_CONTROL, 0x01]).hex(),
-                extra={"discovery_ids": len(request_ids)},
+                extra={
+                    "discovery_ids": len(request_ids),
+                    "per_responder_service_probes": per_responder_services,
+                    "per_responder_did_probes": per_responder_dids,
+                    "planned_requests_note": (
+                        "worst case assuming every discovery id responds; actual count "
+                        "depends on how many responders are found"
+                    ),
+                },
             )
         report = run_active(
             lambda client: ua.auto_recon(

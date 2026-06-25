@@ -81,7 +81,9 @@ class FakeTransaction:
         self.frames = frames
         self.sent: list[CanFrame] = []
 
-    def transaction(self, interface: str, frame: CanFrame) -> list[CanFrame]:
+    def transaction(
+        self, interface: str, frame: CanFrame, *, timeout: float | None = None
+    ) -> list[CanFrame]:
         self.sent.append(frame)
         return self.frames
 
@@ -118,6 +120,32 @@ class TransportClientTest(unittest.TestCase):
         self.assertEqual(exchange.response, bytes.fromhex("500100"))
         self.assertEqual(exchange.response_id, 0x7E8)
 
+    def test_reassembles_extended_29bit_response(self) -> None:
+        response = CanFrame(
+            arbitration_id=0x18DAF110,
+            data=bytes.fromhex("0350010000000000"),
+            is_extended_id=True,
+        )
+        transport = FakeTransaction([response])
+        client = TransportUdsClient(transport=transport, interface="can0")
+        exchange = client.request(0x18DA10F1, 0x18DAF110, b"\x10\x01")
+        self.assertTrue(exchange.positive)
+        self.assertEqual(exchange.response, bytes.fromhex("500100"))
+        self.assertEqual(exchange.response_id, 0x18DAF110)
+
+    def test_passes_timeout_through(self) -> None:
+        class RecordingTransport(FakeTransaction):
+            seen: list[float | None] = []
+
+            def transaction(self, interface, frame, *, timeout=None):
+                RecordingTransport.seen.append(timeout)
+                return self.frames
+
+        transport = RecordingTransport([])
+        client = TransportUdsClient(transport=transport, interface="can0")
+        client.request(0x7E0, 0x7E8, b"\x10\x01", timeout=1.0)
+        self.assertEqual(RecordingTransport.seen, [1.0])
+
     def test_ignores_request_echo(self) -> None:
         echo = CanFrame(arbitration_id=0x7E0, data=bytes.fromhex("0210010000000000"))
         response = CanFrame(arbitration_id=0x7E8, data=bytes.fromhex("037f1011000000"))
@@ -149,10 +177,13 @@ class ServiceEnumerationTest(unittest.TestCase):
         present = UdsExchange(0x7E0, 0x7E8, b"\x22", _positive(0x22, b"\x01"))
         absent = UdsExchange(0x7E0, 0x7E8, b"\x22", _negative(0x22, 0x11))
         conditions = UdsExchange(0x7E0, 0x7E8, b"\x27", _negative(0x27, 0x33))
+        # NRC 0x7F (serviceNotSupportedInActiveSession) means the service exists.
+        session_gated = UdsExchange(0x7E0, 0x7E8, b"\x31", _negative(0x31, 0x7F))
         silent = UdsExchange(0x7E0, 0x7E8, b"\x22", None)
         self.assertTrue(classify_service_support(present))
         self.assertFalse(classify_service_support(absent))
         self.assertTrue(classify_service_support(conditions))
+        self.assertTrue(classify_service_support(session_gated))
         self.assertFalse(classify_service_support(silent))
 
     def test_enumerate_services_marks_supported(self) -> None:

@@ -2707,7 +2707,7 @@ class CliTests(unittest.TestCase):
     def _run_active_uds(self, argv, responder):
         """Run an active uds command with a patched live transaction()."""
 
-        def _transaction(_self, _interface, frame):
+        def _transaction(_self, _interface, frame, *, timeout=None):
             request = frame.data[1 : 1 + frame.data[0]]
             response = responder(frame.arbitration_id, request)
             if response is None:
@@ -2872,6 +2872,34 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["responder_count"], 1)
         self.assertEqual(payload["data"]["responders"][0]["request_id"], 0x7E0)
         self.assertIn("0x7E0", payload["data"]["supported_services"])
+
+    def test_uds_auto_dry_run_reports_per_responder_probes(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "uds",
+            "auto",
+            "--request-start",
+            "0x7E0",
+            "--request-end",
+            "0x7E1",
+            "--probe-dids",
+            "--did-start",
+            "0xF190",
+            "--did-end",
+            "0xF193",
+            "--did-limit",
+            "4",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "dry_run")
+        self.assertEqual(data["discovery_ids"], 2)
+        self.assertGreater(data["per_responder_service_probes"], 0)
+        self.assertEqual(data["per_responder_did_probes"], 4)
+        # Worst case: 2 discovery requests + 2 responders * (services + 4 DIDs).
+        expected = 2 + 2 * (data["per_responder_service_probes"] + 4)
+        self.assertEqual(data["planned_requests"], expected)
 
     def test_uds_dump_dids_dry_run_plans_without_transmitting(self) -> None:
         exit_code, stdout, stderr = run_cli(

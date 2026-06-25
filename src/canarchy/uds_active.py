@@ -53,12 +53,11 @@ NRC_SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION = 0x7F
 # "busy, response pending" — the responder will follow up with the real answer.
 NRC_RESPONSE_PENDING = 0x78
 
-_SERVICE_ABSENT_CODES = frozenset(
-    {NRC_SERVICE_NOT_SUPPORTED, NRC_SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION}
-)
-_SUBFUNCTION_ABSENT_CODES = frozenset(
-    {NRC_SUB_FUNCTION_NOT_SUPPORTED, NRC_SUB_FUNCTION_NOT_SUPPORTED_IN_ACTIVE_SESSION}
-)
+# A service / subfunction is "absent" only on the plain not-supported NRC. The
+# "...InActiveSession" variants (0x7F / 0x7E) mean it exists but is gated to a
+# different diagnostic session, so it still counts as supported.
+_SERVICE_ABSENT_CODES = frozenset({NRC_SERVICE_NOT_SUPPORTED})
+_SUBFUNCTION_ABSENT_CODES = frozenset({NRC_SUB_FUNCTION_NOT_SUPPORTED})
 
 SID_DIAGNOSTIC_SESSION_CONTROL = 0x10
 SID_ECU_RESET = 0x11
@@ -271,9 +270,9 @@ class TransportUdsClient(UdsClient):
     ) -> UdsExchange:
         frame = single_frame_request_frame(request_id, payload)
         started = time.perf_counter()
-        frames = self.transport.transaction(self.interface, frame)
+        frames = self.transport.transaction(self.interface, frame, timeout=timeout)
         elapsed = time.perf_counter() - started
-        pdus = reassemble_uds_pdus(list(frames))
+        pdus = reassemble_uds_pdus(list(frames), allow_extended=True)
         chosen = _select_response(pdus, request_id, response_id)
         if chosen is None:
             return UdsExchange(
