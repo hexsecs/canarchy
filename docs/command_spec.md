@@ -1088,16 +1088,90 @@ Notes:
 
 ### uds services
 
-Inspect the built-in UDS service catalog.
+Inspect the built-in UDS service catalog, or actively probe which services an ECU supports.
 
 ```bash
-canarchy uds services [--json|--jsonl|--text]
+canarchy uds services [<interface>] [--request-id 0x7E0] [--response-id 0x7E8] \
+    [--probe-start 0x00 --probe-end 0xFF] [--max-requests N] [--timeout S] \
+    [--dry-run] [--ack-active] [--json|--jsonl|--text]
 ```
 
 Notes:
 
-* this is a reference command and does not require an interface
-* output includes service identifier, positive-response identifier, category, and subfunction expectations
+* without an interface this is a reference command (`mode: reference`): output includes service identifier, positive-response identifier, category, and subfunction expectations
+* with an interface this becomes an active probe (`mode: active`, gated by the active-transmit safety model): each candidate service id is sent once to `--request-id`, and a service is reported `supported` when it answers positively or with any negative response code other than `ServiceNotSupported` / `ServiceNotSupportedInActiveSession`
+* `--probe-start`/`--probe-end` probe a raw service-id range instead of the catalog; `--max-requests` caps the probe count
+
+### uds subservices
+
+Enumerate which subfunctions of a UDS service an ECU supports.
+
+```bash
+canarchy uds subservices <interface> --service 0x19 [--sub-start 0x00] [--sub-end 0xFF] \
+    [--request-id 0x7E0] [--response-id 0x7E8] [--timeout S] [--dry-run] [--ack-active] [--json|--jsonl|--text]
+```
+
+### uds ecu-reset / uds tester-present
+
+Send a single ECUReset (`0x11`) or TesterPresent (`0x3E`) request.
+
+```bash
+canarchy uds ecu-reset <interface> [--reset-type 0x01] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+canarchy uds tester-present <interface> [--suppress] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+### uds security-seed
+
+Collect SecurityAccess (`0x27`) seeds for an explicit session and level.
+
+```bash
+canarchy uds security-seed <interface> [--level 0x01] [--session 0x03] [--count N] \
+    [--max-duration S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* `--level` must be odd (the requestSeed subfunction); `--session` optionally enters a diagnostic session first
+* output reports `collected`, `distinct_seeds`, and the per-request seed bytes
+
+### uds dump-dids
+
+Read a range of DataIdentifiers via ReadDataByIdentifier (`0x22`).
+
+```bash
+canarchy uds dump-dids <interface> [--did-start 0xF180] [--did-end 0xF1FF] [--limit 256] \
+    [--max-duration S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+### uds read-memory
+
+Read a bounded memory range via ReadMemoryByAddress (`0x23`).
+
+```bash
+canarchy uds read-memory <interface> --address 0x080000 --size N [--chunk-size 4] \
+    [--address-bytes N] [--size-bytes N] [--output PATH] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* the request is chunked by `--chunk-size`; the total size is bounded (max 65536 bytes)
+* `--output` writes the reassembled memory bytes to a file when any bytes were read; provenance (`address`, `size`, `chunk_size`, request/response ids) is in the result data
+
+### uds auto
+
+Bounded zero-knowledge active diagnostic reconnaissance: discover responders, probe services, optionally probe a bounded DID range.
+
+```bash
+canarchy uds auto <interface> [--request-start 0x7E0] [--request-end 0x7E7] [--no-services] \
+    [--probe-dids --did-start 0xF190 --did-end 0xF19F --did-limit 16] [--response-id ID] \
+    [--max-duration S] [--ack-active] [--dry-run] [--json|--jsonl|--text]
+```
+
+Notes:
+
+* discovery sends a DiagnosticSessionControl request to each id in `[--request-start, --request-end]` and notes responders; `--response-id` is auto (any responder id) unless pinned
+* per responder it enumerates supported services (unless `--no-services`) and, with `--probe-dids`, reads a bounded DID range; the result reports `complete` for the scan budget
+* all `uds` active workflows (everything except the reference `uds services` catalog) are CLI-only operator actions and are not exposed as MCP tools
 
 ### xcp scan
 

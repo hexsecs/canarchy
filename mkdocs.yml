@@ -137,6 +137,7 @@ nav:
           - Session Workflows: design/session-workflows.md
           - UDS Transaction Workflows: design/uds-transaction-workflows.md
           - UDS Services Command: design/uds-services-command.md
+          - Active UDS Workflows: design/uds-active-workflows.md
           - DoIP Diagnostic Workflows: design/doip-diagnostic-workflows.md
           - XCP Workflows: design/xcp-workflows.md
           - J1587/J1708 Decode: design/j1587-decode.md
@@ -173,6 +174,7 @@ nav:
           - Session Workflows: tests/session-workflows.md
           - UDS Transaction Workflows: tests/uds-transaction-workflows.md
           - UDS Services Command: tests/uds-services-command.md
+          - Active UDS Workflows: tests/uds-active-workflows.md
           - DoIP Diagnostic Workflows: tests/doip-diagnostic-workflows.md
           - XCP Workflows: tests/xcp-workflows.md
           - J1587/J1708 Decode: tests/j1587-decode.md

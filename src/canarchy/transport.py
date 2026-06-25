@@ -336,9 +336,9 @@ class PythonCanBackend:
         # send() followed by a separate capture()).
         #
         # ``timeout`` bounds the wait for the *first* response frame (so a slow
-        # ECU/slave still gets honoured up to the caller's --timeout); any
-        # follow-on frames are drained at the fast capture timeout so a single
-        # request does not pay the full timeout once per buffered frame.
+        # ECU still gets honoured up to the caller's --timeout); any follow-on
+        # frames are drained at the fast capture timeout so a single request does
+        # not pay the full timeout once per buffered frame.
         first_timeout = self.capture_timeout if timeout is None else timeout
         frames: list[CanFrame] = []
         bus = self._open_bus(interface)

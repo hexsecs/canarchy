@@ -475,6 +475,13 @@ canarchy
     scan
     trace
     services
+    subservices
+    ecu-reset
+    tester-present
+    security-seed
+    dump-dids
+    read-memory
+    auto
   re
     signals
     counters
@@ -486,7 +493,7 @@ canarchy
 
 This tree is a starting point, not a lock.
 
-Active-transmit MCP tools (`send`, `generate`, `gateway`, `replay`, `sequence_replay`, `xcp_scan`, `fuzz_guided`, and `fuzz payload|replay|arbitration-id|signal|spn`) are behind the active-transmit safety model — mandatory `ack_active=true` with `dry_run` defaulting to true. The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred) is maintained in `docs/design/mcp-server.md`, and `tests/test_mcp.py` enforces that every implemented command is either exposed or a documented exclusion (`shell`, `tui`, `web serve`, `cannelloni send`, `mcp serve`, `mcp install`, `completion`, `datasets stream`, `dbc generate-c`, `plugins enable`, `plugins disable`, and the active `xcp info` / `xcp dump`). The `uds_scan` / `uds_trace` tools are exposed for CAN interfaces but refuse a `doip://` target with `DOIP_MCP_EXCLUDED`, since DoIP is active TCP egress to an arbitrary host and stays a CLI-only operator action. `xcp info` (capability queries) and `xcp dump` (bounded memory upload) connect to a slave and are CLI-only operator actions behind the active-transmit gate; the broadcast `xcp scan` stays exposed.
+Active-transmit MCP tools (`send`, `generate`, `gateway`, `replay`, `sequence_replay`, `xcp_scan`, `fuzz_guided`, and `fuzz payload|replay|arbitration-id|signal|spn`) are behind the active-transmit safety model — mandatory `ack_active=true` with `dry_run` defaulting to true. The authoritative CLI-to-MCP coverage matrix (exposed / excluded / deferred) is maintained in `docs/design/mcp-server.md`, and `tests/test_mcp.py` enforces that every implemented command is either exposed or a documented exclusion (`shell`, `tui`, `web serve`, `cannelloni send`, `mcp serve`, `mcp install`, `completion`, `datasets stream`, `dbc generate-c`, `plugins enable`, `plugins disable`, the active `uds` workflows `uds subservices|ecu-reset|tester-present|security-seed|dump-dids|read-memory|auto`, and the active `xcp info` / `xcp dump`). The `uds_scan` / `uds_trace` tools are exposed for CAN interfaces but refuse a `doip://` target with `DOIP_MCP_EXCLUDED`, since DoIP is active TCP egress to an arbitrary host and stays a CLI-only operator action. The active UDS workflows (`uds subservices`, `ecu-reset`, `tester-present`, `security-seed`, `dump-dids`, `read-memory`, `auto`) transmit invasive diagnostic requests and are CLI-only operator actions behind the active-transmit gate; the reference `uds services` catalog stays exposed (its active-probe mode only activates when a CLI caller supplies an interface). `xcp info` (capability queries) and `xcp dump` (bounded memory upload) connect to a slave and are likewise CLI-only; the broadcast `xcp scan` stays exposed.
 
 For plugin automation, agents can use MCP `plugins_list` / `plugins_info` or CLI `canarchy plugins list|info --json` to inspect discovered Python entry-point plugins. Plugin toggles are user configuration actions; use CLI `canarchy plugins enable|disable <name>` only when explicitly requested by the operator.
 

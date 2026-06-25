@@ -2697,6 +2697,258 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["errors"][0]["code"], "TRANSPORT_UNAVAILABLE")
 
+    # --- active UDS workflows (#462/#463/#466) -------------------------------
+
+    @staticmethod
+    def _isotp_single_frame(arbitration_id: int, payload: bytes) -> CanFrame:
+        data = (bytes([len(payload)]) + payload).ljust(8, b"\x00")
+        return CanFrame(arbitration_id=arbitration_id, data=data)
+
+    def _run_active_uds(self, argv, responder):
+        """Run an active uds command with a patched live transaction()."""
+
+        def _transaction(_self, _interface, frame, *, timeout=None):
+            request = frame.data[1 : 1 + frame.data[0]]
+            response = responder(frame.arbitration_id, request)
+            if response is None:
+                return []
+            return [self._isotp_single_frame(frame.arbitration_id + 0x8, response)]
+
+        with (
+            patch(
+                "canarchy.transport._load_user_config",
+                return_value={
+                    "CANARCHY_TRANSPORT_BACKEND": "python-can",
+                    "CANARCHY_PYTHON_CAN_INTERFACE": "virtual",
+                },
+            ),
+            patch("canarchy.transport.LocalTransport.transaction", _transaction),
+        ):
+            return run_cli(*argv, input="YES\n")
+
+    def test_uds_services_active_probe_detects_supported(self) -> None:
+        supported = {0x10, 0x22, 0x27}
+
+        def responder(_rid, request):
+            sid = request[0]
+            if sid in supported:
+                return bytes([sid + 0x40])
+            return bytes([0x7F, sid, 0x11])
+
+        exit_code, stdout, stderr = self._run_active_uds(
+            ["uds", "services", "can0", "--ack-active", "--json"], responder
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("will transmit diagnostic requests", stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+        found = {svc["service"] for svc in payload["data"]["supported_services"]}
+        self.assertEqual(found, supported)
+
+    def test_uds_subservices_active(self) -> None:
+        def responder(_rid, request):
+            if request[1] in (0x01, 0x03):
+                return bytes([request[0] + 0x40, request[1]])
+            return bytes([0x7F, request[0], 0x12])
+
+        exit_code, stdout, _ = self._run_active_uds(
+            [
+                "uds",
+                "subservices",
+                "can0",
+                "--service",
+                "0x19",
+                "--sub-start",
+                "0x00",
+                "--sub-end",
+                "0x04",
+                "--ack-active",
+                "--json",
+            ],
+            responder,
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        supported = {s["subfunction"] for s in payload["data"]["supported_subfunctions"]}
+        self.assertEqual(supported, {0x01, 0x03})
+
+    def test_uds_ecu_reset_active(self) -> None:
+        def responder(_rid, request):
+            return bytes([request[0] + 0x40, request[1]])
+
+        exit_code, stdout, _ = self._run_active_uds(
+            ["uds", "ecu-reset", "can0", "--reset-type", "0x01", "--ack-active", "--json"],
+            responder,
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["result"]["status"], "positive")
+        self.assertEqual(payload["data"]["events"][0]["payload"]["service"], 0x11)
+
+    def test_uds_dump_dids_active_reads_present(self) -> None:
+        def responder(_rid, request):
+            did = (request[1] << 8) | request[2]
+            if did == 0xF190:
+                return bytes([0x62, request[1], request[2]]) + b"VIN1"
+            return bytes([0x7F, 0x22, 0x31])
+
+        exit_code, stdout, _ = self._run_active_uds(
+            [
+                "uds",
+                "dump-dids",
+                "can0",
+                "--did-start",
+                "0xF18F",
+                "--did-end",
+                "0xF191",
+                "--ack-active",
+                "--json",
+            ],
+            responder,
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["present_count"], 1)
+        present = [d for d in payload["data"]["dids"] if d["present"]]
+        self.assertEqual(bytes.fromhex(present[0]["value"]), b"VIN1")
+
+    def test_uds_read_memory_active_writes_output(self) -> None:
+        def responder(_rid, request):
+            size = request[-1]
+            return bytes([0x63]) + bytes(range(size))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "mem.bin")
+            exit_code, stdout, _ = self._run_active_uds(
+                [
+                    "uds",
+                    "read-memory",
+                    "can0",
+                    "--address",
+                    "0x2000",
+                    "--size",
+                    "6",
+                    "--chunk-size",
+                    "4",
+                    "--output",
+                    out,
+                    "--ack-active",
+                    "--json",
+                ],
+                responder,
+            )
+            self.assertEqual(exit_code, EXIT_OK)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["data"]["bytes_read"], 6)
+            self.assertTrue(payload["data"]["complete"])
+            with open(out, "rb") as handle:
+                self.assertEqual(handle.read(), bytes(range(4)) + bytes(range(2)))
+
+    def test_uds_auto_active_discovers_and_probes(self) -> None:
+        def responder(rid, request):
+            if rid != 0x7E0:
+                return None
+            sid = request[0]
+            if sid in (0x10, 0x22):
+                return bytes([sid + 0x40])
+            return bytes([0x7F, sid, 0x11])
+
+        exit_code, stdout, _ = self._run_active_uds(
+            [
+                "uds",
+                "auto",
+                "can0",
+                "--request-start",
+                "0x7E0",
+                "--request-end",
+                "0x7E2",
+                "--ack-active",
+                "--json",
+            ],
+            responder,
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["responder_count"], 1)
+        self.assertEqual(payload["data"]["responders"][0]["request_id"], 0x7E0)
+        self.assertIn("0x7E0", payload["data"]["supported_services"])
+
+    def test_uds_auto_dry_run_reports_per_responder_probes(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "uds",
+            "auto",
+            "--request-start",
+            "0x7E0",
+            "--request-end",
+            "0x7E1",
+            "--probe-dids",
+            "--did-start",
+            "0xF190",
+            "--did-end",
+            "0xF193",
+            "--did-limit",
+            "4",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["mode"], "dry_run")
+        self.assertEqual(data["discovery_ids"], 2)
+        self.assertGreater(data["per_responder_service_probes"], 0)
+        self.assertEqual(data["per_responder_did_probes"], 4)
+        # Worst case: 2 discovery requests + 2 responders * (services + 4 DIDs).
+        expected = 2 + 2 * (data["per_responder_service_probes"] + 4)
+        self.assertEqual(data["planned_requests"], expected)
+
+    def test_uds_dump_dids_dry_run_plans_without_transmitting(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            "uds",
+            "dump-dids",
+            "--did-start",
+            "0xF180",
+            "--did-end",
+            "0xF184",
+            "--dry-run",
+            "--json",
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
+        self.assertEqual(payload["data"]["planned_requests"], 5)
+        self.assertEqual(payload["data"]["first_request"], "22f180")
+        self.assertTrue(any("ACTIVE_TRANSMIT_DRY_RUN" in w for w in payload["warnings"]))
+
+    def test_uds_active_requires_acknowledgement(self) -> None:
+        with patch(
+            "canarchy.transport._load_user_config",
+            return_value={
+                "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+                "CANARCHY_REQUIRE_ACTIVE_ACK": "1",
+            },
+        ):
+            exit_code, stdout, _ = run_cli("uds", "ecu-reset", "can0", "--json")
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "ACTIVE_ACK_REQUIRED")
+
+    def test_uds_read_memory_rejects_oversize(self) -> None:
+        exit_code, stdout, _ = run_cli(
+            "uds", "read-memory", "--address", "0", "--size", "0x20000", "--dry-run", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "UDS_INVALID_VALUE")
+
+    def test_uds_security_seed_rejects_even_level(self) -> None:
+        exit_code, stdout, _ = self._run_active_uds(
+            ["uds", "security-seed", "can0", "--level", "0x02", "--ack-active", "--json"],
+            lambda _rid, _req: None,
+        )
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["errors"][0]["code"], "UDS_INVALID_SECURITY_LEVEL")
+
     def test_re_counters_returns_ranked_candidates(self) -> None:
         exit_code, stdout, stderr = run_cli(
             "re",
