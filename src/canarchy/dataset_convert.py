@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 import re
@@ -17,7 +18,7 @@ import requests
 from canarchy.dataset_provider import DatasetError
 
 
-_SUPPORTED_SOURCE_FORMATS = ("hcrl-csv", "candump", "comma-rlog")
+_SUPPORTED_SOURCE_FORMATS = ("hcrl-csv", "candump", "comma-rlog", "decoded-signal-csv")
 _SUPPORTED_OUTPUT_FORMATS = ("candump", "jsonl")
 
 
@@ -60,6 +61,8 @@ def convert_file(
         frames = list(_parse_candump(src))
     elif source_format == "comma-rlog":
         frames = list(_parse_comma_rlog(str(src)))
+    elif source_format == "decoded-signal-csv":
+        frames = list(_parse_decoded_signal_csv(src))
     else:
         raise AssertionError(f"unhandled source format: {source_format}")
 
@@ -134,6 +137,8 @@ def stream_file(
         frames = _parse_candump(src)
     elif source_format == "comma-rlog":
         frames = _parse_comma_rlog(str(src))
+    elif source_format == "decoded-signal-csv":
+        frames = _parse_decoded_signal_csv(src)
     else:
         raise AssertionError(f"unhandled source format: {source_format}")
 
@@ -539,6 +544,153 @@ def _parse_hcrl_csv(path: Path) -> Iterator[dict]:
                     message=f"Malformed row at line {line_num}: {exc}",
                     hint="Check that Timestamp is a float, ID is hex, and Data is space-separated hex bytes.",
                 ) from exc
+            yield {
+                "timestamp": timestamp,
+                "arbitration_id": arb_id,
+                "data": data_bytes,
+                "label": label,
+            }
+
+
+_DECODED_ID_TRAILING_INT = re.compile(r"(\d+)\s*$")
+
+
+def _decoded_signal_arbitration_id(raw_id: str) -> int:
+    """Map a per-ID signal-CSV ID token to a deterministic arbitration ID.
+
+    These datasets label rows with opaque IDs (e.g. SynCAN's ``id1``..``id10``)
+    rather than real arbitration IDs, so we derive a stable numeric ID:
+
+    * ``0x``-prefixed tokens are parsed as hex (``0x2A0`` -> ``0x2A0``)
+    * plain decimal tokens are used as-is (``672`` -> ``672``)
+    * a trailing integer is extracted from labelled tokens (``id10`` -> ``10``)
+    * anything else falls back to a stable hash masked to the 11-bit ID space
+
+    The mapping is deterministic, so the same token always yields the same
+    arbitration ID across runs and files.
+    """
+    token = raw_id.strip()
+    if not token:
+        raise ValueError("empty ID value")
+    if token.lower().startswith("0x"):
+        return int(token, 16)
+    if token.isdigit():
+        return int(token)
+    match = _DECODED_ID_TRAILING_INT.search(token)
+    if match:
+        return int(match.group(1))
+    digest = hashlib.sha1(token.encode("utf-8")).digest()
+    return int.from_bytes(digest[:2], "big") & 0x7FF
+
+
+def _pack_decoded_signals(row: dict, signal_cols: list[str]) -> bytes:
+    """Pack present normalized signal values into big-endian uint16 payload bytes.
+
+    Each non-empty signal cell is interpreted as a normalized float (typically
+    ``0.0``..``1.0``), scaled to ``value * 0xFFFF``, clamped to ``[0, 0xFFFF]``,
+    and appended as two big-endian bytes. Empty cells are treated as absent for
+    that row's ID (these datasets only populate the signals defined for each ID).
+    """
+    out = bytearray()
+    for col in signal_cols:
+        cell = row.get(col)
+        if cell is None:
+            continue
+        cell = cell.strip()
+        if cell == "":
+            continue
+        scaled = int(round(float(cell) * 0xFFFF))
+        scaled = max(0, min(0xFFFF, scaled))
+        out.extend(scaled.to_bytes(2, "big"))
+    return bytes(out)
+
+
+def _parse_decoded_signal_csv(path: Path) -> Iterator[dict]:
+    """Parse a pre-decoded per-ID signal CSV (e.g. SynCAN-style).
+
+    Expected shape: a header with ``Time`` and ``ID`` columns, an optional
+    ``Label`` column, and one or more per-ID signal-value columns holding
+    normalized floats, e.g. ``Label,Time,ID,Signal1_of_ID,Signal2_of_ID,...``.
+
+    Each row's ``ID`` token is mapped to a deterministic arbitration ID (see
+    :func:`_decoded_signal_arbitration_id`) and its present signal values are
+    packed into payload bytes as big-endian uint16 (see
+    :func:`_pack_decoded_signals`). The original ``Time`` and ``Label`` are
+    preserved; ``Label`` surfaces in JSONL output as ``payload.label``.
+
+    Because payload bytes are reconstructed from normalized signal values rather
+    than captured verbatim, this adapter produces real-timing/ID frames with
+    synthetic byte layouts — suitable for frame-level analysis (`stats`,
+    `re_*`), not for byte-exact replay against a real ECU.
+
+    The output pipeline only models classic CAN, so an ID may carry at most four
+    populated signals (8 payload bytes); a wider row raises
+    ``DECODED_SIGNAL_TOO_WIDE`` rather than emit a candump line that downstream
+    classic-frame parsers would reject.
+    """
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None:
+            raise ConversionError(
+                code="MALFORMED_SOURCE",
+                message="CSV file has no header row.",
+                hint="decoded-signal-csv files must have a header with Time and ID columns.",
+            )
+        fieldmap = {(name or "").strip().lower(): name for name in reader.fieldnames}
+        time_col = fieldmap.get("time") or fieldmap.get("timestamp")
+        id_col = fieldmap.get("id")
+        label_col = fieldmap.get("label")
+        missing = []
+        if time_col is None:
+            missing.append("Time")
+        if id_col is None:
+            missing.append("ID")
+        if missing:
+            raise ConversionError(
+                code="MALFORMED_SOURCE",
+                message=f"CSV is missing required columns: {', '.join(missing)}.",
+                hint=(
+                    "Expected Time and ID columns plus per-ID signal columns "
+                    "(e.g. Label,Time,ID,Signal1_of_ID,Signal2_of_ID,...)."
+                ),
+            )
+        reserved = {time_col, id_col}
+        if label_col is not None:
+            reserved.add(label_col)
+        signal_cols = [name for name in reader.fieldnames if name not in reserved]
+        if not signal_cols:
+            raise ConversionError(
+                code="MALFORMED_SOURCE",
+                message="CSV has no signal value columns.",
+                hint="decoded-signal-csv expects one or more signal columns beyond Time/ID/Label.",
+            )
+        for line_num, row in enumerate(reader, start=2):
+            try:
+                timestamp = float(row[time_col])
+                arb_id = _decoded_signal_arbitration_id(row[id_col])
+                data_bytes = _pack_decoded_signals(row, signal_cols)
+            except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                # TypeError/AttributeError cover short rows where DictReader fills
+                # a missing Time/ID cell with None (float(None) / None.strip()).
+                raise ConversionError(
+                    code="MALFORMED_SOURCE",
+                    message=f"Malformed row at line {line_num}: {exc}",
+                    hint="Check that Time is a float, ID is a recognized token, and signal cells are floats.",
+                ) from exc
+            if len(data_bytes) > 8:
+                raise ConversionError(
+                    code="DECODED_SIGNAL_TOO_WIDE",
+                    message=(
+                        f"Row at line {line_num} (ID {row[id_col]!r}) packs "
+                        f"{len(data_bytes)} payload bytes; classic CAN frames hold at most 8."
+                    ),
+                    hint=(
+                        "decoded-signal-csv synthesizes 2 bytes per populated signal, so an ID "
+                        "may carry at most 4 signals. The candump/JSONL pipeline only models "
+                        "classic CAN frames; split wider IDs or drop excess signal columns."
+                    ),
+                )
+            label = (row.get(label_col) or "").strip() or None if label_col else None
             yield {
                 "timestamp": timestamp,
                 "arbitration_id": arb_id,

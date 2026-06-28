@@ -770,7 +770,7 @@ canarchy datasets cache refresh [--provider <name>] [--json|--jsonl|--text]
 Convert a downloaded dataset file to a CANarchy-compatible capture format.
 
 ```bash
-canarchy datasets convert <file> --source-format hcrl-csv|candump|comma-rlog --format candump|jsonl [--output <path>] [--json|--jsonl|--text]
+canarchy datasets convert <file> --source-format hcrl-csv|candump|comma-rlog|decoded-signal-csv --format candump|jsonl [--output <path>] [--json|--jsonl|--text]
 ```
 
 ### datasets stream
@@ -778,7 +778,7 @@ canarchy datasets convert <file> --source-format hcrl-csv|candump|comma-rlog --f
 Stream a downloaded dataset file to candump or JSONL without loading the full conversion into memory.
 
 ```bash
-canarchy datasets stream <file> --source-format hcrl-csv|candump|comma-rlog --format candump|jsonl [--chunk-size <n>] [--max-frames <n>] [--provider-ref <ref>] [--output <path>] [--json]
+canarchy datasets stream <file> --source-format hcrl-csv|candump|comma-rlog|decoded-signal-csv --format candump|jsonl [--chunk-size <n>] [--max-frames <n>] [--provider-ref <ref>] [--output <path>] [--json]
 ```
 
 Examples:
@@ -797,6 +797,7 @@ Notes:
 * `datasets search` defaults to a compact human-readable table with a `TYPE` column (`INDEX` for curated indexes, `PLAY` for replayable datasets); use `--verbose` for detailed result blocks with type labels, descriptions, source URLs, replay defaults, index notes, and access notes
 * without `--json`, stream records are written directly to stdout or `--output`
 * `comma-rlog` parses openpilot/comma `rlog.zst` CAN events when optional openpilot LogReader support is installed (`uv pip install git+https://github.com/commaai/openpilot.git` on Python 3.12.x); missing support returns `COMMA_RLOG_SUPPORT_UNAVAILABLE`
+* `decoded-signal-csv` ingests pre-decoded per-ID signal CSVs (e.g. SynCAN's `Label,Time,ID,Signal1_of_ID,...`): each row's `ID` token maps to a deterministic arbitration ID (`0x`-hex, plain decimal, or trailing integer like `id10` -> `10`, else a stable hash) and present normalized signal values are packed into payload bytes as big-endian uint16 (`round(value * 0xFFFF)`, clamped); empty signal cells are skipped, and `Time`/`Label` are preserved (`Label` surfaces as `payload.label` in JSONL). Payload bytes are reconstructed, not captured verbatim — suitable for frame-level analysis (`stats`, `re_*`), not byte-exact ECU replay
 * JSONL stream records include `payload.dataset.provider_ref`, `frame_offset`, `chunk_index`, and `chunk_position`
 * `--chunk-size` controls JSONL provenance chunk metadata and does not bound emitted frames
 * `--max-frames` stops local dataset streaming after at most N emitted frames for candump and JSONL output
