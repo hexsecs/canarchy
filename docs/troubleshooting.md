@@ -315,6 +315,18 @@ or a `comma-rlog` source string could not be parsed
 Recovery — confirm the path or ref, and check the source syntax against
 `datasets replay --help`.
 
+### `DECODED_SIGNAL_TOO_WIDE`
+
+Symptom — a `decoded-signal-csv` conversion failed because a row packs more
+than 8 payload bytes.
+
+Causes — the adapter synthesizes 2 bytes per populated signal column, and the
+candump/JSONL pipeline only models classic CAN frames (8 data bytes), so an ID
+with five or more populated signals cannot be represented.
+
+Recovery — drop the excess signal columns, or pre-split the wide ID across
+multiple arbitration IDs so each row holds at most four signals.
+
 ### `COMMA_RLOG_SUPPORT_UNAVAILABLE`
 
 Symptom — a `comma-rlog` dataset was requested but optional support is

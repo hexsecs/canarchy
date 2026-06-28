@@ -685,6 +685,53 @@ class DecodedSignalCsvTests(unittest.TestCase):
                 )
             self.assertEqual(ctx.exception.code, "MALFORMED_SOURCE")
 
+    def test_truncated_row_missing_time_or_id_raises_malformed(self) -> None:
+        # DictReader fills the missing trailing cell with None, which would raise
+        # TypeError/AttributeError rather than the documented structured error.
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.csv"
+            bad.write_text("Time,ID,S1\n0.0\n")
+            dest = str(Path(tmp) / "out.log")
+            with self.assertRaises(ConversionError) as ctx:
+                convert_file(
+                    str(bad),
+                    source_format="decoded-signal-csv",
+                    output_format="candump",
+                    destination=dest,
+                )
+            self.assertEqual(ctx.exception.code, "MALFORMED_SOURCE")
+
+    def test_payload_wider_than_classic_can_raises(self) -> None:
+        # Five populated signals -> 10 payload bytes, which classic CAN cannot
+        # hold and downstream frame parsers would reject.
+        with tempfile.TemporaryDirectory() as tmp:
+            wide = Path(tmp) / "wide.csv"
+            wide.write_text("Time,ID,S1,S2,S3,S4,S5\n0.0,id1,0.1,0.2,0.3,0.4,0.5\n")
+            dest = str(Path(tmp) / "out.log")
+            with self.assertRaises(ConversionError) as ctx:
+                convert_file(
+                    str(wide),
+                    source_format="decoded-signal-csv",
+                    output_format="candump",
+                    destination=dest,
+                )
+            self.assertEqual(ctx.exception.code, "DECODED_SIGNAL_TOO_WIDE")
+
+    def test_exactly_four_signals_is_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ok = Path(tmp) / "ok.csv"
+            ok.write_text("Time,ID,S1,S2,S3,S4\n0.0,id1,0.1,0.2,0.3,0.4\n")
+            dest = str(Path(tmp) / "out.jsonl")
+            result = convert_file(
+                str(ok),
+                source_format="decoded-signal-csv",
+                output_format="jsonl",
+                destination=dest,
+            )
+            self.assertEqual(result["frame_count"], 1)
+            event = json.loads(Path(dest).read_text().splitlines()[0])
+            self.assertEqual(len(bytes.fromhex(event["payload"]["data"])), 8)
+
 
 # ---------------------------------------------------------------------------
 # CLI integration

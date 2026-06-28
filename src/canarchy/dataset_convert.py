@@ -622,6 +622,11 @@ def _parse_decoded_signal_csv(path: Path) -> Iterator[dict]:
     than captured verbatim, this adapter produces real-timing/ID frames with
     synthetic byte layouts — suitable for frame-level analysis (`stats`,
     `re_*`), not for byte-exact replay against a real ECU.
+
+    The output pipeline only models classic CAN, so an ID may carry at most four
+    populated signals (8 payload bytes); a wider row raises
+    ``DECODED_SIGNAL_TOO_WIDE`` rather than emit a candump line that downstream
+    classic-frame parsers would reject.
     """
     with open(path, newline="") as f:
         reader = csv.DictReader(f)
@@ -664,12 +669,27 @@ def _parse_decoded_signal_csv(path: Path) -> Iterator[dict]:
                 timestamp = float(row[time_col])
                 arb_id = _decoded_signal_arbitration_id(row[id_col])
                 data_bytes = _pack_decoded_signals(row, signal_cols)
-            except (ValueError, KeyError) as exc:
+            except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                # TypeError/AttributeError cover short rows where DictReader fills
+                # a missing Time/ID cell with None (float(None) / None.strip()).
                 raise ConversionError(
                     code="MALFORMED_SOURCE",
                     message=f"Malformed row at line {line_num}: {exc}",
                     hint="Check that Time is a float, ID is a recognized token, and signal cells are floats.",
                 ) from exc
+            if len(data_bytes) > 8:
+                raise ConversionError(
+                    code="DECODED_SIGNAL_TOO_WIDE",
+                    message=(
+                        f"Row at line {line_num} (ID {row[id_col]!r}) packs "
+                        f"{len(data_bytes)} payload bytes; classic CAN frames hold at most 8."
+                    ),
+                    hint=(
+                        "decoded-signal-csv synthesizes 2 bytes per populated signal, so an ID "
+                        "may carry at most 4 signals. The candump/JSONL pipeline only models "
+                        "classic CAN frames; split wider IDs or drop excess signal columns."
+                    ),
+                )
             label = (row.get(label_col) or "").strip() or None if label_col else None
             yield {
                 "timestamp": timestamp,
