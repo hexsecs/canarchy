@@ -574,6 +574,119 @@ class DatasetConvertTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# decoded-signal-csv adapter (SynCAN-style)
+# ---------------------------------------------------------------------------
+
+
+class DecodedSignalCsvTests(unittest.TestCase):
+    SRC = str(FIXTURES / "dataset_decoded_signal_sample.csv")
+
+    def test_convert_to_candump_maps_ids_and_packs_signals(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "out.log")
+            result = convert_file(
+                self.SRC,
+                source_format="decoded-signal-csv",
+                output_format="candump",
+                destination=dest,
+            )
+            self.assertEqual(result["frame_count"], 6)
+            lines = Path(dest).read_text().splitlines()
+            self.assertEqual(len(lines), 6)
+            # id1 -> arbitration ID 1; two present signals (0.5, 0.25) packed as
+            # big-endian uint16: round(0.5*0xFFFF)=0x8000, round(0.25*0xFFFF)=0x4000.
+            self.assertTrue(lines[0].startswith("(0.000000) can0 1#"))
+            self.assertEqual(lines[0].split("#", 1)[1], "80004000")
+
+    def test_convert_id_mapping_extracts_trailing_int(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "out.jsonl")
+            convert_file(
+                self.SRC,
+                source_format="decoded-signal-csv",
+                output_format="jsonl",
+                destination=dest,
+            )
+            events = [json.loads(line) for line in Path(dest).read_text().splitlines()]
+            arb_ids = {e["payload"]["arbitration_id"] for e in events}
+            # id1 -> 1, id2 -> 2, id10 -> 10
+            self.assertEqual(arb_ids, {1, 2, 10})
+
+    def test_empty_signal_cells_are_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "out.jsonl")
+            convert_file(
+                self.SRC,
+                source_format="decoded-signal-csv",
+                output_format="jsonl",
+                destination=dest,
+            )
+            events = [json.loads(line) for line in Path(dest).read_text().splitlines()]
+            # id10 row has a single present signal (1.0) -> 2 payload bytes.
+            id10 = next(e for e in events if e["payload"]["arbitration_id"] == 10)
+            self.assertEqual(id10["payload"]["data"], "FFFF")
+            # id2 row has four present signals -> 8 payload bytes.
+            id2 = next(e for e in events if e["payload"]["arbitration_id"] == 2)
+            self.assertEqual(len(bytes.fromhex(id2["payload"]["data"])), 8)
+
+    def test_label_preserved_in_jsonl(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "out.jsonl")
+            convert_file(
+                self.SRC,
+                source_format="decoded-signal-csv",
+                output_format="jsonl",
+                destination=dest,
+            )
+            events = [json.loads(line) for line in Path(dest).read_text().splitlines()]
+            attack = [e for e in events if e["payload"].get("label") == "1"]
+            self.assertEqual(len(attack), 2)
+
+    def test_stream_to_jsonl_preserves_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = str(Path(tmp) / "stream.jsonl")
+            result = stream_file(
+                self.SRC,
+                source_format="decoded-signal-csv",
+                output_format="jsonl",
+                destination=dest,
+                provider_ref="catalog:syncan",
+            )
+            self.assertEqual(result["frame_count"], 6)
+            first = json.loads(Path(dest).read_text().splitlines()[0])
+            self.assertEqual(first["source"], "decoded-signal-csv")
+            self.assertEqual(first["payload"]["dataset"]["provider_ref"], "catalog:syncan")
+
+    def test_missing_required_columns_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.csv"
+            bad.write_text("Foo,Bar\n1,2\n")
+            dest = str(Path(tmp) / "out.log")
+            with self.assertRaises(ConversionError) as ctx:
+                convert_file(
+                    str(bad),
+                    source_format="decoded-signal-csv",
+                    output_format="candump",
+                    destination=dest,
+                )
+            self.assertEqual(ctx.exception.code, "MALFORMED_SOURCE")
+
+    def test_no_signal_columns_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.csv"
+            bad.write_text("Time,ID\n0.0,id1\n")
+            dest = str(Path(tmp) / "out.log")
+            with self.assertRaises(ConversionError) as ctx:
+                convert_file(
+                    str(bad),
+                    source_format="decoded-signal-csv",
+                    output_format="candump",
+                    destination=dest,
+                )
+            self.assertEqual(ctx.exception.code, "MALFORMED_SOURCE")
+
+
+# ---------------------------------------------------------------------------
 # CLI integration
 # ---------------------------------------------------------------------------
 
@@ -894,7 +1007,7 @@ class CliIntegrationTests(unittest.TestCase):
         with contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as ctx:
             main(("datasets", "stream", "--help"))
         self.assertEqual(ctx.exception.code, 0)
-        self.assertIn("{hcrl-csv,candump,comma-rlog}", stdout.getvalue())
+        self.assertIn("{hcrl-csv,candump,comma-rlog,decoded-signal-csv}", stdout.getvalue())
         self.assertIn("--max-frames", stdout.getvalue())
 
     def test_datasets_stream_comma_rlog_to_stdout_jsonl_with_mock_parser(self) -> None:

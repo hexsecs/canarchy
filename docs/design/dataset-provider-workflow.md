@@ -30,8 +30,8 @@ canarchy datasets inspect <ref>
 canarchy datasets fetch <ref>
 canarchy datasets cache list
 canarchy datasets cache refresh [--provider <name>]
-canarchy datasets convert <file> --source-format hcrl-csv --format candump|jsonl [--output <path>]
-canarchy datasets stream <file> --source-format hcrl-csv|candump|comma-rlog --format candump|jsonl [--chunk-size N] [--max-frames N] [--provider-ref <ref>] [--output <path>]
+canarchy datasets convert <file> --source-format hcrl-csv|candump|comma-rlog|decoded-signal-csv --format candump|jsonl [--output <path>]
+canarchy datasets stream <file> --source-format hcrl-csv|candump|comma-rlog|decoded-signal-csv --format candump|jsonl [--chunk-size N] [--max-frames N] [--provider-ref <ref>] [--output <path>]
 canarchy datasets replay <dataset-ref-or-url> [--file <id-or-name>] [--platform <name>] [--limit N] [--list-files] [--format candump|jsonl] [--rate N] [--max-frames N] [--max-seconds N] [--dry-run]
 ```
 
@@ -151,6 +151,7 @@ file into a CANarchy-native format.
 | `hcrl-csv` | HCRL Car-Hacking CSV: `Timestamp,ID,DLC,Data[,Label]` | `candump`, `jsonl` |
 | `candump` | can-utils timestamped log lines such as `(0.000000) can0 123#AABB` | `candump`, `jsonl` |
 | `comma-rlog` | openpilot/comma `rlog.zst` cereal logs parsed through optional LogReader support | `candump`, `jsonl` |
+| `decoded-signal-csv` | Pre-decoded per-ID signal CSV (e.g. SynCAN `Label,Time,ID,Signal1_of_ID,...`): IDs mapped deterministically, normalized signals packed as big-endian uint16 | `candump`, `jsonl` |
 
 ### candump output
 

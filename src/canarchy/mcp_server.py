@@ -1110,7 +1110,7 @@ _TOOLS: list[types.Tool] = [
                 "source_format": {
                     "type": "string",
                     "description": "Source file format",
-                    "enum": ["hcrl-csv", "candump", "comma-rlog"],
+                    "enum": ["hcrl-csv", "candump", "comma-rlog", "decoded-signal-csv"],
                 },
                 "format": {
                     "type": "string",

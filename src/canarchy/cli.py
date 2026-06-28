@@ -1112,8 +1112,11 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_convert.add_argument(
         "--source-format",
         required=True,
-        choices=["hcrl-csv", "candump", "comma-rlog"],
-        help="source file format (hcrl-csv CSV, candump log, comma-rlog openpilot rlog.zst)",
+        choices=["hcrl-csv", "candump", "comma-rlog", "decoded-signal-csv"],
+        help=(
+            "source file format (hcrl-csv CSV, candump log, comma-rlog openpilot "
+            "rlog.zst, decoded-signal-csv pre-decoded per-ID signal CSV e.g. SynCAN)"
+        ),
     )
     datasets_convert.add_argument(
         "--format",
@@ -1135,8 +1138,11 @@ def build_parser() -> CanarchyArgumentParser:
     datasets_stream.add_argument(
         "--source-format",
         required=True,
-        choices=["hcrl-csv", "candump", "comma-rlog"],
-        help="source file format (hcrl-csv CSV, candump log, comma-rlog openpilot rlog.zst)",
+        choices=["hcrl-csv", "candump", "comma-rlog", "decoded-signal-csv"],
+        help=(
+            "source file format (hcrl-csv CSV, candump log, comma-rlog openpilot "
+            "rlog.zst, decoded-signal-csv pre-decoded per-ID signal CSV e.g. SynCAN)"
+        ),
     )
     datasets_stream.add_argument(
         "--format",
