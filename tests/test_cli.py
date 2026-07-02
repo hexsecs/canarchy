@@ -3489,11 +3489,22 @@ class CliTests(unittest.TestCase):
 
     def test_tui_requires_interactive_terminal(self) -> None:
         # The TUI is now a full-screen Textual app; without a TTY it must
-        # not hang — it prints guidance and exits non-zero.
-        exit_code, _stdout, stderr = run_cli("tui", input="")
+        # not hang — it emits the canonical error envelope and exits non-zero.
+        exit_code, stdout, _stderr = run_cli("tui", input="")
 
-        self.assertEqual(exit_code, 1)
-        self.assertIn("interactive terminal", stderr)
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        self.assertIn("TUI_REQUIRES_TTY", stdout)
+
+    def test_tui_non_tty_error_is_structured_json(self) -> None:
+        # `--json`/`--jsonl` are still advertised on `tui`, so the non-TTY
+        # failure must be the same structured envelope other commands use.
+        exit_code, stdout, _stderr = run_cli("tui", "--json", input="")
+
+        self.assertEqual(exit_code, EXIT_USER_ERROR)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["command"], "tui")
+        self.assertEqual(payload["errors"][0]["code"], "TUI_REQUIRES_TTY")
 
     def test_tui_command_flag_removed(self) -> None:
         # The one-shot `--command` mode was removed with the full-screen

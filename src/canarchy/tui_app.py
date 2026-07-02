@@ -60,6 +60,32 @@ def _row_matches(row: tuple[Any, ...], needle: str) -> bool:
     return any(needle in str(cell).lower() for cell in row)
 
 
+def _is_active_transmit_command(argv: list[str]) -> bool:
+    """True if *argv* resolves to an active-transmit command.
+
+    Reuses the CLI's own definition (`ACTIVE_TRANSMIT_COMMANDS` +
+    `_is_doip_active_command`) by parsing the argv the same way
+    `execute_command` will. Any parse failure returns False so the shared
+    command path still produces the normal structured parse error.
+    """
+
+    from canarchy.cli import (
+        ACTIVE_TRANSMIT_COMMANDS,
+        _is_doip_active_command,
+        build_parser,
+    )
+
+    try:
+        args = build_parser().parse_args(argv)
+    except BaseException:
+        # argparse errors (CliUsageError) and --help/--version (SystemExit)
+        # are handled downstream by the shared command path.
+        return False
+    return getattr(args, "command", None) in ACTIVE_TRANSMIT_COMMANDS or _is_doip_active_command(
+        args
+    )
+
+
 class CanarchyTuiApp(App[int]):
     """The CANarchy full-screen TUI application."""
 
@@ -219,6 +245,18 @@ class CanarchyTuiApp(App[int]):
         except ValueError as exc:
             self._emit_alert(f"error: could not parse command: {exc}")
             return
+        if _is_active_transmit_command(argv):
+            # Active-transmit commands print a preflight to stderr and block
+            # on `sys.stdin.readline()` for a `YES` confirmation. In a
+            # full-screen app stdin is owned by Textual and stderr is the
+            # alt-screen, so that would freeze the UI with an invisible
+            # prompt. Refuse them here and point the operator at the CLI,
+            # where the confirmation workflow works.
+            self._emit_alert(
+                "refusing active-transmit command in the TUI — run it from the "
+                "CLI (its confirmation prompt cannot be answered here)."
+            )
+            return
         try:
             _exit_code, result = self._execute_command(argv)
         except SystemExit:
@@ -258,13 +296,19 @@ class CanarchyTuiApp(App[int]):
         if self.paused:
             return
         events = capture.drain()
-        if not events:
-            return
-        result = _FoldResult(
-            command="capture",
-            data={"events": events, "mode": "capturing", "interface": capture.interface},
-        )
-        self._ingest_result(result)
+        if events:
+            result = _FoldResult(
+                command="capture",
+                data={"events": events, "mode": "capturing", "interface": capture.interface},
+            )
+            self._ingest_result(result)
+        # A finite backend or an immediate transport error ends the stream
+        # without a stop request; return to idle so status stops showing
+        # `capturing` and the operator does not have to `/stop` a dead session.
+        if not capture.running:
+            self._capture = None
+            self._emit_alert(f"capture ended on {capture.interface}")
+            self._refresh_status(mode="idle")
 
     # -- folding results into panes ----------------------------------------
 

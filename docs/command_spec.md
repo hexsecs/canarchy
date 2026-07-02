@@ -1049,7 +1049,8 @@ canarchy tui
 
 Notes:
 
-* a full-screen Textual application that requires an interactive terminal; in a non-TTY context it prints guidance and exits non-zero
+* a full-screen Textual application that requires an interactive terminal; in a non-TTY context it emits the canonical error envelope (`TUI_REQUIRES_TTY`, honouring `--json`/`--jsonl`) and exits non-zero
+* active-transmit commands (e.g. `send`, `generate`, `uds scan`) are refused from the TUI command entry — their `YES` confirmation prompt cannot be answered inside the full-screen app, so run them from the CLI
 * panes: bus status, live traffic, decoded signals, J1939 (summary ribbon + recent table), UDS transactions, and an alerts log
 * `/capture <iface>` streams the bus **live** in the background; `/stop` (or `x`) ends it
 * panes are interactive: `/filter <pane> [text]`, `/sort <pane> [column]`, arrow-key row navigation, `[`/`]` to resize the backlog, `space` to pause the feed

@@ -146,3 +146,44 @@ def test_pause_toggles_live_feed() -> None:
             assert app.paused is True
 
     _run(scenario())
+
+
+def test_active_transmit_command_is_rejected_without_executing() -> None:
+    # An active command must never reach execute_command from the TUI: it
+    # would block the UI thread on the stdin confirmation prompt.
+    calls: list[list[str]] = []
+
+    def spy_execute(argv):
+        calls.append(argv)
+        return execute_command(argv)
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(spy_execute, capture_factory=_scaffold_factory)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "send can0 0x123 0011 --ack-active")
+            assert calls == []  # never dispatched
+            assert app.query_one("#traffic", DataTable).row_count == 0
+            # A passive command still runs.
+            await _submit(app, pilot, "j1939 monitor --pgn 65262")
+            assert calls  # dispatched
+
+    _run(scenario())
+
+
+def test_capture_returns_to_idle_when_stream_ends() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture vcan0")
+            # The scaffold stream is finite (2 frames) — the session should
+            # clear itself without an explicit /stop.
+            for _ in range(60):
+                await pilot.pause(0.05)
+                if app._capture is None:
+                    break
+            assert app._capture is None
+            assert app.query_one("#traffic", DataTable).row_count == 2
+
+    _run(scenario())
