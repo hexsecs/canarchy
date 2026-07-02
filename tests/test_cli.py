@@ -3487,42 +3487,33 @@ class CliTests(unittest.TestCase):
         self.assertIn(" can0 ", stdout)
         self.assertIn("#", stdout)
 
-    def test_tui_starts_and_renders_initial_shell(self) -> None:
-        with patch("builtins.input", side_effect=EOFError):
-            exit_code, stdout, stderr = run_cli("tui")
+    def test_tui_requires_interactive_terminal(self) -> None:
+        # The TUI is now a full-screen Textual app; without a TTY it must
+        # not hang — it prints guidance and exits non-zero.
+        exit_code, _stdout, stderr = run_cli("tui", input="")
 
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
-        self.assertIn("== CANarchy TUI ==", stdout)
-        self.assertIn("[Bus Status]", stdout)
-        self.assertIn("[Live Traffic]", stdout)
-        self.assertIn("[Alerts]", stdout)
-        self.assertIn("[Command Entry]", stdout)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("interactive terminal", stderr)
 
-    def test_tui_command_executes_shared_command_path(self) -> None:
-        exit_code, stdout, stderr = run_cli("tui", "--command", "j1939 monitor --pgn 65262")
-
-        self.assertEqual(exit_code, EXIT_OK)
-        self.assertEqual(stderr, "")
-        self.assertIn("command: j1939 monitor", stdout)
-        self.assertIn("mode: passive", stdout)
-        self.assertIn("j1939 pgn=65262", stdout)
-
-    def test_tui_command_surfaces_shared_errors(self) -> None:
-        exit_code, stdout, stderr = run_cli("tui", "--command", "j1939 pgn 300000")
-
-        self.assertEqual(exit_code, EXIT_USER_ERROR)
-        self.assertEqual(stderr, "")
-        self.assertIn("error: INVALID_PGN: J1939 PGN must be between 0 and 262143.", stdout)
-
-    def test_tui_command_rejects_nested_frontends(self) -> None:
-        exit_code, stdout, stderr = run_cli(
-            "tui", "--command", "shell --command 'capture can0 --text'"
+    def test_tui_command_flag_removed(self) -> None:
+        # The one-shot `--command` mode was removed with the full-screen
+        # rewrite; the flag is no longer recognised.
+        exit_code, _stdout, _stderr = run_cli(
+            "tui", "--command", "j1939 monitor --pgn 65262", input=""
         )
 
+        self.assertNotEqual(exit_code, EXIT_OK)
+
+    def test_tui_command_entry_rejects_nested_frontends(self) -> None:
+        # The nested-front-end guard lives in the shared command path the
+        # TUI command entry routes through.
+        from canarchy.cli import execute_command
+
+        exit_code, result = execute_command(["shell", "--command", "capture can0 --text"])
+
         self.assertEqual(exit_code, EXIT_USER_ERROR)
-        self.assertEqual(stderr, "")
-        self.assertIn("TUI_COMMAND_UNSUPPORTED", stdout)
+        self.assertIsNotNone(result)
+        self.assertIn("TUI_COMMAND_UNSUPPORTED", str(result.to_payload()["errors"]))
 
     @patch(
         "canarchy.transport._load_user_config",
@@ -3600,50 +3591,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn(" can0 ", stdout)
         self.assertIn("#", stdout)
-
-    def test_tui_survives_help_flag_in_command(self) -> None:
-        """--help inside the TUI must not exit the session."""
-        inputs = iter(["stats --help", "quit"])
-
-        def fake_input(_prompt):
-            val = next(inputs)
-            return val
-
-        with patch("builtins.input", side_effect=fake_input):
-            exit_code, _, _ = run_cli("tui")
-
-        self.assertEqual(exit_code, EXIT_OK)
-
-    def test_tui_survives_keyboard_interrupt_during_command(self) -> None:
-        """Ctrl+C during a TUI command must not exit the session."""
-        from canarchy.tui import _run_tui_command, TuiState
-
-        state = TuiState()
-        call_count = 0
-
-        def raising_execute(_argv):
-            nonlocal call_count
-            call_count += 1
-            raise KeyboardInterrupt
-
-        result = _run_tui_command("capture can0 --text", state, raising_execute)
-        self.assertEqual(result, 0)
-        self.assertEqual(call_count, 1)
-
-    def test_tui_survives_keyboard_interrupt_at_prompt(self) -> None:
-        """Ctrl+C at the TUI prompt must not exit the session."""
-        inputs = iter([KeyboardInterrupt(), "quit"])
-
-        def fake_input(_prompt):
-            val = next(inputs)
-            if isinstance(val, BaseException):
-                raise val
-            return val
-
-        with patch("builtins.input", side_effect=fake_input):
-            exit_code, _, _ = run_cli("tui")
-
-        self.assertEqual(exit_code, EXIT_OK)
 
     def test_usage_error_respects_json_output(self) -> None:
         exit_code, stdout, stderr = run_cli("decode", "capture.log", "--json")
