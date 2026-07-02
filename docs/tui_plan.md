@@ -1,19 +1,41 @@
 # TUI Plan
 
-Current status: `canarchy tui` now starts an initial text-mode shell with bus status, live traffic, **decoded signals**, **J1939 activity**, **UDS transactions**, **alerts** (including replay activity), and a slash-command hotkey palette. Sections 3–7 of this document are implemented. The TUI v2 milestone is closed.
+Current status: `canarchy tui` is a **full-screen Textual application** with bus
+status, live traffic, **decoded signals**, **J1939 activity** (summary ribbon +
+recent table), **UDS transactions**, an append-only **alerts** log (including
+replay activity), and a command entry. It streams the bus **live** in the
+background, and every pane is an interactive, sortable/filterable table with
+operator-controlled backlog. The full-screen + live-streaming milestone
+(Suggested Implementation Order items 1, 2, and 6) is now implemented; the
+text-mode shell and its one-shot `tui --command` mode have been retired.
 
-Hotkeys (slash commands at the prompt):
+Because the app is full-screen it requires an interactive terminal; in a
+non-TTY / scripted context it prints guidance and exits non-zero. Use the
+individual commands (`capture`, `decode`, `j1939 monitor`, …) for
+non-interactive runs — the CLI remains the authoritative contract.
 
-* `/help` — list the hotkey table
-* `/quit`, `/exit` — exit the TUI
-* `/clear` — reset every pane to its initial state
-* `/capture <iface>` — start a candump-style live capture
+Commands and hotkeys (typed into the command entry):
+
+* `/capture <iface>` — start a **live** background capture on the interface
+* `/stop` (or the `x` key) — stop the live capture
+* `/filter <pane> [text]` — substring-filter a pane (`traffic`, `decoded`,
+  `j1939`, `uds`); no text clears the filter
+* `/sort <pane> [column]` — sort a pane by column index or name (toggles
+  direction)
+* `/clear` (or the `c` key) — reset every pane
+* `/help` — list the shared hotkey table in the alerts log
 * `/save <name>`, `/load <name>` — session management
 * `/dbc <ref>` — inspect a DBC (local path or `opendbc:<name>`)
-* `/doctor` — run environment health checks
-* `/config` — show the effective configuration
+* `/doctor`, `/config` — environment health / effective configuration
+* `/quit`, `/exit` (or the `q` key) — exit the TUI
+* Any real CANarchy command typed at the prompt runs through the shared parser
+  and folds into the panes.
 
-This document remains the forward-looking plan for taking that initial shell toward the richer pane model described below.
+Keys: `space` pause/resume the live feed, `[` / `]` shrink/grow the backlog,
+`ctrl+f` maximize the focused pane, arrow keys navigate rows within a pane,
+`tab` moves focus between panes.
+
+This document remains the forward-looking plan for the pane model.
 
 ## Goal
 

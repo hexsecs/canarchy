@@ -2436,8 +2436,7 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(shell)
     shell.set_defaults(command="shell")
 
-    tui = subparsers.add_parser("tui", help="start the TUI")
-    tui.add_argument("--command", dest="tui_command", help="run a single TUI command and exit")
+    tui = subparsers.add_parser("tui", help="start the full-screen TUI")
     add_output_arguments(tui)
     tui.set_defaults(command="tui")
 
@@ -12264,7 +12263,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "shell":
         return run_shell(args.shell_command)
     if args.command == "tui":
-        return run_tui(execute_command, command=args.tui_command)
+        return run_tui(execute_command)
     if args.command == "capture":
         return emit_live_capture(args, output_format)
     if (

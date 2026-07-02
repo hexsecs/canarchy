@@ -4,9 +4,16 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented |
+| Status | Superseded by the full-screen TUI |
 | Command surface | `canarchy tui` |
 | Primary area | Front end |
+
+> **Update:** `canarchy tui` is now a full-screen Textual application with
+> background live capture and interactive, sortable/filterable panes. The
+> text-mode shell and the one-shot `tui --command` mode described below have
+> been retired. The engine boundary rules (REQ-TUI-03/04/05, including the
+> `TUI_COMMAND_UNSUPPORTED` guard) still hold. See `docs/tui_plan.md` for the
+> current command/keybinding surface.
 
 ## Goal
 
@@ -29,10 +36,13 @@ Operators need a compact interactive view that can surface recent traffic, comma
 ## Command Surface
 
 ```text
-canarchy tui [--command "<existing canarchy command>"]
+canarchy tui
 ```
 
-`--command` runs one command through the TUI command-entry path and exits, which keeps the TUI testable and automation-friendly.
+The TUI is interactive and full-screen; it requires a TTY. For scripted or
+automation use, invoke the underlying commands directly (they are the
+authoritative contract). The retired `--command` one-shot flag no longer
+exists.
 
 ## Responsibilities And Boundaries
 
@@ -42,11 +52,12 @@ In scope:
 * panes for bus status, live traffic, alerts, and command-entry help
 * shared command execution path reused from the CLI
 
-Out of scope:
+Out of scope (for this original text-mode milestone — now delivered by the
+full-screen app):
 
-* full-screen terminal rendering
-* background live subscriptions
-* richer pane selection, filtering, or focus behavior
+* ~~full-screen terminal rendering~~ — delivered (Textual)
+* ~~background live subscriptions~~ — delivered (`CaptureSession`)
+* ~~richer pane selection, filtering, or focus behavior~~ — delivered
 
 ## Pane Model
 
@@ -88,6 +99,13 @@ The TUI renders a text-mode shell with the following sections in order:
 
 ## Deferred Decisions
 
-* curses or full-screen terminal rendering
-* background live capture subscriptions
-* dedicated decoded-signal and UDS panes beyond the compact summary list
+These were deferred for the text-mode milestone and are now implemented by the
+full-screen Textual app (`src/canarchy/tui_app.py`, `src/canarchy/tui_capture.py`):
+
+* ~~curses or full-screen terminal rendering~~ — Textual
+* ~~background live capture subscriptions~~ — `CaptureSession` streaming
+* ~~dedicated decoded-signal and UDS panes beyond the compact summary list~~ —
+  dedicated sortable/filterable DataTables per pane
+
+Remaining follow-up: a finite-timeout `capture_stream` loop so live capture
+stops instantly on real hardware (today the daemon thread is abandoned on stop).

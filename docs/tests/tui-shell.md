@@ -4,9 +4,17 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Implemented |
+| Status | Superseded by the full-screen TUI |
 | Related design spec | `docs/design/tui-shell.md` |
 | Primary test area | Front end |
+
+> **Update:** the text-mode shell and its one-shot `tui --command` mode were
+> replaced by a full-screen Textual app. Fold-layer behaviour is still covered
+> by `tests/test_tui_snapshots.py`; the full-screen app and its live-capture
+> streaming are covered by `tests/test_tui_app.py` and
+> `tests/test_tui_capture.py`. The startup/one-shot cases below are retired;
+> the nested-front-end rejection (`TUI_COMMAND_UNSUPPORTED`) is retained and
+> now verified against the shared command path in `tests/test_cli.py`.
 
 ## Test Objectives
 
@@ -87,8 +95,10 @@ No dedicated fixture files are required. Tests use mocked input and shared comma
 
 ## Explicit Non-Coverage
 
-* full-screen terminal UI rendering
-* background live capture subscriptions
+* pixel-level terminal snapshot rendering (behavioural coverage is via the
+  Textual `Pilot` harness in `tests/test_tui_app.py`, not SVG snapshots)
+* real-hardware live capture (covered deterministically via the scaffold
+  backend's finite frame stream)
 
 ## Traceability
 

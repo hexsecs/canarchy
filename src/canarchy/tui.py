@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import enum
-import shlex
+import sys
+import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
-
-from canarchy.completion import install_completion
 
 if TYPE_CHECKING:
     from canarchy.cli import CommandResult
@@ -70,28 +70,49 @@ _MAX_J1939_DM1_ALERTS = 4
 _J1939_TOP_PGN_COUNT = 3
 _J1939_TOP_SOURCE_ADDRESS_COUNT = 4
 _MAX_UDS_RECENT_ROWS = 8
+_MAX_TRAFFIC_ROWS = 8
 
 
-def _format_signal_row(*, message: str, signal: str, value: object, units: object) -> str:
-    """Format one row for the Decoded Signals pane.
+@dataclass(slots=True, frozen=True)
+class BacklogCaps:
+    """Per-pane backlog ceilings for the fold layer.
 
-    Columns mirror `docs/tui_plan.md#decoded-signals`: message, signal,
-    value, units. Values that are floats are rounded to three decimal
-    places so the pane stays readable; everything else is stringified
-    as-is.
+    The line-mode renderer and the existing snapshot tests rely on the
+    historical caps, so those remain the defaults. The full-screen app
+    passes a larger set (its DataTables provide the real scrollback and
+    the fold cap becomes a safety ceiling the operator can grow/shrink).
     """
 
+    decoded_signals: int = _MAX_DECODED_SIGNAL_ROWS
+    j1939_recent: int = _MAX_J1939_RECENT_ROWS
+    j1939_dm1_alerts: int = _MAX_J1939_DM1_ALERTS
+    uds_recent: int = _MAX_UDS_RECENT_ROWS
+    traffic: int = _MAX_TRAFFIC_ROWS
+
+
+_DEFAULT_CAPS = BacklogCaps()
+
+
+def _signal_value_text(value: object) -> str:
+    """Render a signal value: floats to three trimmed decimals, else str."""
+
     if isinstance(value, float):
-        value_text = f"{value:.3f}".rstrip("0").rstrip(".") or "0"
-    else:
-        value_text = "(none)" if value is None else str(value)
-    units_text = "" if units in (None, "") else f" [{units}]"
-    msg = message or "(message)"
-    return f"{msg}.{signal} = {value_text}{units_text}"
+        return f"{value:.3f}".rstrip("0").rstrip(".") or "0"
+    return "(none)" if value is None else str(value)
 
 
-def _decoded_signal_rows(result: CommandResult) -> list[str]:
-    """Extract Decoded Signals pane rows from a command result.
+def _signal_units_text(units: object) -> str:
+    """Render a signal's units column (empty when absent)."""
+
+    return "" if units in (None, "") else str(units)
+
+
+#: Column headers for the Decoded Signals DataTable.
+DECODED_SIGNAL_COLUMNS = ("message", "signal", "value", "units")
+
+
+def _decoded_signal_tuples(result: CommandResult) -> list[tuple[str, str, str, str]]:
+    """Extract Decoded Signals rows as `(message, signal, value, units)`.
 
     Reuses the existing canonical structures rather than inventing a
     parallel signal model. Supported sources:
@@ -106,23 +127,29 @@ def _decoded_signal_rows(result: CommandResult) -> list[str]:
       name is the PGN.
     """
 
-    rows: list[str] = []
+    def _row(message: object, signal: object, value: object, units: object):
+        return (
+            "" if message is None else str(message),
+            str(signal),
+            _signal_value_text(value),
+            _signal_units_text(units),
+        )
+
+    rows: list[tuple[str, str, str, str]] = []
     for event in result.data.get("events", []) or []:
         event_type = event.get("event_type")
         payload = event.get("payload", {}) or {}
         if event_type == "decoded_message":
             message = payload.get("message_name", "")
             for signal_name, value in (payload.get("signals") or {}).items():
-                rows.append(
-                    _format_signal_row(message=message, signal=signal_name, value=value, units=None)
-                )
+                rows.append(_row(message, signal_name, value, None))
         elif event_type == "signal":
             rows.append(
-                _format_signal_row(
-                    message=payload.get("message_name") or "",
-                    signal=payload.get("signal_name", "(signal)"),
-                    value=payload.get("value"),
-                    units=payload.get("units"),
+                _row(
+                    payload.get("message_name") or "",
+                    payload.get("signal_name", "(signal)"),
+                    payload.get("value"),
+                    payload.get("units"),
                 )
             )
         elif event_type == "j1939_pgn":
@@ -136,24 +163,17 @@ def _decoded_signal_rows(result: CommandResult) -> list[str]:
             # string keys would otherwise raise AttributeError.
             if isinstance(decoded, dict):
                 for signal_name, value in decoded.items():
-                    rows.append(
-                        _format_signal_row(
-                            message=pgn_label,
-                            signal=signal_name,
-                            value=value,
-                            units=None,
-                        )
-                    )
+                    rows.append(_row(pgn_label, signal_name, value, None))
             else:
                 for entry in decoded or []:
                     if not isinstance(entry, dict):
                         continue
                     rows.append(
-                        _format_signal_row(
-                            message=pgn_label,
-                            signal=entry.get("name", "(signal)"),
-                            value=entry.get("value"),
-                            units=entry.get("units"),
+                        _row(
+                            pgn_label,
+                            entry.get("name", "(signal)"),
+                            entry.get("value"),
+                            entry.get("units"),
                         )
                     )
 
@@ -161,19 +181,34 @@ def _decoded_signal_rows(result: CommandResult) -> list[str]:
     if result.command == "j1939 spn":
         for observation in result.data.get("observations", []) or []:
             rows.append(
-                _format_signal_row(
-                    message=f"PGN {observation.get('pgn', '?')}",
-                    signal=observation.get("name") or f"SPN {observation.get('spn', '?')}",
-                    value=observation.get("value"),
-                    units=observation.get("units"),
+                _row(
+                    f"PGN {observation.get('pgn', '?')}",
+                    observation.get("name") or f"SPN {observation.get('spn', '?')}",
+                    observation.get("value"),
+                    observation.get("units"),
                 )
             )
 
     return rows
 
 
-def _format_j1939_recent(payload: dict[str, Any]) -> str:
-    """One-row summary of a `j1939_pgn` event for the J1939 pane."""
+def _decoded_signal_rows(result: CommandResult) -> list[str]:
+    """Line-mode Decoded Signals rows, joined from the structured tuples."""
+
+    lines: list[str] = []
+    for message, signal, value_text, units in _decoded_signal_tuples(result):
+        units_text = f" [{units}]" if units else ""
+        msg = message or "(message)"
+        lines.append(f"{msg}.{signal} = {value_text}{units_text}")
+    return lines
+
+
+#: Column headers for the J1939 recent-activity DataTable.
+J1939_COLUMNS = ("pgn", "sa", "da", "prio", "data")
+
+
+def _j1939_recent_tuple(payload: dict[str, Any]) -> tuple[str, str, str, str, str]:
+    """Structured `(pgn, sa, da, prio, data)` row for a `j1939_pgn` event."""
 
     pgn = payload.get("pgn", "?")
     sa = payload.get("source_address")
@@ -182,8 +217,26 @@ def _format_j1939_recent(payload: dict[str, Any]) -> str:
     data_hex = (payload.get("frame") or {}).get("data", "")
     sa_text = f"0x{sa:02X}" if isinstance(sa, int) else "?"
     da_text = "broadcast" if da == 0xFF or da is None else f"0x{da:02X}"
-    prio_text = "" if priority is None else f" prio={priority}"
-    return f"pgn={pgn} sa={sa_text} da={da_text}{prio_text} data={data_hex}"
+    prio_text = "" if priority is None else str(priority)
+    return (str(pgn), sa_text, da_text, prio_text, data_hex)
+
+
+def _j1939_row_tuples(result: CommandResult) -> list[tuple[str, str, str, str, str]]:
+    """Structured J1939 rows for every `j1939_pgn` event in a result."""
+
+    return [
+        _j1939_recent_tuple(event.get("payload") or {})
+        for event in result.data.get("events", []) or []
+        if event.get("event_type") == "j1939_pgn"
+    ]
+
+
+def _format_j1939_recent(payload: dict[str, Any]) -> str:
+    """One-row summary of a `j1939_pgn` event for the J1939 pane."""
+
+    pgn, sa_text, da_text, prio_text, data_hex = _j1939_recent_tuple(payload)
+    prio_field = f" prio={prio_text}" if prio_text else ""
+    return f"pgn={pgn} sa={sa_text} da={da_text}{prio_field} data={data_hex}"
 
 
 def _format_dm1_alert(message: dict[str, Any]) -> str:
@@ -214,7 +267,9 @@ def _format_dm1_alert(message: dict[str, Any]) -> str:
     return f"DM1 sa={sa_text} transport={transport} active={active}{lamp_field}{sample_text}"
 
 
-def _update_j1939_state(state: TuiState, result: CommandResult) -> None:
+def _update_j1939_state(
+    state: TuiState, result: CommandResult, caps: BacklogCaps = _DEFAULT_CAPS
+) -> None:
     """Fold a command result into the J1939 pane state.
 
     Reads `j1939_pgn` events for PGN frequency, source-address activity,
@@ -241,7 +296,7 @@ def _update_j1939_state(state: TuiState, result: CommandResult) -> None:
         # it at the top of the pane.
         new_rows = [_format_j1939_recent(event) for event in reversed(pgn_events)]
         merged = new_rows + state.j1939_recent
-        state.j1939_recent = merged[:_MAX_J1939_RECENT_ROWS]
+        state.j1939_recent = merged[: caps.j1939_recent]
 
     # DM1 alerts come from the `j1939 dm1` command's structured output
     # (`data.messages`). `data.active_dtc_count` flags real fault
@@ -254,7 +309,7 @@ def _update_j1939_state(state: TuiState, result: CommandResult) -> None:
                 active_alerts.append(_format_dm1_alert(message))
         if active_alerts:
             merged_alerts = active_alerts + state.j1939_dm1_alerts
-            state.j1939_dm1_alerts = merged_alerts[:_MAX_J1939_DM1_ALERTS]
+            state.j1939_dm1_alerts = merged_alerts[: caps.j1939_dm1_alerts]
 
 
 def _j1939_pane_lines(state: TuiState) -> list[str]:
@@ -310,11 +365,55 @@ def _format_uds_transaction(payload: dict[str, Any]) -> str:
     )
 
 
-def _update_uds_state(state: TuiState, result: CommandResult) -> None:
+#: Column headers for the UDS transactions DataTable.
+UDS_COLUMNS = ("service", "name", "req→resp", "ecu", "outcome")
+
+
+def _uds_transaction_tuple(payload: dict[str, Any]) -> tuple[str, str, str, str, str]:
+    """Structured `(service, name, req→resp, ecu, outcome)` UDS row.
+
+    Incomplete ISO-TP reassembly (`complete=false`) is flagged with a
+    leading `!!` in the outcome column, mirroring the line-mode prefix.
+    """
+
+    service = payload.get("service")
+    service_text = f"0x{service:02X}" if isinstance(service, int) else "?"
+    service_name = payload.get("service_name") or ""
+    request_id = payload.get("request_id")
+    response_id = payload.get("response_id")
+    req_text = f"0x{request_id:03X}" if isinstance(request_id, int) else "?"
+    resp_text = f"0x{response_id:03X}" if isinstance(response_id, int) else "?"
+    ecu = payload.get("ecu_address")
+    ecu_text = "?" if ecu is None else (f"0x{ecu:02X}" if isinstance(ecu, int) else str(ecu))
+    nrc_name = payload.get("negative_response_name")
+    if nrc_name:
+        outcome = f"NRC={nrc_name}"
+    elif payload.get("response_summary"):
+        outcome = f"resp={payload['response_summary']}"
+    else:
+        outcome = f"resp={payload.get('response_data', '')}"
+    if payload.get("complete") is False:
+        outcome = f"!! incomplete {outcome}"
+    return (service_text, service_name, f"{req_text}→{resp_text}", ecu_text, outcome)
+
+
+def _uds_row_tuples(result: CommandResult) -> list[tuple[str, str, str, str, str]]:
+    """Structured UDS rows for every `uds_transaction` event in a result."""
+
+    return [
+        _uds_transaction_tuple(event.get("payload") or {})
+        for event in result.data.get("events", []) or []
+        if event.get("event_type") == "uds_transaction"
+    ]
+
+
+def _update_uds_state(
+    state: TuiState, result: CommandResult, caps: BacklogCaps = _DEFAULT_CAPS
+) -> None:
     """Fold a command result into the UDS pane state.
 
     Reads `uds_transaction` events; ignores other event types. Keeps
-    the newest `_MAX_UDS_RECENT_ROWS` transactions at the top.
+    the newest `caps.uds_recent` transactions at the top.
     """
 
     new_rows: list[str] = []
@@ -327,7 +426,7 @@ def _update_uds_state(state: TuiState, result: CommandResult) -> None:
         return
     # Newest event in the batch goes to the top of the pane.
     merged = list(reversed(new_rows)) + state.uds_recent
-    state.uds_recent = merged[:_MAX_UDS_RECENT_ROWS]
+    state.uds_recent = merged[: caps.uds_recent]
 
 
 def _uds_pane_lines(state: TuiState) -> list[str]:
@@ -359,12 +458,22 @@ def _hotkey_help_lines() -> list[str]:
     return [f"  {name.ljust(width)}{description}" for name, description in _HOTKEY_HELP_ROWS]
 
 
-def _handle_hotkey(line: str, state: TuiState) -> tuple[_HotkeyResult, str | None]:
+def _handle_hotkey(
+    line: str,
+    state: TuiState,
+    emit: Callable[[str], None] = print,
+) -> tuple[_HotkeyResult, str | None]:
     """Dispatch a slash command.
 
     Returns `(disposition, expanded_argv_string)`. When the
     disposition is ``EXPANDED`` the caller runs ``expanded_argv_string``
-    through `_run_tui_command` so the existing parser handles the rest.
+    through the shared command path so the existing parser handles the rest.
+
+    Diagnostic lines (help table, error hints) are written through
+    ``emit`` — one call per line. It defaults to ``print`` so the
+    fold-layer tests keep their stdout behaviour; the full-screen app
+    passes a sink that routes the lines to its Alerts log instead of
+    printing into the terminal surface.
     """
 
     parts = line.strip().split(None, 1)
@@ -374,84 +483,52 @@ def _handle_hotkey(line: str, state: TuiState) -> tuple[_HotkeyResult, str | Non
     if name in ("quit", "exit"):
         return _HotkeyResult.QUIT, None
     if name == "help":
-        print("Hotkeys:")
+        emit("Hotkeys:")
         for row in _hotkey_help_lines():
-            print(row)
+            emit(row)
         return _HotkeyResult.LOCAL, None
     if name == "clear":
         _clear_panes(state)
         return _HotkeyResult.LOCAL, None
     template = _HOTKEY_TEMPLATES.get(name)
     if template is None:
-        print(f"unknown hotkey: /{name} (try /help)")
+        emit(f"unknown hotkey: /{name} (try /help)")
         return _HotkeyResult.UNKNOWN, None
     if "{0}" in template and not arg:
-        print(f"/{name} requires an argument; see /help")
+        emit(f"/{name} requires an argument; see /help")
         return _HotkeyResult.UNKNOWN, None
     return _HotkeyResult.EXPANDED, template.format(arg)
 
 
-def run_tui(
-    execute_command: Any,
-    *,
-    command: str | None = None,
-) -> int:
-    state = TuiState()
-    _render(state)
+def run_tui(execute_command: Any) -> int:
+    """Launch the full-screen CANarchy TUI.
 
-    if command is not None:
-        return _run_tui_command(command, state, execute_command)
+    The TUI is an interactive, full-screen Textual application, so it
+    requires a real terminal. When stdin/stdout are not a TTY (piped
+    input, CI) it prints guidance and exits non-zero rather than hanging
+    on a terminal it cannot drive — use the individual commands for
+    non-interactive and scripted runs.
+    """
 
-    install_completion()
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        print(
+            "canarchy tui requires an interactive terminal. "
+            "Run the individual commands (capture, decode, j1939 ...) "
+            "for non-interactive or scripted use.",
+            file=sys.stderr,
+        )
+        return 1
 
-    while True:
-        try:
-            line = input("canarchy-tui> ")
-        except EOFError:
-            return 0
-        except KeyboardInterrupt:
-            # Ctrl+C at the prompt — clear the line and re-prompt.
-            print()
-            continue
+    # Imported lazily so the lightweight fold-layer helpers in this module
+    # can be used (and unit-tested) without importing the Textual runtime.
+    from canarchy.tui_app import run_canarchy_tui
 
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if stripped in {"exit", "quit"}:
-            return 0
-        if stripped.startswith("/"):
-            handled, expanded = _handle_hotkey(stripped, state)
-            if handled is _HotkeyResult.QUIT:
-                return 0
-            if handled is _HotkeyResult.LOCAL:
-                # /help, /clear, etc. operate on state only — re-render
-                # so the user sees the effect.
-                _render(state)
-                continue
-            if expanded is not None:
-                _run_tui_command(expanded, state, execute_command)
-            continue
-        _run_tui_command(stripped, state, execute_command)
+    return run_canarchy_tui(execute_command)
 
 
-def _run_tui_command(command: str, state: TuiState, execute_command: Any) -> int:
-    argv = shlex.split(command)
-    try:
-        exit_code, result = execute_command(argv)
-    except SystemExit:
-        # --help and --version call sys.exit(); stay in the TUI.
-        return 0
-    except KeyboardInterrupt:
-        # Ctrl+C during a command — print a newline and stay in the TUI.
-        print()
-        return 0
-    if result is not None:
-        _update_state(state, result)
-        _render(state)
-    return exit_code
-
-
-def _update_state(state: TuiState, result: CommandResult) -> None:
+def _update_state(
+    state: TuiState, result: CommandResult, caps: BacklogCaps = _DEFAULT_CAPS
+) -> None:
     payload = result.to_payload()
     state.active_command = result.command
     state.last_result = result
@@ -480,18 +557,86 @@ def _update_state(state: TuiState, result: CommandResult) -> None:
                 f"reason={event_payload.get('reason', '')}".strip()
             )
 
-    state.live_traffic = _traffic_lines(result)
+    state.live_traffic = _traffic_lines(result, caps.traffic)
     new_signal_rows = _decoded_signal_rows(result)
     if new_signal_rows:
         # Keep the most recent rows; older entries fall off the bottom of
         # the pane so the display stays bounded. Newest at the top.
         merged = new_signal_rows + state.decoded_signals
-        state.decoded_signals = merged[:_MAX_DECODED_SIGNAL_ROWS]
-    _update_j1939_state(state, result)
-    _update_uds_state(state, result)
+        state.decoded_signals = merged[: caps.decoded_signals]
+    _update_j1939_state(state, result, caps)
+    _update_uds_state(state, result, caps)
 
 
-def _traffic_lines(result: CommandResult) -> list[str]:
+#: Column headers for the Live Traffic DataTable.
+TRAFFIC_COLUMNS = ("time", "src", "kind", "id / pgn", "dlc", "data")
+
+
+def _fmt_ts(ts: object) -> str:
+    """Format an event timestamp as `HH:MM:SS.mmm` (empty when absent)."""
+
+    if not isinstance(ts, (int, float)):
+        return ""
+    return time.strftime("%H:%M:%S", time.localtime(ts)) + f".{int((ts % 1) * 1000):03d}"
+
+
+def _traffic_row_tuples(result: CommandResult) -> list[tuple[str, str, str, str, str, str]]:
+    """Structured Live Traffic rows over the canonical event types.
+
+    Columns are `TRAFFIC_COLUMNS`. Covers the streaming/observable event
+    types (`frame`, `j1939_pgn`, `uds_transaction`, `replay_event`,
+    `alert`); command-specific non-event fallbacks that `_traffic_lines`
+    handles are surfaced through their dedicated panes instead.
+    """
+
+    rows: list[tuple[str, str, str, str, str, str]] = []
+    for event in result.data.get("events", []) or []:
+        event_type = event.get("event_type")
+        payload = event.get("payload", {}) or {}
+        src = str(event.get("source") or "")
+        ts = _fmt_ts(event.get("timestamp"))
+        if event_type == "frame":
+            frame = payload.get("frame", {}) or {}
+            arb = frame.get("arbitration_id")
+            id_text = f"0x{arb:X}" if isinstance(arb, int) else "?"
+            rows.append(
+                (
+                    ts or _fmt_ts(frame.get("timestamp")),
+                    src or str(frame.get("interface") or ""),
+                    "frame",
+                    id_text,
+                    str(frame.get("dlc", "")),
+                    str(frame.get("data", "")),
+                )
+            )
+        elif event_type == "j1939_pgn":
+            frame = payload.get("frame", {}) or {}
+            sa = payload.get("source_address")
+            sa_text = f"0x{sa:02X}" if isinstance(sa, int) else "?"
+            rows.append(
+                (ts, src, "j1939", f"pgn={payload.get('pgn', '?')} sa={sa_text}", "",
+                 str(frame.get("data", "")))
+            )
+        elif event_type == "uds_transaction":
+            service = payload.get("service")
+            svc_text = f"0x{service:02X}" if isinstance(service, int) else "?"
+            rows.append(
+                (ts, src, "uds", svc_text, "", str(payload.get("response_data", "")))
+            )
+        elif event_type == "replay_event":
+            rows.append(
+                (ts, src, "replay", str(payload.get("action", "?")), "",
+                 str(payload.get("reason", "")))
+            )
+        elif event_type == "alert":
+            rows.append(
+                (ts, src, "alert", str(payload.get("level", "")), "",
+                 str(payload.get("message", "")))
+            )
+    return rows
+
+
+def _traffic_lines(result: CommandResult, cap: int = _MAX_TRAFFIC_ROWS) -> list[str]:
     lines: list[str] = []
     for event in result.data.get("events", []):
         event_type = event.get("event_type")
@@ -530,7 +675,7 @@ def _traffic_lines(result: CommandResult) -> list[str]:
                 lines.append(
                     f"dm1 sa=0x{message['source_address']:02X} dtcs={message['active_dtc_count']} transport={message['transport']}"
                 )
-    return lines[:8]
+    return lines[:cap]
 
 
 def _render(state: TuiState) -> None:
