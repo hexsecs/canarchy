@@ -614,24 +614,40 @@ def _traffic_row_tuples(result: CommandResult) -> list[tuple[str, str, str, str,
             sa = payload.get("source_address")
             sa_text = f"0x{sa:02X}" if isinstance(sa, int) else "?"
             rows.append(
-                (ts, src, "j1939", f"pgn={payload.get('pgn', '?')} sa={sa_text}", "",
-                 str(frame.get("data", "")))
+                (
+                    ts,
+                    src,
+                    "j1939",
+                    f"pgn={payload.get('pgn', '?')} sa={sa_text}",
+                    "",
+                    str(frame.get("data", "")),
+                )
             )
         elif event_type == "uds_transaction":
             service = payload.get("service")
             svc_text = f"0x{service:02X}" if isinstance(service, int) else "?"
-            rows.append(
-                (ts, src, "uds", svc_text, "", str(payload.get("response_data", "")))
-            )
+            rows.append((ts, src, "uds", svc_text, "", str(payload.get("response_data", ""))))
         elif event_type == "replay_event":
             rows.append(
-                (ts, src, "replay", str(payload.get("action", "?")), "",
-                 str(payload.get("reason", "")))
+                (
+                    ts,
+                    src,
+                    "replay",
+                    str(payload.get("action", "?")),
+                    "",
+                    str(payload.get("reason", "")),
+                )
             )
         elif event_type == "alert":
             rows.append(
-                (ts, src, "alert", str(payload.get("level", "")), "",
-                 str(payload.get("message", "")))
+                (
+                    ts,
+                    src,
+                    "alert",
+                    str(payload.get("level", "")),
+                    "",
+                    str(payload.get("message", "")),
+                )
             )
     return rows
 
