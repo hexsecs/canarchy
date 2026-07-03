@@ -2436,8 +2436,7 @@ def build_parser() -> CanarchyArgumentParser:
     add_output_arguments(shell)
     shell.set_defaults(command="shell")
 
-    tui = subparsers.add_parser("tui", help="start the TUI")
-    tui.add_argument("--command", dest="tui_command", help="run a single TUI command and exit")
+    tui = subparsers.add_parser("tui", help="start the full-screen TUI")
     add_output_arguments(tui)
     tui.set_defaults(command="tui")
 
@@ -12264,7 +12263,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "shell":
         return run_shell(args.shell_command)
     if args.command == "tui":
-        return run_tui(execute_command, command=args.tui_command)
+        # The TUI is full-screen and interactive, so it needs a real terminal.
+        # In a non-TTY / scripted context, emit the canonical error envelope
+        # (honouring --json/--jsonl) instead of a bare stderr message so the
+        # failure matches every other CLI command's structured contract.
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            emit_result(
+                error_result(
+                    "tui",
+                    errors=[
+                        ErrorDetail(
+                            code="TUI_REQUIRES_TTY",
+                            message="The TUI requires an interactive terminal.",
+                            hint=(
+                                "Run the individual commands (capture, decode, "
+                                "j1939 ...) for non-interactive or scripted use."
+                            ),
+                        )
+                    ],
+                ),
+                output_format,
+            )
+            return EXIT_USER_ERROR
+        return run_tui(execute_command)
     if args.command == "capture":
         return emit_live_capture(args, output_format)
     if (

@@ -1041,18 +1041,21 @@ Notes:
 
 ### tui
 
-Start the initial text-mode TUI shell.
+Start the full-screen TUI.
 
 ```bash
-canarchy tui [--command "<existing canarchy command>"]
+canarchy tui
 ```
 
 Notes:
 
-* the first implementation is a thin text-mode shell, not a full-screen terminal UI
-* panes include bus status, live traffic, alerts, and command entry help
-* command entry runs existing CANarchy commands through the shared parser and result path
-* nested interactive front ends like `shell` or `tui` are rejected from TUI command entry
+* a full-screen Textual application that requires an interactive terminal; in a non-TTY context it emits the canonical error envelope (`TUI_REQUIRES_TTY`, honouring `--json`/`--jsonl`) and exits non-zero
+* active-transmit commands (e.g. `send`, `generate`, `uds scan`) are refused from the TUI command entry — their `YES` confirmation prompt cannot be answered inside the full-screen app, so run them from the CLI
+* panes: bus status, live traffic, decoded signals, J1939 (summary ribbon + recent table), UDS transactions, and an alerts log
+* `/capture <iface>` streams the bus **live** in the background; `/stop` (or `x`) ends it
+* panes are interactive: `/filter <pane> [text]`, `/sort <pane> [column]`, arrow-key row navigation, `[`/`]` to resize the backlog, `space` to pause the feed
+* command entry runs existing CANarchy commands through the shared parser and result path; slash hotkeys (`/save`, `/load`, `/dbc`, `/doctor`, `/config`, …) expand to those commands
+* nested interactive front ends like `shell` or `tui` are rejected from TUI command entry (`TUI_COMMAND_UNSUPPORTED`)
 
 ### uds scan
 

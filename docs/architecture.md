@@ -183,7 +183,7 @@ The project currently ships four user- or agent-facing entry styles:
 
 * CLI: non-interactive and authoritative
 * shell: interactive loop that reuses the same parser and command executor
-* TUI: minimal text-mode shell that reuses the same executor and renders selected state
+* TUI: full-screen Textual app that reuses the same executor, streams the bus live via `CaptureSession`, and renders interactive panes
 * MCP server: stdio RPC surface that reuses the same command executor and result envelope
 
 Relevant modules:
@@ -358,7 +358,7 @@ The architecture is intentionally ahead of some implementations. These are the m
 
 * live transport coverage is currently limited by the `python-can` integration and configured interfaces
 * some protocol commands still rely on explicit sample/reference data providers instead of true transport-backed execution, although `j1939 monitor`, `uds scan`, and `uds trace` now have initial real backend paths when `python-can` is selected
-* the TUI is still a minimal text-mode shell, not yet the richer pane-driven dashboard described in [TUI plan](tui_plan.md)
+* the TUI is a full-screen Textual dashboard with background live capture and interactive panes, as described in [TUI plan](tui_plan.md); a remaining follow-up is a finite-timeout capture loop so live capture stops instantly on real hardware
 * reverse-engineering now has a shared analysis subsystem for heuristic ranking (`re signals`, `re counters`, `re entropy`), reference-series correlation (`re correlate`), and provider-backed schema matching (`re match-dbc`, `re shortlist-dbc`)
 * plugin command registration remains deferred; the registry and inspection/toggle CLI surface are implemented
 

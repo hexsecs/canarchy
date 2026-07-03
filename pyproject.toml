@@ -34,6 +34,7 @@ dependencies = [
     "pyyaml>=6.0",
     "python-can>=4.4",
     "requests>=2.31",
+    "textual>=0.80",
 ]
 
 [project.optional-dependencies]
