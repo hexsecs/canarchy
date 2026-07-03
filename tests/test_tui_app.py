@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 
-from textual.widgets import DataTable, Input, RichLog
+from textual.widgets import DataTable, Input, RichLog, Static
 
 from canarchy.cli import execute_command
 from canarchy.transport import LocalTransport, ScaffoldCanBackend
@@ -167,6 +167,27 @@ def test_active_transmit_command_is_rejected_without_executing() -> None:
             # A passive command still runs.
             await _submit(app, pilot, "j1939 monitor --pgn 65262")
             assert calls  # dispatched
+
+    _run(scenario())
+
+
+def test_dm1_faults_do_not_crash_ribbon() -> None:
+    # DM1 fault summaries contain "[spn=.../fmi=...]"; the J1939 ribbon and
+    # bus-status Statics must render that literally, not as console markup.
+    import pathlib
+
+    fixture = pathlib.Path("tests/fixtures/j1939_dm1_spn175.candump")
+
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, f"j1939 dm1 --file {fixture}")
+            # Toggling pause exercises the bracketed "[paused]" status too.
+            app.action_toggle_pause()
+            await pilot.pause()
+            ribbon = app.query_one("#j1939-ribbon", Static).render()
+            assert "DM1 active faults" in str(ribbon)
 
     _run(scenario())
 

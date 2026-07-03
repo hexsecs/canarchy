@@ -20,6 +20,7 @@ from typing import Any
 
 from collections.abc import Callable
 
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Input, RichLog, Static
@@ -439,7 +440,10 @@ class CanarchyTuiApp(App[int]):
         if self.paused:
             lines.append("[paused]")
         lines.append(f"backlog: {self.backlog_cap}")
-        self.query_one("#bus-status", Static).update("  ".join(lines))
+        # Render as literal Text: status/fault strings contain brackets
+        # (e.g. "[paused]", DM1 "[spn=175/fmi=5]") that Static would
+        # otherwise try to parse as console markup and raise on.
+        self.query_one("#bus-status", Static).update(Text("  ".join(lines)))
 
     def _refresh_j1939_ribbon(self) -> None:
         state = self.tstate
@@ -452,7 +456,11 @@ class CanarchyTuiApp(App[int]):
             parts.append("SA: " + ", ".join(f"0x{sa:02X}({n})" for sa, n in top_sa))
         if state.j1939_dm1_alerts:
             parts.append("!! DM1 active faults: " + " | ".join(state.j1939_dm1_alerts))
-        self.query_one("#j1939-ribbon", Static).update("  ".join(parts) or "(no J1939 summary)")
+        # Literal Text — DM1 fault summaries contain "[spn=.../fmi=...]"
+        # which Static would otherwise treat as console markup.
+        self.query_one("#j1939-ribbon", Static).update(
+            Text("  ".join(parts) or "(no J1939 summary)")
+        )
 
     # -- actions ------------------------------------------------------------
 

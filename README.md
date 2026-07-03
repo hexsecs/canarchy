@@ -1,283 +1,209 @@
-# README.md
+<h1 align="center">CANarchy</h1>
 
-## CANarchy
+<p align="center">
+  <strong>A stream-first CAN bus toolkit for analysts, security researchers, and AI agents.</strong><br>
+  Every command emits typed, machine-readable events you can pipe, script, or hand to an agent — with J1939 heavy-vehicle support as a first-class citizen.
+</p>
 
-CANarchy is a stream-first CAN analysis and manipulation runtime designed for automation, security research, and agent-driven workflows.
+<p align="center">
+  <a href="https://pypi.org/project/canarchy/"><img alt="PyPI" src="https://img.shields.io/pypi/v/canarchy"></a>
+  <a href="https://pypi.org/project/canarchy/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/canarchy"></a>
+  <a href="https://github.com/hexsecs/canarchy/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/hexsecs/canarchy/actions/workflows/test.yml/badge.svg"></a>
+  <a href="https://github.com/hexsecs/canarchy/actions/workflows/lint.yml"><img alt="Lint" src="https://github.com/hexsecs/canarchy/actions/workflows/lint.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/pypi/l/canarchy"></a>
+  <a href="https://hexsecs.github.io/canarchy/"><img alt="Docs" src="https://img.shields.io/badge/docs-hexsecs.github.io-blue"></a>
+</p>
 
-The project is implemented in Python and uses `uv` for environment, dependency, and packaging workflows.
+<p align="center">
+  <img src="docs/assets/tui.svg" alt="CANarchy's full-screen TUI streaming live CAN traffic, J1939 activity, and DM1 faults" width="920">
+</p>
 
-Machine-readable output uses canonical JSON envelopes and JSONL event streams where commands produce typed events. The CLI is the interface. J1939 is a first-class citizen, not an afterthought.
+---
 
-Today the repository delivers:
+## What is CANarchy?
 
-* a stable CLI surface for analysts, scripts, and coding agents
-* J1939-first heavy vehicle workflows: PGN decoding, SPN extraction, TP session reassembly, DM1 fault parsing
-* structured output (`--json`, `--jsonl`, `--text`) on every command
-* live CAN transport via `python-can` with support for socketcan, virtual bus, and UDP multicast
-* UDS scan and trace, DBC decode/encode, capture/filter/replay, and an interactive shell
+CANarchy is a CLI-first runtime for capturing, decoding, and manipulating CAN and CAN-FD traffic. Most CAN tools force a tradeoff: interactive but hard to automate, scriptable but too raw, or protocol-aware but inconsistent across interfaces. CANarchy is built around the opposite constraint — **every output is a stream of typed events** (`--json`, `--jsonl`, `--text`) you can parse, pipe, or forward to an LLM agent over MCP.
 
-### Try it in 60 seconds
+It's for you if you're:
 
-Once a CANarchy release has been published to PyPI:
+- **A security researcher** reversing an unknown bus, fuzzing ECUs, or diffing captures for anomalies.
+- **A heavy-vehicle / J1939 engineer** who wants PGN/SPN decoding, TP reassembly, and DM1 fault parsing without dropping to raw IDs.
+- **Building automation or AI agents** that need a stable, machine-readable CAN interface instead of scraping human-formatted text.
+
+## Install
 
 ```bash
-pipx install canarchy
-canarchy --version
-canarchy doctor --text
+pipx install canarchy          # isolated, on PATH everywhere
+# or:  pip install --user canarchy
+```
 
-# Stream two pre-recorded frame events from the deterministic scaffold
-# backend — no hardware, no fixture files, no network. Shows the
-# canonical JSONL envelope.
+Requires Python 3.12+. Live transport uses [`python-can`](https://python-can.readthedocs.io/) (socketcan, virtual bus, UDP multicast, and more).
+
+## Try it in 60 seconds — no hardware required
+
+```bash
+canarchy --version
+canarchy doctor --text          # 8 offline health checks; all green = good install
+
+# Stream typed events from the deterministic scaffold backend —
+# no hardware, no fixtures, no network. This is the JSONL contract:
 CANARCHY_TRANSPORT_BACKEND=scaffold canarchy capture can0 --jsonl
 ```
 
-`canarchy doctor` runs eight offline health checks; everything green
-means the install is good. The scaffold capture demonstrates the
-structured-output contract that every command emits. Replace it with
-`canarchy capture can0 --candump` once you have a real interface, or
-clone the repo to run against the in-tree J1939 fixtures.
+Point it at a real interface once you have one:
 
-For development or for installs from a checkout, see
-[Installation](#installation) below.
+```bash
+canarchy capture can0 --candump                 # human-friendly live view
+canarchy capture can0 --jsonl | jq .            # typed events, one per line
+```
 
-### Why CANarchy?
+Prefer to explore visually? Launch the **full-screen TUI** (pictured above) and watch the bus live:
 
-Most CAN tools force the wrong tradeoff: interactive but hard to automate, scriptable but too raw, protocol-aware but inconsistent across interfaces. CANarchy is built around the opposite constraint: every output is a stream of typed events you can parse, pipe, or forward to an agent.
+```bash
+canarchy tui        # /capture <iface> to stream; /filter, /sort, /help
+```
 
-The [event schema](docs/event-schema.md) is the stable contract. The CLI wraps it. J1939 heavy vehicle analysis is the initial focus for protocol-aware workflows, with a security-research lens throughout.
+## Why CANarchy?
 
-### Current State
+The [event schema](docs/event-schema.md) is the stable contract; the CLI wraps it. That one design choice is what sets CANarchy apart from most open-source CAN tooling:
+
+- **Structured output is the contract, not an afterthought.** Every command — capture, decode, fuzz, reverse-engineer — emits the same canonical JSON envelope. Parse once, reuse everywhere.
+- **Pipe-first.** `--jsonl` streams one typed event per line, so `| jq`, `| grep`, or a downstream script Just Works.
+- **J1939 is first-class.** PGN decoding, SPN extraction, TP session reassembly, and DM1 fault parsing resolve names from a bundled SAE catalog — not just raw arbitration IDs.
+- **Agent-ready.** A built-in [MCP](https://modelcontextprotocol.io/) server exposes the toolkit to Claude and other MCP clients, so an agent can drive CAN analysis directly.
+
+|  | CANarchy | Typical CAN CLI tools |
+|---|:---:|:---:|
+| Structured output as a core contract | ✅ | ✗ / partial |
+| Pipe-friendly typed event stream | ✅ | partial |
+| Provider-backed DBC discovery & cache | ✅ | ✗ |
+| J1939-first operator workflows | ✅ | partial |
+| MCP / agent integration | ✅ | ✗ |
+
+See the full [CAN tool feature matrix](docs/feature-matrix.md) for an honest, side-by-side comparison with can-utils, SavvyCAN, Caring Caribou, TruckDevil, and others.
+
+## What can you do with it?
+
+```bash
+# Decode a capture against a DBC
+canarchy decode --file trace.candump --dbc vehicle.dbc --jsonl
+
+# J1939 heavy-vehicle analysis
+canarchy j1939 decode --file trace.candump --text
+canarchy j1939 spn 110 --file trace.candump --text     # Engine Coolant Temp
+canarchy j1939 dm1  --file trace.candump --text          # active fault codes
+
+# Reverse-engineer an unknown bus: rank likely signals, counters, anomalies
+canarchy re signals   --file trace.candump --jsonl
+canarchy re anomalies --file trace.candump --baseline known_good.candump --jsonl
+
+# Diff two captures per arbitration ID (rate/timing/entropy deltas)
+canarchy compare before.candump after.candump --json
+
+# Active workflows (gated by the active-transmit safety model; --dry-run plans safely)
+canarchy generate can0 --count 10 --gap 50 --id 7DF --jsonl
+canarchy replay --file trace.candump --rate 2.0 --json
+
+# Pipe events straight into downstream tooling
+canarchy j1939 spn 110 --file trace.candump --jsonl \
+  | jq '[.payload.value, .payload.units, .payload.timestamp]'
+```
+
+## Drive it from an AI agent (MCP)
+
+CANarchy ships a [Model Context Protocol](https://modelcontextprotocol.io/) server, so an LLM agent can capture, decode, and analyze CAN traffic through the same structured contract the CLI uses.
+
+```bash
+canarchy mcp install     # write the client config for your MCP host
+canarchy mcp serve       # or run the stdio server directly
+```
+
+Active-transmit tools require an explicit acknowledgement, so an agent can't put frames on a live bus by accident. See the [active-transmit safety design](docs/design/active-transmit-safety.md).
+
+## The full-screen TUI
+
+`canarchy tui` opens an interactive, full-screen dashboard that streams the bus live:
+
+- **Live panes:** Live Traffic, Decoded Signals, J1939 (summary ribbon + recent table), UDS transactions, and an append-only Alerts log.
+- **Background capture:** `/capture <iface>` starts streaming; `/stop` (or `x`) ends it.
+- **Interactive:** `/filter <pane> <text>`, `/sort <pane> <column>`, arrow-key row navigation, `space` to pause the feed, `[`/`]` to resize the backlog, `ctrl+f` to maximize a pane.
+- Type any real CANarchy command at the prompt — it runs through the shared parser and folds into the panes.
+
+<details>
+<summary><strong>Full command catalog</strong> (click to expand)</summary>
 
 Fully implemented and tested:
 
-_Transport_
+**Transport**
+- `capture`, `send`, `filter`, `stats` — transport workflows with live `python-can` and deterministic scaffold backends; `stats` reports per-ID frequency/timing, DLC distribution, and a bus-load estimate
+- `compare` — diff two or more plain CAN captures per arbitration ID: frame-count/rate deltas, cycle-time drift, payload-entropy deltas against a baseline, each ID flagged (rate-drop, rate-spike, entropy-collapse, timing-drift, new/dropped)
+- `capture-info` — fast capture metadata without loading every frame
+- `generate` — cangen-style frame generation (fixed, random, incrementing)
+- `simulate` — deterministic, profile-driven mix of classic CAN, J1939, and DM1 traffic (no hardware)
+- `gateway` — bridge frames between two interfaces (uni- and bidirectional)
+- `replay`, `sequence replay` — deterministic replay planning from candump files, and YAML/JSON multi-message coordinated transmit
 
-* `capture`, `send`, `filter`, `stats` — transport workflows with live `python-can` and deterministic scaffold backends; `stats` reports per-ID frequency/timing, DLC distribution, and a bus-load estimate
-* `compare` — diff two or more plain CAN captures per arbitration ID in one call: frame-count/rate deltas, cycle-time drift, and payload-entropy deltas against a baseline, each ID flagged (rate-drop, rate-spike, entropy-collapse, timing-drift, new/dropped); the generic-CAN analogue of `j1939 compare`
-* `capture-info` — fast capture metadata without loading every frame
-* `generate` — cangen-style frame generation (fixed, random, incrementing modes)
-* `simulate` — deterministic, profile-driven mix of classic CAN, J1939, and DM1 traffic (no hardware needed)
-* `gateway` — bridge frames between two interfaces (unidirectional and bidirectional)
-* `replay`, `sequence replay` — deterministic replay planning from candump files, and YAML/JSON multi-message coordinated transmit
+**Databases (DBC / ARXML / KCD / SYM via cantools)**
+- `decode`, `encode` — database-backed signal decode/encode; `encode` resolves SAE PGN/SPN display names for round-trips
+- `dbc inspect` (incl. `--layout`, `--search`), `dbc signals` — database and signal inspection
+- `dbc convert` — convert databases between DBC / KCD / SYM
+- `dbc generate-c` — C source/header/fuzzer generation from a database
+- `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list|prune|refresh` — provider-backed DBC discovery and cache workflows
 
-_Databases (DBC / ARXML / KCD / SYM via cantools)_
+**J1939**
+- `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, `compare`, `map` — operator workflows across live, file-backed, and decoded views; faults resolve SPN names and FMI descriptions from the bundled SAE catalog
 
-* `decode`, `encode` — database-backed signal decode and encode; `encode` resolves SAE PGN/SPN display names for a decode→encode round-trip
-* `dbc inspect` (incl. `--layout`, `--search`), `dbc signals` — database and signal inspection
-* `dbc convert` — convert databases between DBC / KCD / SYM
-* `dbc generate-c` — C source/header/fuzzer generation from a database
-* `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list|prune|refresh` — provider-backed DBC discovery and cache workflows
+**UDS**
+- `uds scan`, `trace`, `services`, `subservices`, `ecu-reset`, `tester-present`, `security-seed`, `dump-dids`, `read-memory`, `auto` — diagnostic discovery and active workflows
 
-_J1939_
+**Reverse engineering**
+- `re signals`, `re counters`, `re entropy` — file-backed candidate ranking, annotated with J1939 PGN/source-address context, transport-protocol aware
+- `re correlate` — correlate candidate fields against timestamped reference series
+- `re anomalies` — inter-frame-timing and unexpected/dropped-ID anomaly detection; against a baseline it also flags per-ID rate drop/spike (suppression/injection) and payload-entropy collapse (plateau/frozen-value attacks)
+- `re corpus` — cross-capture coverage, cycle-time drift, and signal-stability analysis
+- `re match-dbc`, `re shortlist-dbc` — provider-backed DBC candidate ranking against captures
 
-* `j1939 monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, `compare` — J1939 operator workflows across live, file-backed, and decoded views; faults resolve SPN names and FMI descriptions from the bundled SAE catalog
+**Datasets**
+- `datasets provider list`, `search`, `inspect`, `fetch`, `download`, `cache list|refresh` — public CAN dataset provider workflows
+- `datasets convert`, `stream`, `replay` — dataset conversion and bounded streaming/replay
 
-_UDS_
+**Diagnostics over other transports**
+- `doip discovery`, `services`, `ecu-reset`, `tester-present`, `security-seed`, `dump-dids` — DoIP UDP discovery and active diagnostic workflows
+- `xcp scan`, `info`, `dump` — XCP slave discovery, capability interrogation, and bounded memory dump
 
-* `uds scan`, `trace`, `services` — UDS diagnostic workflows and service catalog, including initial transport-backed scan/trace heuristics
+**Visualization, front ends, and extensions**
+- `plot` — signal time-series plots to PNG/SVG/HTML (`pip install canarchy[plot]`)
+- `web serve` — read-only browser dashboard over the JSONL envelope (HTTP + WebSocket)
+- `shell` — interactive REPL and `--command` scripting mode
+- `tui` — full-screen terminal dashboard with background live capture
+- `plugins list|info|enable|disable` — Python entry-point plugin discovery and toggles
+- `skills provider list`, `search`, `fetch`, `cache list|refresh` — repository-backed CANarchy skill discovery, caching, and provenance
 
-_Reverse engineering_
+**Active-transmit fuzzing** (gated by the [active-transmit safety design](docs/design/active-transmit-safety.md); `--dry-run` is the safe planning path)
+- `fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz identify` — payload/replay/ID-walk fuzzing and bisecting a fuzz log to the culprit frame
+- `fuzz signal`, `fuzz spn` — DBC-signal and J1939-SPN-aware mutation with sentinel coverage
 
-* `re signals`, `re counters`, `re entropy` — file-backed signal/counter/entropy candidate ranking, annotated with J1939 PGN/source-address context and transport-protocol aware
-* `re correlate` — correlation of candidate fields against timestamped reference series
-* `re anomalies` — inter-frame-timing and unexpected/dropped-ID anomaly detection, with optional baseline; against a baseline it also flags per-ID frame-rate drop/spike (suppression/injection) and payload-entropy collapse (plateau/frozen-value attacks)
-* `re corpus` — cross-capture coverage, cycle-time drift, and signal-stability analysis
-* `re match-dbc`, `re shortlist-dbc` — provider-backed DBC candidate ranking against captures
-
-_Datasets_
-
-* `datasets provider list`, `search`, `inspect`, `fetch`, `cache list|refresh` — public CAN dataset provider workflows
-* `datasets convert`, `stream`, `replay` — dataset conversion and bounded streaming/replay
-
-_Visualization, front ends, and extensions_
-
-* `plot` — signal time-series plots to PNG/SVG/HTML (`pip install canarchy[plot]`)
-* `web serve` — read-only browser dashboard over the JSONL envelope (HTTP + WebSocket)
-* `shell` — interactive REPL and `--command` scripting mode
-* `tui` — terminal UI front end
-* `plugins list|info|enable|disable` — Python entry-point plugin discovery and toggles
-* `skills provider list`, `search`, `fetch`, `cache list|refresh` — repository-backed CANarchy skill discovery, caching, and provenance workflows
-
-_Active-transmit fuzzing_ (gated by the [active-transmit safety design](docs/design/active-transmit-safety.md); `--dry-run` is the safe planning path)
-
-* `fuzz payload`, `fuzz replay`, `fuzz arbitration-id` — payload/replay/ID-walk fuzzing
-* `fuzz signal`, `fuzz spn` — DBC-signal and J1939-SPN-aware mutation with sentinel coverage
-
-_Session, export, and utilities_
-
-* `session save`, `load`, `show` — session management
-* `export` — structured artifact export
-* `doctor` — local environment health checks (Python, `python-can`, vendor backends, caches, MCP, config)
-* `mcp serve`, `mcp install` — Model Context Protocol server and client-config helper
-* `completion {bash,zsh,fish}` — emit a shell completion script
-* `--log-level` and `--quiet` — global stderr logging controls (place before the subcommand)
+**Session, export, and utilities**
+- `session save`, `load`, `show` — session management
+- `export` — structured artifact export
+- `doctor` — local environment health checks (Python, `python-can`, vendor backends, caches, MCP, config)
+- `mcp serve`, `mcp install` — Model Context Protocol server and client-config helper
+- `completion {bash,zsh,fish}` — emit a shell completion script
+- `--log-level`, `--quiet` — global stderr logging controls (place before the subcommand)
 
 Default transport backend is `python-can`; set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
 
-### Documentation
+</details>
 
-* [Event Schema](docs/event-schema.md) — canonical event envelope for all structured output
-* [Command spec](docs/command_spec.md)
-* [CAN Tool Feature Matrix](docs/feature-matrix.md) — high-level comparison to other OSS CAN tools
-* [Architecture](docs/architecture.md)
-* [Cookbook](docs/cookbook/index.md) — short task-oriented recipes
-* [Troubleshooting](docs/troubleshooting.md) — structured error-code catalog
-* [Changelog](CHANGELOG.md)
-* [Release Workflow](docs/release.md)
-* [J1939 Heavy Vehicle Demo](docs/tutorials/j1939_heavy_vehicle.md)
+## The structured contract
 
-### Community
-
-* [Contributing](CONTRIBUTING.md) — local development, branch flow, PR gates
-* [Code of Conduct](CODE_OF_CONDUCT.md)
-* [Security Policy](SECURITY.md) — reporting security concerns and active-bus operation guidance
-
-### Installation
-
-CANarchy currently targets Python 3.12 or newer.
-
-#### From PyPI (recommended for users)
-
-```bash
-pipx install canarchy        # isolated, on PATH everywhere
-# or
-pip install --user canarchy  # if pipx is not available
-```
-
-After install, confirm the environment is healthy:
-
-```bash
-canarchy --version
-canarchy doctor --text
-```
-
-Shell completions for bash, zsh, and fish are produced by `canarchy completion <shell>`; see [Getting Started](docs/getting_started.md#install-shell-completion) for the install snippet for each shell.
-
-#### From source (development)
-
-CANarchy uses `uv` for environment, dependency, and packaging workflows.
-
-1. Install Python 3.12 or newer.
-2. Install `uv`.
-3. Clone the repository.
-4. Sync the project environment and dependencies:
-
-```bash
-uv sync
-```
-
-5. Run the CLI:
-
-```bash
-uv run canarchy --help
-```
-
-6. Optionally install `canarchy` on your PATH so you don't need `uv run` every time:
-
-```bash
-uv tool install --editable .
-canarchy --help
-```
-
-If you want to verify the local environment end to end, run:
-
-```bash
-uv run python -m unittest discover -s tests -v
-```
-
-Notes:
-
-* `uv sync` creates the local virtual environment and installs the package from the current checkout.
-* The checked-in `uv.lock` file should be used for reproducible dependency resolution.
-* `uv tool install --editable .` puts `canarchy` on your PATH permanently; edits take effect without reinstalling.
-* Live transport support currently uses `python-can`; persist backend settings in `~/.canarchy/config.toml` (see [Getting Started](docs/getting_started.md)).
-
-### Development
-
-```bash
-uv sync
-uv tool install --editable .
-canarchy --help
-```
-
-### Versioning Policy
-
-CANarchy uses Semantic Versioning.
-
-Rules:
-
-* `MAJOR` for intentional breaking changes to the CLI contract, structured output contract, or other documented public behavior
-* `MINOR` for backward-compatible new commands, new output fields, or new capabilities
-* `PATCH` for backward-compatible fixes, documentation corrections, and implementation improvements that do not intentionally break the public contract
-
-Prereleases:
-
-* prereleases should use standard SemVer prerelease identifiers such as `0.2.0a1`, `0.2.0b1`, or `0.2.0rc1`
-* prereleases are appropriate when command behavior, output contracts, or packaging flows need release-candidate validation before a stable tag
-
-Release tags:
-
-* Git tags should match the package version exactly, prefixed with `v`, for example `v0.1.0`
-* `canarchy --version`, package metadata, and release tags should always agree
-
-Current implementation:
-
-* `src/canarchy/__init__.py` is the authoritative version source
-* package metadata is derived from that version during build
-* CLI and MCP server version reporting reuse the same version value
-
-### Example Usage
-
-```bash
-# Capture and decode
-canarchy capture can0 --candump
-canarchy capture can0 --jsonl
-canarchy decode --file trace.candump --dbc vehicle.dbc --jsonl
-
-# J1939 heavy vehicle analysis
-canarchy j1939 decode --file trace.candump --text
-canarchy j1939 spn 110 --file trace.candump --text   # Engine Coolant Temp
-canarchy j1939 dm1 --file trace.candump --text        # Active fault codes
-
-# Pipe events into downstream tools
-canarchy j1939 spn 110 --file trace.candump --jsonl \
-  | jq '[.payload.value, .payload.units, .payload.timestamp]'
-
-# Active workflows
-canarchy generate can0 --count 10 --gap 50 --id 7DF --jsonl
-canarchy gateway can0 239.0.0.1 --count 100
-canarchy replay --file trace.candump --rate 2.0 --json
-```
-
-Use `--candump` for a human-oriented live view. Use `--jsonl` when feeding output to scripts or agents — every line is a typed event from the [canonical schema](docs/event-schema.md).
-
-Live transport uses `python-can` by default. Set `CANARCHY_PYTHON_CAN_INTERFACE` to choose an interface type, or set `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
-
-Current file support:
-
-* file-backed workflows such as `filter`, `stats`, `decode`, `j1939 decode`, and `replay` read standard timestamped candump log files
-* `j1939 pgn` inspects recorded traffic with `--file <capture.candump>`
-* the supported log form today is `(timestamp) interface frame#data`
-* additional supported candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier such as `20000080#0000000000000000`
-* supported capture-file suffixes today are `.candump` and `.log`; `capture-info --file -`, `stats --file -`, and `filter --file -` can read candump text from stdin
-* `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin
-* malformed candump log lines are skipped during capture parsing rather than falling back to sample data; commands that require capture metadata or explicitly validate stdin emptiness return structured errors when no valid frames are available
-
-### Structured Output
-
-Successful commands return a stable JSON envelope:
+Every successful command returns a stable envelope:
 
 ```json
-{
-  "ok": true,
-  "command": "capture",
-  "data": {},
-  "warnings": [],
-  "errors": []
-}
+{ "ok": true, "command": "capture", "data": {}, "warnings": [], "errors": [] }
 ```
 
-Failures return structured errors with actionable hints:
+Failures return structured errors with actionable hints (and a documented [error-code catalog](docs/troubleshooting.md)):
 
 ```json
 {
@@ -286,18 +212,59 @@ Failures return structured errors with actionable hints:
   "data": {},
   "warnings": [],
   "errors": [
-    {
-      "code": "DBC_LOAD_FAILED",
-      "message": "Failed to parse DBC file.",
-      "hint": "Validate the DBC syntax and line endings."
-    }
+    { "code": "DBC_LOAD_FAILED", "message": "Failed to parse DBC file.", "hint": "Validate the DBC syntax and line endings." }
   ]
 }
 ```
 
-### Philosophy
+Use `--candump` for a human-oriented live view; use `--jsonl` when feeding scripts or agents — every line is a typed event from the [canonical schema](docs/event-schema.md). Set `CANARCHY_PYTHON_CAN_INTERFACE` to choose an interface type, or `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
 
-* CLI is the contract
-* Protocol semantics over raw frames
-* Structured outputs over formatted text
-* Reproducible workflows over ad-hoc interaction
+## Documentation
+
+- [Getting Started](docs/getting_started.md) · [Cookbook](docs/cookbook/index.md) — task-oriented recipes
+- [Event Schema](docs/event-schema.md) — the canonical envelope for all structured output
+- [Command spec](docs/command_spec.md) · [Architecture](docs/architecture.md)
+- [CAN Tool Feature Matrix](docs/feature-matrix.md) — comparison to other OSS CAN tools
+- [J1939 Heavy Vehicle Demo](docs/tutorials/j1939_heavy_vehicle.md) · [Troubleshooting](docs/troubleshooting.md)
+- Full docs site: **[hexsecs.github.io/canarchy](https://hexsecs.github.io/canarchy/)**
+
+## Install from source (development)
+
+CANarchy uses [`uv`](https://docs.astral.sh/uv/) for environment, dependency, and packaging workflows.
+
+```bash
+git clone https://github.com/hexsecs/canarchy && cd canarchy
+uv sync                          # create the venv and install from the checkout
+uv run canarchy --help
+uv tool install --editable .     # optional: put `canarchy` on your PATH; edits take effect live
+```
+
+Run the test suite end to end:
+
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+Shell completions for bash, zsh, and fish come from `canarchy completion <shell>` — see [Getting Started](docs/getting_started.md#install-shell-completion).
+
+## Community & contributing
+
+CANarchy is GPL-3.0-licensed and welcomes contributions.
+
+- ⭐ **Star the repo** if it's useful — it genuinely helps others find it.
+- [Contributing guide](CONTRIBUTING.md) — local development, branch flow, and PR gates
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md) — reporting concerns and safe active-bus operation
+
+> ⚠️ CANarchy can transmit on live buses. Only operate against vehicles, ECUs, and networks you own or are explicitly authorized to test. Active-transmit commands require explicit acknowledgement by design.
+
+## Philosophy
+
+- The CLI is the contract.
+- Protocol semantics over raw frames.
+- Structured output over formatted text.
+- Reproducible workflows over ad-hoc interaction.
+
+---
+
+<sub>Versioning follows [SemVer](https://semver.org/); see the [changelog](CHANGELOG.md) and [release workflow](docs/release.md). `src/canarchy/__init__.py` is the authoritative version source.</sub>
