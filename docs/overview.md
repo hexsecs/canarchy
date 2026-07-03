@@ -14,7 +14,8 @@ Core principles:
 Implemented and exercised in the current codebase:
 
 * `python-can`-backed live transport workflows plus deterministic scaffold transport for `capture`, `send`, `generate`, and `simulate`
-* file-backed `filter`, `stats`, `compare`, `capture-info`, `decode`, `j1939 decode`, `replay`, and `sequence replay` using candump logs
+* file-backed `filter`, `stats`, `compare`, `capture-info`, `decode`, `j1939 decode`, and `replay` using candump logs
+* `sequence replay` for coordinated transmit of a YAML/JSON sequence of DBC-encoded frames
 * live `gateway` bridging between CAN interfaces via `python-can`
 * database-backed `decode`, `encode`, `dbc inspect`, `dbc convert`, and `dbc generate-c` across DBC / ARXML / KCD / SYM, including provider-ref resolution and `dbc_source` provenance in structured output
 * DBC provider and cache workflows for catalog search, fetch, and refresh through the optional opendbc integration
