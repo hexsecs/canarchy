@@ -182,6 +182,7 @@ Fully implemented and tested:
 **Active-transmit fuzzing** (gated by the [active-transmit safety design](docs/design/active-transmit-safety.md); `--dry-run` is the safe planning path)
 - `fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz identify` — payload/replay/ID-walk fuzzing and bisecting a fuzz log to the culprit frame
 - `fuzz signal`, `fuzz spn` — DBC-signal and J1939-SPN-aware mutation with sentinel coverage
+- `fuzz guided` — response-feedback coverage-guided fuzzing with a persisted seed corpus
 
 **Session, export, and utilities**
 - `session save`, `load`, `show` — session management
