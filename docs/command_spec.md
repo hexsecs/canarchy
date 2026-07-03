@@ -6,30 +6,34 @@ This document describes the current implemented CLI contract.
 
 Implemented and verified in the current codebase:
 
-* live and deterministic transport workflows for `capture`, `send`, and `generate`
-* file-backed `filter` and `stats` over candump capture logs
+* live and deterministic transport workflows for `capture`, `send`, `generate`, and `simulate`
+* file-backed `filter`, `stats`, `compare`, and `capture-info` over candump capture logs
 * default `python-can` support for `capture` and `send`
-* deterministic `replay`
+* deterministic `replay` and `sequence replay`
 * live `gateway` bridging between CAN interfaces via `python-can`
 * structured `export` for capture files and saved sessions
 * DBC-backed `decode`, `encode`, and `dbc inspect`
 * DBC provider workflows for `dbc provider list`, `dbc search`, `dbc fetch`, `dbc cache list`, `dbc cache prune`, and `dbc cache refresh`
-* dataset provider workflows for `datasets provider list`, `datasets search`, `datasets inspect`, `datasets fetch`, `datasets cache list`, `datasets cache refresh`, `datasets convert`, `datasets stream`, and `datasets replay`
-* J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, and `compare`
+* dataset provider workflows for `datasets provider list`, `datasets search`, `datasets inspect`, `datasets fetch`, `datasets download`, `datasets cache list`, `datasets cache refresh`, `datasets convert`, `datasets stream`, and `datasets replay`
+* J1939 `monitor`, `decode`, `pgn`, `spn`, `tp`, `dm1`, `faults`, `summary`, `inventory`, `compare`, and `map`
 * session `save`, `load`, and `show`
 * shell one-shot command execution
-* initial text-mode `tui` shell over the shared command layer
-* UDS `scan`, `trace`, and `services`
-* XCP (measurement/calibration) `scan`, `trace`, `read`, and `commands` for XCP-on-CAN
+* full-screen Textual `tui` dashboard over the shared command layer
+* UDS `scan`, `trace`, `services`, `subservices`, `ecu-reset`, `tester-present`, `security-seed`, `dump-dids`, `read-memory`, and `auto`
+* DoIP `discovery`, `services`, `ecu-reset`, `tester-present`, `security-seed`, and `dump-dids` for Diagnostic-over-IP workflows
+* XCP (measurement/calibration) `scan`, `info`, `dump`, `trace`, `read`, and `commands` for XCP-on-CAN
 * J1587/J1708 `decode` and `pids` for legacy heavy-vehicle diagnostic captures
 * J2497 (PLC4TRUCKS) `decode` and `mids` for passive trailer power-line frame captures
+* `plot` for decoded signal time-series rendering (optional `[plot]` extra)
 * `config show` for effective transport configuration inspection
-* `re signals`, `re counters`, `re entropy`, `re correlate`, and `re anomalies` for passive file-backed analysis
+* `re signals`, `re counters`, `re entropy`, `re correlate`, `re anomalies`, and `re corpus` for passive file-backed analysis
 * `re match-dbc` and `re shortlist-dbc` for provider-backed DBC candidate ranking against captures
 * `re suggest` for heuristic signal-name suggestions (with an optional, off-by-default external-LLM enrichment)
 * `plugins list`, `plugins info`, `plugins enable`, and `plugins disable` for Python entry-point plugin inspection and toggles
 * `web serve` for the read-only browser dashboard over the JSONL event envelope
 * `cannelloni decode` and `cannelloni send` for cannelloni CAN-over-UDP wire-format interop
+* skills provider workflows for `skills provider list`, `skills search`, `skills fetch`, `skills cache list`, and `skills cache refresh`
+* active-transmit `fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz signal`, `fuzz spn`, `fuzz guided`, and `fuzz identify`, all gated by the active-transmit safety model
 * structured JSON and JSONL output
 * explicit error schema and exit codes
 
@@ -1937,10 +1941,7 @@ canarchy shell --command "capture can0 --text"
 
 ## Current Gaps
 
-Planned capabilities that are intentionally not exposed in the CLI yet:
-
-* active fuzzing workflows for replay mutation, payload mutation, and arbitration-ID probing
-
-These deeper capabilities are also not implemented yet even where the command surface exists:
+These deeper capabilities are not fully implemented yet even where the command surface exists:
 
 * deeper live transport integration beyond the current `python-can` transport path
+* the follow-up active-transmit safety controls tracked in the `fuzz` section (configurable rate-cap ceiling, TOML target allowlist, explicit `KILL_SWITCH_TRIGGERED` alert)
