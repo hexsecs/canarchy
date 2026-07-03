@@ -114,8 +114,8 @@ canarchy j1939 spn 110 --file trace.candump --jsonl \
 CANarchy ships a [Model Context Protocol](https://modelcontextprotocol.io/) server, so an LLM agent can capture, decode, and analyze CAN traffic through the same structured contract the CLI uses.
 
 ```bash
-canarchy mcp install     # write the client config for your MCP host
-canarchy mcp serve       # or run the stdio server directly
+canarchy mcp install --client claude-desktop   # or: --client claude-code
+canarchy mcp serve                             # or run the stdio server directly
 ```
 
 Active-transmit tools require an explicit acknowledgement, so an agent can't put frames on a live bus by accident. See the [active-transmit safety design](docs/design/active-transmit-safety.md).
