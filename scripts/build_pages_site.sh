@@ -14,6 +14,12 @@ cp "$repo_root/src/homepage/og-card.png" "$site_root/og-card.png"
 
 site_url="https://hexsecs.github.io/canarchy"
 
+# On a GitHub *project* page this file is served from /canarchy/robots.txt,
+# which crawlers do not treat as authoritative (only the host root counts),
+# so the sitemaps below must also be submitted directly to search engines
+# (e.g. Google Search Console / Bing Webmaster Tools). The file still serves
+# SEO tooling that probes it and becomes authoritative if the site ever
+# moves to a custom domain served from the root.
 cat > "$site_root/robots.txt" <<EOF
 User-agent: *
 Allow: /
