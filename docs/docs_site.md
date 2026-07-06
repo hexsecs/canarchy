@@ -24,14 +24,33 @@ bash scripts/build_pages_site.sh
 
 This produces:
 
-* `site/index.html` as the custom GitHub Pages landing page built from `src/homepage/index.html` and `src/homepage/site-brutalist.jsx`
+* `site/index.html` as the custom GitHub Pages landing page, copied from the prerendered `src/homepage/dist/`
 * `site/docs/` as the MkDocs-built documentation site
+
+### Regenerating the homepage
+
+The landing page is authored in `src/homepage/index.html` and
+`src/homepage/site-brutalist.jsx`, then compiled and prerendered into
+`src/homepage/dist/` (committed) so the Pages build needs no Node or browser
+step. After editing either source file, or to bump the vendored React version,
+regenerate the output:
+
+```bash
+cd src/homepage
+npm install      # first time only
+node build.mjs   # precompiles the JSX, vendors React, prerenders dist/index.html
+```
+
+Prerendering (a headless Chromium pass) embeds the rendered DOM into `#root` so
+crawlers and social scrapers see real content without executing JavaScript;
+React re-renders it on load for the interactive page. Commit the updated
+`src/homepage/dist/` alongside your source change.
 
 ## Source Layout
 
 The docs site pulls from these in-repo sources:
 
-* `src/homepage/index.html` and `src/homepage/site-brutalist.jsx` for the GitHub Pages landing page
+* `src/homepage/index.html` and `src/homepage/site-brutalist.jsx` for the GitHub Pages landing page (compiled/prerendered into `src/homepage/dist/`)
 * `docs/index.md` for the docs landing page published at `/docs/`
 * `README.md` surfaced through `docs/overview.md`
 * `AGENTS.md` surfaced through `docs/agents.md`

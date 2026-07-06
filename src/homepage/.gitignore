@@ -1,0 +1,5 @@
+node_modules/
+
+# dist/ is ignored globally, but the homepage build output is committed
+# so the Pages CI can publish it without a Node/browser build step.
+!dist/

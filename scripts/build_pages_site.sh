@@ -8,8 +8,19 @@ site_root="$repo_root/site"
 rm -rf "$site_root"
 uv run mkdocs build --strict
 
-cp "$repo_root/src/homepage/index.html" "$site_root/index.html"
-cp "$repo_root/src/homepage/site-brutalist.jsx" "$site_root/site-brutalist.jsx"
+# The homepage is prerendered and its assets vendored into src/homepage/dist by
+# `node src/homepage/build.mjs` (committed output), so this build only copies
+# them — no Node, npm, or headless browser needed here. Regenerate dist after
+# editing the homepage source.
+homepage_dist="$repo_root/src/homepage/dist"
+if [[ ! -f "$homepage_dist/index.html" ]]; then
+  echo "missing prerendered homepage: $homepage_dist/index.html (run: node src/homepage/build.mjs)" >&2
+  exit 1
+fi
+cp "$homepage_dist/index.html" "$site_root/index.html"
+cp "$homepage_dist/site-brutalist.js" "$site_root/site-brutalist.js"
+cp "$homepage_dist/react.production.min.js" "$site_root/react.production.min.js"
+cp "$homepage_dist/react-dom.production.min.js" "$site_root/react-dom.production.min.js"
 cp "$repo_root/src/homepage/og-card.png" "$site_root/og-card.png"
 
 site_url="https://hexsecs.github.io/canarchy"

@@ -1,0 +1,16 @@
+{
+  "name": "canarchy-homepage-build",
+  "private": true,
+  "description": "Build tooling for the CANarchy homepage: precompile JSX, vendor React, prerender static HTML.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.29.0",
+    "@babel/preset-react": "^7.27.1",
+    "puppeteer-core": "^23.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
