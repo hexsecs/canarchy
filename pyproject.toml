@@ -5,7 +5,12 @@ description = "CLI-first CAN security research toolkit"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
-keywords = ["can", "can-bus", "j1939", "uds", "security", "cli"]
+keywords = [
+  "can", "can-bus", "canfd", "j1939", "uds", "doip", "iso-tp",
+  "automotive", "automotive-security", "car-hacking", "vehicle",
+  "socketcan", "candump", "dbc",
+  "fuzzing", "reverse-engineering", "security", "cli", "mcp",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
