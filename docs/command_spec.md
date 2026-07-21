@@ -225,12 +225,15 @@ Examples:
 canarchy generate can0 --id 0x123 --dlc 4 --data 11223344 --count 2 --gap 100 --json
 canarchy generate --id 0x123 --dlc 4 --data 11223344 --count 2 --dry-run --json
 canarchy generate can0 --data I --count 4 --text
+canarchy generate can0                              # runs until Ctrl-C, cangen-style
 ```
 
 Notes:
 
 * `--id`, `--dlc`, and `--data` accept `R` for random generation, and `--data I` enables a deterministic incrementing payload pattern
-* `--dry-run` emits the planned generated frame events without requiring an interface or opening a transport
+* omitting `--count` generates and transmits frames continuously, spaced by `--gap`, until interrupted (Ctrl-C) — matching `cangen` from can-utils; passing `--count N` generates exactly `N` frames and exits
+* `--dry-run` emits the planned generated frame events without requiring an interface or opening a transport; without `--count` a dry run plans a single frame
+* invocations that cannot receive Ctrl-C (e.g. the MCP server) must pass `--count` explicitly for a live (non-dry-run) run, or a structured `MISSING_COUNT` error is returned
 * `--ack-active` requests an interactive `YES` confirmation before generated frames are transmitted
 * when active acknowledgement is required by configuration, omitting `--ack-active` returns a structured `ACTIVE_ACK_REQUIRED` error
 * generated JSON output includes an active-transmit alert followed by generated frame events

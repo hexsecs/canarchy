@@ -22,7 +22,10 @@ Operators need a quick active-traffic workflow for lab validation, replay suppor
 |----|------|-------------|
 | `REQ-GENERATE-01` | Ubiquitous | The system shall provide a `canarchy generate <interface>` command for active CAN frame generation. |
 | `REQ-GENERATE-02` | Event-driven | When `generate` is invoked, the system shall support fixed, random (`R`), and incrementing (`I`) generation modes for identifiers and payloads as specified by `--id`, `--dlc`, and `--data`. |
-| `REQ-GENERATE-03` | Event-driven | When `generate` is invoked, the system shall bound output by `--count` and space events by `--gap` milliseconds. |
+| `REQ-GENERATE-03` | Event-driven | When `generate` is invoked with an explicit `--count`, the system shall bound output to that many frames and space events by `--gap` milliseconds. |
+| `REQ-GENERATE-12` | Event-driven | When `generate` is invoked without `--count` from an interactive terminal, the system shall generate and transmit frames continuously, spaced by `--gap` milliseconds, until interrupted (Ctrl-C / SIGINT), matching `cangen`. |
+| `REQ-GENERATE-13` | Unwanted behaviour | If `--dry-run` is supplied without `--count`, the system shall plan a single frame rather than requiring or attempting an unbounded plan. |
+| `REQ-GENERATE-14` | Unwanted behaviour | If `generate` is invoked without `--count` and without `--dry-run` through a non-interactive entry point that cannot deliver Ctrl-C (e.g. the MCP server), the system shall return a structured error with code `MISSING_COUNT` and exit code 1 instead of generating indefinitely. |
 | `REQ-GENERATE-04` | Event-driven | When `generate` is invoked and validation succeeds, the system shall emit a preflight active-transmit warning to `stderr`, emit a leading active-transmit alert event, and serialise the generated frame events. |
 | `REQ-GENERATE-10` | Optional feature | Where `--ack-active` is supplied for `generate`, the system shall require a confirmation response of `YES` before generated frames are transmitted. |
 | `REQ-GENERATE-11` | Optional feature | Where active acknowledgement is required, the system shall require `--ack-active` before generated frames are transmitted. |
@@ -48,7 +51,7 @@ canarchy generate <interface> [--id <hex|R>] [--dlc <0-8|R>] [--data <hex|R|I>]
 | `--id` | `R` | Arbitration ID as hex or `R` for random |
 | `--dlc` | `R` | Data length `0-8` or `R` for random |
 | `--data` | `R` | Payload as hex, `R` for random bytes, or `I` for incrementing |
-| `--count` | `1` | Number of frames to generate |
+| `--count` | continuous | Number of frames to generate; omit to generate continuously until interrupted (Ctrl-C), matching `cangen`. `--dry-run` without `--count` plans a single frame. Invocations that cannot receive Ctrl-C (e.g. the MCP server) must pass `--count` explicitly. |
 | `--gap` | `200` | Inter-frame gap in milliseconds |
 | `--extended` | off | Force 29-bit extended arbitration IDs |
 | `--ack-active` | off | Request an interactive confirmation prompt before generated frames are transmitted |
@@ -114,6 +117,7 @@ frames: 3
 | `INVALID_FRAME_DATA` | `--data` is not valid hex, `R`, or `I` | 1 |
 | `INVALID_COUNT` | `--count` is less than `1` | 1 |
 | `INVALID_GAP` | `--gap` is less than `0` | 1 |
+| `MISSING_COUNT` | `--count` was omitted for a live run reached through a non-interactive entry point (e.g. the MCP server) that cannot deliver Ctrl-C | 1 |
 | `ACTIVE_ACK_REQUIRED` | active acknowledgement is required but `--ack-active` was omitted | 1 |
 | `ACTIVE_CONFIRMATION_DECLINED` | `--ack-active` was supplied but the confirmation response was not `YES` | 1 |
 

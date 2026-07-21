@@ -99,7 +99,11 @@ _TOOLS: list[types.Tool] = [
                 },
                 "count": {
                     "type": "integer",
-                    "description": "Number of frames to generate",
+                    "description": (
+                        "Number of frames to generate. Defaults to 1 for a dry-run plan; "
+                        "required (and must be finite) when `dry_run=false`, since this "
+                        "tool cannot interrupt an unbounded live run."
+                    ),
                     "default": 1,
                 },
                 "gap": {

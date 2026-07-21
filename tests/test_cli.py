@@ -4052,7 +4052,17 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_fixed_id_and_data_returns_frame_events(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
-            "generate", "can0", "--id", "0x123", "--dlc", "4", "--data", "11223344", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x123",
+            "--dlc",
+            "4",
+            "--data",
+            "11223344",
+            "--count",
+            "1",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         self.assertIn("warning: `generate` will transmit generated frames", stderr)
@@ -4211,7 +4221,18 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_extended_flag_sets_29bit_id(self, _mock_cfg) -> None:
         exit_code, stdout, stderr = run_cli(
-            "generate", "can0", "--id", "0x100", "--dlc", "0", "--data", "R", "--extended", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x100",
+            "--dlc",
+            "0",
+            "--data",
+            "R",
+            "--extended",
+            "--count",
+            "1",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4226,7 +4247,17 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_default_gap_is_200ms(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x1",
+            "--dlc",
+            "1",
+            "--data",
+            "FF",
+            "--count",
+            "1",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4581,7 +4612,17 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_id_without_0x_prefix(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "7DF", "--dlc", "2", "--data", "1234", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "7DF",
+            "--dlc",
+            "2",
+            "--data",
+            "1234",
+            "--count",
+            "1",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4617,6 +4658,8 @@ class CliTests(unittest.TestCase):
             "8",
             "--data",
             "AABBCCDDEEFF0011",
+            "--count",
+            "1",
             "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
@@ -4631,7 +4674,17 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_id_zero(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x0", "--dlc", "1", "--data", "FF", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x0",
+            "--dlc",
+            "1",
+            "--data",
+            "FF",
+            "--count",
+            "1",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4644,7 +4697,17 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_id_max_standard(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x7FF", "--dlc", "1", "--data", "00", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x7FF",
+            "--dlc",
+            "1",
+            "--data",
+            "00",
+            "--count",
+            "1",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4660,7 +4723,7 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_dlc_zero_produces_empty_data(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "0", "--data", "R", "--json"
+            "generate", "can0", "--id", "0x1", "--dlc", "0", "--data", "R", "--count", "1", "--json"
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4674,7 +4737,7 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_dlc_eight_produces_eight_byte_frame(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "8", "--data", "R", "--json"
+            "generate", "can0", "--id", "0x1", "--dlc", "8", "--data", "R", "--count", "1", "--json"
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4690,7 +4753,7 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_data_r_produces_hex_payload(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "R", "--json"
+            "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "R", "--count", "1", "--json"
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4705,7 +4768,17 @@ class CliTests(unittest.TestCase):
     )
     def test_generate_data_uppercase_hex_accepted(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "4", "--data", "DEADBEEF", "--json"
+            "generate",
+            "can0",
+            "--id",
+            "0x1",
+            "--dlc",
+            "4",
+            "--data",
+            "DEADBEEF",
+            "--count",
+            "1",
+            "--json",
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
@@ -4734,15 +4807,60 @@ class CliTests(unittest.TestCase):
         "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
     )
-    def test_generate_default_count_is_one(self, _mock_cfg) -> None:
+    def test_generate_dry_run_default_count_plans_one_frame(self, _mock_cfg) -> None:
         exit_code, stdout, _ = run_cli(
-            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--dry-run", "--json"
         )
         self.assertEqual(exit_code, EXIT_OK)
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["frame_count"], 1)
         frame_events = [e for e in payload["data"]["events"] if e["event_type"] == "frame"]
         self.assertEqual(len(frame_events), 1)
+
+    @patch("canarchy.transport.time.sleep")
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_generate_without_count_streams_until_interrupted(self, _mock_cfg, mock_sleep) -> None:
+        mock_sleep.side_effect = [None, KeyboardInterrupt]
+        exit_code, stdout, stderr = run_cli(
+            "generate", "can0", "--id", "0x1", "--dlc", "1", "--data", "FF", "--json"
+        )
+        self.assertEqual(exit_code, EXIT_OK)
+        self.assertIn("warning: `generate` will transmit generated frames", stderr)
+        lines = stdout.strip().splitlines()
+        events = [json.loads(line) for line in lines]
+        self.assertEqual(events[0]["event_type"], "alert")
+        self.assertEqual(events[0]["payload"]["code"], "ACTIVE_TRANSMIT")
+        frame_events = [e for e in events if e["event_type"] == "frame"]
+        self.assertEqual(len(frame_events), 2)
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_generate_dry_run_requires_no_explicit_count(self, _mock_cfg) -> None:
+        with patch.object(
+            LocalTransport,
+            "generate_stream_events",
+            side_effect=AssertionError("generate_stream_events must not be called in dry-run"),
+        ):
+            exit_code, stdout, _ = run_cli(
+                "generate",
+                "can0",
+                "--id",
+                "0x1",
+                "--dlc",
+                "1",
+                "--data",
+                "FF",
+                "--dry-run",
+                "--json",
+            )
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "dry_run")
 
     @patch("canarchy.transport.time.sleep")
     @patch(

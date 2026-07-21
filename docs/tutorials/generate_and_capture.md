@@ -104,7 +104,7 @@ Terminal 1 prints:
 ### Extended (29-bit) IDs
 
 ```bash
-canarchy generate 239.0.0.1 --id 0x18FEEE31 --dlc 8 --data R --extended
+canarchy generate 239.0.0.1 --id 0x18FEEE31 --dlc 8 --data R --extended --count 1
 ```
 
 ### Control the gap
@@ -113,6 +113,14 @@ canarchy generate 239.0.0.1 --id 0x18FEEE31 --dlc 8 --data R --extended
 
 ```bash
 canarchy generate 239.0.0.1 --count 10 --gap 50
+```
+
+### Run continuously, `cangen`-style
+
+Omit `--count` to generate and transmit frames continuously, spaced by `--gap`, until you stop it with Ctrl-C:
+
+```bash
+canarchy generate 239.0.0.1 --gap 50
 ```
 
 ## Get Structured Output
