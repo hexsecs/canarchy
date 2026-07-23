@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import os
 import queue
 import random
@@ -988,6 +989,45 @@ class LocalTransport:
             events.append(FrameEvent(frame=sent_frame, source="transport.generate").to_event())
         return serialize_events(events)
 
+    def generate_stream_events(
+        self,
+        interface: str,
+        *,
+        id_spec: str = "R",
+        dlc_spec: str = "R",
+        data_spec: str = "R",
+        count: int | None = None,
+        gap_ms: float = 200.0,
+        extended: bool = False,
+    ) -> Iterator[dict[str, object]]:
+        """Generate and transmit frames one at a time, running forever when *count* is ``None``."""
+        yield serialize_events(
+            [
+                AlertEvent(
+                    level="warning",
+                    code="ACTIVE_TRANSMIT",
+                    message="Active frame generation requested on the selected interface.",
+                    source="transport.generate",
+                ).to_event(),
+            ]
+        )[0]
+        frames = iter_generated_frames(
+            interface,
+            id_spec=id_spec,
+            dlc_spec=dlc_spec,
+            data_spec=data_spec,
+            count=count,
+            gap_ms=gap_ms,
+            extended=extended,
+        )
+        for i, frame in enumerate(frames):
+            if i > 0 and gap_ms > 0:
+                time.sleep(gap_ms / 1000.0)
+            sent_frame = self.send(interface, frame)
+            yield serialize_events(
+                [FrameEvent(frame=sent_frame, source="transport.generate").to_event()]
+            )[0]
+
     def _gateway_unidirectional_stream(
         self,
         src: str,
@@ -1606,6 +1646,43 @@ def parse_candump_fd_line(match: re.Match[str], *, path: Path, line_number: int)
         ) from exc
 
 
+def _build_generated_frame(
+    interface: str,
+    index: int,
+    *,
+    id_spec: str,
+    dlc_spec: str,
+    data_spec: str,
+    gap_ms: float,
+    extended: bool,
+) -> CanFrame:
+    if id_spec.upper() == "R":
+        arb_id = random.randint(0, 0x1FFFFFFF if extended else 0x7FF)
+    else:
+        arb_id = int(id_spec, 16)
+    is_extended = extended or arb_id > 0x7FF
+
+    if dlc_spec.upper() == "R":
+        dlc = random.randint(0, 8)
+    else:
+        dlc = int(dlc_spec)
+
+    if data_spec.upper() == "R":
+        data = bytes(random.randint(0, 255) for _ in range(dlc))
+    elif data_spec.upper() == "I":
+        data = bytes((index * dlc + j) % 256 for j in range(dlc))
+    else:
+        data = bytes.fromhex(data_spec)
+
+    return CanFrame(
+        arbitration_id=arb_id,
+        data=data,
+        interface=interface,
+        is_extended_id=is_extended,
+        timestamp=index * gap_ms / 1000.0,
+    )
+
+
 def generate_frames(
     interface: str,
     *,
@@ -1616,33 +1693,39 @@ def generate_frames(
     gap_ms: float = 200.0,
     extended: bool = False,
 ) -> list[CanFrame]:
-    frames: list[CanFrame] = []
-    for i in range(count):
-        if id_spec.upper() == "R":
-            arb_id = random.randint(0, 0x1FFFFFFF if extended else 0x7FF)
-        else:
-            arb_id = int(id_spec, 16)
-        is_extended = extended or arb_id > 0x7FF
-
-        if dlc_spec.upper() == "R":
-            dlc = random.randint(0, 8)
-        else:
-            dlc = int(dlc_spec)
-
-        if data_spec.upper() == "R":
-            data = bytes(random.randint(0, 255) for _ in range(dlc))
-        elif data_spec.upper() == "I":
-            data = bytes((i * dlc + j) % 256 for j in range(dlc))
-        else:
-            data = bytes.fromhex(data_spec)
-
-        frames.append(
-            CanFrame(
-                arbitration_id=arb_id,
-                data=data,
-                interface=interface,
-                is_extended_id=is_extended,
-                timestamp=i * gap_ms / 1000.0,
-            )
+    return [
+        _build_generated_frame(
+            interface,
+            i,
+            id_spec=id_spec,
+            dlc_spec=dlc_spec,
+            data_spec=data_spec,
+            gap_ms=gap_ms,
+            extended=extended,
         )
-    return frames
+        for i in range(count)
+    ]
+
+
+def iter_generated_frames(
+    interface: str,
+    *,
+    id_spec: str = "R",
+    dlc_spec: str = "R",
+    data_spec: str = "R",
+    count: int | None = None,
+    gap_ms: float = 200.0,
+    extended: bool = False,
+) -> Iterator[CanFrame]:
+    """Yield generated frames, running forever when *count* is ``None``."""
+    indices: Iterator[int] = itertools.count() if count is None else range(count)
+    for i in indices:
+        yield _build_generated_frame(
+            interface,
+            i,
+            id_spec=id_spec,
+            dlc_spec=dlc_spec,
+            data_spec=data_spec,
+            gap_ms=gap_ms,
+            extended=extended,
+        )

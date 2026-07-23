@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import itertools
 import json
 import multiprocessing
 import os
@@ -26,6 +27,7 @@ from canarchy.transport import (
     build_live_backend,
     capture_metadata,
     iter_candump_file,
+    iter_generated_frames,
     load_candump_file,
     parse_candump_line,
     python_can,
@@ -554,6 +556,20 @@ class TransportBackendTests(unittest.TestCase):
             error_state_indicator=False,
         )
         self.assertTrue(fake_bus.shutdown_called)
+
+    def test_iter_generated_frames_with_count_is_finite(self) -> None:
+        frames = list(
+            iter_generated_frames("can0", id_spec="0x100", dlc_spec="1", data_spec="00", count=3)
+        )
+        self.assertEqual(len(frames), 3)
+
+    def test_iter_generated_frames_without_count_is_unbounded(self) -> None:
+        frames = iter_generated_frames(
+            "can0", id_spec="0x100", dlc_spec="1", data_spec="00", count=None
+        )
+        first_ten = list(itertools.islice(frames, 10))
+        self.assertEqual(len(first_ten), 10)
+        self.assertTrue(all(f.arbitration_id == 0x100 for f in first_ten))
 
     @unittest.skipIf(python_can is None, "python-can is not installed")
     def test_generate_frames_round_trip_in_same_process(self) -> None:

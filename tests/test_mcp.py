@@ -1418,6 +1418,21 @@ def test_generate_with_ack_active_defaults_to_dry_run():
     assert payload["data"]["frame_count"] == 1
 
 
+def test_generate_live_without_count_returns_structured_error():
+    # The MCP tool call is one-shot request/response and has no way to send
+    # Ctrl-C, so an unbounded live `generate` (no `count`) must be rejected
+    # rather than hang the call forever.
+    results = asyncio.run(
+        handle_call_tool(
+            "generate",
+            {"interface": "can0", "ack_active": True, "dry_run": False},
+        )
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "MISSING_COUNT"
+
+
 def test_simulate_without_ack_active_returns_structured_error():
     results = asyncio.run(
         handle_call_tool("simulate", {"profile": "heavy-truck", "interface": "vcan0"})

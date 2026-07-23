@@ -604,7 +604,12 @@ def build_parser() -> CanarchyArgumentParser:
     generate.add_argument(
         "--data", default="R", help="payload hex, R for random, I for incrementing"
     )
-    generate.add_argument("--count", type=int, default=1, help="number of frames to generate")
+    generate.add_argument(
+        "--count",
+        type=int,
+        default=None,
+        help="number of frames to generate; omit to generate continuously until interrupted (Ctrl-C)",
+    )
     generate.add_argument(
         "--gap", type=float, default=200.0, help="inter-frame gap in milliseconds"
     )
@@ -3054,7 +3059,7 @@ def validate_args(args: argparse.Namespace) -> None:
                     data={"data": args.data},
                 )
 
-        if args.count < 1:
+        if args.count is not None and args.count < 1:
             raise CommandError(
                 command=args.command,
                 exit_code=EXIT_USER_ERROR,
@@ -3067,6 +3072,12 @@ def validate_args(args: argparse.Namespace) -> None:
                 ],
                 data={"count": args.count},
             )
+
+        if args.count is None and getattr(args, "dry_run", False):
+            # Dry-run plans a fixed set of frames to display, so an unbounded
+            # generation request (the default with no `--count`) assumes a
+            # single-frame plan rather than requiring `--count` explicitly.
+            args.count = 1
 
         if args.gap < 0:
             raise CommandError(
@@ -4577,6 +4588,26 @@ def transport_payload(
             [],
         )
     if args.command == "generate":
+        if args.count is None:
+            # Continuous generation (no `--count`) streams frame-by-frame until
+            # Ctrl-C from `main()`'s CLI dispatch; callers that reach this
+            # batch/JSON-envelope path directly (e.g. the MCP server) have no
+            # way to interrupt an unbounded run, so require an explicit count.
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="MISSING_COUNT",
+                        message="An explicit `--count` is required for this invocation.",
+                        hint=(
+                            "Pass `--count N`, or run `canarchy generate` from an "
+                            "interactive terminal to stream continuously until Ctrl-C."
+                        ),
+                    )
+                ],
+                data={"count": None},
+            )
         frames = generate_frames(
             args.interface,
             id_spec=args.id,
@@ -11425,6 +11456,47 @@ def emit_live_gateway(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def emit_live_generate(args: argparse.Namespace, output_format: str) -> int:
+    """Stream generated frames until Ctrl+C — used when `generate` has no `--count`."""
+    transport = LocalTransport()
+    enforce_active_transmit_safety(args)
+    text_mode = output_format == "text"
+    try:
+        for event in transport.generate_stream_events(
+            args.interface,
+            id_spec=args.id,
+            dlc_spec=args.dlc,
+            data_spec=args.data,
+            count=args.count,
+            gap_ms=args.gap,
+            extended=args.extended,
+        ):
+            if text_mode:
+                if event.get("event_type") != "frame":
+                    continue
+                frame = event["payload"]["frame"]
+                interface = frame["interface"] or args.interface
+                timestamp = event.get("timestamp")
+                timestamp_text = (
+                    f"({timestamp:0.6f})" if isinstance(timestamp, (int, float)) else "(0.000000)"
+                )
+                print(f"{timestamp_text} {interface} {format_candump_frame(frame)}")
+            else:
+                print(json.dumps(event, sort_keys=True))
+    except TransportError as exc:
+        emit_result(
+            error_result(
+                "generate",
+                errors=[ErrorDetail(code=exc.code, message=exc.message, hint=exc.hint)],
+            ),
+            output_format,
+        )
+        return EXIT_TRANSPORT_ERROR
+    except KeyboardInterrupt:
+        return EXIT_OK
+    return EXIT_OK
+
+
 def emit_dataset_stream(args: argparse.Namespace) -> int:
     from canarchy.dataset_convert import ConversionError, stream_file
 
@@ -12294,6 +12366,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         and not getattr(args, "dry_run", False)
     ):
         return emit_live_gateway(args)
+    if args.command == "generate" and args.count is None and not getattr(args, "dry_run", False):
+        # This dispatch bypasses `execute_command`'s batch path (and its
+        # `validate_args` call), so validate here to catch a bad `--id`,
+        # `--dlc`, `--data`, or `--gap` before an unbounded stream starts.
+        try:
+            validate_args(args)
+        except CommandError as exc:
+            emit_result(
+                error_result(exc.command, errors=exc.errors, data=exc.data, warnings=exc.warnings),
+                output_format,
+            )
+            return exc.exit_code
+        return emit_live_generate(args, output_format)
     if args.command == "datasets stream" and not args.json:
         return emit_dataset_stream(args)
     if (

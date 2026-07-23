@@ -35,6 +35,9 @@ Validate that `generate` produces deterministic frame sequences, emits active-tr
 | `REQ-GENERATE-07` | `TEST-GENERATE-06` |
 | `REQ-GENERATE-08` | `TEST-GENERATE-07` |
 | `REQ-GENERATE-09` | `TEST-GENERATE-08` |
+| `REQ-GENERATE-12` | `TEST-GENERATE-09` |
+| `REQ-GENERATE-13` | `TEST-GENERATE-10` |
+| `REQ-GENERATE-14` | `TEST-GENERATE-11` |
 
 ## Representative Test Cases
 
@@ -137,6 +140,46 @@ Given  a negative gap value is supplied
 When   the operator runs `canarchy generate can0 --gap -1 --json`
 Then   the command shall exit with code `1`
 And    `errors[0].code` shall equal `"INVALID_GAP"`
+```
+
+**Fixture:** none required.
+
+---
+
+### `TEST-GENERATE-09` — Continuous generation without `--count`
+
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy generate can0 --json` with no `--count`
+Then   the command shall stream generated frame events continuously
+And    the run shall stop cleanly with exit code `0` when interrupted (Ctrl-C / SIGINT)
+```
+
+**Fixture:** scaffold backend; `time.sleep` mocked to raise `KeyboardInterrupt` after a fixed number of frames.
+
+---
+
+### `TEST-GENERATE-10` — Dry run without `--count` plans a single frame
+
+```gherkin
+Given  the scaffold transport backend is active
+When   the operator runs `canarchy generate can0 --dry-run --json` with no `--count`
+Then   the command shall succeed
+And    `data.frame_count` shall equal `1`
+And    no transport transmission shall occur
+```
+
+**Fixture:** scaffold backend (no file required).
+
+---
+
+### `TEST-GENERATE-11` — Live generation without `--count` through a non-interactive entry point
+
+```gherkin
+Given  the MCP server invokes `generate` directly via `execute_command`, bypassing the interactive CLI's Ctrl-C dispatch
+When   the call requests a live run (`dry_run=false`) without `count`
+Then   the command shall exit with code `1`
+And    `errors[0].code` shall equal `"MISSING_COUNT"`
 ```
 
 **Fixture:** none required.
