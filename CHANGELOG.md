@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-23
+
 ### Added
 
 * **`generate` runs until stopped when no `--count` is given, `cangen`-style (#477).** `canarchy generate <interface>` with no `--count` previously sent a single frame and exited, unlike the reference `cangen` tool from can-utils, which streams continuously by default. `--count` now defaults to unbounded: omitting it generates and transmits frames continuously, spaced by `--gap`, until interrupted (Ctrl-C / SIGINT); `--count N` keeps its existing exact-`N`-frames behaviour. Frame generation streams one frame at a time (`iter_generated_frames`, `LocalTransport.generate_stream_events`) rather than materializing an unbounded list, and the CLI dispatches an unbounded live run to a streaming emitter — mirroring the existing `capture` / `gateway --text` pattern — so both text and JSON/JSONL output stream per-frame and SIGINT exits cleanly (exit 0). `--dry-run` without `--count` plans a single frame rather than requiring or attempting an unbounded plan. Entry points that cannot deliver Ctrl-C, such as the MCP server, get a structured `MISSING_COUNT` error instead of hanging on an unbounded live run. Closes #477.
