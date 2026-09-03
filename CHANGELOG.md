@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-03
+
+### Fixed
+
+* README documentation links now target the published GitHub Pages documentation, so navigation from PyPI reaches the rendered docs instead of GitHub source pages (#491).
+
 ## [0.9.1] - 2026-09-03
 
 ### Fixed
