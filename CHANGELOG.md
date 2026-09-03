@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-03
+
 ### Added
 
 * **SEO and link-preview metadata for the published site (#479, #480, #483).** The homepage now ships Open Graph and Twitter Card tags with a generated 1200×630 brand card (`src/homepage/og-card.png`), a canonical URL, an inline SVG favicon, a `SoftwareApplication` JSON-LD block, and a keyword-forward `<title>`. The Pages build (`scripts/build_pages_site.sh`) additionally emits a root `robots.txt` referencing both the root and docs sitemaps and a root `sitemap.xml` covering the homepage, and publishes the social card. PyPI keywords in `pyproject.toml` expanded from 6 to 19 discovery terms. Closes #479, #480, #483.
