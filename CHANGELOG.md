@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-03
+
+### Fixed
+
+* Repository links and the TUI image in the PyPI project description now use absolute GitHub URLs, so README navigation and media render correctly when viewed on PyPI (#491).
+* The PyPI development-status classifier now identifies CANarchy as Beta rather than Alpha (#491).
+
 ## [0.9.0] - 2026-07-23
 
 ### Added
