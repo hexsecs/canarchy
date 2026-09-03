@@ -15,7 +15,7 @@ from textual.widgets import DataTable, Input, RichLog, Static
 from canarchy.cli import execute_command
 from canarchy.transport import LocalTransport, ScaffoldCanBackend
 from canarchy.tui_app import CanarchyTuiApp
-from canarchy.tui_capture import CaptureSession
+from canarchy.tui_capture import CaptureSession, CaptureStats
 
 
 def _scaffold_factory(interface: str) -> CaptureSession:
@@ -206,5 +206,166 @@ def test_capture_returns_to_idle_when_stream_ends() -> None:
                     break
             assert app._capture is None
             assert app.query_one("#traffic", DataTable).row_count == 2
+
+    _run(scenario())
+
+
+def test_finished_capture_drains_every_buffered_event() -> None:
+    sample = next(LocalTransport(live_backend=ScaffoldCanBackend()).capture_stream_events("vcan0"))
+
+    class _BurstTransport:
+        def capture_stream_events(self, interface: str, *, stop_event=None):
+            for index in range(1000):
+                event = dict(sample)
+                event["timestamp"] = float(index)
+                yield event
+
+    def burst_factory(interface: str) -> CaptureSession:
+        return CaptureSession(interface, transport=_BurstTransport(), maxsize=2000)  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=burst_factory)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture vcan0")
+            for _ in range(100):
+                await pilot.pause(0.05)
+                if app._capture is None:
+                    break
+            assert app._capture is None
+            assert app.query_one("#traffic", DataTable).row_count == 1000
+
+    _run(scenario())
+
+
+def test_finished_capture_waits_for_resume_before_draining() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.action_toggle_pause()
+            await _submit(app, pilot, "/capture vcan0")
+            for _ in range(60):
+                await pilot.pause(0.05)
+                if app._capture is not None and not app._capture.running:
+                    break
+            assert app._capture is not None
+            assert app._capture.running is False
+            assert app.query_one("#traffic", DataTable).row_count == 0
+
+            app.action_toggle_pause()
+            for _ in range(60):
+                await pilot.pause(0.05)
+                if app._capture is None:
+                    break
+            assert app._capture is None
+            assert app.query_one("#traffic", DataTable).row_count == 2
+
+    _run(scenario())
+
+
+def test_stop_capture_drains_buffered_events_before_release() -> None:
+    sample = next(LocalTransport(live_backend=ScaffoldCanBackend()).capture_stream_events("vcan0"))
+
+    class _BufferedTransport:
+        def capture_stream_events(self, interface: str, *, stop_event=None):
+            for _ in range(600):
+                yield dict(sample)
+            assert stop_event is not None
+            stop_event.wait(1)
+
+    def buffered_factory(interface: str) -> CaptureSession:
+        return CaptureSession(
+            interface,
+            transport=_BufferedTransport(),
+            maxsize=1000,  # type: ignore[arg-type]
+        )
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=buffered_factory)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture vcan0")
+            for _ in range(60):
+                await pilot.pause(0.01)
+                if app._capture is not None and app._capture.stats.received == 600:
+                    break
+            app.action_stop_capture()
+            for _ in range(60):
+                await pilot.pause(0.05)
+                if app._capture is None:
+                    break
+            assert app._capture is None
+            assert app.query_one("#traffic", DataTable).row_count == 600
+
+    _run(scenario())
+
+
+def test_capture_queue_loss_is_visible_in_status() -> None:
+    sample = next(LocalTransport(live_backend=ScaffoldCanBackend()).capture_stream_events("vcan0"))
+
+    class _OverflowTransport:
+        def capture_stream_events(self, interface: str, *, stop_event=None):
+            for _ in range(10):
+                yield dict(sample)
+
+    def overflow_factory(interface: str) -> CaptureSession:
+        return CaptureSession(interface, transport=_OverflowTransport(), maxsize=2)  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=overflow_factory)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture vcan0")
+            for _ in range(60):
+                await pilot.pause(0.05)
+                if app._capture is None:
+                    break
+            status = str(app.query_one("#bus-status", Static).render())
+            assert "received=10" in status
+            assert "drained=2" in status
+            assert "dropped=8" in status
+            assert "high-water=2" in status
+
+    _run(scenario())
+
+
+def test_capture_replacement_waits_for_previous_worker() -> None:
+    class _StubbornCapture:
+        def __init__(self, interface: str) -> None:
+            self.interface = interface
+            self.stats = CaptureStats()
+            self.running = True
+
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> bool:
+            return False
+
+        def errors(self):
+            return []
+
+        def drain(self, max_items: int = 256):
+            return []
+
+    created: list[_StubbornCapture] = []
+
+    def stubborn_factory(interface: str) -> CaptureSession:
+        capture = _StubbornCapture(interface)
+        created.append(capture)
+        return capture  # type: ignore[return-value]
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=stubborn_factory)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture can0")
+            first = app._capture
+            await _submit(app, pilot, "/capture can1")
+            assert len(created) == 1
+            assert app._capture is first
+            assert app._capture is not None
+            assert app._capture.interface == "can0"
 
     _run(scenario())

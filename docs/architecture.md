@@ -190,6 +190,8 @@ Relevant modules:
 
 * `src/canarchy/cli.py`
 * `src/canarchy/tui.py`
+* `src/canarchy/tui_app.py`
+* `src/canarchy/tui_capture.py`
 * `src/canarchy/completion.py`
 * `src/canarchy/mcp_server.py`
 
@@ -218,12 +220,14 @@ Current behavior:
 
 * `canarchy shell --command ...` routes a one-shot shell command back through `main()`
 * interactive shell mode uses `shlex` parsing and then calls the same executor used by the CLI
-* `canarchy tui` renders a minimal status view and updates it from shared command results
+* `canarchy tui` renders a full-screen Textual dashboard, updates it from shared command results, and consumes live events through a background `CaptureSession`
 * `canarchy mcp serve` exposes implemented commands as MCP tools and delegates tool calls to the same `execute_command()` path
 * nested interactive front ends are rejected to preserve a single clear execution boundary
 * DBC-backed commands resolve provider refs before handing local files to the runtime codec layer, then attach `dbc_source` metadata to the final command result
 
 This is deliberate. The shell, TUI, and MCP server are convenience or integration surfaces, not separate applications.
+
+The TUI capture boundary uses a bounded producer queue so transport reads never block on rendering. Each capture exposes received, drained, dropped, queue-depth, and high-water telemetry. Completed producers remain attached until the UI consumes their buffered events and errors; pausing presentation does not discard completed sessions. A shared stop event reaches the live transport, where `python-can` receive calls use bounded polling before bus shutdown, preventing idle hardware from orphaning a capture worker.
 
 ## Transport Boundary
 
@@ -358,7 +362,7 @@ The architecture is intentionally ahead of some implementations. These are the m
 
 * live transport coverage is currently limited by the `python-can` integration and configured interfaces
 * some protocol commands still rely on explicit sample/reference data providers instead of true transport-backed execution, although `j1939 monitor`, `uds scan`, and `uds trace` now have initial real backend paths when `python-can` is selected
-* the TUI is a full-screen Textual dashboard with background live capture and interactive panes, as described in [TUI plan](tui_plan.md); a remaining follow-up is a finite-timeout capture loop so live capture stops instantly on real hardware
+* the TUI is a full-screen Textual dashboard with cancellable background capture, loss telemetry, pause-safe buffering, and interactive panes, as described in [TUI plan](tui_plan.md); live DBC/J1939/UDS enrichment remains follow-up work
 * reverse-engineering now has a shared analysis subsystem for heuristic ranking (`re signals`, `re counters`, `re entropy`), reference-series correlation (`re correlate`), and provider-backed schema matching (`re match-dbc`, `re shortlist-dbc`)
 * plugin command registration remains deferred; the registry and inspection/toggle CLI surface are implemented
 

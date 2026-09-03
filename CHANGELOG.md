@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+* TUI live capture now stops promptly on idle buses, preserves completed and paused capture buffers until they are drained, blocks replacement of a worker that has not stopped, and exposes queue-loss telemetry instead of silently dropping events (#498).
+
 ## [0.9.2] - 2026-09-03
 
 ### Fixed

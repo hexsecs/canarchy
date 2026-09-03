@@ -1,105 +1,123 @@
-# Test Spec: Initial TUI Shell
+# Full-Screen TUI Test Specification
 
 ## Document Control
 
 | Field | Value |
-|-------|-------|
-| Status | Superseded by the full-screen TUI |
+|---|---|
+| Status | Implemented |
 | Related design spec | `docs/design/tui-shell.md` |
-| Primary test area | Front end |
+| Test modules | `tests/test_tui.py`, `tests/test_tui_app.py`, `tests/test_tui_capture.py`, `tests/test_transport.py` |
 
-> **Update:** the text-mode shell and its one-shot `tui --command` mode were
-> replaced by a full-screen Textual app. Fold-layer behaviour is still covered
-> by `tests/test_tui_snapshots.py`; the full-screen app and its live-capture
-> streaming are covered by `tests/test_tui_app.py` and
-> `tests/test_tui_capture.py`. The startup/one-shot cases below are retired;
-> the nested-front-end rejection (`TUI_COMMAND_UNSUPPORTED`) is retained and
-> now verified against the shared command path in `tests/test_cli.py`.
+## Test Cases
 
-## Test Objectives
-
-Validate that the initial TUI shell starts correctly, reuses the shared command path, surfaces structured errors, and rejects nested interactive front ends.
-
-## Coverage Requirements
-
-* TUI startup renders the initial shell
-* one-shot TUI command execution reuses the shared command path
-* structured command errors appear in the alerts pane
-* nested interactive front ends are rejected from TUI command entry
-
-## Requirement Traceability
-
-| Requirement ID | Covered by test IDs |
-|----------------|---------------------|
-| `REQ-TUI-01` | `TEST-TUI-01` |
-| `REQ-TUI-02` | `TEST-TUI-01` |
-| `REQ-TUI-03` | `TEST-TUI-02`, `TEST-TUI-03` |
-| `REQ-TUI-04` | `TEST-TUI-02`, `TEST-TUI-04` |
-| `REQ-TUI-05` | `TEST-TUI-04` |
-
-## Representative Test Cases
-
-### `TEST-TUI-01` — TUI startup
+### TEST-TUI-01: TTY Gate
 
 ```gherkin
-Given  EOF is supplied on stdin
-When   the operator runs `canarchy tui`
-Then   the startup output shall contain the shell header
-And    the output shall contain bus status, live traffic, alerts, and command-entry sections
+Given the TUI command is launched without an interactive terminal
+When command validation runs
+Then the command fails with TUI_REQUIRES_TTY and an actionable hint
 ```
 
-**Fixture:** mocked input (EOF).
+**Fixture:** Patched non-TTY standard streams.
 
----
-
-### `TEST-TUI-02` — One-shot command execution
+### TEST-TUI-02: Full-Screen Layout And Shared Commands
 
 ```gherkin
-Given  the scaffold transport backend is active
-When   the operator runs `canarchy tui --command "j1939 monitor --pgn 65262"`
-Then   the output shall reflect the shared command result
-And    the output shall include command and mode state plus recent traffic content
+Given the Textual TUI is running
+When commands and structured command results are submitted
+Then the expected panes are mounted and shared state is rendered without nested front ends
 ```
 
-**Fixture:** scaffold backend (no file required).
+**Fixture:** Textual test pilot and deterministic command executor.
 
----
-
-### `TEST-TUI-03` — Shared error surface
+### TEST-TUI-03: Background Capture And Stop
 
 ```gherkin
-Given  the scaffold transport backend is active
-When   the operator runs `canarchy tui --command "j1939 pgn 300000"`
-Then   the output shall contain a structured `INVALID_PGN` error in the alerts pane
+Given a capture session is consuming a live event iterator
+When stop is requested with a 250 millisecond join budget
+Then the stop event reaches the transport and the worker terminates within the budget
+And a worker that exceeds the budget reports CAPTURE_STOP_TIMEOUT and blocks replacement
 ```
 
-**Fixture:** scaffold backend (no file required).
+**Fixture:** Deterministic cancellable and stubborn capture doubles.
 
----
-
-### `TEST-TUI-04` — Nested front ends rejected
+### TEST-TUI-04: Idle Python-CAN Cancellation
 
 ```gherkin
-Given  the TUI is running
-When   the operator submits the command `shell --command 'capture can0 --text'` from TUI input
-Then   the output shall contain `TUI_COMMAND_UNSUPPORTED`
+Given a python-can bus is idle and recv returns no frame
+When the capture stop event is set
+Then capture iteration exits after bounded receive polling and the bus is shut down
 ```
 
-**Fixture:** mocked TUI command input.
+**Fixture:** Fake python-can bus recording receive timeouts and shutdown.
 
----
+### TEST-TUI-05: Finite Stream Drain
 
-## Fixtures And Environment
+```gherkin
+Given a finite capture source produces 1000 events before the first UI drain
+When the capture producer finishes
+Then the TUI retains the session and renders all 1000 events before releasing it
+```
 
-No dedicated fixture files are required. Tests use mocked input and shared command execution paths.
+**Fixture:** Textual test pilot with a 1000-event burst transport.
 
-## Explicit Non-Coverage
+### TEST-TUI-06: Paused Completion
 
-* pixel-level terminal snapshot rendering (behavioural coverage is via the
-  Textual `Pilot` harness in `tests/test_tui_app.py`, not SVG snapshots)
-* real-hardware live capture (covered deterministically via the scaffold
-  backend's finite frame stream)
+```gherkin
+Given presentation is paused while a finite capture source completes
+When timer drains run and presentation later resumes
+Then no buffered events are consumed while paused and all are rendered after resume
+```
+
+**Fixture:** Textual test pilot with a finite burst transport.
+
+### TEST-TUI-07: Overflow Telemetry
+
+```gherkin
+Given capture produces more events than the bounded queue can hold
+When the producer evicts old events and the TUI drains the queue
+Then received, drained, dropped, depth, and high-water counts are exact and loss is visible in status
+```
+
+**Fixture:** Two-item capture queue with a ten-event producer.
+
+### TEST-TUI-08: Capture Errors
+
+```gherkin
+Given the transport raises a structured or unexpected error
+When the capture worker handles the failure
+Then the error is queued for the TUI with a stable code, message, and hint
+```
+
+**Fixture:** Failing transport doubles.
+
+### TEST-TUI-09: Explicit Stop Drain
+
+```gherkin
+Given a live capture worker has buffered more than one UI drain batch
+When the operator stops capture
+Then the worker exits and every buffered event is rendered before the session is released
+```
+
+**Fixture:** Textual test pilot with a stoppable 600-event burst transport.
 
 ## Traceability
 
-This spec maps to the initial TUI acceptance criteria around startup, pane wiring, shared command execution, and presentation-layer-only behavior.
+| Requirement | Tests |
+|---|---|
+| REQ-TUI-01 | TEST-TUI-01 |
+| REQ-TUI-02 | TEST-TUI-02 |
+| REQ-TUI-03 | TEST-TUI-02 |
+| REQ-TUI-04 | TEST-TUI-02 |
+| REQ-TUI-05 | TEST-TUI-03, TEST-TUI-05 |
+| REQ-TUI-06 | TEST-TUI-03, TEST-TUI-04, TEST-TUI-09 |
+| REQ-TUI-07 | TEST-TUI-03, TEST-TUI-08 |
+| REQ-TUI-08 | TEST-TUI-05, TEST-TUI-08, TEST-TUI-09 |
+| REQ-TUI-09 | TEST-TUI-06 |
+| REQ-TUI-10 | TEST-TUI-07 |
+| REQ-TUI-11 | TEST-TUI-07 |
+| REQ-TUI-12 | TEST-TUI-02, TEST-TUI-05, TEST-TUI-06 |
+
+## Not Tested
+
+Real adapter shutdown timing is hardware-dependent and is not exercised in CI. The tests enforce the polling contract and worker lifecycle with deterministic fake buses; operator validation remains necessary for each physical backend.

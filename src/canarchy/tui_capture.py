@@ -29,6 +29,17 @@ class CaptureError:
     hint: str
 
 
+@dataclass(frozen=True, slots=True)
+class CaptureStats:
+    """Thread-safe snapshot of capture queue activity."""
+
+    received: int = 0
+    drained: int = 0
+    dropped: int = 0
+    queue_depth: int = 0
+    high_water_mark: int = 0
+
+
 class CaptureSession:
     """Own a daemon capture thread feeding events into a queue.
 
@@ -51,6 +62,12 @@ class CaptureSession:
         self._stop = threading.Event()
         self._finished = threading.Event()
         self._thread: threading.Thread | None = None
+        self._stats_lock = threading.Lock()
+        self._received = 0
+        self._drained = 0
+        self._dropped = 0
+        self._high_water_mark = 0
+        self._stop_timeout_reported = False
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -66,23 +83,41 @@ class CaptureSession:
         )
         self._thread.start()
 
-    def stop(self, *, join_timeout: float = 0.2) -> None:
-        """Signal the capture thread to stop and best-effort join it.
-
-        The underlying `bus.recv()` may block between frames, so the
-        thread is a daemon and we do not block the UI waiting on it — a
-        short join is attempted and any lingering thread dies with the
-        process.
-        """
+    def stop(self, *, join_timeout: float = 0.25) -> bool:
+        """Signal the capture thread and return whether it exited in time."""
 
         self._stop.set()
         thread = self._thread
         if thread is not None and thread.is_alive():
             thread.join(timeout=join_timeout)
+        stopped = thread is None or not thread.is_alive()
+        if not stopped and not self._stop_timeout_reported:
+            self._errors.put(
+                CaptureError(
+                    code="CAPTURE_STOP_TIMEOUT",
+                    message=f"Capture on '{self.interface}' did not stop within {join_timeout:g}s.",
+                    hint="Wait for the backend to close before starting another capture.",
+                )
+            )
+            self._stop_timeout_reported = True
+        return stopped
 
     @property
     def running(self) -> bool:
         return self._thread is not None and not self._finished.is_set()
+
+    @property
+    def stats(self) -> CaptureStats:
+        """Return an immutable snapshot of producer and consumer counts."""
+
+        with self._stats_lock:
+            return CaptureStats(
+                received=self._received,
+                drained=self._drained,
+                dropped=self._dropped,
+                queue_depth=self._events.qsize(),
+                high_water_mark=self._high_water_mark,
+            )
 
     # -- consumption --------------------------------------------------------
 
@@ -90,11 +125,14 @@ class CaptureSession:
         """Return up to *max_items* buffered events without blocking."""
 
         drained: list[dict[str, object]] = []
-        for _ in range(max_items):
-            try:
-                drained.append(self._events.get_nowait())
-            except queue.Empty:
-                break
+        with self._stats_lock:
+            for _ in range(max_items):
+                try:
+                    drained.append(self._events.get_nowait())
+                except queue.Empty:
+                    break
+            if drained:
+                self._drained += len(drained)
         return drained
 
     def errors(self) -> list[CaptureError]:
@@ -112,20 +150,34 @@ class CaptureSession:
 
     def _run(self) -> None:
         try:
-            for event in self._transport.capture_stream_events(self.interface):
+            for event in self._transport.capture_stream_events(
+                self.interface, stop_event=self._stop
+            ):
                 if self._stop.is_set():
                     break
-                # Never block the producer on a full UI queue; drop the
-                # oldest buffered event so live capture keeps flowing.
-                try:
-                    self._events.put_nowait(event)
-                except queue.Full:
+                with self._stats_lock:
+                    self._received += 1
+                    # Never block the producer on a full UI queue; drop the
+                    # oldest buffered event so live capture keeps flowing.
                     try:
-                        self._events.get_nowait()
-                    except queue.Empty:
-                        pass
-                    self._events.put_nowait(event)
+                        self._events.put_nowait(event)
+                    except queue.Full:
+                        try:
+                            self._events.get_nowait()
+                            self._dropped += 1
+                        except queue.Empty:
+                            pass
+                        self._events.put_nowait(event)
+                    self._high_water_mark = max(self._high_water_mark, self._events.qsize())
         except TransportError as exc:
             self._errors.put(CaptureError(code=exc.code, message=exc.message, hint=exc.hint))
+        except Exception as exc:
+            self._errors.put(
+                CaptureError(
+                    code="CAPTURE_FAILED",
+                    message=f"Unexpected capture failure: {exc}",
+                    hint="Check the transport configuration and retry the capture.",
+                )
+            )
         finally:
             self._finished.set()

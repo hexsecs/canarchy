@@ -144,7 +144,7 @@ nav:
           - J1587/J1708 Decode: design/j1587-decode.md
           - J2497 (PLC4TRUCKS) Decode: design/j2497-decode.md
           - Shell Command: design/shell-command.md
-          - TUI Shell: design/tui-shell.md
+          - Full-Screen TUI: design/tui-shell.md
           - Web Dashboard: design/web-serve.md
           - cannelloni Interop: design/cannelloni-interop.md
       - Test Specs:
@@ -182,7 +182,7 @@ nav:
           - J1587/J1708 Decode: tests/j1587-decode.md
           - J2497 (PLC4TRUCKS) Decode: tests/j2497-decode.md
           - Shell Command: tests/shell-command.md
-          - TUI Shell: tests/tui-shell.md
+          - Full-Screen TUI: tests/tui-shell.md
           - Web Dashboard: tests/web-serve.md
           - cannelloni Interop: tests/cannelloni-interop.md
           - Composition: tests/composition.md

@@ -319,6 +319,37 @@ class TransportBackendTests(unittest.TestCase):
         self.assertEqual(frames[0].interface, "can0")
         self.assertEqual(frames[1].interface, "can0")
 
+    def test_python_can_capture_stream_honors_stop_event_while_idle(self) -> None:
+        backend = PythonCanBackend(bus_interface="virtual", capture_timeout=1.0)
+        stop_event = threading.Event()
+        recv_timeouts: list[float | None] = []
+
+        class _IdleBus:
+            shutdown_called = False
+
+            def recv(self, timeout: float | None = None) -> None:
+                recv_timeouts.append(timeout)
+                time.sleep(timeout or 0)
+                return None
+
+            def shutdown(self) -> None:
+                self.shutdown_called = True
+
+        bus = _IdleBus()
+        with patch.object(backend, "_open_bus", return_value=bus):
+            thread = threading.Thread(
+                target=lambda: list(backend.capture_stream("can0", stop_event=stop_event))
+            )
+            thread.start()
+            time.sleep(0.02)
+            stop_event.set()
+            thread.join(timeout=0.25)
+
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(bus.shutdown_called)
+        self.assertTrue(recv_timeouts)
+        self.assertTrue(all(timeout is not None and timeout <= 0.1 for timeout in recv_timeouts))
+
     def test_j1939_monitor_events_use_explicit_sample_provider(self) -> None:
         transport = LocalTransport(live_backend=ScaffoldCanBackend())
 

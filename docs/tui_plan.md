@@ -8,6 +8,11 @@ background, and every pane is an interactive, sortable/filterable table with
 operator-controlled backlog. The full-screen + live-streaming milestone
 (Suggested Implementation Order items 1, 2, and 6) is now implemented; the
 text-mode shell and its one-shot `tui --command` mode have been retired.
+Live capture uses a cancellable background worker, retains completed or paused
+buffers until they are rendered, and reports received, drained, queued, dropped,
+and high-water counts in the status pane. Direct live DBC/J1939/UDS enrichment
+remains a later milestone; those panes currently consume structured events from
+commands that already produce them.
 
 Because the app is full-screen it requires an interactive terminal; in a
 non-TTY / scripted context it prints guidance and exits non-zero. Use the
