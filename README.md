@@ -10,12 +10,12 @@
   <a href="https://pypi.org/project/canarchy/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/canarchy"></a>
   <a href="https://github.com/hexsecs/canarchy/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/hexsecs/canarchy/actions/workflows/test.yml/badge.svg"></a>
   <a href="https://github.com/hexsecs/canarchy/actions/workflows/lint.yml"><img alt="Lint" src="https://github.com/hexsecs/canarchy/actions/workflows/lint.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/pypi/l/canarchy"></a>
+  <a href="https://github.com/hexsecs/canarchy/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/pypi/l/canarchy"></a>
   <a href="https://hexsecs.github.io/canarchy/"><img alt="Docs" src="https://img.shields.io/badge/docs-hexsecs.github.io-blue"></a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/tui.svg" alt="CANarchy's full-screen TUI streaming live CAN traffic, J1939 activity, and DM1 faults" width="920">
+  <img src="https://raw.githubusercontent.com/hexsecs/canarchy/main/docs/assets/tui.svg" alt="CANarchy's full-screen TUI streaming live CAN traffic, J1939 activity, and DM1 faults" width="920">
 </p>
 
 ---
@@ -65,7 +65,7 @@ canarchy tui        # /capture <iface> to stream; /filter, /sort, /help
 
 ## Why CANarchy?
 
-The [event schema](docs/event-schema.md) is the stable contract; the CLI wraps it. That one design choice is what sets CANarchy apart from most open-source CAN tooling:
+The [event schema](https://github.com/hexsecs/canarchy/blob/main/docs/event-schema.md) is the stable contract; the CLI wraps it. That one design choice is what sets CANarchy apart from most open-source CAN tooling:
 
 - **Structured output is the contract, not an afterthought.** Every command — capture, decode, fuzz, reverse-engineer — emits the same canonical JSON envelope. Parse once, reuse everywhere.
 - **Pipe-first.** `--jsonl` streams one typed event per line, so `| jq`, `| grep`, or a downstream script Just Works.
@@ -80,7 +80,7 @@ The [event schema](docs/event-schema.md) is the stable contract; the CLI wraps i
 | J1939-first operator workflows | ✅ | partial |
 | MCP / agent integration | ✅ | ✗ |
 
-See the full [CAN tool feature matrix](docs/feature-matrix.md) for an honest, side-by-side comparison with can-utils, SavvyCAN, Caring Caribou, TruckDevil, and others.
+See the full [CAN tool feature matrix](https://github.com/hexsecs/canarchy/blob/main/docs/feature-matrix.md) for an honest, side-by-side comparison with can-utils, SavvyCAN, Caring Caribou, TruckDevil, and others.
 
 ## What can you do with it?
 
@@ -118,7 +118,7 @@ canarchy mcp install --client claude-desktop   # or: --client claude-code
 canarchy mcp serve                             # or run the stdio server directly
 ```
 
-Active-transmit tools require an explicit acknowledgement, so an agent can't put frames on a live bus by accident. See the [active-transmit safety design](docs/design/active-transmit-safety.md).
+Active-transmit tools require an explicit acknowledgement, so an agent can't put frames on a live bus by accident. See the [active-transmit safety design](https://github.com/hexsecs/canarchy/blob/main/docs/design/active-transmit-safety.md).
 
 ## The full-screen TUI
 
@@ -179,7 +179,7 @@ Fully implemented and tested:
 - `plugins list|info|enable|disable` — Python entry-point plugin discovery and toggles
 - `skills provider list`, `search`, `fetch`, `cache list|refresh` — repository-backed CANarchy skill discovery, caching, and provenance
 
-**Active-transmit fuzzing** (gated by the [active-transmit safety design](docs/design/active-transmit-safety.md); `--dry-run` is the safe planning path)
+**Active-transmit fuzzing** (gated by the [active-transmit safety design](https://github.com/hexsecs/canarchy/blob/main/docs/design/active-transmit-safety.md); `--dry-run` is the safe planning path)
 - `fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz identify` — payload/replay/ID-walk fuzzing and bisecting a fuzz log to the culprit frame
 - `fuzz signal`, `fuzz spn` — DBC-signal and J1939-SPN-aware mutation with sentinel coverage
 - `fuzz guided` — response-feedback coverage-guided fuzzing with a persisted seed corpus
@@ -204,7 +204,7 @@ Every successful command returns a stable envelope:
 { "ok": true, "command": "capture", "data": {}, "warnings": [], "errors": [] }
 ```
 
-Failures return structured errors with actionable hints (and a documented [error-code catalog](docs/troubleshooting.md)):
+Failures return structured errors with actionable hints (and a documented [error-code catalog](https://github.com/hexsecs/canarchy/blob/main/docs/troubleshooting.md)):
 
 ```json
 {
@@ -218,15 +218,15 @@ Failures return structured errors with actionable hints (and a documented [error
 }
 ```
 
-Use `--candump` for a human-oriented live view; use `--jsonl` when feeding scripts or agents — every line is a typed event from the [canonical schema](docs/event-schema.md). Set `CANARCHY_PYTHON_CAN_INTERFACE` to choose an interface type, or `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
+Use `--candump` for a human-oriented live view; use `--jsonl` when feeding scripts or agents — every line is a typed event from the [canonical schema](https://github.com/hexsecs/canarchy/blob/main/docs/event-schema.md). Set `CANARCHY_PYTHON_CAN_INTERFACE` to choose an interface type, or `CANARCHY_TRANSPORT_BACKEND=scaffold` for deterministic offline behavior.
 
 ## Documentation
 
-- [Getting Started](docs/getting_started.md) · [Cookbook](docs/cookbook/index.md) — task-oriented recipes
-- [Event Schema](docs/event-schema.md) — the canonical envelope for all structured output
-- [Command spec](docs/command_spec.md) · [Architecture](docs/architecture.md)
-- [CAN Tool Feature Matrix](docs/feature-matrix.md) — comparison to other OSS CAN tools
-- [J1939 Heavy Vehicle Demo](docs/tutorials/j1939_heavy_vehicle.md) · [Troubleshooting](docs/troubleshooting.md)
+- [Getting Started](https://github.com/hexsecs/canarchy/blob/main/docs/getting_started.md) · [Cookbook](https://github.com/hexsecs/canarchy/blob/main/docs/cookbook/index.md) — task-oriented recipes
+- [Event Schema](https://github.com/hexsecs/canarchy/blob/main/docs/event-schema.md) — the canonical envelope for all structured output
+- [Command spec](https://github.com/hexsecs/canarchy/blob/main/docs/command_spec.md) · [Architecture](https://github.com/hexsecs/canarchy/blob/main/docs/architecture.md)
+- [CAN Tool Feature Matrix](https://github.com/hexsecs/canarchy/blob/main/docs/feature-matrix.md) — comparison to other OSS CAN tools
+- [J1939 Heavy Vehicle Demo](https://github.com/hexsecs/canarchy/blob/main/docs/tutorials/j1939_heavy_vehicle.md) · [Troubleshooting](https://github.com/hexsecs/canarchy/blob/main/docs/troubleshooting.md)
 - Full docs site: **[hexsecs.github.io/canarchy](https://hexsecs.github.io/canarchy/)**
 
 ## Install from source (development)
@@ -246,16 +246,16 @@ Run the test suite end to end:
 uv run python -m unittest discover -s tests -v
 ```
 
-Shell completions for bash, zsh, and fish come from `canarchy completion <shell>` — see [Getting Started](docs/getting_started.md#install-shell-completion).
+Shell completions for bash, zsh, and fish come from `canarchy completion <shell>` — see [Getting Started](https://github.com/hexsecs/canarchy/blob/main/docs/getting_started.md#install-shell-completion).
 
 ## Community & contributing
 
 CANarchy is GPL-3.0-licensed and welcomes contributions.
 
 - ⭐ **Star the repo** if it's useful — it genuinely helps others find it.
-- [Contributing guide](CONTRIBUTING.md) — local development, branch flow, and PR gates
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Security Policy](SECURITY.md) — reporting concerns and safe active-bus operation
+- [Contributing guide](https://github.com/hexsecs/canarchy/blob/main/CONTRIBUTING.md) — local development, branch flow, and PR gates
+- [Code of Conduct](https://github.com/hexsecs/canarchy/blob/main/CODE_OF_CONDUCT.md)
+- [Security Policy](https://github.com/hexsecs/canarchy/blob/main/SECURITY.md) — reporting concerns and safe active-bus operation
 
 > ⚠️ CANarchy can transmit on live buses. Only operate against vehicles, ECUs, and networks you own or are explicitly authorized to test. Active-transmit commands require explicit acknowledgement by design.
 
@@ -268,4 +268,4 @@ CANarchy is GPL-3.0-licensed and welcomes contributions.
 
 ---
 
-<sub>Versioning follows [SemVer](https://semver.org/); see the [changelog](CHANGELOG.md) and [release workflow](docs/release.md). `src/canarchy/__init__.py` is the authoritative version source.</sub>
+<sub>Versioning follows [SemVer](https://semver.org/); see the [changelog](https://github.com/hexsecs/canarchy/blob/main/CHANGELOG.md) and [release workflow](https://github.com/hexsecs/canarchy/blob/main/docs/release.md). `src/canarchy/__init__.py` is the authoritative version source.</sub>
