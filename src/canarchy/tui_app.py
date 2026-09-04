@@ -41,7 +41,7 @@ from canarchy.tui import (
     _uds_row_tuples,
     _update_state,
 )
-from canarchy.tui_capture import CaptureSession
+from canarchy.tui_capture import CaptureSession, CaptureStats
 
 # Pane id → (DataTable selector, column headers).
 _PANES: dict[str, tuple[str, tuple[str, ...]]] = {
@@ -147,6 +147,9 @@ class CanarchyTuiApp(App[int]):
         self.backlog_cap = _DEFAULT_BACKLOG
         self.paused = False
         self._capture: CaptureSession | None = None
+        self._last_capture_stats = CaptureStats()
+        self._reported_dropped = 0
+        self._capture_end_announced = False
         # Per-pane retained backlog + bookkeeping for filter/sort/trim.
         self._rows: dict[str, list[tuple[Any, ...]]] = {name: [] for name in _PANES}
         self._row_keys: dict[str, deque] = {name: deque() for name in _PANES}
@@ -269,34 +272,80 @@ class CanarchyTuiApp(App[int]):
     # -- live capture -------------------------------------------------------
 
     def _start_capture(self, interface: str) -> None:
-        self._stop_capture()
+        if not self._stop_capture(release=False):
+            self._emit_alert("capture replacement cancelled until the previous worker exits")
+            return
+        if self.paused and self._capture is not None and self._capture.stats.queue_depth:
+            self._emit_alert("capture replacement cancelled; resume to drain buffered events first")
+            return
+        self._drain_stopped_capture()
         self._capture = self._capture_factory(interface)
+        self._last_capture_stats = CaptureStats()
+        self._reported_dropped = 0
+        self._capture_end_announced = False
         self._capture.start()
         self._emit_alert(f"capture started on {interface}")
         self._refresh_status(mode="capturing", interface=interface)
 
-    def _stop_capture(self) -> None:
+    def _stop_capture(self, *, release: bool = True) -> bool:
         if self._capture is not None:
-            self._capture.stop()
-            self._capture = None
+            capture = self._capture
+            stopped = capture.stop()
+            self._last_capture_stats = capture.stats
+            if stopped and release:
+                self._capture = None
+            else:
+                for error in capture.errors():
+                    self._emit_alert(f"error: {error.code}: {error.message} Hint: {error.hint}")
+            return stopped
+        return True
 
     def action_stop_capture(self) -> None:
         if self._capture is None:
             return
         interface = self._capture.interface
-        self._stop_capture()
-        self._emit_alert(f"capture stopped on {interface}")
-        self._refresh_status(mode="idle")
+        if self._stop_capture(release=False):
+            self._emit_alert(f"capture stopped on {interface}")
+            self._capture_end_announced = True
+            self._drain_capture()
+        else:
+            self._refresh_status(mode="stopping")
+
+    def _drain_stopped_capture(self) -> None:
+        capture = self._capture
+        if capture is None:
+            return
+        for error in capture.errors():
+            self._emit_alert(f"error: {error.code}: {error.message} Hint: {error.hint}")
+        self._report_capture_drops(capture)
+        events = capture.drain(max_items=max(capture.stats.queue_depth, 1))
+        self._last_capture_stats = capture.stats
+        if events:
+            self._ingest_result(
+                _FoldResult(
+                    command="capture",
+                    data={"events": events, "mode": "stopped", "interface": capture.interface},
+                )
+            )
+        self._capture = None
 
     def _drain_capture(self) -> None:
         capture = self._capture
         if capture is None:
             return
         for error in capture.errors():
-            self._emit_alert(f"error: {error.code}: {error.message}")
+            self._emit_alert(f"error: {error.code}: {error.message} Hint: {error.hint}")
+        self._report_capture_drops(capture)
         if self.paused:
+            if not capture.running and not self._capture_end_announced:
+                self._capture_end_announced = True
+                self._emit_alert(
+                    f"capture ended on {capture.interface}; buffered events will drain on resume"
+                )
+                self._refresh_status(mode="ended")
             return
         events = capture.drain()
+        self._last_capture_stats = capture.stats
         if events:
             result = _FoldResult(
                 command="capture",
@@ -306,10 +355,22 @@ class CanarchyTuiApp(App[int]):
         # A finite backend or an immediate transport error ends the stream
         # without a stop request; return to idle so status stops showing
         # `capturing` and the operator does not have to `/stop` a dead session.
-        if not capture.running:
+        if not capture.running and capture.stats.queue_depth == 0:
             self._capture = None
-            self._emit_alert(f"capture ended on {capture.interface}")
+            if not self._capture_end_announced:
+                self._emit_alert(f"capture ended on {capture.interface}")
             self._refresh_status(mode="idle")
+        else:
+            self._refresh_status()
+
+    def _report_capture_drops(self, capture: CaptureSession) -> None:
+        stats = capture.stats
+        self._last_capture_stats = stats
+        if stats.dropped <= self._reported_dropped:
+            return
+        delta = stats.dropped - self._reported_dropped
+        self._reported_dropped = stats.dropped
+        self._emit_alert(f"warning: capture queue dropped {delta} events ({stats.dropped} total)")
 
     # -- folding results into panes ----------------------------------------
 
@@ -427,9 +488,11 @@ class CanarchyTuiApp(App[int]):
         self.query_one("#alerts", RichLog).write(line)
 
     def _refresh_status(self, *, mode: str | None = None, interface: str | None = None) -> None:
-        lines = list(self.tstate.bus_status)
+        lines = [line for line in self.tstate.bus_status if not line.startswith("capture:")]
         capturing = self._capture is not None
-        status = mode or ("capturing" if capturing else None)
+        status = mode or (
+            ("capturing" if self._capture.running else "draining") if capturing else None
+        )
         if interface is not None:
             lines = [f"interface: {interface}"] + [
                 line for line in lines if not line.startswith("interface:")
@@ -439,6 +502,14 @@ class CanarchyTuiApp(App[int]):
             lines.append(f"mode: {status}")
         if self.paused:
             lines.append("[paused]")
+        stats = self._capture.stats if self._capture is not None else self._last_capture_stats
+        if stats.received or stats.drained or stats.dropped:
+            lines.append(
+                "capture: "
+                f"received={stats.received} drained={stats.drained} "
+                f"queued={stats.queue_depth} dropped={stats.dropped} "
+                f"high-water={stats.high_water_mark}"
+            )
         lines.append(f"backlog: {self.backlog_cap}")
         # Render as literal Text: status/fault strings contain brackets
         # (e.g. "[paused]", DM1 "[spn=175/fmi=5]") that Static would

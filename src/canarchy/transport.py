@@ -228,7 +228,9 @@ class LiveCanBackend(Protocol):
 
     def capture(self, interface: str) -> list[CanFrame]: ...
 
-    def capture_stream(self, interface: str) -> Iterator[CanFrame]: ...
+    def capture_stream(
+        self, interface: str, *, stop_event: threading.Event | None = None
+    ) -> Iterator[CanFrame]: ...
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame: ...
 
@@ -248,9 +250,14 @@ class ScaffoldCanBackend:
         self._require_interface(interface)
         return [frame.with_interface(interface) for frame in scaffold_transport_frames()[:2]]
 
-    def capture_stream(self, interface: str) -> Iterator[CanFrame]:
+    def capture_stream(
+        self, interface: str, *, stop_event: threading.Event | None = None
+    ) -> Iterator[CanFrame]:
         self._require_interface(interface)
-        yield from (frame.with_interface(interface) for frame in scaffold_transport_frames()[:2])
+        for frame in scaffold_transport_frames()[:2]:
+            if stop_event is not None and stop_event.is_set():
+                break
+            yield frame.with_interface(interface)
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         self._require_interface(interface)
@@ -302,11 +309,14 @@ class PythonCanBackend:
             bus.shutdown()
         return frames
 
-    def capture_stream(self, interface: str) -> Iterator[CanFrame]:
+    def capture_stream(
+        self, interface: str, *, stop_event: threading.Event | None = None
+    ) -> Iterator[CanFrame]:
         bus = self._open_bus(interface)
+        poll_timeout = min(max(self.capture_timeout, 0.01), 0.1)
         try:
-            while True:
-                message = bus.recv(timeout=None)
+            while stop_event is None or not stop_event.is_set():
+                message = bus.recv(timeout=poll_timeout)
                 if message is None:
                     continue
                 yield self._decode_message(message, interface)
@@ -664,8 +674,10 @@ class LocalTransport:
     def capture(self, interface: str) -> list[CanFrame]:
         return self.live_backend.capture(interface)
 
-    def capture_stream(self, interface: str) -> Iterator[CanFrame]:
-        return self.live_backend.capture_stream(interface)
+    def capture_stream(
+        self, interface: str, *, stop_event: threading.Event | None = None
+    ) -> Iterator[CanFrame]:
+        return self.live_backend.capture_stream(interface, stop_event=stop_event)
 
     def send(self, interface: str, frame: CanFrame) -> CanFrame:
         return self.live_backend.send(interface, frame)
@@ -832,8 +844,10 @@ class LocalTransport:
             [FrameEvent(frame=frame, source="transport.capture").to_event() for frame in frames]
         )
 
-    def capture_stream_events(self, interface: str) -> Iterator[dict[str, object]]:
-        for frame in self.capture_stream(interface):
+    def capture_stream_events(
+        self, interface: str, *, stop_event: threading.Event | None = None
+    ) -> Iterator[dict[str, object]]:
+        for frame in self.capture_stream(interface, stop_event=stop_event):
             yield serialize_events(
                 [FrameEvent(frame=frame, source="transport.capture").to_event()]
             )[0]
