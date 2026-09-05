@@ -9,6 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+* **RE signal-name suggestions use exact Intel/Motorola bit overlap (#502).** Unaligned Motorola signals retain valid matches across byte boundaries, and disjoint fields sharing a byte no longer produce false DBC matches. Confidence uses the actual overlapping-bit fraction; output fields are unchanged.
+
 * **Capture comparisons preserve standard/extended identifier types (#500).** Messages sharing a numeric CAN ID now retain independent metrics and new/dropped flags. Rows expose `is_extended_id`, and category summaries add typed `*_identifiers` lists while retaining numeric `*_ids` lists for compatibility.
 
 * TUI live capture now stops promptly on idle buses, preserves completed and paused capture buffers until they are drained, blocks replacement of a worker that has not stopped, and exposes queue-loss telemetry instead of silently dropping events (#498).

@@ -59,17 +59,21 @@ def _overlap_bits(a_start: int, a_len: int, b_start: int, b_len: int) -> int:
     return max(0, min(a_start + a_len, b_start + b_len) - max(a_start, b_start))
 
 
-def _signal_byte_span(start: int, length: int, byte_order: str) -> tuple[int, int]:
-    """Return the inclusive ``(first_byte, last_byte)`` a DBC signal occupies.
+def _signal_bits(start: int, length: int, byte_order: str) -> set[int]:
+    """Return occupied DBC signal bits in physical LSB0 numbering.
 
-    Little-endian uses the exact LSB0 span; big-endian (Motorola sawtooth, where
-    ``start`` is the most-significant bit) is approximated as ``ceil(length/8)``
-    bytes forward from the start byte — precise enough to rank overlap.
+    Intel starts at the LSB and advances linearly. Motorola starts at the MSB,
+    descends within each byte, then jumps from bit 0 to bit 7 of the next byte.
+    For example, start=0 and length=16 occupies bits 0, 15..8, and 23..17.
     """
     if "big" in (byte_order or "").lower():
-        first = start // 8
-        return first, first + (length + 7) // 8 - 1
-    return start // 8, (start + length - 1) // 8
+        bits: set[int] = set()
+        bit = start
+        for _ in range(length):
+            bits.add(bit)
+            bit = bit + 15 if bit % 8 == 0 else bit - 1
+        return bits
+    return set(range(start, start + length))
 
 
 def _template_name(candidate: dict[str, Any]) -> str:
@@ -117,19 +121,19 @@ def _dbc_suggestions(
         return []
     bit_length = int(candidate["bit_length"])
     start_bit = int(candidate["start_bit"])
-    candidate_first, candidate_last = start_bit // 8, (start_bit + bit_length - 1) // 8
+    candidate_bits = set(range(start_bit, start_bit + bit_length))
     observed_max = int(candidate.get("observed_max", 0) or 0)
     suggestions: list[dict[str, Any]] = []
     for signal in signals:
         length = int(signal["length"])
-        signal_first, signal_last = _signal_byte_span(
+        signal_bits = _signal_bits(
             int(signal.get("start", 0)), length, str(signal.get("byte_order", "little_endian"))
         )
-        overlap = min(candidate_last, signal_last) - max(candidate_first, signal_first) + 1
+        overlap = len(candidate_bits & signal_bits)
         if overlap <= 0:
-            # A signal whose bytes do not overlap the candidate is not a name for it.
+            # Sharing a byte is insufficient: the actual fields must intersect.
             continue
-        overlap_fraction = overlap / (signal_last - signal_first + 1)
+        overlap_fraction = overlap / length
         length_match = (
             1.0 if length == bit_length else max(0.0, 1.0 - abs(length - bit_length) / 8.0)
         )

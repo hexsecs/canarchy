@@ -45,6 +45,71 @@ def _candidate(**overrides) -> dict:
 
 
 class HeuristicSuggestionTests(unittest.TestCase):
+    def test_dbc_matches_exact_occupied_bits(self) -> None:
+        # Independently specified DBC layouts in physical LSB0 bit numbering.
+        layouts = [
+            ("big_endian", 7, 16, set(range(16))),
+            ("big_endian", 0, 16, {0, *range(8, 16), *range(17, 24)}),
+            ("big_endian", 3, 8, {0, 1, 2, 3, 12, 13, 14, 15}),
+            ("big_endian", 5, 3, {3, 4, 5}),
+            ("little_endian", 0, 16, set(range(16))),
+            ("little_endian", 5, 8, set(range(5, 13))),
+        ]
+        for byte_order, start, length, occupied in layouts:
+            signals = {
+                0x200: [
+                    {
+                        "name": "Reference",
+                        "start": start,
+                        "length": length,
+                        "byte_order": byte_order,
+                    }
+                ]
+            }
+            for bit in range(32):
+                with self.subTest(byte_order=byte_order, start=start, length=length, bit=bit):
+                    result = suggest_for_candidate(
+                        _candidate(
+                            arbitration_id=0x200,
+                            pgn=None,
+                            start_bit=bit,
+                            bit_length=1,
+                            observed_max=1,
+                        ),
+                        signals,
+                    )
+                    matches = [s for s in result["suggestions"] if s["source"] == "dbc"]
+                    self.assertEqual(bool(matches), bit in occupied)
+                    self.assertEqual(
+                        result["suggested_source"], "dbc" if bit in occupied else "heuristic"
+                    )
+
+    def test_dbc_ranking_uses_bit_overlap_fraction(self) -> None:
+        # All three fields share byte 0. Only the low nibble matches exactly;
+        # the high nibble is disjoint and the middle nibble overlaps halfway.
+        for byte_order, starts in (("little_endian", (4, 2, 0)), ("big_endian", (7, 5, 3))):
+            with self.subTest(byte_order=byte_order):
+                signals = {
+                    0x200: [
+                        {"name": name, "start": start, "length": 4, "byte_order": byte_order}
+                        for name, start in zip(("Disjoint", "Partial", "Exact"), starts)
+                    ]
+                }
+                result = suggest_for_candidate(
+                    _candidate(
+                        arbitration_id=0x200,
+                        pgn=None,
+                        start_bit=0,
+                        bit_length=4,
+                        observed_max=1,
+                    ),
+                    signals,
+                )
+                matches = [s for s in result["suggestions"] if s["source"] == "dbc"]
+                self.assertEqual([s["name"] for s in matches], ["Exact", "Partial"])
+                self.assertEqual([s["confidence"] for s in matches], [0.95, 0.875])
+                self.assertEqual(result["suggested_name"], "Exact")
+
     def test_spn_overlap_names_engine_speed(self) -> None:
         # Bits 24..31 overlap SPN 190 (Engine Speed, PGN 61444, bytes 3..4).
         result = suggest_for_candidate(_candidate(start_bit=24, bit_length=8))

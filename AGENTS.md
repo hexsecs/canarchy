@@ -528,6 +528,8 @@ The user should not be forced to manually reason from raw 29-bit IDs for common 
 
 ## Reverse engineering expectations
 
+Reference-DBC matching in `re suggest` uses exact physical-bit overlap for Intel and Motorola signals; sharing a byte alone is insufficient. Confidence remains heuristic, and corrected overlap can change suggestion inclusion and ranking without changing output fields.
+
 Reverse engineering features should be evidence-driven and explainable.
 
 Good early features:
