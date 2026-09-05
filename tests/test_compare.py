@@ -47,6 +47,76 @@ class CompareCapturesTests(unittest.TestCase):
         self.attack = self.tmp / "attack.candump"
         _write_capture(self.attack, attack_rows)
 
+    def test_colliding_identifier_types_keep_independent_metrics(self) -> None:
+        # Both forms use numeric 0x123; only the extended stream changes.
+        for path, extended_times in ((self.baseline, range(5)), (self.attack, (0, 4))):
+            rows = [(t, "123", "00") for t in range(5)]
+            rows += [(t, "00000123", f"{t:02X}") for t in extended_times]
+            path.write_text(
+                "".join(
+                    f"({t:.6f}) can0 {identifier}#{payload}\n"
+                    for t, identifier, payload in sorted(rows)
+                )
+            )
+        result = compare_captures([str(self.baseline), str(self.attack)], top=0)
+        entries = {e["is_extended_id"]: e for e in result["comparison"]}
+        self.assertEqual(result["id_count"], 2)
+        self.assertEqual(result["summary"]["unique_ids"], 2)
+        standard, extended = entries[False], entries[True]
+        self.assertEqual(standard["frame_counts"], [5, 5])
+        self.assertEqual(standard["rates_hz"], [1.25, 1.25])
+        self.assertEqual(standard["mean_gap_ms"], [1000.0, 1000.0])
+        self.assertEqual(standard["mean_byte_entropy"], [0.0, 0.0])
+        self.assertEqual(standard["flags"], [])
+        self.assertNotIn("pgn", standard)
+        self.assertEqual(extended["frame_counts"], [5, 2])
+        self.assertEqual(extended["rates_hz"], [1.25, 0.5])
+        self.assertEqual(extended["mean_gap_ms"], [1000.0, 4000.0])
+        self.assertGreater(extended["mean_byte_entropy"][0], 2.0)
+        self.assertEqual(extended["mean_byte_entropy"][1], 1.0)
+        self.assertEqual(set(extended["flags"]), {"rate-drop", "entropy-collapse", "timing-drift"})
+        for category in ("rate_drop", "entropy_collapse", "timing_drift"):
+            self.assertEqual(
+                result["summary"][f"{category}_identifiers"],
+                [{"arbitration_id": 0x123, "is_extended_id": True}],
+            )
+        self.assertEqual(result["comparison"][0], extended)
+
+    def test_identifier_type_switch_is_new_and_dropped_through_cli(self) -> None:
+        self.baseline.write_text("(0.0) can0 123#00\n(1.0) can0 123#01\n")
+        self.attack.write_text("(0.0) can0 00000123#00\n(1.0) can0 00000123#01\n")
+        code, result = execute_command(
+            ["compare", str(self.baseline), str(self.attack), "--top", "1", "--json"]
+        )
+        self.assertEqual(code, 0)
+        assert result is not None
+        self.assertEqual(result.warnings, [])
+        data = result.data
+        self.assertEqual(data["id_count"], 2)
+        self.assertEqual(data["returned_count"], 1)
+        # Equal scores sort by numeric ID, then standard before extended.
+        self.assertFalse(data["comparison"][0]["is_extended_id"])
+        self.assertEqual(data["comparison"][0]["flags"], ["dropped-vs-baseline"])
+        for category, extended in (("new", True), ("dropped", False)):
+            self.assertEqual(data["summary"][f"{category}_ids"], [0x123])
+            self.assertEqual(
+                data["summary"][f"{category}_identifiers"],
+                [{"arbitration_id": 0x123, "is_extended_id": extended}],
+            )
+
+    def test_numeric_summary_deduplicates_colliding_new_identifiers(self) -> None:
+        self.baseline.write_text("(0.0) can0 456#00\n")
+        self.attack.write_text("(0.0) can0 123#00\n(1.0) can0 00000123#00\n")
+        result = compare_captures([str(self.baseline), str(self.attack)])
+        self.assertEqual(result["summary"]["new_ids"], [0x123])
+        self.assertEqual(
+            result["summary"]["new_identifiers"],
+            [
+                {"arbitration_id": 0x123, "is_extended_id": False},
+                {"arbitration_id": 0x123, "is_extended_id": True},
+            ],
+        )
+
     def test_compare_flags_rate_and_entropy_changes(self) -> None:
         result = compare_captures([str(self.baseline), str(self.attack)])
         flags = {entry["arbitration_id"]: entry["flags"] for entry in result["comparison"]}

@@ -136,7 +136,7 @@ Fully implemented and tested:
 
 **Transport**
 - `capture`, `send`, `filter`, `stats` — transport workflows with live `python-can` and deterministic scaffold backends; `stats` reports per-ID frequency/timing, DLC distribution, and a bus-load estimate
-- `compare` — diff two or more plain CAN captures per arbitration ID: frame-count/rate deltas, cycle-time drift, payload-entropy deltas against a baseline, each ID flagged (rate-drop, rate-spike, entropy-collapse, timing-drift, new/dropped)
+- `compare` — diff two or more plain CAN captures per arbitration ID and identifier type (standard/extended): frame-count/rate deltas, cycle-time drift, payload-entropy deltas against a baseline, each identifier flagged (rate-drop, rate-spike, entropy-collapse, timing-drift, new/dropped)
 - `capture-info` — fast capture metadata without loading every frame
 - `generate` — cangen-style frame generation (fixed, random, incrementing)
 - `simulate` — deterministic, profile-driven mix of classic CAN, J1939, and DM1 traffic (no hardware)

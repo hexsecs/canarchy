@@ -4,6 +4,8 @@
 
 ---
 
+For `compare`, identify each message by `(arbitration_id, is_extended_id)`. Standard and extended frames with the same numeric ID have separate rows. `id_count` and `summary.unique_ids` count these pairs. Use summary `*_identifiers` arrays (objects with `arbitration_id` and `is_extended_id`) for unambiguous category membership; legacy `*_ids` arrays remain sorted, deduplicated numeric views. Summaries include all findings even when `--top` limits rows.
+
 ## MCP Server Integration
 
 CANarchy ships a native Model Context Protocol (MCP) server. Agents that support MCP tool calls can connect directly instead of spawning subprocesses and parsing stdout.

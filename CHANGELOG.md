@@ -9,6 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+* **Capture comparisons preserve standard/extended identifier types (#500).** Messages sharing a numeric CAN ID now retain independent metrics and new/dropped flags. Rows expose `is_extended_id`, and category summaries add typed `*_identifiers` lists while retaining numeric `*_ids` lists for compatibility.
+
 * TUI live capture now stops promptly on idle buses, preserves completed and paused capture buffers until they are drained, blocks replacement of a worker that has not stopped, and exposes queue-loss telemetry instead of silently dropping events (#498).
 
 ## [0.9.2] - 2026-09-03
