@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+* **Homepage is now static HTML and CSS (#478).** The landing page previously shipped an empty `<div id="root">` filled in by React development builds and an in-browser Babel compiler, so crawlers that do not execute JavaScript — and every social scraper — saw no page content, and visitors paid for a compile on every load. Headings, copy, comparison table, and links are now in the initial payload, client-side script is limited to the mobile menu and the install copy button, and the Pages build fails if that content or the no-framework guarantee regresses. The hero and shell release tags now read 0.9.2 instead of the stale 0.7.0.
+
 ### Fixed
 
 * **Guided-fuzz review fixes (#503).** Raw adapter I/O failures retain transport diagnostics rather than being reported as disk errors. Non-finite rate/duration values are rejected as usage errors before archive creation in active and dry-run modes.
