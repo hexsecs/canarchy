@@ -255,6 +255,8 @@ The TUI should:
 
 ## Security research focus
 
+Active `fuzz guided` runs archive each finding before the next transmission under `--findings-dir`, `<corpus>/findings`, or `~/.canarchy/findings` (in that order). Use the returned `archive_path` and `campaign_id` to inspect `campaign.json` and `finding-*.json` offline. Findings retain payload/response evidence and lineage after corpus pruning; storage failures stop transmission. Dry-run creates no archive. MCP accepts `findings_dir` and retains its acknowledgement gate and dry-run default.
+
 CANarchy is intended for defensive research, protocol analysis, lab experimentation, red-team style validation, and tool-assisted reverse engineering.
 
 When implementing features, prefer:

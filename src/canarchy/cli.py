@@ -2223,6 +2223,11 @@ def build_parser() -> CanarchyArgumentParser:
         "--corpus", default=None, help="seed-corpus directory (persisted/reused)"
     )
     fuzz_guided.add_argument(
+        "--findings-dir",
+        default=None,
+        help="durable evidence root (default: <corpus>/findings or ~/.canarchy/findings)",
+    )
+    fuzz_guided.add_argument(
         "--seed-data", default=None, help="initial seed payload as hex (defaults to 8 zero bytes)"
     )
     fuzz_guided.add_argument(
@@ -8461,10 +8466,25 @@ def fuzz_identify_payload(
 def fuzz_guided_payload(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
-    from canarchy.fuzz_feedback import SIGNAL_CATEGORIES, ResponseObservation
+    from canarchy.fuzz_archive import FindingArchive
+    from canarchy.fuzz_feedback import DEFAULT_WEIGHTS, SIGNAL_CATEGORIES, ResponseObservation
     from canarchy.fuzz_guided import run_guided_fuzz, save_corpus
+    from canarchy.transport import transport_backend_config
 
     rate = getattr(args, "rate", None)
+    for option, value in (("--rate", rate), ("--max-seconds", args.max_seconds)):
+        if value is not None and not math.isfinite(value):
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="FUZZ_GUIDED_INVALID_TIMING",
+                        message=f"{option} must be finite; got {value}.",
+                        hint="Use a finite positive rate and a finite duration, or omit --max-seconds.",
+                    )
+                ],
+            )
     _validate_fuzz_rate(rate, args.command)
 
     signal_tokens = [token.strip() for token in str(args.signals).split(",") if token.strip()]
@@ -8556,33 +8576,100 @@ def fuzz_guided_payload(
             # before the probe is transmitted, so a fast response is not missed
             # and recorded as false silence.
             frames = transport.transaction(args.interface, frame)
-        except TransportError as exc:
+        except (TransportError, OSError) as exc:
             raise CommandError(
                 command=args.command,
                 exit_code=EXIT_TRANSPORT_ERROR,
                 errors=[
                     ErrorDetail(
-                        code="FUZZ_GUIDED_TRANSPORT_FAILED", message=str(exc), hint=exc.hint
+                        code="FUZZ_GUIDED_TRANSPORT_FAILED",
+                        message=str(exc),
+                        hint=getattr(
+                            exc, "hint", "Check the CAN adapter, driver, and bus connection."
+                        ),
                     )
                 ],
             ) from exc
         elapsed = time.monotonic() - started
         return ResponseObservation(frames=tuple(frames), elapsed=elapsed, silent=not frames)
 
-    result = run_guided_fuzz(
-        seeds,
-        responder,
-        signals=signals,
-        max_iterations=args.max_iterations,
-        max_seconds=args.max_seconds,
-        max_corpus=args.max_corpus,
-        max_payload=max_payload,
-        rng_seed=args.seed,
-        pace_seconds=gap_s,
+    archive_root = getattr(args, "findings_dir", None) or (
+        Path(args.corpus) / "findings" if args.corpus else Path.home() / ".canarchy" / "findings"
     )
+    config = transport_backend_config()
+    archive = None
 
-    if getattr(args, "corpus", None):
-        save_corpus(args.corpus, result.seeds)
+    def persist(operation, *values):
+        # Only explicit storage operations can become persistence errors.
+        try:
+            return operation(*values)
+        except OSError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_TRANSPORT_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="FUZZ_GUIDED_PERSISTENCE_FAILED",
+                        message=str(exc),
+                        hint="Inspect completed records in archive_path; check storage space and permissions.",
+                    )
+                ],
+            ) from exc
+
+    try:
+        archive = persist(
+            FindingArchive,
+            archive_root,
+            {
+                **base,
+                "max_payload": max_payload,
+                "pace_seconds": gap_s,
+                "mutator": "canarchy.fuzz_guided.default_mutator",
+                "feedback_weights": dict(DEFAULT_WEIGHTS),
+                "transport_backend": config.backend,
+                "python_can_interface": config.python_can_interface,
+                "capture_limit": config.capture_limit,
+                "capture_timeout": config.capture_timeout,
+                "target_firmware": None,
+            },
+            seeds,
+        )
+        result = run_guided_fuzz(
+            seeds,
+            responder,
+            signals=signals,
+            max_iterations=args.max_iterations,
+            max_seconds=args.max_seconds,
+            max_corpus=args.max_corpus,
+            max_payload=max_payload,
+            rng_seed=args.seed,
+            pace_seconds=gap_s,
+            on_finding=lambda finding: persist(archive.save, finding),
+            campaign_id=archive.campaign_id,
+        )
+        if getattr(args, "corpus", None):
+            persist(save_corpus, args.corpus, result.seeds)
+    except (CommandError, KeyboardInterrupt) as exc:
+        evidence = {
+            "archive_path": str(archive.path) if archive else str(archive_root),
+            "campaign_id": archive.campaign_id if archive else None,
+            "archived_finding_count": archive.count if archive else 0,
+        }
+        if isinstance(exc, CommandError):
+            exc.data.update(evidence)
+            raise
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code="FUZZ_GUIDED_INTERRUPTED",
+                    message="Campaign interrupted.",
+                    hint="Completed finding records remain in archive_path; inspect them offline.",
+                )
+            ],
+            data=evidence,
+        ) from exc
 
     events = [finding.to_payload() for finding in result.findings]
     data = {
@@ -8590,6 +8677,9 @@ def fuzz_guided_payload(
         "mode": "active",
         "iterations": result.iterations,
         "new_behaviour_count": result.new_behaviour_count,
+        "campaign_id": archive.campaign_id,
+        "archive_path": str(archive.path),
+        "archived_finding_count": archive.count,
         "corpus_size": result.corpus_size,
         "unique_markers": result.unique_markers,
         "stop_reason": result.stop_reason,
@@ -10712,6 +10802,10 @@ def format_fuzz_guided_table(result: CommandResult) -> list[str]:
     lines.append(f"id: 0x{arb:X}" if isinstance(arb, int) else "id: unknown")
     lines.append(f"signals: {','.join(data.get('signals', []))}")
     lines.append(f"mode: {data.get('mode')}")
+    if data.get("archive_path"):
+        lines.append(f"archive_path: {data['archive_path']}")
+        lines.append(f"campaign_id: {data.get('campaign_id')}")
+        lines.append(f"archived_findings: {data.get('archived_finding_count', 0)}")
     if data.get("mode") == "dry_run":
         lines.append(f"initial_seeds: {data.get('initial_seed_count', 0)}")
         for index, mutation in enumerate(data.get("planned_mutations", [])):

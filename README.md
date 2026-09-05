@@ -182,7 +182,7 @@ Fully implemented and tested:
 **Active-transmit fuzzing** (gated by the [active-transmit safety design](https://hexsecs.github.io/canarchy/docs/design/active-transmit-safety/); `--dry-run` is the safe planning path)
 - `fuzz payload`, `fuzz replay`, `fuzz arbitration-id`, `fuzz identify` — payload/replay/ID-walk fuzzing and bisecting a fuzz log to the culprit frame
 - `fuzz signal`, `fuzz spn` — DBC-signal and J1939-SPN-aware mutation with sentinel coverage
-- `fuzz guided` — response-feedback coverage-guided fuzzing with a persisted seed corpus
+- `fuzz guided` — response-feedback coverage-guided fuzzing with a persisted seed corpus and independent, incremental payload/response evidence archives
 
 **Session, export, and utilities**
 - `session save`, `load`, `show` — session management

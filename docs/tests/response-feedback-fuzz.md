@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Design doc | `docs/design/response-feedback-fuzz.md` |
-| Test file | `tests/test_fuzz_guided.py` |
+| Test files | `tests/test_fuzz_guided.py`, `tests/test_fuzz_archive.py` |
 
 ## Requirement Traceability
 
@@ -23,6 +23,13 @@
 | Active-transmit safety + MCP gate | Active run + MCP `ack_active` gate | `TEST-GF-13`, `TEST-GF-14` |
 | Rate pacing bounded by budget | A pacing delay crossing `--max-seconds` ends the run without a further transmission; pacing precedes each transmission | `TEST-GF-15`, `TEST-GF-16` |
 | Extended-id inference | A 29-bit `--id` without `--extended` runs as an extended frame; an out-of-range id is a structured error | `TEST-GF-17`, `TEST-GF-18`, `TEST-GF-19` |
+| REQ-GFA-01, REQ-GFA-02, REQ-GFA-07 | Pruned findings remain inspectable with payload and response evidence | TEST-GFA-01 |
+| REQ-GFA-03 | Explicit manifest and result metadata | TEST-GFA-02 |
+| REQ-GFA-04 | Fail closed on storage errors; preserve earlier records | TEST-GFA-03 |
+| REQ-GFA-05 | Interruptions retain evidence and report archive path | TEST-GFA-04 |
+| REQ-GFA-08 | Reject non-finite settings before side effects | TEST-GFA-06 |
+| REQ-GFA-09 | Separate raw transport errors from storage failures | TEST-GFA-07 |
+| REQ-GFA-06 | Dry-run has no archive or transmissions | TEST-GFA-05 |
 
 ## Test Cases
 
@@ -253,6 +260,86 @@ Then   the system shall exit 1 with error code `FUZZ_GUIDED_INVALID_ID`
 
 **Fixture:** none.
 
+## Archive Regression Cases
+
+### TEST-GFA-01 — Findings outlive the corpus
+
+```gherkin
+Given two distinct findings, max_corpus one, and mutations exceeding max_payload
+When the run prunes a finding and the surviving corpus is saved and reloaded
+Then the system shall retain both exact clamped inputs, observations, markers and lineage in the archive
+And a new campaign shall have a separate namespace despite seed IDs restarting at s0
+```
+
+**Fixture:** `test_pruned_findings_survive_corpus_reload_and_new_campaign`, temporary corpus/archive directories and deterministic responder.
+
+### TEST-GFA-02 — CLI/MCP provenance
+
+```gherkin
+Given a fake transport producing two findings
+When the active CLI campaign completes
+Then the system shall report campaign ID, archive path and finding count
+And the manifest shall contain explicit tool/schema, target, feedback and timing configuration
+And the MCP argv builder shall accept findings_dir while retaining dry-run by default
+```
+
+**Fixture:** `test_cli_manifest_and_output`, `test_mcp_findings_directory_preserves_safety_default`.
+
+### TEST-GFA-03 — Storage failure
+
+```gherkin
+Given an injected archive initialization, publication, serialization or final corpus-save failure
+When the operation fails
+Then the system shall preserve earlier complete JSON records and stop further sends
+And the CLI shall return FUZZ_GUIDED_PERSISTENCE_FAILED with the archive location and count
+And a failed temporary write shall not publish partial JSON
+```
+
+**Fixture:** `test_cli_storage_failure_before_transmit`, `test_failed_publication_keeps_previous_records_and_stops_sends`, `test_serialization_failure_leaves_no_partial_json`, `test_final_corpus_save_failure_preserves_archive`, `test_cli_record_failure_stops_campaign_and_reports_previous_evidence`.
+
+### TEST-GFA-04 — Interrupted campaign
+
+```gherkin
+Given a completed finding followed by keyboard interruption or transport failure
+When the campaign stops
+Then the system shall retain the completed record
+And the CLI shall preserve the error category and return the archive location and count
+```
+
+**Fixture:** `test_completed_evidence_survives_interruption`, `test_cli_partial_error_reports_archive` with parameterized fake failures.
+
+### TEST-GFA-05 — Dry-run
+
+```gherkin
+Given a nonexistent evidence root and dry-run selected
+When the CLI plans the campaign
+Then the system shall create no archive and call no transport transaction
+```
+
+**Fixture:** `test_dry_run_does_not_create_archive_or_transmit`.
+
+### TEST-GFA-06 — Non-finite timing values
+
+```gherkin
+Given nan, inf or negative infinity as rate or max-seconds
+When an active or dry-run campaign is requested
+Then the system shall return FUZZ_GUIDED_INVALID_TIMING with exit 1
+And neither the archive constructor nor a transport transaction shall run
+```
+
+**Fixture:** `test_nonfinite_timing_is_usage_error_before_archive`, parameterized CLI inputs.
+
+### TEST-GFA-07 — Raw transport I/O errors
+
+```gherkin
+Given a completed finding followed by an OSError from the transport transaction
+When the campaign stops
+Then the system shall return FUZZ_GUIDED_TRANSPORT_FAILED with the original message and adapter guidance
+And the archive path and completed finding count shall remain available
+```
+
+**Fixture:** `test_raw_transport_io_error_is_not_a_storage_failure`, fake receive/shutdown errors.
+
 ## Fixtures And Environment
 
 The loop tests inject an in-process reactive responder (high-byte payloads
@@ -265,3 +352,5 @@ tests use the scaffold transport backend.
 * Live-bus campaigns against real ECUs.
 * Feedback signals beyond NRC / positive / DM1 / timing / silence.
 * Seed minimisation / corpus distillation.
+
+* Abrupt OS power loss is not simulated; atomic publication and injected write failures are tested.
