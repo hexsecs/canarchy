@@ -14,13 +14,15 @@
 |--------|--------------------|----------|
 | `REQ-SUG-01` | Ranks candidates and attaches names offline | `TEST-SUG-05`, `TEST-SUG-06` |
 | `REQ-SUG-02` | Each suggestion has source + confidence; top reported | `TEST-SUG-01`, `TEST-SUG-04` |
-| `REQ-SUG-03` | `--reference-dbc` cross-reference | `TEST-SUG-02` |
+| `REQ-SUG-03` | `--reference-dbc` cross-reference | `TEST-SUG-02`, `TEST-SUG-11`, `TEST-SUG-12` |
 | `REQ-SUG-04` | J1939 SPN overlap + PGN fallback | `TEST-SUG-01`, `TEST-SUG-03` |
 | `REQ-SUG-05` | `--llm` enrichment + envelope note | `TEST-SUG-08` |
 | `REQ-SUG-06` | Declined confirmation error | `TEST-SUG-07` |
 | `REQ-SUG-07` | Unsupported provider error | `TEST-SUG-09` |
 | `REQ-SUG-08` | Metadata-only to the provider | `TEST-SUG-08` |
 | `REQ-SUG-09` | MCP heuristic-only exposure | `TEST-SUG-10` |
+| `REQ-SUG-10` | Exact Intel/Motorola bit overlap | `TEST-SUG-11`, `TEST-SUG-12` |
+| `REQ-SUG-11` | Exclude disjoint fields sharing a byte | `TEST-SUG-11`, `TEST-SUG-12` |
 
 ## Test Cases
 
@@ -142,6 +144,30 @@ And    `_build_argv("re_suggest", {...})` shall map to the heuristic CLI argv
 ```
 
 **Fixture:** none.
+
+### TEST-SUG-11 — Exact physical bit membership
+
+```gherkin
+Given independently specified Intel and Motorola occupied-bit layouts
+And aligned, unaligned, sub-byte, and multi-byte signals including Motorola start 0 length 16
+When suggestions are requested for each single-bit candidate across bits 0 through 31
+Then the system shall include the DBC suggestion exactly for occupied bits
+And the selected source shall be dbc for matches and heuristic otherwise
+```
+
+**Fixture:** In-test mappings and literal expected bit sets in `test_dbc_matches_exact_occupied_bits`; no hardware or network.
+
+### TEST-SUG-12 — Rank exact overlap above partial overlap
+
+```gherkin
+Given a low-nibble candidate and exact, half-overlapping, and disjoint four-bit DBC fields
+When suggestions are requested for Intel and Motorola versions of those fields
+Then the system shall rank the exact match above the partial match with scores 0.95 and 0.875
+And the disjoint field shall be absent despite sharing the candidate byte
+And suggested_name shall select the exact match
+```
+
+**Fixture:** In-test mappings in `test_dbc_ranking_uses_bit_overlap_fraction`.
 
 ## Fixtures And Environment
 

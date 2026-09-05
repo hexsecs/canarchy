@@ -30,13 +30,20 @@ the rest — without sending anything off the machine unless they explicitly opt
 |----|------|-------------|
 | `REQ-SUG-01` | Ubiquitous | The system shall provide `re suggest <file>` that ranks signal candidates (reusing `re signals`) and attaches one or more name suggestions to each, fully offline. |
 | `REQ-SUG-02` | Ubiquitous | Each suggestion shall carry a `source` (`dbc` / `spn` / `pgn` / `heuristic` / `llm`) and a `confidence`; the highest-confidence suggestion shall be reported as `suggested_name` / `suggested_source`. |
-| `REQ-SUG-03` | Optional feature | Where `--reference-dbc <ref>` is supplied, the system shall cross-reference the candidate's message id against that database's signals and rank them by bit-length match and observed-range plausibility. |
+| `REQ-SUG-03` | Optional feature | Where `--reference-dbc <ref>` is supplied, the system shall cross-reference the candidate's message id against that database's signals and rank signals with nonzero physical-bit overlap by overlap fraction, bit-length match, and observed-range plausibility. |
 | `REQ-SUG-04` | Ubiquitous | For J1939 candidates, the system shall name fields by bit-range overlap with the bundled decodable SPN catalog, falling back to the PGN name when no SPN overlaps. |
 | `REQ-SUG-05` | Optional feature | Where `--llm <provider>` is specified, the system shall enrich names via an external LLM, but only after explicit confirmation, and shall record an `external_enrichment` note plus an `EXTERNAL_SERVICE_CALLED` warning in the envelope. |
 | `REQ-SUG-06` | Unwanted behaviour | If `--llm` enrichment is not confirmed (no `--yes`, no `CANARCHY_LLM_NONINTERACTIVE=1`, and a non-`YES` reply), the system shall return `LLM_CONFIRMATION_DECLINED` and exit code 1, having sent nothing. |
 | `REQ-SUG-07` | Unwanted behaviour | If the `--llm` provider is unknown or unavailable, the system shall return `LLM_PROVIDER_UNSUPPORTED` (exit 1) or `LLM_PROVIDER_UNAVAILABLE` (exit 2). |
 | `REQ-SUG-08` | Ubiquitous | Only candidate metadata (arbitration ids, bit ranges, observed value ranges, change rate, and heuristic names) shall be sent to an LLM provider — never raw payload bytes. |
 | `REQ-SUG-09` | Ubiquitous | `re suggest` shall be exposed as the MCP tool `re_suggest` for the heuristic path only; the external `--llm` enrichment shall be CLI-only. |
+
+## DBC Bit Overlap Requirement
+
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-SUG-10` | Ubiquitous | The system shall compute reference-DBC overlap using exact occupied physical bits in LSB0 numbering, traversing Intel signals linearly from the LSB and Motorola signals from the MSB down through each byte then to bit 7 of the next byte. |
+| `REQ-SUG-11` | Unwanted behaviour | If the candidate and DBC signal share no physical bits, the system shall omit that DBC suggestion even when their byte spans overlap. |
 
 ## Command Surface
 
@@ -51,13 +58,24 @@ canarchy re suggest (<file> | --file <file>) [--reference-dbc <ref>] [--limit <n
 |--------|-------|------------|
 | `llm` | External provider proposal (opt-in) | 0.98 |
 | `spn` | Bit-range overlap with a bundled decodable SPN | 0.70–0.95 (overlap fraction) |
-| `dbc` | Signal on the candidate's message id, ranked by length/range fit | 0.50–0.90 |
+| `dbc` | Signal on the candidate's message id, ranked by exact bit overlap and length/range fit | 0.50–0.95 |
 | `pgn` | PGN name (coarse, when no SPN overlaps) | 0.40 |
 | `heuristic` | Plain-English template from change behaviour | 0.20 |
 
 SPN `start`/`length` are byte-based in the bundled catalog and converted to a
 0-based bit range (`start*8`, `length*8`), which matches the little-endian bit
 numbering the candidate extractor uses, so overlap is well defined.
+
+DBC overlap is the number of physical bits shared with the candidate divided
+by the DBC signal length. Candidates use contiguous LSB0 ranges; Motorola
+signals can occupy noncontiguous LSB0 ranges. For example, Motorola start 0,
+length 16 occupies bit 0, bits 8–15, and bits 17–23 (bytes 0–2).
+
+Confidence remains a heuristic score, not a calibrated probability. Its existing
+formula is preserved: `min(0.95, 0.5 + 0.25 * length_match + 0.15 * overlap_fraction
++ (0.05 if observed_max fits the unsigned signal width else 0))`, rounded to three
+decimal places. Correcting overlap can change inclusion, confidence, and ranking;
+it does not change the result schema or the other suggestion sources.
 
 ## Output Contracts
 
