@@ -61,20 +61,72 @@ then folds the fingerprint's markers into `seen`.
 
 * A seed is `(data, seed_id, parent_id, generation, score)`. The initial seeds
   seed generation 0 with no parent.
-* Each iteration selects a seed (highest score, round-robin among ties for
-  energy), mutates it with a `canarchy.fuzzing` mutator (havoc / splice), and
+* Each iteration selects a seed (randomly with weight `score + 1`), mutates it with a `canarchy.fuzzing` mutator (havoc / splice), and
   observes the response. A mutation with `gain > 0` becomes a child seed whose
   `score` is its gain and whose `parent_id` / `generation` record its lineage.
 * The corpus is capped (`--max-corpus`); when it overflows, the lowest-scoring
   seeds are pruned, so productive lineages survive and barren ones are dropped.
 * `--corpus <dir>` persists the corpus: one raw seed file per seed plus a
-  `lineage.json` manifest, and reloads it on the next run so campaigns resume.
+  `lineage.json` manifest, and reloads seed bytes on the next run. Each invocation starts a new feedback
+  tracker and campaign namespace; this is seed reuse, not exact process resumption.
+
+## Durable Findings Requirements (#503)
+
+| ID | Type | Requirement |
+|----|------|-------------|
+| REQ-GFA-01 | Ubiquitous | The active CLI/MCP campaign shall create a unique campaign directory and persist each finding independently of the bounded working corpus before another transmission. |
+| REQ-GFA-02 | Ubiquitous | The system shall retain exact clamped payload bytes, response frames/timing/silence, new markers, iteration, parent ID/payload, generation, and campaign-qualified finding identity. |
+| REQ-GFA-03 | Ubiquitous | The campaign manifest shall record schema/tool versions, timestamp, initial seeds, effective RNG/mutation/feedback settings, target ID/type/channel, and available transport window settings without copying arbitrary environment variables. |
+| REQ-GFA-04 | Unwanted behaviour | If a storage operation fails, the system shall stop further transmissions, report a structured error and archive location, and preserve previously completed records. |
+| REQ-GFA-05 | Event-driven | When transport failure or keyboard interruption ends a campaign, the CLI shall report the archive location and completed finding count. |
+| REQ-GFA-06 | Optional feature | Where dry-run is selected, the system shall create no archive and transmit no frames. |
+| REQ-GFA-07 | Ubiquitous | The archive shall expose JSON records inspectable offline without executing commands or requiring surviving corpus seeds. |
+
+## Archive Format And Durability
+
+Every active run creates `<root>/<uuid>/campaign.json` and one
+`finding-<iteration padded to 8 digits>.json` per interesting input. The root is
+`--findings-dir`, otherwise `<corpus>/findings` when `--corpus` is given, otherwise
+`~/.canarchy/findings`. Existing corpus manifests and `.bin` files keep their
+format; findings never depend on them. Repeated runs use fresh UUID directories
+so `s1` in one run cannot overwrite `s1` in another.
+
+The manifest has `schema_version: 1`, `campaign_id`, `created_at`,
+`canarchy_version`, explicit `config`, and clamped `initial_seeds` with local
+seed IDs. Configuration includes `seed`, `max_payload`, `pace_seconds`, budget,
+mutator name, feedback weights/categories, numeric arbitration ID, extended
+flag, interface, backend, python-can interface type, capture limit and timeout.
+`target_firmware: null` explicitly denotes unavailable ECU identity; physical
+ECU state is not reproducible from the manifest alone.
+
+Finding records add `schema_version`, `recorded_at`, `campaign_id`, and
+`finding_id` (`<campaign_id>:<seed_id>`) to iteration, seed/parent IDs, generation,
+gain and new markers. `data` and `parent_data` are hex strings. `observation`
+contains serialized response frames, elapsed seconds, and a silence flag.
+Parent snapshots remain available after pruning; initial parents are also in
+the manifest and every interesting descendant has its own record.
+
+Records are serialized into a temporary file, flushed and fsynced, then
+atomically replaced into their final filename. POSIX additionally fsyncs the
+directory; Windows supports the complete-file replacement but not that directory
+fsync step. A process killed during a write may leave a hidden temporary file;
+offline readers use only `campaign.json` and `finding-*.json`. A write failure
+stops the loop rather than proceeding with unrecorded findings. Only previously
+completed records are guaranteed: a kill between receiving a response and
+publishing its record can lose that in-flight finding. Final corpus-save failure
+cannot remove already archived evidence. No automatic retention/pruning of the
+findings archive occurs.
+
+The pure loop supports an injected `on_finding` callback and optional campaign
+ID. Direct Python callers select their own persistence sink; the CLI/MCP always
+wires the archive for active runs. See the command specification for offline
+inspection and manual replay planning.
 
 ## Command Surface
 
 ```text
 canarchy fuzz guided <interface> --id <arb-id> [--signals nrc,timing,dm1,silence]
-    [--corpus <dir>] [--seed-data <hex>] [--max-iterations <n>] [--max-seconds <s>]
+    [--corpus <dir>] [--findings-dir <root>] [--seed-data <hex>] [--max-iterations <n>] [--max-seconds <s>]
     [--max-corpus <n>] [--rate <hz>] [--seed <rng>] [--ack-active] [--dry-run]
     [--json|--jsonl|--text]
 ```
@@ -109,16 +161,16 @@ canarchy fuzz guided <interface> --id <arb-id> [--signals nrc,timing,dm1,silence
 | Condition | Handling |
 |-----------|----------|
 | Hung / silent ECU | The observation window times out, recorded as a `silence` marker; the loop continues unless the kill-switch fires. |
-| Bus / transport error | Surfaced as `FUZZ_GUIDED_TRANSPORT_FAILED` (exit 2); the partial campaign result is preserved. |
+| Bus / transport error | Surfaced as `FUZZ_GUIDED_TRANSPORT_FAILED` (exit 2); completed finding records remain in the archive, whose location/count is returned in the error data; a partial final corpus is not promised. |
 | Saturating DM1 output | DM1 markers are de-duplicated by `(spn, fmi)`; a single noisy fault cannot inflate the score unboundedly. |
 | Kill-switch | `--max-seconds` and `--max-iterations` bound the campaign; either reaching its limit ends the run with a recorded `stop_reason`. |
 
 ## Output Contracts
 
 `--json` returns the campaign envelope: `iterations`, `new_behaviour_count`,
-`corpus_size`, `unique_markers`, `stop_reason`, a bounded `findings` list (each
-with iteration, parent seed, gained markers), and the resolved campaign config.
-`--jsonl` streams per-finding events; `--text` renders a campaign summary.
+`corpus_size`, `unique_markers`, `stop_reason`, a `findings` list (each with exact payload, observation, lineage and stable identity), and the resolved campaign config.
+`campaign_id`, `archive_path`, and `archived_finding_count` locate durable evidence.
+`--jsonl` emits per-finding events after the campaign; persistence itself is incremental. `--text` renders a campaign summary.
 `--dry-run` returns the plan (`mode: dry_run`) with the seed count and the first
 planned mutations, opening no transport.
 
@@ -130,14 +182,14 @@ planned mutations, opening no transport.
 | `FUZZ_GUIDED_INVALID_ID` | `--id` is not a valid CAN id, or is outside the 29-bit range | 1 |
 | `ACTIVE_ACK_REQUIRED` | active run without `--ack-active` while required | 1 |
 | `FUZZ_GUIDED_TRANSPORT_FAILED` | the transport raised mid-campaign | 2 |
+| `FUZZ_GUIDED_PERSISTENCE_FAILED` | archive initialization, record publication, or final corpus save failed | 2 |
+| `FUZZ_GUIDED_INTERRUPTED` | keyboard interruption | 1 |
 
 ## Responsibilities And Boundaries
 
 In scope: the response-fingerprint engine, the guided loop with lineage and
 persistence, the CLI/MCP surface, and active-transmit safety. Out of scope (v1):
-multi-target campaigns, automatic seed minimisation, crash-triage/replay
-artifacts beyond the persisted corpus, and feedback signals other than the four
-above. These are natural follow-ups once the loop is in use.
+multi-target campaigns, automatic seed minimisation, automatic live replay and feedback signals beyond the five categories above. These are natural follow-ups once the loop is in use.
 
 ## Deferred Decisions
 

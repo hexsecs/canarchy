@@ -8,6 +8,8 @@ For `compare`, identify each message by `(arbitration_id, is_extended_id)`. Stan
 
 ## MCP Server Integration
 
+Active `fuzz guided` runs archive each finding before the next transmission under `--findings-dir`, `<corpus>/findings`, or `~/.canarchy/findings` (in that order). Use the returned `archive_path` and `campaign_id` to inspect `campaign.json` and `finding-*.json` offline. Findings retain payload/response evidence and lineage after corpus pruning; storage failures stop transmission. Dry-run creates no archive. MCP accepts `findings_dir` and retains its acknowledgement gate and dry-run default.
+
 CANarchy ships a native Model Context Protocol (MCP) server. Agents that support MCP tool calls can connect directly instead of spawning subprocesses and parsing stdout.
 
 For security workflow examples that combine CLI/MCP calls into complete analyst tasks, see [Security Use Cases With Coding Agents](security-use-cases.md).

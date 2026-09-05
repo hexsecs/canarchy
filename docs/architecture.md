@@ -416,3 +416,12 @@ The architecture is best understood as:
 * shell, TUI, and MCP as reusable views or integration surfaces over that same contract
 
 That structure is what makes CANarchy suitable for both human operators and coding agents: the live bus boundary stays below the workflow layer, and the workflow layer stays above any one front end.
+
+## Guided-fuzz evidence persistence
+
+`fuzz_guided.run_guided_fuzz` accepts an optional synchronous finding sink.
+The CLI wires `fuzz_archive.FindingArchive` before active transmission, passing
+only explicit campaign/transport metadata. The archive writes atomic JSON
+records independently of corpus pruning and final corpus persistence; MCP
+reuses that same command path. Storage errors stop the campaign. See
+[the guided-fuzz design](design/response-feedback-fuzz.md) for format and durability.

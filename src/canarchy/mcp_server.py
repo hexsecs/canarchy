@@ -1873,6 +1873,10 @@ _TOOLS: list[types.Tool] = [
                     "type": "string",
                     "description": "Seed-corpus directory (persisted/reused)",
                 },
+                "findings_dir": {
+                    "type": "string",
+                    "description": "Durable evidence root; each active run creates a fresh campaign",
+                },
                 "max_iterations": {
                     "type": "integer",
                     "description": "Campaign iteration budget",
@@ -2645,6 +2649,8 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv.append("--extended")
             if a.get("signals"):
                 argv += ["--signals", str(a["signals"])]
+            if a.get("findings_dir"):
+                argv += ["--findings-dir", str(a["findings_dir"])]
             if a.get("corpus"):
                 argv += ["--corpus", str(a["corpus"])]
             if a.get("max_iterations") is not None:

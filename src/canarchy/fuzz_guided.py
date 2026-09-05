@@ -14,7 +14,7 @@ import itertools
 import json
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -50,6 +50,10 @@ class Finding:
     generation: int
     gain: int
     new_markers: tuple[str, ...]
+    data: bytes = b""
+    parent_data: bytes = b""
+    observation: ResponseObservation = field(default_factory=ResponseObservation)
+    campaign_id: str | None = None
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -59,6 +63,15 @@ class Finding:
             "generation": self.generation,
             "gain": self.gain,
             "new_markers": list(self.new_markers),
+            "data": self.data.hex(),
+            "parent_data": self.parent_data.hex(),
+            "observation": {
+                "frames": [frame.to_payload() for frame in self.observation.frames],
+                "elapsed": self.observation.elapsed,
+                "silent": self.observation.silent,
+            },
+            "campaign_id": self.campaign_id,
+            "finding_id": f"{self.campaign_id}:{self.seed_id}" if self.campaign_id else None,
         }
 
 
@@ -111,6 +124,8 @@ def run_guided_fuzz(
     sleep: Callable[[float], None] = time.sleep,
     pace_seconds: float = 0.0,
     kill_switch: Callable[[], bool] | None = None,
+    on_finding: Callable[[Finding], None] | None = None,
+    campaign_id: str | None = None,
 ) -> GuidedFuzzResult:
     """Run the guided campaign, returning the result and final corpus.
 
@@ -204,16 +219,23 @@ def run_guided_fuzz(
                 score=float(gain),
             )
             corpus.append(child)
-            findings.append(
-                Finding(
-                    iteration=iteration,
-                    seed_id=child.seed_id,
-                    parent_id=parent.seed_id,
-                    generation=child.generation,
-                    gain=gain,
-                    new_markers=tuple(sorted(new_markers)),
-                )
+            finding = Finding(
+                iteration=iteration,
+                seed_id=child.seed_id,
+                parent_id=parent.seed_id,
+                generation=child.generation,
+                gain=gain,
+                new_markers=tuple(sorted(new_markers)),
+                data=child_data,
+                parent_data=parent.data,
+                observation=observation,
+                campaign_id=campaign_id,
             )
+            # Save evidence before pruning or another responder call. Sink errors
+            # propagate immediately so the caller cannot continue without evidence.
+            if on_finding is not None:
+                on_finding(finding)
+            findings.append(finding)
             _prune(corpus, max_corpus)
 
 
