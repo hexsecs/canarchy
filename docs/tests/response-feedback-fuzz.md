@@ -27,6 +27,8 @@
 | REQ-GFA-03 | Explicit manifest and result metadata | TEST-GFA-02 |
 | REQ-GFA-04 | Fail closed on storage errors; preserve earlier records | TEST-GFA-03 |
 | REQ-GFA-05 | Interruptions retain evidence and report archive path | TEST-GFA-04 |
+| REQ-GFA-08 | Reject non-finite settings before side effects | TEST-GFA-06 |
+| REQ-GFA-09 | Separate raw transport errors from storage failures | TEST-GFA-07 |
 | REQ-GFA-06 | Dry-run has no archive or transmissions | TEST-GFA-05 |
 
 ## Test Cases
@@ -315,6 +317,28 @@ Then the system shall create no archive and call no transport transaction
 ```
 
 **Fixture:** `test_dry_run_does_not_create_archive_or_transmit`.
+
+### TEST-GFA-06 — Non-finite timing values
+
+```gherkin
+Given nan, inf or negative infinity as rate or max-seconds
+When an active or dry-run campaign is requested
+Then the system shall return FUZZ_GUIDED_INVALID_TIMING with exit 1
+And neither the archive constructor nor a transport transaction shall run
+```
+
+**Fixture:** `test_nonfinite_timing_is_usage_error_before_archive`, parameterized CLI inputs.
+
+### TEST-GFA-07 — Raw transport I/O errors
+
+```gherkin
+Given a completed finding followed by an OSError from the transport transaction
+When the campaign stops
+Then the system shall return FUZZ_GUIDED_TRANSPORT_FAILED with the original message and adapter guidance
+And the archive path and completed finding count shall remain available
+```
+
+**Fixture:** `test_raw_transport_io_error_is_not_a_storage_failure`, fake receive/shutdown errors.
 
 ## Fixtures And Environment
 

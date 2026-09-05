@@ -80,6 +80,8 @@ then folds the fingerprint's markers into `seen`.
 | REQ-GFA-04 | Unwanted behaviour | If a storage operation fails, the system shall stop further transmissions, report a structured error and archive location, and preserve previously completed records. |
 | REQ-GFA-05 | Event-driven | When transport failure or keyboard interruption ends a campaign, the CLI shall report the archive location and completed finding count. |
 | REQ-GFA-06 | Optional feature | Where dry-run is selected, the system shall create no archive and transmit no frames. |
+| REQ-GFA-08 | Unwanted behaviour | If a campaign rate or duration is non-finite, the CLI shall reject it as a usage error before archive creation, in active and dry-run modes. |
+| REQ-GFA-09 | Unwanted behaviour | If a transport transaction raises an OSError, the CLI shall report a transport error; only explicit archive or corpus operations shall produce persistence errors. |
 | REQ-GFA-07 | Ubiquitous | The archive shall expose JSON records inspectable offline without executing commands or requiring surviving corpus seeds. |
 
 ## Archive Format And Durability
@@ -183,6 +185,7 @@ planned mutations, opening no transport.
 | `ACTIVE_ACK_REQUIRED` | active run without `--ack-active` while required | 1 |
 | `FUZZ_GUIDED_TRANSPORT_FAILED` | the transport raised mid-campaign | 2 |
 | `FUZZ_GUIDED_PERSISTENCE_FAILED` | archive initialization, record publication, or final corpus save failed | 2 |
+| `FUZZ_GUIDED_INVALID_TIMING` | non-finite rate or max-seconds | 1 |
 | `FUZZ_GUIDED_INTERRUPTED` | keyboard interruption | 1 |
 
 ## Responsibilities And Boundaries

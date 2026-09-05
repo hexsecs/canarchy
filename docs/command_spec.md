@@ -1670,6 +1670,8 @@ Each finding adds `data` (exact transmitted hex), `parent_data`, serialized
 `observation` frames/elapsed/silence, and a campaign-qualified `finding_id`.
 The manifest records the tool/schema version, initial seeds, explicit effective
 settings and transport window; unavailable target firmware is null.
+Non-finite `--rate` or `--max-seconds` values return `FUZZ_GUIDED_INVALID_TIMING` (exit 1) before archive creation, including in dry-run. Raw adapter I/O errors retain `FUZZ_GUIDED_TRANSPORT_FAILED`; only archive/corpus operations produce persistence errors.
+
 Errors return `archive_path`, `campaign_id` (if initialized), and
 `archived_finding_count`. Storage failure is `FUZZ_GUIDED_PERSISTENCE_FAILED`
 (exit 2); keyboard interruption is `FUZZ_GUIDED_INTERRUPTED` (exit 1).

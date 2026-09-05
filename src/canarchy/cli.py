@@ -8472,6 +8472,19 @@ def fuzz_guided_payload(
     from canarchy.transport import transport_backend_config
 
     rate = getattr(args, "rate", None)
+    for option, value in (("--rate", rate), ("--max-seconds", args.max_seconds)):
+        if value is not None and not math.isfinite(value):
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="FUZZ_GUIDED_INVALID_TIMING",
+                        message=f"{option} must be finite; got {value}.",
+                        hint="Use a finite positive rate and a finite duration, or omit --max-seconds.",
+                    )
+                ],
+            )
     _validate_fuzz_rate(rate, args.command)
 
     signal_tokens = [token.strip() for token in str(args.signals).split(",") if token.strip()]
@@ -8563,13 +8576,17 @@ def fuzz_guided_payload(
             # before the probe is transmitted, so a fast response is not missed
             # and recorded as false silence.
             frames = transport.transaction(args.interface, frame)
-        except TransportError as exc:
+        except (TransportError, OSError) as exc:
             raise CommandError(
                 command=args.command,
                 exit_code=EXIT_TRANSPORT_ERROR,
                 errors=[
                     ErrorDetail(
-                        code="FUZZ_GUIDED_TRANSPORT_FAILED", message=str(exc), hint=exc.hint
+                        code="FUZZ_GUIDED_TRANSPORT_FAILED",
+                        message=str(exc),
+                        hint=getattr(
+                            exc, "hint", "Check the CAN adapter, driver, and bus connection."
+                        ),
                     )
                 ],
             ) from exc
@@ -8581,8 +8598,27 @@ def fuzz_guided_payload(
     )
     config = transport_backend_config()
     archive = None
+
+    def persist(operation, *values):
+        # Only explicit storage operations can become persistence errors.
+        try:
+            return operation(*values)
+        except OSError as exc:
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_TRANSPORT_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="FUZZ_GUIDED_PERSISTENCE_FAILED",
+                        message=str(exc),
+                        hint="Inspect completed records in archive_path; check storage space and permissions.",
+                    )
+                ],
+            ) from exc
+
     try:
-        archive = FindingArchive(
+        archive = persist(
+            FindingArchive,
             archive_root,
             {
                 **base,
@@ -8608,12 +8644,12 @@ def fuzz_guided_payload(
             max_payload=max_payload,
             rng_seed=args.seed,
             pace_seconds=gap_s,
-            on_finding=archive.save,
+            on_finding=lambda finding: persist(archive.save, finding),
             campaign_id=archive.campaign_id,
         )
         if getattr(args, "corpus", None):
-            save_corpus(args.corpus, result.seeds)
-    except (OSError, CommandError, KeyboardInterrupt) as exc:
+            persist(save_corpus, args.corpus, result.seeds)
+    except (CommandError, KeyboardInterrupt) as exc:
         evidence = {
             "archive_path": str(archive.path) if archive else str(archive_root),
             "campaign_id": archive.campaign_id if archive else None,
@@ -8622,18 +8658,14 @@ def fuzz_guided_payload(
         if isinstance(exc, CommandError):
             exc.data.update(evidence)
             raise
-        interrupted = isinstance(exc, KeyboardInterrupt)
         raise CommandError(
             command=args.command,
-            exit_code=EXIT_USER_ERROR if interrupted else EXIT_TRANSPORT_ERROR,
+            exit_code=EXIT_USER_ERROR,
             errors=[
                 ErrorDetail(
-                    code="FUZZ_GUIDED_INTERRUPTED"
-                    if interrupted
-                    else "FUZZ_GUIDED_PERSISTENCE_FAILED",
-                    message="Campaign interrupted." if interrupted else str(exc),
-                    hint="Completed finding records remain in archive_path; inspect them offline. "
-                    "For storage failures, check available space and permissions before retrying.",
+                    code="FUZZ_GUIDED_INTERRUPTED",
+                    message="Campaign interrupted.",
+                    hint="Completed finding records remain in archive_path; inspect them offline.",
                 )
             ],
             data=evidence,

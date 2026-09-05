@@ -9,6 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+* **Guided-fuzz review fixes (#503).** Raw adapter I/O failures retain transport diagnostics rather than being reported as disk errors. Non-finite rate/duration values are rejected as usage errors before archive creation in active and dry-run modes.
+
 * **Guided fuzz findings survive corpus pruning and interrupted runs (#503).** Active campaigns now save exact payloads, responses, lineage, and campaign settings incrementally in unique evidence directories. `--findings-dir` / MCP `findings_dir` selects the root; failures report archive location and stop further sends. Existing corpus files remain compatible, and dry-run creates no archive.
 
 * **RE signal-name suggestions use exact Intel/Motorola bit overlap (#502).** Unaligned Motorola signals retain valid matches across byte boundaries, and disjoint fields sharing a byte no longer produce false DBC matches. Confidence uses the actual overlapping-bit fraction; output fields are unchanged.

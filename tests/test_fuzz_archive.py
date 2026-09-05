@@ -254,3 +254,32 @@ def test_cli_record_failure_stops_campaign_and_reports_previous_evidence(tmp_pat
     assert payload["errors"][0]["code"] == "FUZZ_GUIDED_PERSISTENCE_FAILED"
     assert payload["data"]["archived_finding_count"] == 1
     assert len(list(Path(payload["data"]["archive_path"]).glob("finding-*.json"))) == 1
+
+
+@pytest.mark.parametrize("failure", [OSError("receive failed"), OSError("shutdown failed")])
+def test_raw_transport_io_error_is_not_a_storage_failure(tmp_path, failure):
+    with patch.object(LocalTransport, "transaction", side_effect=[[], [response(1)], failure]):
+        code, stdout, _ = active_cli(tmp_path)
+    payload = json.loads(stdout)
+    assert code == 2
+    assert payload["errors"][0]["code"] == "FUZZ_GUIDED_TRANSPORT_FAILED"
+    assert str(failure) in payload["errors"][0]["message"]
+    assert "disk" not in payload["errors"][0]["hint"]
+    assert payload["data"]["archived_finding_count"] == 1
+
+
+@pytest.mark.parametrize("option", ["--rate", "--max-seconds"])
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_nonfinite_timing_is_usage_error_before_archive(tmp_path, option, value, dry_run):
+    with patch("canarchy.fuzz_archive.FindingArchive") as archive:
+        with patch.object(LocalTransport, "transaction") as transaction:
+            code, stdout, _ = active_cli(
+                tmp_path, f"{option}={value}", *(["--dry-run"] if dry_run else [])
+            )
+    payload = json.loads(stdout)
+    assert code == 1
+    assert payload["errors"][0]["code"] == "FUZZ_GUIDED_INVALID_TIMING"
+    assert option in payload["errors"][0]["message"]
+    archive.assert_not_called()
+    transaction.assert_not_called()
