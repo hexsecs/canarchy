@@ -30,13 +30,20 @@ _ENTROPY_MIN_BASELINE = 1.0
 _TIMING_DRIFT = 0.2
 
 
-def _index_capture(frames: list[CanFrame]) -> dict[int, list[CanFrame]]:
-    """Group a capture's data frames by arbitration id (skip remote/error)."""
-    id_map: dict[int, list[CanFrame]] = defaultdict(list)
+def _index_capture(frames: list[CanFrame]) -> dict[tuple[int, bool], list[CanFrame]]:
+    """Group data frames by numeric ID and identifier type (skip remote/error)."""
+    id_map: dict[tuple[int, bool], list[CanFrame]] = defaultdict(list)
     for frame in frames:
         if not frame.is_remote_frame and not frame.is_error_frame:
-            id_map[frame.arbitration_id].append(frame)
+            id_map[(frame.arbitration_id, frame.is_extended_id)].append(frame)
     return dict(id_map)
+
+
+def _identifier_payloads(identifiers: list[tuple[int, bool]]) -> list[dict[str, Any]]:
+    return [
+        {"arbitration_id": arb_id, "is_extended_id": extended}
+        for arb_id, extended in sorted(identifiers)
+    ]
 
 
 def _change_score(
@@ -69,16 +76,18 @@ def compare_captures(
     seconds: float | None = None,
     top: int | None = 20,
 ) -> dict[str, Any]:
-    """Compare two or more captures per arbitration id against a baseline.
+    """Compare captures per (arbitration_id, is_extended_id) against a baseline.
 
     Returns, for each id, per-file frame counts, frame rates, mean inter-frame
     gaps, and mean per-byte payload entropy, plus deltas/ratios versus the
     baseline file and a cross-capture cycle-time drift ratio (reusing the corpus
     drift logic). Entries are ranked by a combined change score and capped at
-    ``top`` (use 0 / None for no cap); ``id_count`` always reports the total.
+    ``top`` (use 0 / None for no cap); ``id_count`` counts distinct ID/type pairs.
+    Numeric summary lists are deduplicated compatibility views; the parallel
+    ``*_identifiers`` lists preserve type and include entries beyond ``top``.
     """
     transport = LocalTransport()
-    per_capture: list[dict[int, list[CanFrame]]] = []
+    per_capture: list[dict[tuple[int, bool], list[CanFrame]]] = []
     spans: list[float | None] = []
     for path in capture_files:
         frames = transport.frames_from_file(
@@ -95,20 +104,21 @@ def compare_captures(
     others = [i for i in range(len(per_capture)) if i != baseline_index]
 
     comparison: list[dict[str, Any]] = []
-    new_ids: list[int] = []
-    dropped_ids: list[int] = []
-    rate_drop_ids: list[int] = []
-    rate_spike_ids: list[int] = []
-    entropy_collapse_ids: list[int] = []
-    timing_drift_ids: list[int] = []
+    new_ids: list[tuple[int, bool]] = []
+    dropped_ids: list[tuple[int, bool]] = []
+    rate_drop_ids: list[tuple[int, bool]] = []
+    rate_spike_ids: list[tuple[int, bool]] = []
+    entropy_collapse_ids: list[tuple[int, bool]] = []
+    timing_drift_ids: list[tuple[int, bool]] = []
 
-    for arb_id in all_ids:
-        frame_counts = [len(idx.get(arb_id, [])) for idx in per_capture]
+    for identifier in all_ids:
+        arb_id, is_extended_id = identifier
+        frame_counts = [len(idx.get(identifier, [])) for idx in per_capture]
         rates: list[float | None] = []
         gaps: list[float | None] = []
         entropies: list[float | None] = []
         for index, idx in enumerate(per_capture):
-            group = idx.get(arb_id, [])
+            group = idx.get(identifier, [])
             span = spans[index]
             rates.append(round(len(group) / span, 4) if group and span else None)
             timestamps = [f.timestamp for f in group if f.timestamp is not None]
@@ -144,30 +154,31 @@ def compare_captures(
         flags: list[str] = []
         if not present_in_baseline and any(present):
             flags.append("new-vs-baseline")
-            new_ids.append(arb_id)
+            new_ids.append(identifier)
         if present_in_baseline and not all(present):
             flags.append("dropped-vs-baseline")
-            dropped_ids.append(arb_id)
+            dropped_ids.append(identifier)
         if any(rate_ratio[i] is not None and rate_ratio[i] <= _RATE_DROP for i in others):
             flags.append("rate-drop")
-            rate_drop_ids.append(arb_id)
+            rate_drop_ids.append(identifier)
         if any(rate_ratio[i] is not None and rate_ratio[i] >= _RATE_SPIKE for i in others):
             flags.append("rate-spike")
-            rate_spike_ids.append(arb_id)
+            rate_spike_ids.append(identifier)
         if base_entropy is not None and base_entropy >= _ENTROPY_MIN_BASELINE:
             if any(
                 entropies[i] is not None and (entropies[i] / base_entropy) <= _ENTROPY_DROP
                 for i in others
             ):
                 flags.append("entropy-collapse")
-                entropy_collapse_ids.append(arb_id)
+                entropy_collapse_ids.append(identifier)
         if drift_ratio is not None and drift_ratio > _TIMING_DRIFT:
             flags.append("timing-drift")
-            timing_drift_ids.append(arb_id)
+            timing_drift_ids.append(identifier)
 
         entry: dict[str, Any] = {
             "arbitration_id": arb_id,
             "arbitration_id_hex": f"0x{arb_id:X}",
+            "is_extended_id": is_extended_id,
             "present": present,
             "present_in_baseline": present_in_baseline,
             "frame_counts": frame_counts,
@@ -181,14 +192,16 @@ def compare_captures(
             "change_score": _change_score(rate_ratio, entropy_delta, drift_ratio, flags, others),
             "flags": flags,
         }
-        if any(frame.is_extended_id for idx in per_capture for frame in idx.get(arb_id, [])):
+        if is_extended_id:
             annotation = j1939_annotation(arb_id)
             if annotation is not None:
                 entry.update(annotation)
         comparison.append(entry)
 
     total = len(comparison)
-    comparison.sort(key=lambda item: (-item["change_score"], item["arbitration_id"]))
+    comparison.sort(
+        key=lambda item: (-item["change_score"], item["arbitration_id"], item["is_extended_id"])
+    )
     shown = comparison if top is None or top <= 0 else comparison[:top]
 
     return {
@@ -202,11 +215,17 @@ def compare_captures(
         "comparison": shown,
         "summary": {
             "unique_ids": total,
-            "new_ids": sorted(new_ids),
-            "dropped_ids": sorted(dropped_ids),
-            "rate_drop_ids": sorted(rate_drop_ids),
-            "rate_spike_ids": sorted(rate_spike_ids),
-            "entropy_collapse_ids": sorted(entropy_collapse_ids),
-            "timing_drift_ids": sorted(timing_drift_ids),
+            "new_ids": sorted({arb_id for arb_id, _ in new_ids}),
+            "new_identifiers": _identifier_payloads(new_ids),
+            "dropped_ids": sorted({arb_id for arb_id, _ in dropped_ids}),
+            "dropped_identifiers": _identifier_payloads(dropped_ids),
+            "rate_drop_ids": sorted({arb_id for arb_id, _ in rate_drop_ids}),
+            "rate_drop_identifiers": _identifier_payloads(rate_drop_ids),
+            "rate_spike_ids": sorted({arb_id for arb_id, _ in rate_spike_ids}),
+            "rate_spike_identifiers": _identifier_payloads(rate_spike_ids),
+            "entropy_collapse_ids": sorted({arb_id for arb_id, _ in entropy_collapse_ids}),
+            "entropy_collapse_identifiers": _identifier_payloads(entropy_collapse_ids),
+            "timing_drift_ids": sorted({arb_id for arb_id, _ in timing_drift_ids}),
+            "timing_drift_identifiers": _identifier_payloads(timing_drift_ids),
         },
     }

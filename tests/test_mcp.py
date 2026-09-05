@@ -304,6 +304,29 @@ def test_call_tool_stats_uses_file_flag():
     assert payload["data"]["unique_arbitration_ids"] == 3
 
 
+def test_call_tool_compare_preserves_identifier_type(tmp_path):
+    baseline = tmp_path / "baseline.candump"
+    after = tmp_path / "after.candump"
+    baseline.write_text("(0.0) can0 123#00\n(1.0) can0 123#01\n")
+    after.write_text("(0.0) can0 00000123#00\n(1.0) can0 00000123#01\n")
+    results = asyncio.run(
+        handle_call_tool("compare", {"files": [str(baseline), str(after)], "top": 0})
+    )
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["id_count"] == 2
+    assert [e["is_extended_id"] for e in data["comparison"]] == [False, True]
+    assert [e["flags"] for e in data["comparison"]] == [
+        ["dropped-vs-baseline"],
+        ["new-vs-baseline"],
+    ]
+    assert data["summary"]["new_identifiers"] == [{"arbitration_id": 0x123, "is_extended_id": True}]
+    assert data["summary"]["dropped_identifiers"] == [
+        {"arbitration_id": 0x123, "is_extended_id": False}
+    ]
+
+
 def test_stats_schema_exposes_top_param():
     tools = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
     assert "top" in tools["stats"].inputSchema["properties"]

@@ -206,9 +206,11 @@ Notes:
 
 * this command is passive and file-backed; it accepts two or more captures positionally or via repeatable `--file`, and requires at least two (`COMPARE_NEEDS_FILES` otherwise)
 * the baseline is the first file unless `--baseline <path>` designates another; a `--baseline` outside the compared set is folded in as the reference
-* each `comparison` entry reports, per arbitration ID, the per-file `frame_counts`, `rates_hz`, `mean_gap_ms`, and `mean_byte_entropy` arrays, the `frame_count_delta` / `rate_ratio` / `entropy_delta` versus the baseline, a `cycle_time_drift_ratio` (reusing the `re corpus` drift formulation), a combined `change_score`, and a `flags` list (`new-vs-baseline`, `dropped-vs-baseline`, `rate-drop`, `rate-spike`, `entropy-collapse`, `timing-drift`)
+* each `comparison` entry reports, per `(arbitration_id, is_extended_id)` pair, the per-file `frame_counts`, `rates_hz`, `mean_gap_ms`, and `mean_byte_entropy` arrays, the `frame_count_delta` / `rate_ratio` / `entropy_delta` versus the baseline, a `cycle_time_drift_ratio` (reusing the `re corpus` drift formulation), a combined `change_score`, and a `flags` list (`new-vs-baseline`, `dropped-vs-baseline`, `rate-drop`, `rate-spike`, `entropy-collapse`, `timing-drift`)
 * entries are ranked by `change_score` and capped at `--top` (default 20; `0` for all); `id_count` reports the full total and `returned_count` the number returned
-* the `summary` block lists the affected IDs by category (`new_ids`, `dropped_ids`, `rate_drop_ids`, `rate_spike_ids`, `entropy_collapse_ids`, `timing_drift_ids`); J1939 ids are annotated with `pgn`, `pgn_label`, and `source_address_name`
+* each row includes `is_extended_id`; standard and extended frames sharing a numeric ID remain separate, and only extended rows receive available J1939 annotations
+* `id_count` and `summary.unique_ids` count ID/type pairs; equal change scores sort by numeric ID, then standard before extended
+* the `summary` block retains sorted, deduplicated numeric arrays (`new_ids`, `dropped_ids`, `rate_drop_ids`, `rate_spike_ids`, `entropy_collapse_ids`, `timing_drift_ids`) for compatibility. Each has a parallel `*_identifiers` array (replace `_ids` with `_identifiers`) of objects such as `{"arbitration_id": 291, "is_extended_id": true}`. These arrays preserve type, sort by numeric ID then type, and include all findings regardless of `--top`
 * `--offset`, `--max-frames`, and `--seconds` bound each capture independently
 
 ### generate
