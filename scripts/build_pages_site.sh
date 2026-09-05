@@ -9,7 +9,7 @@ rm -rf "$site_root"
 uv run mkdocs build --strict
 
 cp "$repo_root/src/homepage/index.html" "$site_root/index.html"
-cp "$repo_root/src/homepage/site-brutalist.jsx" "$site_root/site-brutalist.jsx"
+cp "$repo_root/src/homepage/site.css" "$site_root/site.css"
 cp "$repo_root/src/homepage/og-card.png" "$site_root/og-card.png"
 
 site_url="https://hexsecs.github.io/canarchy"
@@ -44,6 +44,25 @@ fi
 
 if [[ ! -f "$site_root/docs/index.html" ]]; then
   echo "missing docs homepage: $site_root/docs/index.html" >&2
+  exit 1
+fi
+
+if [[ ! -f "$site_root/site.css" ]]; then
+  echo "missing homepage stylesheet: $site_root/site.css" >&2
+  exit 1
+fi
+
+# The homepage must be readable without executing JavaScript: crawlers that do
+# not run scripts, and every social scraper, only ever see this payload.
+for marker in "J1939" "stream-first runtime" "MCP SERVER"; do
+  if ! grep -qF "$marker" "$site_root/index.html"; then
+    echo "homepage is missing crawlable content: $marker" >&2
+    exit 1
+  fi
+done
+
+if grep -qiE 'babel|react\.(development|production)' "$site_root/index.html"; then
+  echo "homepage ships a browser-side compiler or framework build" >&2
   exit 1
 fi
 

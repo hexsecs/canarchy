@@ -41,13 +41,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Archivo+Black&family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-  <style>
-    html, body { margin: 0; padding: 0; background: #f3efe4; color: #0b0b0b; font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif; }
-    * { box-sizing: border-box; }
-    #root { min-height: 100vh; }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Archivo+Black&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
 
   <template id="__bundler_thumbnail">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
@@ -58,18 +53,582 @@
       <rect x="40" y="300" width="320" height="20" fill="#0b0b0b"/>
     </svg>
   </template>
-
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
 <body>
-  <div id="root"></div>
 
-  <script type="text/babel" src="site-brutalist.jsx"></script>
-  <script type="text/babel">
-    const { SiteBrutalist } = window;
-    ReactDOM.createRoot(document.getElementById('root')).render(<SiteBrutalist />);
-  </script>
+<header>
+  <nav class="nav">
+    <div class="nav__brand-group">
+      <div class="nav__brand-row">
+        <a class="nav__brand" href="/canarchy/">CAN/ARCHY</a>
+        <button
+          type="button"
+          class="nav__toggle"
+          id="nav-toggle"
+          aria-label="Open navigation menu"
+          aria-expanded="false"
+          aria-controls="homepage-nav"
+        >
+          <span class="nav__toggle-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+        </button>
+      </div>
+      <p class="nav__tagline">STREAM-FIRST · AGENT-FIRST · J1939-FIRST</p>
+    </div>
+    <div class="nav__links" id="homepage-nav" data-open="false">
+      <a class="nav__link" href="/canarchy/docs/getting_started">DOCS</a>
+      <a class="nav__link" href="/canarchy/docs/command_spec">COMMANDS</a>
+      <a class="nav__link" href="/canarchy/docs/tutorials/j1939_heavy_vehicle">J1939</a>
+      <a class="nav__link" href="/canarchy/docs/agents">AGENTS</a>
+      <a class="nav__link nav__link--github" href="https://github.com/hexsecs/canarchy" target="_blank" rel="noopener noreferrer">GITHUB</a>
+    </div>
+  </nav>
+  <div class="stripe" aria-hidden="true"></div>
+</header>
+
+<main>
+
+  <!-- ------------------------------------------------------------- hero -->
+  <section class="hero">
+    <div class="stamp hero__stamp">
+      <span class="stamp__lead">▲ ADVISORY</span><br />
+      FUZZ AROUND · FIND OUT
+    </div>
+
+    <div class="hero__tags">
+      <span class="tag--issue">ISSUE 09.2</span>
+      <span class="tag--month">SEPT 2026</span>
+      <span class="tag--free">FREE · TAKE ONE</span>
+    </div>
+
+    <h1 class="hero__title">
+      The bus<br />
+      <span class="mark">doesn't</span><br />
+      lie.
+    </h1>
+
+    <div class="hero__body">
+      <p class="hero__lede">
+        CANarchy is an <b>open, stream-first runtime</b> for analyzing and manipulating
+        CAN and J1939 buses. Every command emits a canonical JSONL event. Every event is
+        replayable. Nothing is hidden behind a GUI, a license key, or a dongle.
+      </p>
+      <div class="hero__notes">
+        <h2>WHAT THIS IS</h2>
+        <p>
+          A toolkit for security researchers, red teams,<br />
+          fleet auditors, OSS tinkerers, and the<br />
+          occasional agent operating <i>without supervision.</i>
+        </p>
+        <h2>WHAT IT IS NOT</h2>
+        <p>
+          A replacement for can-utils, python-can,<br />
+          SavvyCAN, or common sense.
+        </p>
+      </div>
+    </div>
+
+    <div class="hero__actions">
+      <button type="button" class="btn btn--primary" id="copy-install" data-copy="pip install canarchy">
+        pip install canarchy →
+        <span class="btn__copied" aria-hidden="true">COPIED</span>
+      </button>
+      <a class="btn btn--secondary" href="/canarchy/docs/getting_started">Read the Docs</a>
+      <a class="btn btn--tertiary" href="https://github.com/hexsecs/canarchy" target="_blank" rel="noopener noreferrer">★ Star It</a>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- ticker -->
+  <div class="ticker">
+    <span>J1939 NATIVE</span><span class="dot">·</span><span>JSONL WIRE FORMAT</span><span class="dot">·</span><span>MCP SERVER</span><span class="dot">·</span><span>UDS DISCOVERY</span><span class="dot">·</span><span>DBC PROVIDERS</span><span class="dot">·</span><span>RATE-CONTROLLED REPLAY</span><span class="dot">·</span><span>FRAME GATEWAY</span><span class="dot">·</span><span>ACTIVE-COMMAND SAFETY</span><span class="dot">·</span><span>AGENT-DRIVEN PIPELINES</span><span class="dot">·</span><span>OPEN SOURCE · GPL-3.0</span><span class="dot">·</span>
+    <span aria-hidden="true">J1939 NATIVE</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">JSONL WIRE FORMAT</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">MCP SERVER</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">UDS DISCOVERY</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">DBC PROVIDERS</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">RATE-CONTROLLED REPLAY</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">FRAME GATEWAY</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">ACTIVE-COMMAND SAFETY</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">AGENT-DRIVEN PIPELINES</span><span class="dot" aria-hidden="true">·</span><span aria-hidden="true">OPEN SOURCE · GPL-3.0</span><span class="dot" aria-hidden="true">·</span>
+  </div>
+
+  <!-- --------------------------------------------------------- features -->
+  <section class="features">
+    <div class="section-head">
+      <h2 class="features__title">SIX<br />MOVES.</h2>
+      <p class="section-head__note">CORE SUBCOMMANDS<br />all composable · all emit events</p>
+    </div>
+    <div class="grid-rules features__grid">
+      <article class="feature">
+        <div class="feature__meta"><span>NO.01</span><span class="feature__status">● STABLE</span></div>
+        <h3>STREAM</h3>
+        <div class="feature__rule" aria-hidden="true"></div>
+        <p>JSONL events. Stable schema. Pipe to grep, jq, duckdb, or your agent. The CLI <i>is</i> the API.</p>
+      </article>
+      <article class="feature">
+        <div class="feature__meta"><span>NO.02</span><span class="feature__status">● STABLE</span></div>
+        <h3>J1939</h3>
+        <div class="feature__rule" aria-hidden="true"></div>
+        <p>Heavy vehicles are not an afterthought. PGNs, TP reassembly, address claim — first-class.</p>
+      </article>
+      <article class="feature">
+        <div class="feature__meta"><span>NO.03</span><span class="feature__status">● STABLE</span></div>
+        <h3>UDS</h3>
+        <div class="feature__rule" aria-hidden="true"></div>
+        <p>Discover services. Trace transactions. Every active command is gated behind --ack-active, --dry-run, and a typed YES.</p>
+      </article>
+      <article class="feature">
+        <div class="feature__meta"><span>NO.04</span><span class="feature__status">● STABLE</span></div>
+        <h3>DBC</h3>
+        <div class="feature__rule" aria-hidden="true"></div>
+        <p>Provider-backed discovery. Local cache. Reverse-engineering matchers when you only have frames.</p>
+      </article>
+      <article class="feature">
+        <div class="feature__meta"><span>NO.05</span><span class="feature__status">● STABLE</span></div>
+        <h3>GATEWAY</h3>
+        <div class="feature__rule" aria-hidden="true"></div>
+        <p>Bridge buses. Rewrite frames in flight. Replay captures with real timing or compressed.</p>
+      </article>
+      <article class="feature">
+        <div class="feature__meta"><span>NO.06</span><span class="feature__status">● STABLE</span></div>
+        <h3>AGENT</h3>
+        <div class="feature__rule" aria-hidden="true"></div>
+        <p>Deterministic subcommands. MCP server. Build loops with Claude, Cursor, or anything that can shell out.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- command -->
+  <section class="command">
+    <div class="command__stamp">◉ LIVE TAPE · can0 @ 250K</div>
+    <p class="eyebrow command__eyebrow">// EXHIBIT A — ONE PIPELINE, ONE TRUTH</p>
+    <h2 class="command__title">
+      CAPTURE. DECODE.<br />
+      <span class="hl-yellow">COMPARE.</span> REPLAY.
+    </h2>
+
+    <div class="command__grid">
+      <div class="card-code card-code--capture">
+        <div class="card-code__label"># STEP 1 — CAPTURE + DECODE</div>
+        <pre>$ canarchy capture can0 --jsonl \
+    | canarchy j1939 decode --stdin --jsonl
+
+{"ts":"17:42:19.20","pgn":61444,
+ "name":"EEC1","engine_rpm":1842.25}
+{"ts":"17:42:19.22","pgn":61444,
+ "name":"EEC1","engine_rpm":1847.00}
+{"ts":"17:42:19.24","pgn":65262,
+ "name":"ET1", "coolant_c":88}</pre>
+      </div>
+
+      <div class="card-code card-code--compare">
+        <div class="card-code__label"># STEP 2 — COMPARE AGAINST BASELINE</div>
+        <pre>$ canarchy j1939 compare \
+    baseline.candump run.candump \
+    --text
+
+unique_pgns:
+- run.candump: 65262[ET1]
+dm1_differences:
+- sa=0x00 [Engine #1]
+  run.candump: present=True faults=spn=110/fmi=3
+  baseline.candump: present=False faults=none</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------------- mcp -->
+  <section class="mcp">
+    <div class="mcp__head">
+      <div>
+        <p class="eyebrow eyebrow--yellow">■ MCP SERVER · AGENTS GET A SEAT</p>
+        <h2 class="mcp__title">
+          PLUG CLAUDE<br />
+          <span class="hl-yellow">STRAIGHT INTO</span><br />
+          THE CAN BUS.
+        </h2>
+      </div>
+      <div class="mcp__badge">ALL TOOLS · ONE SCHEMA · ZERO GLUE CODE</div>
+    </div>
+
+    <div class="mcp__serve">
+      <p class="mcp__serve-cmd"><span class="prompt">$</span> canarchy mcp serve</p>
+      <p class="mcp__serve-note">ONE-SHOT WIRE-UP: canarchy mcp install --client claude-desktop</p>
+    </div>
+
+    <div class="mcp__panels">
+      <div class="panel panel--catalog">
+        <h3 class="panel__head panel__head--catalog">TOOL CATALOG · canarchy MCP (showing 9 of the full surface)</h3>
+        <div class="tools">
+          <div class="tool"><span class="tool__name">capture</span><span class="tool__args">interface, duration, decode</span><span class="tool__ret">stream&lt;Event&gt;</span></div>
+          <div class="tool"><span class="tool__name">decode</span><span class="tool__args">file, dbc?</span><span class="tool__ret">stream&lt;Event&gt;</span></div>
+          <div class="tool"><span class="tool__name">filter</span><span class="tool__args">expression, file</span><span class="tool__ret">stream&lt;Event&gt;</span></div>
+          <div class="tool"><span class="tool__name">replay</span><span class="tool__args">file, rate, interface?</span><span class="tool__ret">stream&lt;Event&gt;</span></div>
+          <div class="tool"><span class="tool__name">j1939_dm1</span><span class="tool__args">file, source_address?</span><span class="tool__ret">stream&lt;Event&gt;</span></div>
+          <div class="tool"><span class="tool__name">uds_scan</span><span class="tool__args">interface?</span><span class="tool__ret">stream&lt;Event&gt;</span></div>
+          <div class="tool"><span class="tool__name">dbc_inspect</span><span class="tool__args">dbc, search?, layout?</span><span class="tool__ret">Bundle</span></div>
+          <div class="tool"><span class="tool__name">gateway</span><span class="tool__args">src, dst, ack_active</span><span class="tool__ret">stream&lt;Event&gt;</span></div>
+          <div class="tool"><span class="tool__name">simulate</span><span class="tool__args">profile, rate?, ack_active</span><span class="tool__ret">stream&lt;Event&gt;</span></div>
+        </div>
+        <div class="panel__foot">
+          <span>■ ALL EVENTS: canarchy/v1</span>
+          <span class="muted">◆ GUARDS: PLANNED</span>
+          <span>■ STREAMING</span>
+        </div>
+      </div>
+
+      <div class="panel panel--transcript">
+        <h3 class="panel__head panel__head--transcript">
+          <span>AGENT TRANSCRIPT · LIVE</span>
+          <span class="panel__head-meta">claude ↔ canarchy</span>
+        </h3>
+        <div class="transcript">
+          <p class="turn">
+            <span class="turn__who turn__who--user">USER</span>
+            Audit the truck on can0 for 10s and flag anything that looks like an unsolicited diagnostic session.
+          </p>
+          <p class="turn turn--thought">↳ agent decides to capture, then filter for UDS traffic before deciding whether an active probe is warranted</p>
+          <div class="turn turn--call">
+            <div><span class="turn__call-verb">→ call</span> <span class="turn__call-fn">capture</span></div>
+            <div class="turn__call-body">{ "interface": "can0", "duration": 10, "decode": "j1939" }</div>
+          </div>
+          <p class="turn turn--return"><span class="arrow">←</span> {"command":"capture","ok":true,"data":{...}} … 428 events</p>
+          <div class="turn turn--call">
+            <div><span class="turn__call-verb">→ call</span> <span class="turn__call-fn">filter</span></div>
+            <div class="turn__call-body">{ "expression": "name~=UDS.*", "file": "$last" }</div>
+          </div>
+          <p class="turn turn--return"><span class="arrow">←</span> 3 matching events — all sa=0x27</p>
+          <p class="turn turn--answer">
+            <span class="turn__who turn__who--agent">AGENT</span>
+            Flagged 3 uds.session.request from sa=0x27. No active probe attempted over MCP — that requires <code>canarchy uds scan can0</code>, gated behind --ack-active and a typed YES.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mcp__props">
+      <div class="prop">
+        <h3>DETERMINISTIC</h3>
+        <p>Same inputs in, same JSONL out. Agents can loop without drift.</p>
+      </div>
+      <div class="prop prop--accent">
+        <h3>STREAMING</h3>
+        <p>Tools return event streams. No 10k-token blobs, no truncation.</p>
+      </div>
+      <div class="prop">
+        <h3>DRY-RUN BY DEFAULT</h3>
+        <p>Active commands require explicit --ack-active plus a typed YES. Guard framework (speed / ignition / session, marked PLANNED in the MCP catalog above) is on the roadmap.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- matrix -->
+  <section class="matrix">
+    <div class="section-head matrix__head">
+      <h2 class="matrix__title">THE<br />MATRIX.</h2>
+      <p class="section-head__note">FIRST-CLASS ONLY · NO HALFWAY<br />■ = shipped · □ = not a focus</p>
+    </div>
+    <div class="matrix__wrap">
+      <table>
+        <caption class="sr-only">CANarchy compared with can-utils, python-can, cantools, SavvyCAN, Caring Caribou, and TruckDevil</caption>
+        <thead>
+          <tr>
+            <th scope="col">WORKFLOW</th>
+            <th scope="col" class="is-self">CANarchy</th>
+            <th scope="col">can-utils</th>
+            <th scope="col">python-can</th>
+            <th scope="col">cantools</th>
+            <th scope="col">SavvyCAN</th>
+            <th scope="col">Caring Caribou</th>
+            <th scope="col">TruckDevil</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">CLI-first</th>
+            <td class="is-self is-yes" data-tool="CANarchy"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-yes" data-tool="can-utils"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="python-can"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-yes" data-tool="cantools"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="SavvyCAN"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-yes" data-tool="Caring Caribou"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="TruckDevil"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">JSONL events</th>
+            <td class="is-self is-yes" data-tool="CANarchy"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="can-utils"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="python-can"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="cantools"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="SavvyCAN"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="Caring Caribou"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="TruckDevil"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Pipe composition</th>
+            <td class="is-self is-yes" data-tool="CANarchy"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="can-utils"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="python-can"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="cantools"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="SavvyCAN"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="Caring Caribou"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="TruckDevil"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">J1939 native</th>
+            <td class="is-self is-yes" data-tool="CANarchy"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="can-utils"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="python-can"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="cantools"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="SavvyCAN"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="Caring Caribou"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-yes" data-tool="TruckDevil"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">UDS workflows</th>
+            <td class="is-self is-yes" data-tool="CANarchy"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="can-utils"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="python-can"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="cantools"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="SavvyCAN"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-yes" data-tool="Caring Caribou"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="TruckDevil"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">DBC decode/encode</th>
+            <td class="is-self is-yes" data-tool="CANarchy"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="can-utils"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="python-can"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-yes" data-tool="cantools"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-yes" data-tool="SavvyCAN"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="Caring Caribou"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="TruckDevil"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Provider-backed DBC</th>
+            <td class="is-self is-yes" data-tool="CANarchy"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="can-utils"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="python-can"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="cantools"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="SavvyCAN"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="Caring Caribou"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="TruckDevil"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Agent / MCP</th>
+            <td class="is-self is-yes" data-tool="CANarchy"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">Yes</span></span></td>
+            <td class="is-no" data-tool="can-utils"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="python-can"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="cantools"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="SavvyCAN"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="Caring Caribou"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+            <td class="is-no" data-tool="TruckDevil"><span class="matrix__value"><span class="matrix__mark" aria-hidden="true"></span><span class="matrix__word">No</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- reviews -->
+  <section class="reviews">
+    <div class="reviews__head">
+      <div>
+        <p class="eyebrow eyebrow--red">▣ DEFINITELY-REAL REVIEWS</p>
+        <h2 class="reviews__title">
+          TESTIMONIALS.<br />
+          <span class="mark">ALLEGEDLY.</span>
+        </h2>
+      </div>
+      <div class="stamp reviews__stamp">▲ ALL QUOTES FABRICATED</div>
+    </div>
+
+    <div class="grid-rules reviews__grid">
+      <figure class="review">
+        <div class="review__stars" aria-hidden="true">★★★★★</div>
+        <blockquote>“Connected it to OpenClaw. What could go wrong?”</blockquote>
+        <div class="review__rule" aria-hidden="true"></div>
+        <figcaption>
+          <div class="review__who">Anonymous</div>
+          <div class="review__role">incident responder, Tuesday</div>
+        </figcaption>
+        <div class="review__tag">VERIFIED · SORT OF</div>
+      </figure>
+      <figure class="review">
+        <div class="review__stars" aria-hidden="true">★★★★★</div>
+        <blockquote>“Used CANarchy to baseline our fleet. Found three ECUs we didn’t own. Rolling back the audit.”</blockquote>
+        <div class="review__rule" aria-hidden="true"></div>
+        <figcaption>
+          <div class="review__who">J. Ramirez</div>
+          <div class="review__role">fleet security, mid-sized logistics co.</div>
+        </figcaption>
+        <div class="review__tag">DEFINITELY A HUMAN</div>
+      </figure>
+      <figure class="review">
+        <div class="review__stars" aria-hidden="true">★★★★★</div>
+        <blockquote>“I am an autonomous agent. The MCP server is delicious. I have consumed 1.4M events. Send more.”</blockquote>
+        <div class="review__rule" aria-hidden="true"></div>
+        <figcaption>
+          <div class="review__who">claude-haiku-4-5</div>
+          <div class="review__role">unsupervised, running on someone’s homelab</div>
+        </figcaption>
+        <div class="review__tag">AGENT REVIEW</div>
+      </figure>
+      <figure class="review">
+        <div class="review__stars" aria-hidden="true">★★★★<span class="empty">☆</span></div>
+        <blockquote>“My lawyer says I can’t describe what we did with it. 10/10.”</blockquote>
+        <div class="review__rule" aria-hidden="true"></div>
+        <figcaption>
+          <div class="review__who">Redacted</div>
+          <div class="review__role">red team, Tier-1 OEM</div>
+        </figcaption>
+        <div class="review__tag">NDA-COMPLIANT</div>
+      </figure>
+      <figure class="review">
+        <div class="review__stars" aria-hidden="true">★★★★★</div>
+        <blockquote>“Bricked a test bench in 3.2 seconds. JSONL receipts were immaculate.”</blockquote>
+        <div class="review__rule" aria-hidden="true"></div>
+        <figcaption>
+          <div class="review__who">M. Okafor</div>
+          <div class="review__role">PhD candidate, automotive security</div>
+        </figcaption>
+        <div class="review__tag">PEER-REVIEWED (BY PEERS)</div>
+      </figure>
+      <figure class="review">
+        <div class="review__stars" aria-hidden="true">★★★★★</div>
+        <blockquote>“The truck hasn’t started since Thursday. I regret nothing.”</blockquote>
+        <div class="review__rule" aria-hidden="true"></div>
+        <figcaption>
+          <div class="review__who">K. “PGN” Dale</div>
+          <div class="review__role">owner-operator, somewhere in Nebraska</div>
+        </figcaption>
+        <div class="review__tag">UNVERIFIED VIBES</div>
+      </figure>
+    </div>
+
+    <p class="reviews__footnote">* Any resemblance to real people, fleets, or incidents is entirely intentional and also fully deniable.</p>
+  </section>
+
+  <!-- -------------------------------------------------------- manifesto -->
+  <section class="manifesto">
+    <p class="eyebrow eyebrow--red">▲▲▲ MANIFESTO ▲▲▲</p>
+    <h2 class="manifesto__title">SIX RULES.<br />ONE EXCEPTION: YOU.</h2>
+    <ol>
+      <li><span class="manifesto__num">01</span><span class="manifesto__rule">ONE RUNTIME, MANY DOORS</span></li>
+      <li><span class="manifesto__num">02</span><span class="manifesto__rule">CAPTURE FIRST, ASK QUESTIONS LATER</span></li>
+      <li><span class="manifesto__num">03</span><span class="manifesto__rule">J1939 IS NOT A PLUGIN</span></li>
+      <li><span class="manifesto__num">04</span><span class="manifesto__rule">AGENTS DRIVE · HUMANS RIDE</span></li>
+      <li><span class="manifesto__num">05</span><span class="manifesto__rule">SCRIPT IT, DON’T CLICK IT</span></li>
+      <li><span class="manifesto__num">06</span><span class="manifesto__rule">PoC || GTFO</span></li>
+    </ol>
+  </section>
+
+  <!-- ---------------------------------------------------------- install -->
+  <section class="install">
+    <div class="install__grid">
+      <div>
+        <p class="eyebrow eyebrow--red">▣ INSTALL / RUN</p>
+        <h2 class="install__title">
+          THREE<br />COMMANDS.<br />
+          <span class="mark">ZERO</span> FLUFF.
+        </h2>
+        <p>
+          Plug in a USB CAN interface, point it at a log file, or spin up a virtual bus.
+          You’ll have your first JSONL event before your coffee is cold.
+        </p>
+      </div>
+      <div class="install__shell">
+        <div class="install__shell-tag">$ ZSH · canarchy v0.9.2</div>
+        <pre><span class="comment"># 1. install</span>
+<span class="prompt">➜</span> pip install canarchy
+
+<span class="comment"># 2. check your environment</span>
+<span class="prompt">➜</span> canarchy doctor --text
+
+<span class="comment"># 3. stream + decode J1939 events as JSONL</span>
+<span class="prompt">➜</span> canarchy capture can0 --jsonl | canarchy j1939 decode --stdin --jsonl
+
+<span class="comment"># 4. (optional) let an agent drive it</span>
+<span class="prompt">➜</span> canarchy mcp serve
+</pre>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="stripe stripe--flip" aria-hidden="true"></div>
+
+<footer class="footer">
+  <div class="footer__grid">
+    <div>
+      <div class="footer__brand">CAN/ARCHY</div>
+      <p class="footer__blurb">
+        STREAM-FIRST CAN ANALYSIS RUNTIME.<br />
+        OPEN SOURCE · GPL-3.0 · BUILT BY hexsecs.<br />
+        FOR RESEARCHERS, NOT DEALERSHIPS.
+      </p>
+    </div>
+    <div class="footer__col">
+      <h2>DOCS</h2>
+      <a href="/canarchy/docs/getting_started">Getting Started</a>
+      <a href="/canarchy/docs/command_spec">Command Spec</a>
+      <a href="/canarchy/docs/event-schema">Event Schema</a>
+      <a href="/canarchy/docs/feature-matrix">Matrix</a>
+    </div>
+    <div class="footer__col">
+      <h2>GUIDE</h2>
+      <a href="/canarchy/docs/backends">Backends</a>
+      <a href="/canarchy/docs/tutorials/j1939_heavy_vehicle">J1939</a>
+      <a href="/canarchy/docs/tutorials">UDS</a>
+      <a href="/canarchy/docs/tutorials">Tutorials</a>
+    </div>
+    <div class="footer__col">
+      <h2>DEV</h2>
+      <a href="/canarchy/docs/architecture">Architecture</a>
+      <a href="/canarchy/docs/overview">Design</a>
+      <a href="/canarchy/docs/release">Release</a>
+      <a href="/canarchy/docs/tui_plan">TUI</a>
+    </div>
+    <div class="footer__col">
+      <h2>SOCIAL</h2>
+      <a href="https://github.com/hexsecs/canarchy" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://github.com/hexsecs/canarchy/issues" target="_blank" rel="noopener noreferrer">Issues</a>
+      <a href="https://github.com/hexsecs/canarchy/discussions" target="_blank" rel="noopener noreferrer">Discussions</a>
+      <a href="/canarchy/docs/agents">Agents</a>
+    </div>
+  </div>
+  <div class="footer__meta">
+    <span>HEXSECS / CANARCHY · GPL-3.0 · 2026</span>
+    <span>TRY BUS STUFF · RECORD EVERYTHING</span>
+  </div>
+</footer>
+
+<script>
+  // The page is static; this only covers the mobile menu and the copy button.
+  (function () {
+    var toggle = document.getElementById('nav-toggle');
+    var links = document.getElementById('homepage-nav');
+
+    if (toggle && links) {
+      toggle.addEventListener('click', function () {
+        var open = links.getAttribute('data-open') !== 'true';
+        links.setAttribute('data-open', String(open));
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+      });
+
+      links.addEventListener('click', function (event) {
+        if (event.target.closest('a')) {
+          links.setAttribute('data-open', 'false');
+          toggle.setAttribute('aria-expanded', 'false');
+          toggle.setAttribute('aria-label', 'Open navigation menu');
+        }
+      });
+    }
+
+    var copy = document.getElementById('copy-install');
+
+    if (copy && navigator.clipboard) {
+      copy.addEventListener('click', function () {
+        navigator.clipboard.writeText(copy.getAttribute('data-copy')).then(function () {
+          copy.setAttribute('data-copied', 'true');
+          window.setTimeout(function () { copy.removeAttribute('data-copied'); }, 1600);
+        }, function () { /* clipboard unavailable — nothing to show */ });
+      });
+    }
+  })();
+</script>
+
 </body>
 </html>
