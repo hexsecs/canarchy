@@ -16,13 +16,15 @@ from __future__ import annotations
 
 import shlex
 from collections import deque
-from typing import Any
+from typing import Any, TypeVar
 
 from collections.abc import Callable
 
 from rich.text import Text
 from textual.app import App, ComposeResult
+from textual.css.query import NoMatches
 from textual.containers import Horizontal, Vertical
+from textual.widget import Widget
 from textual.widgets import DataTable, Footer, Header, Input, RichLog, Static
 
 from canarchy.tui import (
@@ -85,6 +87,9 @@ def _is_active_transmit_command(argv: list[str]) -> bool:
     return getattr(args, "command", None) in ACTIVE_TRANSMIT_COMMANDS or _is_doip_active_command(
         args
     )
+
+
+_WidgetT = TypeVar("_WidgetT", bound=Widget)
 
 
 class CanarchyTuiApp(App[int]):
@@ -330,6 +335,11 @@ class CanarchyTuiApp(App[int]):
         self._capture = None
 
     def _drain_capture(self) -> None:
+        # The interval timer keeps firing while the app tears down, after the
+        # widget tree is gone. Nothing is left to draw at that point, so skip
+        # the whole drain rather than reaching a query that cannot match.
+        if not self.is_running:
+            return
         capture = self._capture
         if capture is None:
             return
@@ -484,8 +494,23 @@ class CanarchyTuiApp(App[int]):
             traffic=cap,
         )
 
+    def _find_widget(self, selector: str, kind: type[_WidgetT]) -> _WidgetT | None:
+        """Return the widget, or None when it is not mounted.
+
+        Teardown does not stop the capture drain timer synchronously, so a
+        refresh can still run after the widget tree is gone. `is_running` is
+        cleared first in practice, but the ordering is Textual's to change;
+        callers that run off a timer should tolerate a missing node.
+        """
+        try:
+            return self.query_one(selector, kind)
+        except NoMatches:
+            return None
+
     def _emit_alert(self, line: str) -> None:
-        self.query_one("#alerts", RichLog).write(line)
+        alerts = self._find_widget("#alerts", RichLog)
+        if alerts is not None:
+            alerts.write(line)
 
     def _refresh_status(self, *, mode: str | None = None, interface: str | None = None) -> None:
         lines = [line for line in self.tstate.bus_status if not line.startswith("capture:")]
@@ -514,7 +539,9 @@ class CanarchyTuiApp(App[int]):
         # Render as literal Text: status/fault strings contain brackets
         # (e.g. "[paused]", DM1 "[spn=175/fmi=5]") that Static would
         # otherwise try to parse as console markup and raise on.
-        self.query_one("#bus-status", Static).update(Text("  ".join(lines)))
+        bus_status = self._find_widget("#bus-status", Static)
+        if bus_status is not None:
+            bus_status.update(Text("  ".join(lines)))
 
     def _refresh_j1939_ribbon(self) -> None:
         state = self.tstate
@@ -529,9 +556,9 @@ class CanarchyTuiApp(App[int]):
             parts.append("!! DM1 active faults: " + " | ".join(state.j1939_dm1_alerts))
         # Literal Text — DM1 fault summaries contain "[spn=.../fmi=...]"
         # which Static would otherwise treat as console markup.
-        self.query_one("#j1939-ribbon", Static).update(
-            Text("  ".join(parts) or "(no J1939 summary)")
-        )
+        ribbon = self._find_widget("#j1939-ribbon", Static)
+        if ribbon is not None:
+            ribbon.update(Text("  ".join(parts) or "(no J1939 summary)"))
 
     # -- actions ------------------------------------------------------------
 
