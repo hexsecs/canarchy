@@ -330,6 +330,31 @@ def test_capture_queue_loss_is_visible_in_status() -> None:
     _run(scenario())
 
 
+def test_refresh_helpers_tolerate_a_torn_down_widget_tree() -> None:
+    """The capture drain timer can fire after the widget tree is gone.
+
+    Textual does not stop interval timers synchronously on exit, so a drain
+    scheduled by `on_mount` can still run once the screen is unmounted. The
+    refresh helpers must not raise `NoMatches` in that window; see issue #509.
+    """
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            # The widgets exist while the app is mounted.
+            assert app.query_one("#bus-status", Static) is not None
+
+        # Outside the context the app has exited and the tree is gone. These
+        # are exactly the calls the drain timer makes.
+        app._refresh_status(mode="capturing", interface="can0")
+        app._refresh_j1939_ribbon()
+        app._emit_alert("late alert after teardown")
+        app._drain_capture()
+
+    _run(scenario())
+
+
 def test_capture_replacement_waits_for_previous_worker() -> None:
     class _StubbornCapture:
         def __init__(self, interface: str) -> None:
