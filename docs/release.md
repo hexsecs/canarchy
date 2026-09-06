@@ -1,3 +1,7 @@
+---
+description: "How to prepare and publish a CANarchy release, including the TestPyPI rehearsal, version bumps, and changelog and tagging conventions."
+---
+
 # Release Workflow
 
 ## Goal

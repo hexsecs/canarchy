@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{#-
+  Internal design specs, test specs, and benchmark records stay public and
+  stay in the site's own search, but are not offered to search engines for
+  indexing: they dilute what the site looks like it is about. "follow" keeps
+  the links inside them live for crawlers. Keep this list in step with
+  sitemap.xml.
+-#}
+{% block extrahead %}
+  {%- if page and page.file.src_uri.startswith(("design/", "tests/", "benchmarks/")) %}
+    <meta name="robots" content="noindex, follow" />
+  {%- endif %}
+{% endblock %}

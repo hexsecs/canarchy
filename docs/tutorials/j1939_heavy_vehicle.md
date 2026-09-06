@@ -1,3 +1,7 @@
+---
+description: "Find an active J1939 engine fault in a heavy-vehicle candump trace in three CANarchy commands, from PGN summary to decoded DM1 diagnostics."
+---
+
 # Demo: J1939 Heavy Vehicle Analysis
 
 This demo walks through a realistic J1939 analysis scenario: an engine controller is broadcasting normal data alongside active fault codes. CANarchy finds the fault in three commands.

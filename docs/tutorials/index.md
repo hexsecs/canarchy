@@ -1,3 +1,7 @@
+---
+description: "End-to-end CANarchy walkthroughs: J1939 fault analysis, provider-backed DBC discovery, dataset streaming, traffic simulation, and the web dashboard."
+---
+
 # Tutorials
 
 These walkthroughs show complete CANarchy workflows from end to end.

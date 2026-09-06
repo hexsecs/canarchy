@@ -1,3 +1,7 @@
+---
+description: "Install the CANarchy MCP server in Claude Desktop, Claude Code, or any MCP-capable client, with OS-specific config paths and verification steps."
+---
+
 # Install the CANarchy MCP server in an agent client
 
 `canarchy mcp serve` exposes the CLI as an [MCP](https://modelcontextprotocol.io/)

@@ -9,6 +9,7 @@ extra_css:
 
 theme:
   name: material
+  custom_dir: overrides
   features:
     - navigation.sections
     - navigation.tabs
@@ -38,6 +39,17 @@ theme:
       scheme: default
       primary: blue grey
       accent: amber
+
+plugins:
+  # `search` is a default plugin; naming any plugin means listing it again.
+  - search
+  # Renders a per-page social card from the page title and its `description`
+  # front matter, so a shared docs URL unfurls with page-specific text
+  # instead of the site-wide description.
+  - social:
+      cards_layout_options:
+        background_color: "#0b0b0b"
+        color: "#ffd400"
 
 extra_javascript:
   - https://unpkg.com/mermaid@11/dist/mermaid.min.js

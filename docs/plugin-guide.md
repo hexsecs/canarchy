@@ -1,3 +1,7 @@
+---
+description: "Write CANarchy plugins: the processor, sink, and input-adapter extension points, entry-point registration, and two complete walkthroughs."
+---
+
 # Plugin Author Guide
 
 CANarchy supports third-party plugins that extend the analysis engine without requiring a fork.

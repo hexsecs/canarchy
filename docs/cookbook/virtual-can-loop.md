@@ -1,3 +1,7 @@
+---
+description: "Run CANarchy end to end with no hardware: build a virtual CAN loop, send frames in one terminal, and capture them in another."
+---
+
 # Build a virtual CAN loop for offline testing
 
 ## Goal

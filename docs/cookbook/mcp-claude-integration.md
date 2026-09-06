@@ -1,3 +1,7 @@
+---
+description: "Run CANarchy as an MCP server so Claude Desktop or Claude Code can call its capture, decode, and analysis tools directly."
+---
+
 # Wire CANarchy into Claude Desktop or Claude Code
 
 ## Goal

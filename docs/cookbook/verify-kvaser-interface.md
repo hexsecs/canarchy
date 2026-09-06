@@ -1,3 +1,7 @@
+---
+description: "Confirm CANarchy can drive Kvaser USB or PCIe hardware through python-can's kvaser backend, in about 30 seconds, in a controlled lab setup."
+---
+
 # Verify a Kvaser interface in 30 seconds
 
 ## Goal

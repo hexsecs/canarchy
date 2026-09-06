@@ -1,3 +1,7 @@
+---
+description: "What CANarchy is: a CLI-first CAN security research toolkit built on structured output, reproducible workflows, and first-class J1939 support."
+---
+
 # Project Overview
 
 CANarchy is a CLI-first CAN security research toolkit for reproducible, protocol-aware, automation-friendly workflows.

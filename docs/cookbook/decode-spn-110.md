@@ -1,3 +1,7 @@
+---
+description: "Extract engine coolant temperature (SPN 110) samples from a J1939 capture with the SPN-aware decoder — no DBC file required."
+---
+
 # Decode SPN 110 (engine coolant temperature)
 
 ## Goal

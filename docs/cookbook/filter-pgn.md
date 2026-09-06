@@ -1,3 +1,7 @@
+---
+description: "Pull every frame matching an arbitration ID or J1939 PGN out of a capture with `canarchy filter`, in a form you can pipe into other commands."
+---
+
 # Filter for a single arbitration ID or PGN
 
 ## Goal

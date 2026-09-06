@@ -1,3 +1,7 @@
+---
+description: "The required structure for CANarchy design and test specs: EARS requirement syntax, Gherkin test cases, and requirement-to-test traceability."
+---
+
 # CANarchy Specification Template
 
 All design specs (`docs/design/`) and test specs (`docs/tests/`) follow this template.

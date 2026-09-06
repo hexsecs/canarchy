@@ -1,3 +1,7 @@
+---
+description: "How CANarchy compares with can-utils, python-can, cantools, SavvyCAN, Caring Caribou, and TruckDevil across CLI, J1939, UDS, DBC, and agent workflows."
+---
+
 # CAN Tool Feature Matrix
 
 This page compares CANarchy to several widely used open-source CAN tools.

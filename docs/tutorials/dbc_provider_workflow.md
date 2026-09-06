@@ -1,3 +1,7 @@
+---
+description: "Go from a candump trace with no DBC to decoded signals: refresh the provider catalog, match candidates, cache a DBC, and decode the capture."
+---
+
 # Tutorial: Discover and Use Provider-Backed DBC Files
 
 This tutorial walks through the current provider-backed DBC workflow from catalog refresh to capture decoding.

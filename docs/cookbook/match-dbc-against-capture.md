@@ -1,3 +1,7 @@
+---
+description: "Given a capture from an unknown vehicle, rank the top matching DBC candidates from the opendbc catalogue with CANarchy's DBC matcher."
+---
+
 # Match an unknown capture against opendbc
 
 ## Goal

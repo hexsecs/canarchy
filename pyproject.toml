@@ -61,7 +61,10 @@ dev = [
 ]
 docs = [
     "mkdocs>=1.6",
-    "mkdocs-material>=9.5",
+    # The `imaging` extra pulls cairosvg/pillow for the social-card plugin.
+    # It also needs cairo and friends from the system package manager; see
+    # docs/docs_site.md and the docs workflow.
+    "mkdocs-material[imaging]>=9.5",
     "pymdown-extensions>=10.14",
 ]
 

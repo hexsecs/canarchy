@@ -1,3 +1,7 @@
+---
+description: "Confirm CANarchy can drive a PEAK PCAN adapter through python-can's pcan backend, in about 30 seconds, in a controlled lab setup."
+---
+
 # Verify a PCAN interface in 30 seconds
 
 ## Goal

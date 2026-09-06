@@ -1,3 +1,7 @@
+---
+description: "Choose between the python-can and scaffold transport backends, configure interfaces such as socketcan, PCAN, Vector, and Kvaser, and verify which is in effect."
+---
+
 # Backends & Interfaces
 
 CANarchy uses **python-can** as its live transport layer. This page explains how to choose and configure a transport backend, which interface types are available, and how to verify what is in effect.
