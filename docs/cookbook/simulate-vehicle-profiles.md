@@ -1,3 +1,7 @@
+---
+description: "Generate a believable mix of CAN, J1939, and DM1 fault traffic with `canarchy simulate`, then analyze the result with the standard decode and stats commands."
+---
+
 # Run and analyze a simulated vehicle traffic profile
 
 ## Goal

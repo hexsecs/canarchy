@@ -1,3 +1,7 @@
+---
+description: "The canonical CANarchy event envelope and every typed event subclass: the stable JSONL interface for scripts, pipelines, and coding agents."
+---
+
 # Event Schema
 
 Every CANarchy command that produces structured output emits events using a canonical envelope. This document defines that envelope and every typed event subclass.

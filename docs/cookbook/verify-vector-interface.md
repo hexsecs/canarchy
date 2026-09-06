@@ -1,3 +1,7 @@
+---
+description: "Confirm CANarchy can drive Vector VN/VX hardware through python-can's vector backend, in about 30 seconds, in a controlled lab setup."
+---
+
 # Verify a Vector interface in 30 seconds
 
 ## Goal

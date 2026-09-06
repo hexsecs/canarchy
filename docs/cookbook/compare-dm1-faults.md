@@ -1,3 +1,7 @@
+---
+description: "Diff two J1939 captures from the same vehicle to surface which active DM1 fault codes appeared, cleared, or changed between them."
+---
+
 # Compare two captures for DM1 fault diffs
 
 ## Goal

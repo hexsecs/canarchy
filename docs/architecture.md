@@ -1,3 +1,7 @@
+---
+description: "How CANarchy is built: the core engine, transport layer, event pipeline, and the module boundaries that keep front ends thin."
+---
+
 # Architecture
 
 ## Overview

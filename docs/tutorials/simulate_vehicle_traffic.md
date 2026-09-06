@@ -1,3 +1,7 @@
+---
+description: "Plan, transmit, and analyze a simulated vehicle bus with `canarchy simulate` — mixed CAN, J1939, and DM1 fault traffic without hardware or a capture file."
+---
+
 # Tutorial: Simulate a Vehicle's Bus Traffic
 
 This tutorial walks through `canarchy simulate` end to end: planning a run,

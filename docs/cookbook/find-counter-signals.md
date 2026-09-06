@@ -1,3 +1,7 @@
+---
+description: "Spot likely counter fields in a capture: the small monotonically incrementing nibbles that CANarchy's reverse-engineering helpers surface automatically."
+---
+
 # Find counter signals in a capture
 
 ## Goal

@@ -1,3 +1,7 @@
+---
+description: "Pull a small, bounded slice of a public CAN dataset to disk or straight into analysis, without replaying the whole capture in real time."
+---
+
 # Acquire a bounded dataset slice for offline analysis
 
 ## Goal

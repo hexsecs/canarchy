@@ -1,3 +1,7 @@
+---
+description: "Worked CAN security workflows an agent can drive end to end: capture triage, DBC reconnaissance, fault diffing, and gated active probing with preserved evidence."
+---
+
 # Security Use Cases With Coding Agents
 
 CANarchy is designed for operators and coding agents working together on CAN security research. These use cases show how an agent can drive repeatable CLI workflows, preserve evidence, and return structured findings without hiding the underlying commands.

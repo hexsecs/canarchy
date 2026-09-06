@@ -1,3 +1,7 @@
+---
+description: "How the CANarchy docs site and landing page are built and published to GitHub Pages, including the no-JavaScript requirement for the homepage."
+---
+
 # Docs Workflow
 
 CANarchy publishes its full documentation site from the same repository as the codebase using `mkdocs-material` and GitHub Pages.
@@ -55,6 +59,49 @@ works without them. Responsive behaviour lives in media queries in
 (tablet), 430px, and 390px. Update the release version and issue tag in the hero
 and install sections of `src/homepage/index.html` on each release.
 
+## Page Metadata and Social Cards
+
+Every user-facing page carries its own meta description in front matter:
+
+```yaml
+---
+description: "One sentence describing what this page does, under 200 characters."
+---
+```
+
+Without it `mkdocs-material` falls back to the site-wide `site_description`,
+which would give every page the same meta description and the same social-card
+text. `tests/test_docs_metadata.py` fails if a user-facing page is missing one
+or reuses another page's wording, so a new cookbook recipe or tutorial needs a
+description in the same commit.
+
+The built-in `social` plugin renders a card per page from the page title and
+that description, so a shared docs URL unfurls with page-specific text. Card
+generation needs the imaging dependencies:
+
+```bash
+uv sync --group docs                      # includes mkdocs-material[imaging]
+sudo apt-get install -y libcairo2-dev libfreetype6-dev libffi-dev \
+  libjpeg-dev libpng-dev libz-dev         # or the equivalent for your OS
+```
+
+On a cold cache the plugin downloads its font from Google Fonts, so the first
+build needs network access. Rendered cards and the font are cached under
+`.cache/plugin/social`, which the docs workflow restores between runs.
+
+## Internal Pages
+
+`docs/design/`, `docs/tests/`, and `docs/benchmarks/` are internal
+specification and record pages. They stay published and stay in the site's own
+search, but they are kept out of the crawl surface so search engines weigh the
+site by its guides, tutorials, and cookbook instead of ~100 spec pages:
+
+* `overrides/sitemap.xml` omits them from the sitemap
+* `overrides/main.html` marks them `noindex, follow`
+
+Those two lists must stay in step; the test above checks that both cover every
+prefix. Pages under these directories do not need a `description:` entry.
+
 ## Mermaid Diagrams
 
 The docs site supports Mermaid code fences for architecture and flow diagrams.
@@ -75,6 +122,11 @@ The site theme also supports light and dark mode through Material for MkDocs, fo
 ## GitHub Pages
 
 The GitHub Pages workflow builds the full Pages artifact on pushes to `main` and deploys the generated `site/` directory through GitHub Pages.
+
+The same workflow also runs on pull requests, where it builds the site but skips
+the upload and deploy steps. A docs build that breaks — a missing image
+dependency, an unreachable font, a new `--strict` warning — is therefore caught
+before it can reach the deploy path.
 
 The published structure is:
 

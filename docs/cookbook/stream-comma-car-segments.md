@@ -1,3 +1,7 @@
+---
+description: "List comma.ai commaCarSegments route segments for a vehicle platform, plan a bounded replay, and stream CAN frames from an openpilot rlog.zst."
+---
+
 # Stream commaCarSegments CAN data
 
 ## Goal

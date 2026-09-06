@@ -1,3 +1,7 @@
+---
+description: "Generate synthetic CAN traffic with `canarchy generate` and watch it arrive live in `canarchy capture --candump`, using two terminals and no hardware."
+---
+
 # Demo: Generate Frames and Watch with Candump
 
 This demo shows how to use `canarchy generate` to produce test CAN traffic and

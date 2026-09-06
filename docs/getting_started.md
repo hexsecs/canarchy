@@ -1,3 +1,7 @@
+---
+description: "Install CANarchy on Linux, macOS, or Windows and produce your first candump-style output and JSONL events, with or without CAN hardware."
+---
+
 # Getting Started
 
 This guide walks through the fastest way to see CANarchy produce familiar `candump`-style output.

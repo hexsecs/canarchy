@@ -1,3 +1,7 @@
+---
+description: "Discover, browse, and stream real passenger-vehicle CAN logs from the CANdid research dataset over HTTP, with no hardware and preserved provenance."
+---
+
 # Stream CAN Data from the CANdid Dataset
 
 This tutorial walks through discovering, browsing, and streaming real passenger-vehicle

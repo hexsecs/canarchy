@@ -1,3 +1,7 @@
+---
+description: "CANarchy documentation: a stream-first CAN and J1939 analysis runtime with typed JSONL events, a CLI-first contract, and agent-driven workflows."
+---
+
 # CANarchy Docs
 
 CANarchy is a stream-first CAN analysis and manipulation runtime designed for automation, security research, and agent-driven workflows.

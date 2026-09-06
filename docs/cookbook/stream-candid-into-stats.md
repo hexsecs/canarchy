@@ -1,3 +1,7 @@
+---
+description: "Pipe a remote CANdid replay stream straight into `canarchy stats`, with no temporary file on disk."
+---
+
 # Stream the CANdid dataset into stats
 
 ## Goal

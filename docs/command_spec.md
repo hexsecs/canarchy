@@ -1,3 +1,7 @@
+---
+description: "The implemented CANarchy CLI contract — capture, send, filter, stats, compare, replay, gateway, export, and the protocol subcommands, with their flags and output modes."
+---
+
 # Command Spec
 
 ## Status

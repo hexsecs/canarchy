@@ -1,3 +1,7 @@
+---
+description: "The state and roadmap of `canarchy tui`, the full-screen Textual application for live bus status, decoded signals, J1939 activity, and UDS transactions."
+---
+
 # TUI Plan
 
 Current status: `canarchy tui` is a **full-screen Textual application** with bus

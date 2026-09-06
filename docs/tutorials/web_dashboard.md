@@ -1,3 +1,7 @@
+---
+description: "Run `canarchy web serve` for a read-only browser view of live frames, bus status, decoded signals, J1939 activity, and UDS transactions."
+---
+
 # Launch the Web Dashboard
 
 `canarchy web serve` streams a capture through a small read-only browser

@@ -1,3 +1,7 @@
+---
+description: "How coding agents should drive CANarchy: command selection, structured output, safety gates on active commands, and MCP tool usage."
+---
+
 # Agent Guide
 
 --8<-- "AGENTS.md"

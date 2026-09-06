@@ -1,3 +1,7 @@
+---
+description: "Inspect the Tesla CAN DBC, locate DI_vehicleSpeed inside DI_torque2, and run a bounded, acknowledgement-gated fuzz campaign against that message."
+---
+
 # Fuzz Tesla DI_torque2 vehicle speed
 
 ## Goal

@@ -1,3 +1,7 @@
+---
+description: "Short, task-oriented CANarchy recipes — filtering, decoding, DBC matching, fuzzing, dataset streaming, and interface verification — each runnable against a fixture or a named lab setup."
+---
+
 # Cookbook
 
 Short, task-oriented recipes for common CANarchy workflows. Each recipe

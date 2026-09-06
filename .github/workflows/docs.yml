@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  # Build (but do not deploy) on pull requests, so a docs build that breaks --
+  # a missing image dependency, an unreachable font, a --strict warning -- is
+  # caught before it reaches the deploy path.
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -11,8 +15,9 @@ permissions:
   pages: write
   id-token: write
 
+# Per-ref so a pull-request build never cancels a deploy running for main.
 concurrency:
-  group: pages
+  group: pages-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,19 +35,39 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v8.1.0
 
+      - name: Install social-card image dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
+
       - name: Install docs dependencies
         run: uv sync --group docs
+
+      # The social plugin fetches its font from Google Fonts on a cold cache
+      # and hashes rendered cards into the same directory, so caching it keeps
+      # the build off the network and fast on repeat runs.
+      - name: Restore social card cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/plugin/social
+          key: social-cards-${{ hashFiles('mkdocs.yml') }}-${{ hashFiles('docs/**/*.md') }}
+          restore-keys: |
+            social-cards-${{ hashFiles('mkdocs.yml') }}-
+            social-cards-
 
       - name: Build Pages site
         run: bash scripts/build_pages_site.sh
 
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

@@ -1,3 +1,7 @@
+---
+description: "Every CANarchy structured error code with its typical cause and a copy-pasteable recovery path, from interface failures to DBC and dataset errors."
+---
+
 # Troubleshooting
 
 CANarchy emits structured errors with a stable `code`, a human-readable
