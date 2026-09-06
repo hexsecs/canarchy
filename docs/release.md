@@ -123,6 +123,7 @@ If trusted publishing is not ready yet, use an API token with the narrowest poss
 
 ## Notes
 
+* Use the [distribution and launch packet](launch-packet.md) for ecosystem listing copy, launch announcements, and search-engine submission instructions after publication.
 * Release tags should match the package version exactly, prefixed with `v`.
 * GitHub release notes should use the complete text from the matching `CHANGELOG.md` version section verbatim.
 * If the release introduces breaking CLI or output-contract changes, bump the major version according to the documented SemVer policy.

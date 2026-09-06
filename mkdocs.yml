@@ -117,6 +117,7 @@ nav:
       - Architecture: architecture.md
       - Docs Workflow: docs_site.md
       - Release Workflow: release.md
+      - Distribution and Launch: launch-packet.md
       - TUI Plan: tui_plan.md
       - Spec Template: spec-template.md
       - Design Specs:
