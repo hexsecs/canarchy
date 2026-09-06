@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  # Build (but do not deploy) on pull requests, so a docs build that breaks --
+  # a missing image dependency, an unreachable font, a --strict warning -- is
+  # caught before it reaches the deploy path.
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -11,8 +15,9 @@ permissions:
   pages: write
   id-token: write
 
+# Per-ref so a pull-request build never cancels a deploy running for main.
 concurrency:
-  group: pages
+  group: pages-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -55,12 +60,14 @@ jobs:
         run: bash scripts/build_pages_site.sh
 
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

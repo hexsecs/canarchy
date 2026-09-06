@@ -123,6 +123,11 @@ The site theme also supports light and dark mode through Material for MkDocs, fo
 
 The GitHub Pages workflow builds the full Pages artifact on pushes to `main` and deploys the generated `site/` directory through GitHub Pages.
 
+The same workflow also runs on pull requests, where it builds the site but skips
+the upload and deploy steps. A docs build that breaks — a missing image
+dependency, an unreachable font, a new `--strict` warning — is therefore caught
+before it can reach the deploy path.
+
 The published structure is:
 
 * `/` for the custom homepage
