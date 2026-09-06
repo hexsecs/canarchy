@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Documentation
+
+* Added a maintainer launch packet with ecosystem listing copy, a released-package demo without CAN hardware, MCP registry prerequisites, and search-engine submission instructions (#484).
+
 ### Changed
 
 * **Docs pages carry their own search and social metadata (#482).** All 41 user-facing pages — getting started, the user guide, every tutorial, and every cookbook recipe — now set a unique `description:` in front matter instead of inheriting one site-wide sentence, and Material's `social` plugin renders a per-page card so a shared docs URL unfurls with that page's own title and summary. Internal design specs, test specs, and benchmark records stay published and searchable on the site but are marked `noindex` and dropped from the sitemap, which now lists 41 user-facing pages rather than ~140 mostly internal ones. The docs workflow also builds (without deploying) on pull requests, so a broken docs build is caught before it reaches the deploy path.
