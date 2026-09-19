@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+* **Sessions are reproducible research records (#504).** `session save` now records input provenance — a SHA-256 hash, size, and modification time for every capture and DBC it names, the provider repo/commit/ref when a DBC came from the provider cache, the effective configuration, an environment snapshot, and the CANarchy version — alongside the context it always kept. Five new subcommands build on that: `session verify` re-hashes every recorded input and artifact offline and reports what changed, what is missing, and what is needed to reproduce the analysis (exit 1 when degraded, `--root` for relocated inputs); `session attach` records an analysis output with its hash, the command that produced it, and the inputs it derives from (`--embed` keeps the result inside the record); `session annotate` appends timestamped operator notes that can target recorded entries; and `session bundle` / `session import` move a whole session — manifest plus copies of its files — to another directory or machine without depending on the original absolute paths. Each is also exposed as an MCP tool. Sessions saved earlier keep loading unchanged and report `provenance_available: false` with an explicit warning naming the command that upgrades them; nothing in the session surface executes a recorded command, opens a transport, or serializes credentials.
+
 ### Documentation
 
 * Added a maintainer launch packet with ecosystem listing copy, a released-package demo without CAN hardware, MCP registry prerequisites, and search-engine submission instructions (#484).

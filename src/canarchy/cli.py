@@ -62,7 +62,13 @@ from canarchy.reverse_engineering import (
     load_reference_series,
     score_dbc_candidates,
 )
-from canarchy.session import SessionError, SessionStore, build_session_context
+from canarchy.session import (
+    SessionError,
+    SessionRecord,
+    SessionStore,
+    build_session_context,
+    session_arguments,
+)
 from canarchy.shell_completion import SUPPORTED_SHELLS, render_completion
 from canarchy.simulate import PROFILE_NAMES, simulate_frames
 from canarchy.skills import SkillError
@@ -142,7 +148,16 @@ J1939_COMMANDS = {
     "j1939 compare",
     "j1939 map",
 }
-SESSION_COMMANDS = {"session save", "session load", "session show"}
+SESSION_COMMANDS = {
+    "session save",
+    "session load",
+    "session show",
+    "session verify",
+    "session annotate",
+    "session attach",
+    "session bundle",
+    "session import",
+}
 UDS_ACTIVE_COMMANDS = {
     "uds subservices",
     "uds ecu-reset",
@@ -1232,6 +1247,13 @@ def build_parser() -> CanarchyArgumentParser:
     session_save.add_argument("--interface")
     session_save.add_argument("--dbc")
     session_save.add_argument("--capture")
+    session_save.add_argument("--note", help="operator annotation to record with the session")
+    session_save.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        help="analysis output to record as session evidence (repeatable)",
+    )
     add_output_arguments(session_save)
     session_save.set_defaults(command="session save")
 
@@ -1243,6 +1265,71 @@ def build_parser() -> CanarchyArgumentParser:
     session_show = session_subparsers.add_parser("show", help="show session state")
     add_output_arguments(session_show)
     session_show.set_defaults(command="session show")
+
+    session_verify = session_subparsers.add_parser(
+        "verify", help="verify recorded session inputs and artifacts offline"
+    )
+    session_verify.add_argument("name")
+    session_verify.add_argument(
+        "--root", help="directory to resolve store-relative paths against after relocation"
+    )
+    add_output_arguments(session_verify)
+    session_verify.set_defaults(command="session verify")
+
+    session_annotate = session_subparsers.add_parser(
+        "annotate", help="add an operator annotation to a session"
+    )
+    session_annotate.add_argument("name")
+    session_annotate.add_argument("--note", required=True, help="annotation text")
+    session_annotate.add_argument(
+        "--target",
+        action="append",
+        default=[],
+        help="recorded input or artifact id the note refers to (repeatable)",
+    )
+    add_output_arguments(session_annotate)
+    session_annotate.set_defaults(command="session annotate")
+
+    session_attach = session_subparsers.add_parser(
+        "attach", help="record an analysis artifact in a session"
+    )
+    session_attach.add_argument("name")
+    session_attach.add_argument("--artifact", required=True, help="path to the analysis output")
+    session_attach.add_argument(
+        "--kind", default="analysis_output", help="artifact kind label (default: analysis_output)"
+    )
+    session_attach.add_argument(
+        "--command", dest="produced_by_command", help="command that produced this artifact"
+    )
+    session_attach.add_argument(
+        "--derived-from",
+        action="append",
+        default=[],
+        help="recorded input id this artifact was derived from (repeatable)",
+    )
+    session_attach.add_argument(
+        "--embed",
+        action="store_true",
+        help="store the artifact content inside the session record",
+    )
+    add_output_arguments(session_attach)
+    session_attach.set_defaults(command="session attach")
+
+    session_bundle = session_subparsers.add_parser("bundle", help="write a portable session bundle")
+    session_bundle.add_argument("name")
+    session_bundle.add_argument(
+        "--output", required=True, help="bundle destination directory, or a path ending in .zip"
+    )
+    add_output_arguments(session_bundle)
+    session_bundle.set_defaults(command="session bundle")
+
+    session_import = session_subparsers.add_parser(
+        "import", help="import a portable session bundle"
+    )
+    session_import.add_argument("bundle", help="bundle directory or .zip written by session bundle")
+    session_import.add_argument("--name", help="import under this session name")
+    add_output_arguments(session_import)
+    session_import.set_defaults(command="session import")
 
     j1939 = subparsers.add_parser("j1939", help="J1939 protocol workflows")
     j1939_subparsers = j1939.add_subparsers(dest="j1939_action", required=True)
@@ -3279,7 +3366,7 @@ def validate_args(args: argparse.Namespace) -> None:
                     data={"signal": assignment},
                 )
 
-    if args.command in {"session save", "session load"}:
+    if args.command in SESSION_COMMANDS and getattr(args, "name", None) is not None:
         if "/" in args.name or args.name in {".", ".."}:
             raise CommandError(
                 command=args.command,
@@ -9281,14 +9368,20 @@ def session_payload(
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     store = SessionStore()
     if args.command == "session save":
-        record = store.save(args.name, build_session_context(args))
+        record = store.save(
+            args.name,
+            build_session_context(args),
+            arguments=session_arguments(args),
+            notes=[args.note] if getattr(args, "note", None) else None,
+            artifacts=list(getattr(args, "artifact", []) or []),
+        )
         return (
             {
                 "mode": "stateful",
                 "session": record.to_payload(),
             },
             [],
-            [],
+            _provenance_warnings(record),
         )
     if args.command == "session load":
         record = store.load(args.name)
@@ -9298,13 +9391,94 @@ def session_payload(
                 "session": record.to_payload(),
             },
             [],
-            [],
+            _provenance_warnings(record),
         )
     if args.command == "session show":
         payload = store.show()
         payload["mode"] = "stateful"
         return (payload, [], [])
+    if args.command == "session verify":
+        root = Path(args.root) if getattr(args, "root", None) else None
+        report = store.verify(args.name, root=root)
+        report["mode"] = "stateful"
+        if report["verification"]["status"] == "degraded":
+            summary = report["verification"]["summary"]
+            raise CommandError(
+                command=args.command,
+                exit_code=EXIT_USER_ERROR,
+                errors=[
+                    ErrorDetail(
+                        code="SESSION_VERIFICATION_FAILED",
+                        message=(
+                            f"Session '{args.name}' no longer matches its recorded inputs: "
+                            f"{summary['inputs_changed'] + summary['artifacts_changed']} changed, "
+                            f"{summary['inputs_missing'] + summary['artifacts_missing']} missing."
+                        ),
+                        hint=(
+                            "Inspect `verification.required_actions` for what must be restored, "
+                            "or re-run with `--root <directory>` if the inputs were relocated."
+                        ),
+                    )
+                ],
+                data=report,
+            )
+        return (report, [], [])
+    if args.command == "session annotate":
+        record, annotation = store.annotate(args.name, args.note, list(args.target or []))
+        return (
+            {
+                "mode": "stateful",
+                "session": record.to_payload(),
+                "annotation": annotation,
+            },
+            [],
+            _provenance_warnings(record),
+        )
+    if args.command == "session attach":
+        record, artifact = store.attach(
+            args.name,
+            args.artifact,
+            kind=args.kind,
+            derived_from=list(args.derived_from or []),
+            command=getattr(args, "produced_by_command", None),
+            embed=bool(args.embed),
+        )
+        return (
+            {
+                "mode": "stateful",
+                "session": record.to_payload(),
+                "artifact": artifact,
+            },
+            [],
+            _provenance_warnings(record),
+        )
+    if args.command == "session bundle":
+        bundle = store.bundle(args.name, Path(args.output))
+        warnings = list(bundle.pop("warnings", []))
+        return ({"mode": "stateful", "bundle": bundle}, [], warnings)
+    if args.command == "session import":
+        record = store.import_bundle(Path(args.bundle), name=getattr(args, "name", None))
+        return (
+            {
+                "mode": "stateful",
+                "session": record.to_payload(),
+                "imported_from": str(args.bundle),
+            },
+            [],
+            _provenance_warnings(record),
+        )
     raise AssertionError(f"unsupported session command: {args.command}")
+
+
+def _provenance_warnings(record: SessionRecord) -> list[str]:
+    """Say so when a record predates provenance recording instead of implying it has it."""
+    if record.provenance_available:
+        return []
+    return [
+        f"SESSION_PROVENANCE_UNAVAILABLE: session '{record.name}' was saved with manifest "
+        f"schema version {record.schema_version} and records no input hashes. Re-run "
+        f"`canarchy session save {record.name}` with its inputs to upgrade it."
+    ]
 
 
 def _build_match_catalog(
