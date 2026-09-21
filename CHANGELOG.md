@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+* **Synthetic datasets that work with no network access (#460).** Every dataset in the `catalog` provider downloads from a host (zenodo.org, figshare.com, huggingface.co, ocslab.hksecurity.net) that a typical sandboxed agent environment blocks, so the documented dataset workflow could not run there at all — and failed late, as a transport error deep inside a replay. A second `offline` provider now ships four synthetic datasets generated locally from protocol rules: `can-basic` (classic CAN with a discoverable counter and checksum), `j1939-basic` (J1939 with a BAM/TP sequence and a DM1 active fault), `can-intrusion` (attack-labelled rows in the HCRL CSV shape), and `signal-decoded` (pre-decoded per-ID signal columns). `datasets fetch offline:<name>` writes real data into the cache and returns its path, after which `datasets convert`, `datasets stream`, `stats`, `j1939 summary`, and `replay --file` work against a local file with no egress. Generation is deterministic, so a given dataset always produces the same bytes and provenance hashes stay stable across machines; nothing is downloaded and no third-party dataset content is redistributed. The data is synthetic and says so in its licence string, a `SYNTHETIC:` description prefix, and a `synthetic: true` machine field — it is for exercising tooling, not for research findings.
+
 ### Documentation
 
 * Added a maintainer launch packet with ecosystem listing copy, a released-package demo without CAN hardware, MCP registry prerequisites, and search-engine submission instructions (#484).

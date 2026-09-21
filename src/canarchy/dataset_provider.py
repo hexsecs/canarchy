@@ -160,6 +160,7 @@ def get_registry() -> DatasetProviderRegistry:
 def _build_default_registry() -> DatasetProviderRegistry:
     from canarchy.dataset_cache import load_datasets_config
     from canarchy.dataset_catalog import PublicDatasetProvider
+    from canarchy.dataset_offline import OfflineDatasetProvider
 
     cfg = load_datasets_config()
     registry = DatasetProviderRegistry()
@@ -167,6 +168,12 @@ def _build_default_registry() -> DatasetProviderRegistry:
     catalog_cfg = cfg.get("providers", {}).get("catalog", {})
     if catalog_cfg.get("enabled", True):
         registry.register(PublicDatasetProvider())
+
+    # Registered after the catalog so a bare ref still resolves to the real
+    # dataset of that name; synthetic data is opt-in via the `offline:` prefix.
+    offline_cfg = cfg.get("providers", {}).get("offline", {})
+    if offline_cfg.get("enabled", True):
+        registry.register(OfflineDatasetProvider())
 
     return registry
 

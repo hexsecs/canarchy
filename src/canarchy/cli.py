@@ -6329,6 +6329,10 @@ def dataset_machine_fields(descriptor: Any) -> dict[str, Any]:
         "default_replay_file": default_replay_file,
         "download_url_available": bool(replay_download_url),
         "source_type": source_type or ("index" if is_index else "dataset"),
+        # Synthetic datasets carry real protocol structure but no vehicle
+        # behaviour, so agents need to be able to tell them apart from research
+        # data without parsing the description.
+        "synthetic": bool(metadata.get("synthetic", False)),
     }
 
 

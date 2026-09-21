@@ -703,6 +703,32 @@ List registered public CAN dataset providers.
 canarchy datasets provider list [--json|--jsonl|--text]
 ```
 
+Two providers are registered by default:
+
+| Provider | Contents | Network |
+|----------|----------|---------|
+| `catalog` | Metadata for well-known public research datasets. `fetch` records provenance; the data itself downloads from the publisher's host | Required to obtain data |
+| `offline` | Synthetic datasets generated locally from protocol rules | None |
+
+Every `catalog` download host (zenodo.org, figshare.com, huggingface.co,
+ocslab.hksecurity.net) is blocked under a typical sandboxed agent network
+policy. Where there is no egress, use `offline` refs instead: `datasets fetch
+offline:<name>` generates real data into the cache and returns its path, after
+which `datasets convert`, `datasets stream`, `stats`, `j1939 summary` and
+`replay --file` all work against a local file.
+
+Offline datasets are **synthetic**. They carry real protocol structure but no
+vehicle behaviour, and are labelled as such in `license`, in a `SYNTHETIC:`
+description prefix, and by `synthetic: true` in the JSON machine fields. Use
+them to exercise tooling; do not report analysis of them as research findings.
+
+| Ref | Source format | Contents |
+|-----|---------------|----------|
+| `offline:can-basic` | `candump` | Periodic classic-CAN traffic with a rolling counter and checksum byte |
+| `offline:j1939-basic` | `candump` | J1939 traffic with a BAM/TP sequence and a DM1 active fault |
+| `offline:can-intrusion` | `hcrl-csv` | Attack-labelled rows, normal baseline plus injection bursts |
+| `offline:signal-decoded` | `decoded-signal-csv` | Pre-decoded normalised per-ID signal columns |
+
 ### datasets search
 
 Search public CAN dataset provider catalogs by name, protocol, or keyword.
