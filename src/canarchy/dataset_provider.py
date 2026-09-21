@@ -8,12 +8,26 @@ from typing import Protocol, runtime_checkable
 
 
 class DatasetError(Exception):
-    """Raised for dataset provider and cache failures."""
+    """Raised for dataset provider and cache failures.
 
-    def __init__(self, code: str, message: str, hint: str | None = None) -> None:
+    ``category`` separates a caller's mistake from an environment failure so
+    the CLI can map it to the documented exit code: ``"user"`` (bad ref,
+    unknown dataset, unsupported operation) exits 1, ``"backend"`` (cache
+    write failure, unreachable host) exits 2. It defaults to ``"user"``,
+    which is what every existing raise site means.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        hint: str | None = None,
+        category: str = "user",
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.hint = hint
+        self.category = category
 
 
 @dataclass(frozen=True)
@@ -42,6 +56,11 @@ class DatasetResolution:
     cache_path: Path
     is_cached: bool
     provenance: dict  # sha, fetched_at, source_url, provider
+    #: True when `cache_path` holds the dataset's actual bytes rather than a
+    #: provenance record for a file that still has to be downloaded. Providers
+    #: that generate or download data set this; the default False keeps the
+    #: existing provenance-only providers behaving as before (#460 review).
+    data_materialized: bool = False
 
 
 @runtime_checkable

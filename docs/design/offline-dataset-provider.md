@@ -85,6 +85,10 @@ such. The labelling requirements below exist to make that impossible to miss.
 | `REQ-ODS-08` | Unwanted behaviour | If an unknown offline dataset name is requested, the system shall return a structured error with code `DATASET_NOT_FOUND` and exit code 1. |
 | `REQ-ODS-09` | Ubiquitous | The system shall write a provenance record for each fetched offline dataset stating that the data is synthetic and naming the generator version. |
 | `REQ-ODS-10` | Ubiquitous | The system shall cover each source format the conversion layer parses (`candump`, `hcrl-csv`, `decoded-signal-csv`) with at least one offline dataset. |
+| `REQ-ODS-11` | Ubiquitous | The system shall publish a generated dataset atomically, so `cache_path` holds either the complete dataset or no file at all, and shall remove any temporary file if publishing fails. |
+| `REQ-ODS-12` | Unwanted behaviour | If the cache cannot be written, the system shall report `DATASET_GENERATION_FAILED` with exit code 2, distinguishing a storage failure from a usage error. |
+| `REQ-ODS-13` | Event-driven | When a fetch materialises data into the cache, the system shall report `data_is_local: true` and next steps naming commands that operate on `cache_path`, rather than the download and replay commands that only apply to provenance-only entries. |
+| `REQ-ODS-14` | Ubiquitous | The system shall address the generated BAM transport-protocol sequence to the global destination `0xFF`, consistent with the `0x20` (BAM) control byte in its announcement. |
 
 ---
 
@@ -169,7 +173,22 @@ the warning is visible in every output mode.
 | `DATASET_PROVIDER_NOT_FOUND` | Unknown provider prefix | 1 |
 | `DATASET_GENERATION_FAILED` | The cache path cannot be written | 2 |
 
+Exit code 2 is carried by a `category="backend"` field on `DatasetError`,
+which the CLI maps onto `EXIT_TRANSPORT_ERROR`. The default category is
+`"user"` (exit 1), which is what every other dataset error means, so a script
+can tell "I asked for the wrong thing" apart from "this machine could not do
+it".
+
 ---
+
+## Publishing
+
+Generation writes to a temporary sibling of the target path and renames it into
+place only once the whole dataset is on disk, removing the temporary file if
+anything fails. A direct write that died partway -- the cache filesystem filling
+up is the realistic case -- would leave a truncated file, and because `fetch`
+treats any non-empty path as cached, the next call would record provenance for
+and return partial data instead of regenerating it.
 
 ## Determinism
 

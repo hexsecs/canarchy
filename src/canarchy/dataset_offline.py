@@ -18,9 +18,12 @@ bytes, on every platform, so provenance hashes stay stable across machines.
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
+import os
 import random
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -28,7 +31,8 @@ from typing import Callable
 from canarchy.dataset_provider import DatasetDescriptor, DatasetError, DatasetResolution
 
 #: Bumped whenever generated output changes, so a stale cache is identifiable.
-GENERATOR_VERSION = "1"
+#: v2 corrects the BAM destination address to the global 0xFF (#460 review).
+GENERATOR_VERSION = "2"
 
 #: Fixed epoch for generated timestamps. Real wall-clock time would make output
 #: non-deterministic, which would defeat provenance hashing.
@@ -103,7 +107,28 @@ def _generate_can_basic(name: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _j1939_id(priority: int, pgn: int, source_address: int) -> int:
+def _j1939_id(
+    priority: int,
+    pgn: int,
+    source_address: int,
+    destination_address: int | None = None,
+) -> int:
+    """Compose a 29-bit J1939 identifier.
+
+    For a PDU1 PGN (PDU format 0x00-0xEF) the PGN's low byte is the PDU
+    specific field, which carries the *destination address* rather than
+    being part of the PGN. Callers building peer-to-peer or broadcast
+    PDU1 traffic must say which destination they mean: a BAM, for
+    instance, is addressed to the global 0xFF, and leaving the field at
+    0x00 would address node 0x00 instead (#460 review).
+    """
+    if destination_address is not None:
+        pdu_format = (pgn >> 8) & 0xFF
+        if pdu_format > 0xEF:
+            raise ValueError(
+                f"PGN 0x{pgn:04X} is PDU2 (broadcast); it has no destination address field"
+            )
+        pgn = (pgn & 0x3FF00) | (destination_address & 0xFF)
     return (priority << 26) | (pgn << 8) | source_address
 
 
@@ -143,7 +168,9 @@ def _generate_j1939_basic(name: str) -> str:
         lines.append(f"({_EPOCH + offset:.6f}) can0 {identifier:08X}#{payload.hex().upper()}")
 
     # A BAM multi-packet sequence: announcement (PGN 60416) then data
-    # (PGN 60160), which exercises transport-protocol reassembly.
+    # (PGN 60160), which exercises transport-protocol reassembly. Both are
+    # PDU1, so they carry an explicit destination: a BAM is addressed to the
+    # global 0xFF, matching the 0x20 (BAM) control byte in the announcement.
     bam_start = 6.0
     total_bytes = 20
     packet_count = 3
@@ -160,7 +187,8 @@ def _generate_j1939_basic(name: str) -> str:
         ]
     )
     lines.append(
-        f"({_EPOCH + bam_start:.6f}) can0 {_j1939_id(7, 60416, 0x00):08X}#{announce.hex().upper()}"
+        f"({_EPOCH + bam_start:.6f}) can0 "
+        f"{_j1939_id(7, 60416, 0x00, destination_address=0xFF):08X}#{announce.hex().upper()}"
     )
     remaining = total_bytes
     for sequence in range(1, packet_count + 1):
@@ -169,7 +197,7 @@ def _generate_j1939_basic(name: str) -> str:
         body = bytes([sequence]) + chunk + bytes([0xFF] * (7 - len(chunk)))
         lines.append(
             f"({_EPOCH + bam_start + sequence * 0.05:.6f}) can0 "
-            f"{_j1939_id(7, 60160, 0x00):08X}#{body.hex().upper()}"
+            f"{_j1939_id(7, 60160, 0x00, destination_address=0xFF):08X}#{body.hex().upper()}"
         )
 
     # DM1 active fault: SPN 110 (coolant temperature) FMI 3, from the engine.
@@ -412,15 +440,45 @@ class OfflineDatasetProvider:
         is_cached = path.is_file() and path.stat().st_size > 0
 
         if not is_cached:
+            # Publish atomically. A direct write that fails partway -- a full
+            # cache filesystem is the realistic case -- would leave a non-empty
+            # partial file, and the next fetch treats any non-empty path as
+            # cached: it would record provenance for, and hand back, truncated
+            # data. Write to a temporary sibling and rename only once the whole
+            # dataset is on disk (#460 review).
+            tmp_path: Path | None = None
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(dataset.generate(dataset.name), encoding="utf-8")
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    dir=path.parent,
+                    prefix=f".{path.name}.",
+                    suffix=".partial",
+                    delete=False,
+                ) as handle:
+                    tmp_path = Path(handle.name)
+                    handle.write(dataset.generate(dataset.name))
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp_path, path)
+                tmp_path = None
             except OSError as exc:
                 raise DatasetError(
                     code="DATASET_GENERATION_FAILED",
                     message=f"Could not write generated dataset to {path}: {exc}",
                     hint="Check permissions and free space for the CANarchy cache directory.",
+                    # A storage failure is a backend problem, not bad user
+                    # input. The category is what the CLI maps to exit code 2,
+                    # per this provider's error contract (#460 review).
+                    category="backend",
                 ) from exc
+            finally:
+                if tmp_path is not None:
+                    # The publish never happened; do not leave the partial
+                    # behind for a later fetch to trip over.
+                    with contextlib.suppress(OSError):
+                        tmp_path.unlink()
 
         provenance = {
             "provider": self.name,
@@ -441,6 +499,7 @@ class OfflineDatasetProvider:
             cache_path=path,
             is_cached=is_cached,
             provenance=provenance,
+            data_materialized=True,
         )
 
     def refresh(self, name: str | None = None) -> list[DatasetDescriptor]:

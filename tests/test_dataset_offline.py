@@ -8,6 +8,8 @@ checking descriptor metadata.
 
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -16,6 +18,15 @@ from unittest.mock import patch
 from canarchy.dataset_convert import convert_file
 from canarchy.dataset_offline import GENERATOR_VERSION, OfflineDatasetProvider
 from canarchy.dataset_provider import DatasetError, DatasetProvider
+
+
+def _raise(error: Exception):
+    """Return a generator callable that always raises `error`."""
+
+    def _generate(_name: str) -> str:
+        raise error
+
+    return _generate
 
 
 class OfflineProviderCacheTestCase(unittest.TestCase):
@@ -209,3 +220,155 @@ class OfflineProviderRegistrationTests(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+class OfflineReviewRegressionTests(OfflineProviderCacheTestCase):
+    """Regressions for the four defects found in review of #460 (PR #533)."""
+
+    @contextlib.contextmanager
+    def _generation_fails(self, name: str, error: Exception):
+        """Make one dataset's generator raise.
+
+        `generate` is a field on a frozen dataclass rather than a method, so
+        the registry tuple is swapped rather than the type patched.
+        """
+        import canarchy.dataset_offline as module
+
+        replaced = tuple(
+            dataclasses.replace(entry, generate=_raise(error)) if entry.name == name else entry
+            for entry in module._DATASETS
+        )
+        with patch.object(module, "_DATASETS", replaced):
+            yield
+
+    # --- BAM addressing -----------------------------------------------
+
+    def test_bam_frames_use_the_global_destination_address(self) -> None:
+        """A BAM must be addressed to 0xFF, not to node 0x00.
+
+        TP.CM (0xEC) and TP.DT (0xEB) are PDU1, so the PGN's low byte is the
+        destination address rather than part of the PGN. Leaving it at zero
+        produced 0x1CEC0000 / 0x1CEB0000 — a session addressed to node 0x00
+        while the payload's 0x20 control byte declared a BAM, which is
+        self-contradictory and can be rejected or misclassified by
+        protocol-aware consumers.
+        """
+        from canarchy.j1939 import decompose_arbitration_id
+
+        resolution = self.provider.fetch("j1939-basic")
+        text = resolution.cache_path.read_text(encoding="utf-8")
+
+        seen = {}
+        for line in text.splitlines():
+            identifier = int(line.split()[2].split("#")[0], 16)
+            decomposed = decompose_arbitration_id(identifier)
+            if decomposed.pdu_format in (0xEC, 0xEB):
+                seen.setdefault(decomposed.pdu_format, []).append(decomposed)
+
+        self.assertIn(0xEC, seen, "no TP.CM announcement generated")
+        self.assertIn(0xEB, seen, "no TP.DT data frames generated")
+        for pdu_format, entries in seen.items():
+            for decomposed in entries:
+                self.assertEqual(
+                    decomposed.destination_address,
+                    0xFF,
+                    f"PDU format 0x{pdu_format:02X} must be globally addressed for a BAM",
+                )
+
+    def test_bam_session_reassembles_as_a_global_broadcast(self) -> None:
+        """The generated sequence must reassemble as a BAM to 0xFF."""
+        from canarchy.j1939_decoder import get_j1939_decoder
+        from canarchy.transport import LocalTransport
+
+        resolution = self.provider.fetch("j1939-basic")
+        frames = LocalTransport().iter_frames_from_file(str(resolution.cache_path))
+        sessions = list(get_j1939_decoder().transport_protocol_sessions(frames))
+
+        self.assertEqual(len(sessions), 1)
+        session = sessions[0]
+        self.assertEqual(session["session_type"], "bam")
+        self.assertEqual(session["destination_address"], 0xFF)
+        self.assertTrue(session["complete"])
+
+    def test_destination_address_is_rejected_for_a_pdu2_pgn(self) -> None:
+        """A PDU2 PGN has no destination field; asking for one is a bug."""
+        from canarchy.dataset_offline import _j1939_id
+
+        with self.assertRaises(ValueError):
+            _j1939_id(6, 65226, 0x00, destination_address=0xFF)
+
+    # --- atomic publish -----------------------------------------------
+
+    def test_publish_is_atomic_and_cleans_up_on_failure(self) -> None:
+        """The dataset must appear at its path complete, or not at all.
+
+        The realistic failure is the cache filesystem filling up mid-write.
+        A direct write to the target would leave a truncated file, and
+        `fetch` treats any non-empty path as cached — so the next call would
+        record provenance for, and hand back, partial data instead of
+        regenerating it.
+
+        The contract is checked at the publish boundary: if the rename into
+        place fails, neither the target nor the temporary sibling may be left
+        behind. Before the fix there was no rename at all — generation wrote
+        straight to the target — so this fails there.
+        """
+        path = self.provider.data_path("can-basic")
+
+        def _enospc(_src, _dst):
+            raise OSError("No space left on device")
+
+        with patch("canarchy.dataset_offline.os.replace", _enospc):
+            with self.assertRaises(DatasetError) as caught:
+                self.provider.fetch("can-basic")
+
+        self.assertEqual(caught.exception.code, "DATASET_GENERATION_FAILED")
+        self.assertFalse(
+            path.exists(),
+            "a failed publish must not leave a file the next fetch treats as cached",
+        )
+        siblings = sorted(path.parent.glob("*")) if path.parent.exists() else []
+        self.assertEqual(siblings, [], f"temporary files left behind: {siblings}")
+
+    def test_a_generation_error_reports_the_documented_code(self) -> None:
+        """A generator failure surfaces as DATASET_GENERATION_FAILED."""
+        with self._generation_fails("can-basic", OSError("No space left on device")):
+            with self.assertRaises(DatasetError) as caught:
+                self.provider.fetch("can-basic")
+
+        self.assertEqual(caught.exception.code, "DATASET_GENERATION_FAILED")
+        self.assertFalse(self.provider.data_path("can-basic").exists())
+
+    def test_a_successful_fetch_after_a_failure_regenerates_cleanly(self) -> None:
+        """Recovery path: the dataset is complete once the write succeeds."""
+        path = self.provider.data_path("can-basic")
+
+        with self._generation_fails("can-basic", OSError("No space left on device")):
+            with self.assertRaises(DatasetError):
+                self.provider.fetch("can-basic")
+
+        resolution = self.provider.fetch("can-basic")
+        self.assertTrue(path.is_file())
+        self.assertGreater(path.stat().st_size, 0)
+        self.assertTrue(resolution.data_materialized)
+
+    # --- error category / exit code -----------------------------------
+
+    def test_generation_failure_is_categorised_as_a_backend_error(self) -> None:
+        """Storage failure is exit 2, not exit 1: it is not bad user input."""
+        with self._generation_fails("can-basic", OSError("Permission denied")):
+            with self.assertRaises(DatasetError) as caught:
+                self.provider.fetch("can-basic")
+
+        self.assertEqual(caught.exception.category, "backend")
+
+    def test_dataset_error_defaults_to_the_user_category(self) -> None:
+        """Every pre-existing raise site keeps exit 1."""
+        self.assertEqual(DatasetError(code="X", message="y").category, "user")
+
+    # --- fetch reports a usable next step ------------------------------
+
+    def test_fetch_declares_that_data_was_materialised(self) -> None:
+        resolution = self.provider.fetch("can-basic")
+        self.assertTrue(resolution.data_materialized)
+        self.assertTrue(resolution.cache_path.is_file())

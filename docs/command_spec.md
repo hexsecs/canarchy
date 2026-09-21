@@ -768,9 +768,11 @@ canarchy datasets fetch <provider>:<dataset> [--json|--jsonl|--text]
 
 Notes:
 
-* `datasets fetch` records provenance **only** — it does not download data. Use `datasets download` to retrieve the actual file, or `datasets replay` to stream it.
-* normal dataset entries return `download_instructions` plus a `next_steps` cross-link to `datasets download`/`datasets replay`
+* `datasets fetch` records provenance only for **remote** datasets — it does not download data. Use `datasets download` to retrieve the actual file, or `datasets replay` to stream it.
+* a provider that generates data locally (the `offline` provider) instead writes the real bytes into the cache; those fetches return `data_is_local=true` and a `next_steps` pointing at `cache_path` for `capture-info`, `stats`, `replay --file`, `datasets convert`, and `datasets stream`. `datasets download` and `datasets replay` do not apply and return `DATASET_REPLAY_UNAVAILABLE`.
+* normal (remote) dataset entries return `data_is_local=false`, `download_instructions`, plus a `next_steps` cross-link to `datasets download`/`datasets replay`
 * curated index entries return `is_index=true` and `index_instructions`; there is no single dataset payload to download
+* a cache-write failure returns `DATASET_GENERATION_FAILED` with exit code 2 (backend error), distinct from exit code 1 for a bad ref or unknown dataset
 
 ### datasets download
 

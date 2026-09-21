@@ -1733,6 +1733,95 @@ class FetchWordingTests(unittest.TestCase):
         self.assertNotIn("Curated index entry", out)
 
 
+class OfflineFetchNextStepsTests(unittest.TestCase):
+    """`datasets fetch` must give a usable next step per provider (#460 review).
+
+    The offline provider materialises real bytes into the cache, but the
+    shared handler reported "Provenance only — no data was downloaded" and
+    pointed at `datasets download` / `datasets replay`. Both fail with
+    DATASET_REPLAY_UNAVAILABLE for a generated dataset, so an agent
+    following `next_steps` hit two dead ends while the data sat at
+    `cache_path`.
+    """
+
+    def setUp(self) -> None:
+        reset_registry()
+
+    def tearDown(self) -> None:
+        reset_registry()
+
+    def test_offline_fetch_points_at_the_local_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.Path.home", return_value=Path(tmp)):
+                code, out, _ = run_cli("datasets", "fetch", "offline:can-basic", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)["data"]
+        self.assertTrue(data["data_is_local"])
+        self.assertIn("already on disk", data["next_steps"])
+        self.assertIn(data["cache_path"], data["next_steps"])
+        self.assertIn("generated locally", data["download_instructions"])
+        # The two commands that cannot work for a generated dataset must not
+        # be recommended.
+        self.assertNotIn("datasets download", data["next_steps"])
+        self.assertNotIn("datasets replay", data["next_steps"])
+        self.assertNotIn("no data was downloaded", data["next_steps"])
+
+    def test_offline_fetch_next_steps_name_commands_that_work(self) -> None:
+        """Every command named in `next_steps` must accept the cached path."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.Path.home", return_value=Path(tmp)):
+                code, out, _ = run_cli("datasets", "fetch", "offline:can-basic", "--json")
+                self.assertEqual(code, 0)
+                path = json.loads(out)["data"]["cache_path"]
+
+                info_code, info_out, _ = run_cli("capture-info", "--file", path, "--json")
+                stats_code, _, _ = run_cli("stats", "--file", path, "--json")
+
+        self.assertEqual(info_code, 0)
+        self.assertEqual(stats_code, 0)
+        self.assertGreater(json.loads(info_out)["data"]["frame_count"], 0)
+
+    def test_catalog_fetch_still_reports_provenance_only(self) -> None:
+        """A provenance-only provider keeps its original wording."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.cache_root", return_value=Path(tmp) / "cache"):
+                code, out, _ = run_cli("datasets", "fetch", "catalog:road", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)["data"]
+        self.assertFalse(data["data_is_local"])
+        self.assertIn("no data was downloaded", data["next_steps"])
+        self.assertIn("Download the data manually", data["download_instructions"])
+
+
+class OfflineFetchExitCodeTests(unittest.TestCase):
+    """A storage failure is a backend error (exit 2), not a usage error (#460 review)."""
+
+    def setUp(self) -> None:
+        reset_registry()
+
+    def tearDown(self) -> None:
+        reset_registry()
+
+    def test_generation_failure_exits_with_the_backend_code(self) -> None:
+        def _enospc(_src, _dst):
+            raise OSError("No space left on device")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("canarchy.dataset_cache.Path.home", return_value=Path(tmp)):
+                with patch("canarchy.dataset_offline.os.replace", _enospc):
+                    code, out, _ = run_cli("datasets", "fetch", "offline:can-basic", "--json")
+
+        self.assertEqual(code, 2, "a cache write failure must be distinguishable from bad input")
+        payload = json.loads(out)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["errors"][0]["code"], "DATASET_GENERATION_FAILED")
+
+    def test_unknown_dataset_still_exits_with_the_usage_code(self) -> None:
+        code, out, _ = run_cli("datasets", "fetch", "offline:does-not-exist", "--json")
+        self.assertEqual(code, 1)
+        self.assertFalse(json.loads(out)["ok"])
+
+
 class FetchHumanFormattingTests(unittest.TestCase):
     """Human-readable formatting for datasets fetch (issue #266)."""
 
