@@ -423,6 +423,17 @@ Suggested JSON error shape:
 }
 ```
 
+Argument-parsing failures use the same envelope, so one error parser covers
+every failure. An unrecognised option, an unknown command or subcommand, a
+missing required argument, or a value that fails type conversion returns
+`command: "cli"`, code `INVALID_ARGUMENTS`, and exit code 1 in the requested
+format — `canarchy stats --unknown-option --json` emits JSON, not a text
+block. The output flags are mutually exclusive, so passing more than one is
+itself an argument error; the envelope reporting it is rendered by the fixed
+precedence `--json` > `--jsonl` > `--text` > `--table`, independent of order.
+`--help` and `--version` remain plain text with exit code 0. See
+`docs/design/cli-parse-errors.md`.
+
 ---
 
 ## Proposed initial command tree
