@@ -394,3 +394,196 @@ def test_capture_replacement_waits_for_previous_worker() -> None:
             assert app._capture.interface == "can0"
 
     _run(scenario())
+
+
+def _alert_text(app: CanarchyTuiApp) -> str:
+    """Every line written to the Alerts log, joined for substring checks."""
+
+    return "\n".join(strip.text for strip in app.query_one("#alerts", RichLog).lines)
+
+
+def _holding_factory(interface: str) -> CaptureSession:
+    """A capture that yields the two scaffold frames and then stays alive.
+
+    The scaffold stream is finite and releases its session as soon as it
+    drains, which would make "does the running capture survive?" vacuous.
+    This one parks on the stop event so the session is still live while the
+    test submits help and malformed input.
+    """
+
+    sample = next(
+        LocalTransport(live_backend=ScaffoldCanBackend()).capture_stream_events(interface)
+    )
+
+    class _HoldingTransport:
+        def capture_stream_events(self, interface: str, *, stop_event=None):
+            for _ in range(2):
+                yield dict(sample)
+            assert stop_event is not None
+            stop_event.wait(2)
+
+    return CaptureSession(interface, transport=_HoldingTransport())  # type: ignore[arg-type]
+
+
+async def _await_rows(app: CanarchyTuiApp, pilot, selector: str, count: int) -> None:
+    for _ in range(60):
+        await pilot.pause(0.05)
+        if app.query_one(selector, DataTable).row_count >= count:
+            return
+
+
+def test_help_does_not_clear_rows_or_stores() -> None:
+    """`/help` is read-only: issue #517 had it wiping panes and row stores."""
+
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "j1939 monitor --pgn 65262")
+            traffic = app.query_one("#traffic", DataTable)
+            rows_before = traffic.row_count
+            store_before = len(app._rows["traffic"])
+            j1939_before = len(app._rows["j1939"])
+            assert rows_before >= 1
+            assert store_before == rows_before
+
+            await _submit(app, pilot, "/help")
+
+            # Displayed rows and the underlying stores both survive.
+            assert traffic.row_count == rows_before
+            assert len(app._rows["traffic"]) == store_before
+            assert len(app._rows["j1939"]) == j1939_before
+            assert app.query_one("#j1939", DataTable).row_count >= 1
+            alerts = _alert_text(app)
+            assert "Hotkeys:" in alerts
+            assert "/capture <iface>" in alerts
+            assert "panes cleared" not in alerts
+
+            # Filter state is untouched, and a filter round-trip still
+            # recovers every stored row (the #517 report's check).
+            assert app._pane_filters == {}
+            await _submit(app, pilot, "/filter traffic zzzznomatch")
+            assert traffic.row_count == 0
+            await _submit(app, pilot, "/filter traffic")
+            assert traffic.row_count == rows_before
+
+            # /clear still clears.
+            await _submit(app, pilot, "/clear")
+            assert traffic.row_count == 0
+            assert app._rows["traffic"] == []
+            assert "panes cleared" in _alert_text(app)
+
+    _run(scenario())
+
+
+def test_help_during_capture_and_while_paused_preserves_state() -> None:
+    """Help must not disturb the capture lifecycle or the paused feed."""
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=_holding_factory)
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture vcan0")
+            await _await_rows(app, pilot, "#traffic", 2)
+            capture = app._capture
+            assert capture is not None
+            assert capture.running is True
+            assert app.query_one("#traffic", DataTable).row_count == 2
+
+            await _submit(app, pilot, "/help")
+            assert app._capture is capture
+            assert app._capture.running is True
+            assert app.query_one("#traffic", DataTable).row_count == 2
+            assert len(app._rows["traffic"]) == 2
+
+            # ... and again while presentation is paused.
+            app.action_toggle_pause()
+            await pilot.pause()
+            await _submit(app, pilot, "/help")
+            assert app.paused is True
+            assert app._capture is capture
+            assert app.query_one("#traffic", DataTable).row_count == 2
+            assert len(app._rows["traffic"]) == 2
+            assert "panes cleared" not in _alert_text(app)
+
+            app.action_toggle_pause()
+            app.action_stop_capture()
+            await pilot.pause()
+
+    _run(scenario())
+
+
+def test_malformed_slash_quoting_reports_instead_of_crashing() -> None:
+    """Issue #518: `/capture "` escaped shlex and tore down the whole app."""
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=_holding_factory)
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture vcan0")
+            await _await_rows(app, pilot, "#traffic", 2)
+            capture = app._capture
+            assert capture is not None
+
+            # Submitted through the real Input event, exactly as typed.
+            await _submit(app, pilot, '/capture "')
+            assert "could not parse /capture arguments" in _alert_text(app)
+            assert "No closing quotation" in _alert_text(app)
+            # The running capture and the displayed history are untouched.
+            assert app._capture is capture
+            assert app._capture.running is True
+            assert app.query_one("#traffic", DataTable).row_count == 2
+
+            # A dangling backslash escape is reported the same way.
+            await _submit(app, pilot, "/capture vcan0\\")
+            assert "No escaped character" in _alert_text(app)
+            assert app._capture is capture
+
+            # The app is still usable: a valid command still runs.
+            await _submit(app, pilot, "j1939 monitor --pgn 65262")
+            assert app.query_one("#j1939", DataTable).row_count >= 1
+
+            app.action_stop_capture()
+            await pilot.pause()
+
+    _run(scenario())
+
+
+def test_capture_rejects_empty_and_extra_arguments() -> None:
+    """Empty interface tokens and extra `/capture` tokens are refused."""
+
+    started: list[str] = []
+
+    def recording_factory(interface: str) -> CaptureSession:
+        started.append(interface)
+        return _holding_factory(interface)
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=recording_factory)
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture vcan0")
+            await _await_rows(app, pilot, "#traffic", 2)
+            capture = app._capture
+            assert started == ["vcan0"]
+
+            await _submit(app, pilot, '/capture ""')
+            assert "interface must not be empty" in _alert_text(app)
+            await _submit(app, pilot, "/capture vcan1 --candump")
+            assert "takes a single interface" in _alert_text(app)
+            await _submit(app, pilot, "/capture")
+            assert "/capture requires an interface" in _alert_text(app)
+
+            # No rejected form reached the capture factory, so the running
+            # capture was neither stopped nor replaced.
+            assert started == ["vcan0"]
+            assert app._capture is capture
+            assert app._capture is not None
+            assert app._capture.interface == "vcan0"
+            assert app._capture.running is True
+            assert app.query_one("#traffic", DataTable).row_count == 2
+
+            app.action_stop_capture()
+            await pilot.pause()
+
+    _run(scenario())

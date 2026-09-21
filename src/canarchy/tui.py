@@ -15,9 +15,18 @@ if TYPE_CHECKING:
 
 
 class _HotkeyResult(enum.Enum):
-    """Disposition signalled by `_handle_hotkey`."""
+    """Disposition signalled by `_handle_hotkey`.
 
-    LOCAL = "local"  # state-only handler ran (e.g. /help, /clear); re-render
+    ``LOCAL`` and ``CLEARED`` are deliberately distinct: "the handler ran
+    without producing an argv" is not the same signal as "the handler
+    discarded pane data". Front ends own view state the fold layer cannot
+    see (the full-screen app keeps its own per-pane row stores), so only
+    ``CLEARED`` authorises them to drop it. Conflating the two made
+    read-only commands such as ``/help`` erase captured rows (issue #517).
+    """
+
+    LOCAL = "local"  # read-only local handler ran (e.g. /help); keep view state
+    CLEARED = "cleared"  # local handler reset pane state (/clear); clear the view
     EXPANDED = "expanded"  # the slash command produced an argv to execute
     QUIT = "quit"  # session should end
     UNKNOWN = "unknown"  # unrecognised slash command
@@ -468,6 +477,10 @@ def _handle_hotkey(
     Returns `(disposition, expanded_argv_string)`. When the
     disposition is ``EXPANDED`` the caller runs ``expanded_argv_string``
     through the shared command path so the existing parser handles the rest.
+    ``CLEARED`` means this handler reset the shared pane state and the
+    caller should discard its own view state too; ``LOCAL`` means the
+    handler only emitted diagnostics and the caller must leave rows,
+    counters, filters, and capture lifecycle untouched.
 
     Diagnostic lines (help table, error hints) are written through
     ``emit`` — one call per line. It defaults to ``print`` so the
@@ -489,7 +502,7 @@ def _handle_hotkey(
         return _HotkeyResult.LOCAL, None
     if name == "clear":
         _clear_panes(state)
-        return _HotkeyResult.LOCAL, None
+        return _HotkeyResult.CLEARED, None
     template = _HOTKEY_TEMPLATES.get(name)
     if template is None:
         emit(f"unknown hotkey: /{name} (try /help)")
