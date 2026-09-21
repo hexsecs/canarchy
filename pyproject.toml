@@ -88,5 +88,15 @@ package = true
 [tool.hatch.version]
 path = "src/canarchy/__init__.py"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Integration tests touch the real environment or real hardware and are
+# excluded from the default run; select them explicitly with `-m integration`
+# (see tests/conftest.py and docs/tests/test-isolation.md).
+addopts = "-m 'not integration'"
+markers = [
+    "integration: needs the real environment or real CAN hardware; opts out of test isolation and must be selected explicitly",
+]
+
 [tool.ruff]
 line-length = 100
