@@ -162,6 +162,7 @@ nav:
           - Full-Screen TUI: design/tui-shell.md
           - Web Dashboard: design/web-serve.md
           - cannelloni Interop: design/cannelloni-interop.md
+          - CLI Parse-Error Output: design/cli-parse-errors.md
       - Test Specs:
           - Test Isolation: tests/test-isolation.md
           - Active Command Safety: tests/active-command-safety.md
@@ -203,6 +204,7 @@ nav:
           - Web Dashboard: tests/web-serve.md
           - cannelloni Interop: tests/cannelloni-interop.md
           - Composition: tests/composition.md
+          - CLI Parse-Error Output: tests/cli-parse-errors.md
   - Agents:
       - Agent Guide: agents.md
       - MCP Install: mcp_install.md
