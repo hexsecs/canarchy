@@ -226,7 +226,7 @@ class CanarchyTuiApp(App[int]):
             self._cmd_capture(rest)
             return
         if name == "stop":
-            self.action_stop_capture()
+            self._cmd_stop(rest)
             return
         if name == "filter":
             self._cmd_filter(rest)
@@ -291,6 +291,27 @@ class CanarchyTuiApp(App[int]):
             self._ingest_result(result)
 
     # -- live capture -------------------------------------------------------
+
+    def _cmd_stop(self, rest: str) -> None:
+        """Validate `/stop` before ending the capture.
+
+        `/stop` takes no arguments. It used to discard `rest` entirely, so
+        `/stop "` stopped a running capture instead of reporting the
+        unmatched quote — a destructive action taken on input the command
+        contract says must be refused (issue #542). Rejection happens
+        before `action_stop_capture`, so the capture survives.
+        """
+
+        tokens = self._split_slash_args("stop", rest)
+        if tokens is None:
+            return
+        if tokens:
+            self._emit_alert(
+                f"/stop takes no arguments; got {len(tokens)}. "
+                "Use /stop on its own to end the capture."
+            )
+            return
+        self.action_stop_capture()
 
     def _cmd_capture(self, rest: str) -> None:
         """Validate `/capture <iface>` before touching the capture session.

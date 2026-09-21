@@ -149,6 +149,37 @@ And the running session, its interface, and the displayed rows shall be unchange
 
 **Fixture:** Textual test pilot with a recording capture factory over a parked capture transport.
 
+### TEST-TUI-14: Stop Argument Validation
+
+```gherkin
+Given a capture is running and traffic rows are displayed
+When  the operator submits `/stop "`
+Then  the alerts log shall report the parse failure
+And   the capture shall still be running
+When  the operator submits `/stop now`
+Then  the alerts log shall state that /stop takes no arguments
+And   the capture shall still be running
+And   the displayed rows shall be unchanged
+When  the operator submits a bare `/stop`
+Then  the capture shall stop
+```
+
+**Fixture:** Textual test pilot over a parked capture transport.
+
+### TEST-TUI-15: Raw-Text Slash Arguments
+
+```gherkin
+Given the TUI is running
+When  the operator submits `/filter traffic "`
+Then  the traffic filter shall be the literal quote character
+And   no parse-failure diagnostic shall be reported
+When  the operator submits `/sort "`
+Then  the alerts log shall show the /sort usage hint
+```
+
+**Fixture:** Textual test pilot. Guards the scoping of REQ-TUI-15: tokenising
+every slash command would make this filter needle unusable.
+
 ## Traceability
 
 | Requirement | Tests |
@@ -167,8 +198,10 @@ And the running session, its interface, and the displayed rows shall be unchange
 | REQ-TUI-12 | TEST-TUI-02, TEST-TUI-05, TEST-TUI-06 |
 | REQ-TUI-13 | TEST-TUI-10, TEST-TUI-11 |
 | REQ-TUI-14 | TEST-TUI-10, TEST-TUI-11 |
-| REQ-TUI-15 | TEST-TUI-12 |
+| REQ-TUI-15 | TEST-TUI-12, TEST-TUI-14 |
 | REQ-TUI-16 | TEST-TUI-13 |
+| REQ-TUI-17 | TEST-TUI-14 |
+| REQ-TUI-18 | TEST-TUI-15 |
 
 ## Not Tested
 

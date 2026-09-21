@@ -2187,6 +2187,47 @@ class ConfiguredSearchOrderTests(unittest.TestCase):
             registry = get_registry()
         self.assertEqual(registry.search_order(), ["offline", "catalog"])
 
+    def test_all_providers_disabled_renders_an_explicit_empty_state(self) -> None:
+        """Issue #543: the bare heading told the operator nothing.
+
+        `datasets provider list` is the documented way to inspect the
+        effective provider configuration, so the one configuration that
+        needs explaining must not be the one that renders blank.
+        """
+        self._write_config(
+            "[datasets.providers.catalog]\nenabled = false\n"
+            "[datasets.providers.offline]\nenabled = false\n"
+        )
+        code, out, _ = run_cli("datasets", "provider", "list")
+        self.assertEqual(code, 0)
+        self.assertIn("(none registered)", out)
+        self.assertIn("Search order: (none)", out)
+        # The empty state names the cause, so it is actionable.
+        self.assertIn("datasets.providers", out)
+
+    def test_all_providers_disabled_leaves_json_shape_unchanged(self) -> None:
+        """The JSON was already correct and unambiguous; only text changed."""
+        self._write_config(
+            "[datasets.providers.catalog]\nenabled = false\n"
+            "[datasets.providers.offline]\nenabled = false\n"
+        )
+        code, out, _ = run_cli("datasets", "provider", "list", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["data"]["providers"], [])
+        self.assertEqual(data["data"]["search_order"], [])
+        # No human decoration leaked into the machine output.
+        self.assertNotIn("(none)", out)
+
+    def test_populated_provider_list_still_shows_the_search_order(self) -> None:
+        """The normal path keeps its existing rendering."""
+        code, out, _ = run_cli("datasets", "provider", "list")
+        self.assertEqual(code, 0)
+        self.assertIn("catalog (registered)", out)
+        self.assertIn("Search order: catalog -> offline", out)
+        self.assertNotIn("(none)", out)
+
     def test_real_providers_follow_configured_order(self) -> None:
         """The built-in providers, not stubs, honour the configured order."""
         self._write_config('[datasets]\nsearch_order = ["offline", "catalog"]\n')

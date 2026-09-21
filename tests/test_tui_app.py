@@ -587,3 +587,67 @@ def test_capture_rejects_empty_and_extra_arguments() -> None:
             await pilot.pause()
 
     _run(scenario())
+
+
+def test_stop_rejects_arguments_instead_of_ending_the_capture() -> None:
+    """Issue #542: `/stop "` stopped the capture instead of refusing it.
+
+    `_run_slash` discarded `/stop`'s arguments entirely, so malformed input
+    still reached `action_stop_capture`. REQ-TUI-15 requires the opposite:
+    report the failure and leave capture state alone.
+    """
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=_holding_factory)
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, "/capture vcan0")
+            await _await_rows(app, pilot, "#traffic", 2)
+            capture = app._capture
+            assert capture is not None
+
+            # An unmatched quote is reported, not acted on.
+            await _submit(app, pilot, '/stop "')
+            assert "could not parse /stop arguments" in _alert_text(app)
+            assert app._capture is capture
+            assert app._capture.running is True
+
+            # A well-formed but unexpected argument is refused too, rather
+            # than being silently dropped the way it used to be.
+            await _submit(app, pilot, "/stop now")
+            assert "/stop takes no arguments" in _alert_text(app)
+            assert app._capture is capture
+            assert app._capture.running is True
+
+            # The displayed history survived both rejections.
+            assert app.query_one("#traffic", DataTable).row_count == 2
+
+            # Bare /stop still works.
+            await _submit(app, pilot, "/stop")
+            await pilot.pause()
+            assert app._capture is None or app._capture.running is False
+
+    _run(scenario())
+
+
+def test_filter_still_accepts_raw_text_with_a_quote() -> None:
+    """`/filter` and `/sort` take raw text, so they must not be tokenised.
+
+    Guards the narrowed REQ-TUI-15 (#542): routing every slash command
+    through `shlex.split` would make a filter needle containing a quote
+    unusable, which would be a regression rather than a fix.
+    """
+
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=_holding_factory)
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause()
+            await _submit(app, pilot, '/filter traffic "')
+            assert app._pane_filters.get("traffic") == '"'
+            assert "could not parse" not in _alert_text(app)
+
+            # An unknown pane is still rejected without touching state.
+            await _submit(app, pilot, '/sort "')
+            assert "/sort <" in _alert_text(app)
+
+    _run(scenario())

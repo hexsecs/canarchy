@@ -35,8 +35,10 @@ This specification covers TUI launch, shared command execution, live capture lif
 | REQ-TUI-12 | Event-driven | When buffered events are drained, the system shall update shared TUI state and render the applicable traffic and protocol panes without bypassing the command or protocol layers. |
 | REQ-TUI-13 | Ubiquitous | The system shall discard retained pane rows only in response to an explicit clearing action. |
 | REQ-TUI-14 | Event-driven | When an operator requests the in-TUI help, the system shall render the hotkey table into the alerts log and leave retained rows, pane row stores, filters, sort state, counters, and the capture lifecycle unchanged. |
-| REQ-TUI-15 | Unwanted behaviour | If a slash command's arguments cannot be tokenised, the system shall report the parse failure in the alerts log, leave capture and pane state unchanged, and continue accepting commands. |
+| REQ-TUI-15 | Unwanted behaviour | If a slash command that tokenises its arguments (`/capture`, `/stop`) cannot tokenise them, the system shall report the parse failure in the alerts log, leave capture and pane state unchanged, and continue accepting commands. |
 | REQ-TUI-16 | Unwanted behaviour | If `/capture` receives no interface, an empty interface token, or more than one argument, the system shall reject the command with an alerts diagnostic and shall neither stop nor replace a running capture. |
+| REQ-TUI-17 | Unwanted behaviour | If `/stop` receives any argument, the system shall reject the command with an alerts diagnostic and shall not stop a running capture. |
+| REQ-TUI-18 | Ubiquitous | The system shall treat `/filter` and `/sort` arguments as raw text rather than shell tokens, so that a filter needle may contain quote characters. |
 
 ## Command Surface
 
@@ -47,6 +49,10 @@ canarchy tui
 Inside the TUI, `/capture <interface>`, `/stop`, `/clear`, `/filter`, and `/help` control presentation and capture; the spacebar pauses or resumes presentation. Other commands are delegated to the canonical command executor.
 
 `/capture` takes exactly one interface. It is a hotkey for the app-native live stream and carries no options, so an empty token, a whitespace-only token, or extra arguments are rejected with an alerts diagnostic rather than silently ignored; run the full `capture` command for anything that needs flags. Rejection happens before the capture session is touched, so malformed input never stops or replaces a running capture.
+
+`/stop` takes no arguments. It previously discarded whatever followed it, so `/stop "` ended a running capture instead of reporting the unmatched quote; arguments are now validated before the capture is touched (issue #542).
+
+Argument handling differs by command on purpose. `/capture` and `/stop` tokenise with `shlex` and report a parse failure as a diagnostic. `/filter` and `/sort` take raw text — a filter needle may legitimately contain a quote character — so they validate their pane argument instead of tokenising, and leave state unchanged when it is not recognised. REQ-TUI-15 is scoped to the tokenising commands for that reason.
 
 `/clear` (and the `c` key) is the only slash command that discards pane data. The shared hotkey layer signals this to front ends with a dedicated disposition (`_HotkeyResult.CLEARED`) that is distinct from "handled locally without producing a command" (`_HotkeyResult.LOCAL`); a read-only handler such as `/help` returns `LOCAL` and front ends leave their view state alone.
 
@@ -89,6 +95,7 @@ Slash-command validation failures are presentation-level diagnostics, not struct
 |---|---|
 | `error: could not parse /<name> arguments: <reason>` | Unmatched quote or dangling escape in a slash command's arguments |
 | `/capture requires an interface; e.g. /capture vcan0` | `/capture` submitted with no argument |
+| `/stop takes no arguments; got N. …` | `/stop` submitted with any argument |
 | `/capture interface must not be empty; e.g. /capture vcan0` | `/capture ""` or a whitespace-only interface token |
 | `/capture takes a single interface; got N arguments. …` | `/capture` submitted with more than one token |
 
