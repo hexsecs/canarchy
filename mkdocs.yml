@@ -121,6 +121,7 @@ nav:
       - TUI Plan: tui_plan.md
       - Spec Template: spec-template.md
       - Design Specs:
+          - Test Isolation: design/test-isolation.md
           - Active Command Safety: design/active-command-safety.md
           - Active-Transmit Safety Model: design/active-transmit-safety.md
           - Response-Feedback Guided Fuzzing: design/response-feedback-fuzz.md
@@ -162,6 +163,7 @@ nav:
           - Web Dashboard: design/web-serve.md
           - cannelloni Interop: design/cannelloni-interop.md
       - Test Specs:
+          - Test Isolation: tests/test-isolation.md
           - Active Command Safety: tests/active-command-safety.md
           - Active-Transmit Safety Model: tests/active-transmit-safety.md
           - Response-Feedback Guided Fuzzing: tests/response-feedback-fuzz.md

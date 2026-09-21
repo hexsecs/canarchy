@@ -33,6 +33,24 @@ canarchy --help
 uv run pytest tests/ -q
 ```
 
+The suite is isolated by default: it redirects `Path.home()` to a temporary
+directory, clears every `CANARCHY_*` variable, and fails any test that tries
+to open a real CAN interface. It is safe to run on a machine with a real
+`~/.canarchy` and real hardware attached, and it produces the same result
+whether or not you have a config file.
+
+Tests that genuinely need the real environment or real hardware are marked
+`integration`. They are excluded from the default run — select them with:
+
+```bash
+uv run pytest tests/ -q -m integration
+```
+
+If a test fails with "tried to open a real CAN bus", it reached a live
+interface: patch `PythonCanBackend._open_bus`, select the scaffold backend,
+use the in-process `virtual` interface, or mark it `integration` if it really
+does need hardware. See [`docs/design/test-isolation.md`](docs/design/test-isolation.md).
+
 `uv.lock` is checked in for reproducible resolution. Do not modify it by
 hand — let `uv` do that.
 
