@@ -2653,6 +2653,102 @@ class CliTests(unittest.TestCase):
         self.assertIn("service=0x27", stdout)
         self.assertIn("name=SecurityAccess", stdout)
 
+    # --- #530: a configured default interface must not promote the reference
+    # catalog lookup into active bus probing. -----------------------------
+
+    def _assert_reference_catalog(self, stdout: str, stderr: str) -> None:
+        payload = json.loads(stdout)
+        self.assertEqual(payload["command"], "uds services")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["mode"], "reference")
+        self.assertGreater(payload["data"]["service_count"], 5)
+        # Active mode is what we are guarding against: it reports probe
+        # counts and emits a transmit warning on stderr.
+        self.assertNotIn("probe_count", payload["data"])
+        self.assertNotIn("interface", payload["data"])
+        self.assertEqual(stderr, "")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+        },
+    )
+    def test_uds_services_config_default_stays_reference(self, _mock_cfg) -> None:
+        """`[transport].default_interface` must not trigger probing (#530)."""
+        exit_code, stdout, stderr = run_cli("uds", "services", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self._assert_reference_catalog(stdout, stderr)
+
+    @patch.dict(
+        os.environ,
+        {
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+        },
+    )
+    @patch("canarchy.transport._load_user_config", return_value={})
+    def test_uds_services_env_default_stays_reference(self, _mock_cfg) -> None:
+        """CANARCHY_DEFAULT_INTERFACE must not trigger probing either (#530)."""
+        exit_code, stdout, stderr = run_cli("uds", "services", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self._assert_reference_catalog(stdout, stderr)
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+            "CANARCHY_REQUIRE_ACTIVE_ACK": "true",
+        },
+    )
+    def test_uds_services_reference_ignores_require_active_ack(self, _mock_cfg) -> None:
+        """The catalog answers under either acknowledgement setting (#530).
+
+        Before the fix this combination failed outright: the command went
+        active and was then refused for a missing `--ack-active`, so the
+        safety setting changed a reference lookup from wrong to broken.
+        """
+        exit_code, stdout, stderr = run_cli("uds", "services", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self._assert_reference_catalog(stdout, stderr)
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+        },
+    )
+    def test_uds_services_reference_never_builds_a_transport(self, _mock_cfg) -> None:
+        """The reference path must not construct a transport client (#530)."""
+
+        def _explode(*_args, **_kwargs):
+            raise AssertionError("reference lookup must not build a transport")
+
+        with patch("canarchy.cli.LocalTransport", _explode):
+            exit_code, stdout, stderr = run_cli("uds", "services", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        self._assert_reference_catalog(stdout, stderr)
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+        },
+    )
+    def test_uds_services_explicit_interface_still_probes(self, _mock_cfg) -> None:
+        """Explicit operator intent on the command line still probes (#530)."""
+        exit_code, stdout, stderr = run_cli("uds", "services", "can0", "--json")
+        self.assertEqual(exit_code, EXIT_OK)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["data"]["mode"], "active")
+        self.assertEqual(payload["data"]["interface"], "can0")
+        self.assertGreater(payload["data"]["probe_count"], 0)
+        self.assertIn("will transmit diagnostic requests", stderr)
+
     def test_uds_services_returns_catalog(self) -> None:
         exit_code, stdout, stderr = run_cli("uds", "services", "--json")
         self.assertEqual(exit_code, EXIT_OK)

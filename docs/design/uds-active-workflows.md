@@ -39,7 +39,10 @@ all behind the same active-transmit acknowledgement gate used by `uds scan`.
 | `REQ-UDS-ACT-04` | Event-driven | When `--dry-run` is supplied, the system shall emit a request plan (planned request count and first request bytes) without opening the transport or transmitting, and shall not require an interface. |
 | `REQ-UDS-ACT-05` | Ubiquitous | Each active workflow shall emit `uds_transaction` events for every exchange that received a response, enriched with negative-response-code decoding. |
 | `REQ-UDS-ACT-06` | Ubiquitous | Structured output shall include per-request status distinguishing `positive`, `negative` (with NRC), and `no_response`. |
-| `REQ-UDS-ACT-07` | Ubiquitous | `uds services` without an interface shall continue to return the static reference catalog (`mode: reference`); with an interface it shall actively probe (`mode: active`). |
+| `REQ-UDS-ACT-07` | Ubiquitous | `uds services` shall actively probe (`mode: active`) only when a CLI caller supplies an interface on the command line; otherwise it shall return the static reference catalog (`mode: reference`). |
+| `REQ-UDS-ACT-15` | Unwanted behaviour | If a default interface is configured through `[transport].default_interface` or `CANARCHY_DEFAULT_INTERFACE`, the system shall not apply it to `uds services`, so a configured default cannot promote a reference lookup into active probing. |
+| `REQ-UDS-ACT-16` | State-driven | While `uds services` is resolving in reference mode, the system shall return the catalog before constructing any transport client, and shall do so irrespective of the `CANARCHY_REQUIRE_ACTIVE_ACK` setting. |
+| `REQ-UDS-ACT-17` | Ubiquitous | The MCP `uds_services` tool shall be structurally reference-only: it shall expose no `interface`, `ack_active`, or `dry_run` parameter, and the server shall refuse the call with `REFERENCE_ONLY_TOOL_VIOLATION` if the argv built for it ever differs from its fixed reference form. |
 | `REQ-UDS-ACT-08` | Ubiquitous | `uds dump-dids`, `uds read-memory`, and `uds auto` shall apply conservative bounded defaults (DID `--limit`, memory `MAX_MEMORY_DUMP_BYTES`, discovery id range, `--max-duration`) so a stray invocation cannot run away on a live bus. |
 | `REQ-UDS-ACT-09` | Unwanted behaviour | If an operator supplies an out-of-range or inconsistent bound (inverted range, even SecurityAccess level, oversize memory read, malformed id), the system shall return a structured error with exit code 1 before transmitting. |
 | `REQ-UDS-ACT-10` | Event-driven | When `uds read-memory --output <path>` is supplied and bytes were read, the system shall write the reassembled memory bytes to the path and report `bytes_written` plus provenance (`address`, `size`, `chunk_size`, request/response ids) in the result data. |
@@ -106,3 +109,35 @@ warning, `--ack-active` plus interactive `YES` (or
 callers), and `--dry-run` planning. Bounds (`--limit`, `MAX_MEMORY_DUMP_BYTES`,
 discovery range, `--max-duration`) keep scans from running away. Per the MCP
 exclusion matrix these workflows are CLI-only operator actions.
+
+### Reference mode is decided by intent, not by presence (#530)
+
+`uds services` is the only dual-mode command in `INTERFACE_FALLBACK_COMMANDS`,
+and its mode is decided by *where* the interface came from rather than merely
+whether one is set. Active probing is operator intent expressed on the command
+line; an interface resolved from `[transport].default_interface` or
+`CANARCHY_DEFAULT_INTERFACE` is configuration, not a request to transmit.
+
+Two independent layers enforce this, so a regression in either one alone
+cannot reach a bus:
+
+1. `prepare_args` excludes `uds services` from the default-interface fallback
+   entirely, leaving `interface_source` as `missing`.
+2. `_uds_services_is_reference` re-checks `interface_source` and answers from
+   the catalog before `LocalTransport()` is constructed.
+
+The MCP `uds_services` tool carries no `interface`, `ack_active`, or `dry_run`
+parameter, so an agent has no way to authorise transmission through it. The
+server additionally pins the exact argv that tool may produce and fails closed
+with `REFERENCE_ONLY_TOOL_VIOLATION` rather than running anything else.
+
+An explicit `--dry-run` remains on the active path: it is a request to *plan* a
+probe, transmits nothing, and reports `interface: null` when no interface was
+supplied — which now matches what the corresponding real invocation would do.
+
+**Audit of sibling commands.** The other reference/active dual-mode commands —
+`xcp commands`, `j1587 pids`, `j2497 mids` — are reference-only and absent from
+`INTERFACE_FALLBACK_COMMANDS`, so the fallback cannot reach them. `j1939 pgn`
+and `j1939 spn` switch on the presence of a *capture file*, not an interface.
+`fuzz replay` takes the fallback but is an active command by design and stays
+behind the active-transmit gate. No other command has the same defect.

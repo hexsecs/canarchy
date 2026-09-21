@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import sys
 from pathlib import Path
 
 import pytest
 
 from canarchy.mcp_server import (
+    _ACTIVE_TRANSMIT_TOOLS,
+    _REFERENCE_ONLY_TOOL_ARGV,
     _TOOL_NAMES,
     _TOOLS,
     _build_argv,
@@ -280,6 +284,136 @@ def test_call_tool_uds_services():
     payload = json.loads(results[0].text)
     assert payload["ok"] is True
     assert payload["data"]["service_count"] > 0
+
+
+# --- TEST-MCP-06a: uds_services is structurally reference-only (#530) ------
+
+
+@pytest.mark.parametrize("require_ack", ["true", "false"])
+def test_uds_services_ignores_configured_default_interface(monkeypatch, require_ack):
+    """A configured default must never make this tool probe a bus (#530).
+
+    The tool exposes no `interface` and no `ack_active`, so an agent has no
+    way to authorise transmission through it. Before the fix, the CLI's
+    default-interface fallback supplied a target anyway and the tool returned
+    `mode: active` with a probe count.
+    """
+    monkeypatch.setattr(
+        "canarchy.transport._load_user_config",
+        lambda: {
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+            "CANARCHY_REQUIRE_ACTIVE_ACK": require_ack,
+        },
+    )
+    results = asyncio.run(handle_call_tool("uds_services", {}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["mode"] == "reference"
+    assert payload["data"]["service_count"] > 0
+    assert "probe_count" not in payload["data"]
+    assert "interface" not in payload["data"]
+
+
+def test_uds_services_never_builds_a_transport(monkeypatch):
+    """The tool must not construct a transport client at all (#530)."""
+    monkeypatch.setattr(
+        "canarchy.transport._load_user_config",
+        lambda: {
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+        },
+    )
+
+    def _explode(*_args, **_kwargs):
+        raise AssertionError("reference-only tool must not build a transport")
+
+    monkeypatch.setattr("canarchy.cli.LocalTransport", _explode)
+    results = asyncio.run(handle_call_tool("uds_services", {}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is True
+    assert payload["data"]["mode"] == "reference"
+
+
+def test_uds_services_fails_closed_if_argv_gains_a_target(monkeypatch):
+    """Defence in depth: refuse rather than run a non-reference argv (#530).
+
+    This simulates a future regression in the argv builder or the CLI's
+    interface resolution. The MCP layer pins the exact argv a reference-only
+    tool may produce, so such a regression surfaces as a refusal instead of
+    unacknowledged bus traffic.
+    """
+    monkeypatch.setattr(
+        "canarchy.mcp_server._build_argv",
+        lambda name, args: ["uds", "services", "vcan7", "--json"],
+    )
+    results = asyncio.run(handle_call_tool("uds_services", {}))
+    payload = json.loads(results[0].text)
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "REFERENCE_ONLY_TOOL_VIOLATION"
+
+
+def test_reference_only_tools_expose_no_transport_surface():
+    """A reference-only tool must not be able to take a target or ack (#530).
+
+    Pins the invariant that makes the registry meaningful: if someone later
+    adds an `interface` to one of these schemas, this fails rather than
+    quietly reopening the path the fix closed.
+    """
+    schemas = {tool.name: tool.inputSchema for tool in _TOOLS}
+    for name in _REFERENCE_ONLY_TOOL_ARGV:
+        properties = schemas[name].get("properties", {})
+        assert "interface" not in properties, name
+        assert "ack_active" not in properties, name
+        assert "dry_run" not in properties, name
+        assert name not in _ACTIVE_TRANSMIT_TOOLS, name
+
+
+def test_uds_services_reference_over_real_stdio_session(tmp_path):
+    """End-to-end over a real stdio MCP session, not a direct handler call.
+
+    This is the shape the evaluation in #532 used to find the defect: a
+    separate server process started with a configured default interface,
+    initialised over stdio, then asked for the service catalog.
+    """
+    mcp = pytest.importorskip("mcp")
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    assert mcp  # referenced so the import guard is meaningful
+
+    home = tmp_path / "home"
+    (home / ".canarchy").mkdir(parents=True)
+    (home / ".canarchy" / "config.toml").write_text(
+        '[transport]\nbackend = "scaffold"\ndefault_interface = "vcan7"\n',
+        encoding="utf-8",
+    )
+
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "canarchy.cli", "mcp", "serve"],
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_DEFAULT_INTERFACE": "vcan7",
+            "CANARCHY_REQUIRE_ACTIVE_ACK": "false",
+        },
+    )
+
+    async def _call() -> dict:
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool("uds_services", {})
+                return json.loads(result.content[0].text)
+
+    payload = asyncio.run(asyncio.wait_for(_call(), timeout=60))
+    assert payload["ok"] is True
+    assert payload["data"]["mode"] == "reference"
+    assert payload["data"]["service_count"] > 0
+    assert "probe_count" not in payload["data"]
 
 
 def test_call_tool_capture_info():
