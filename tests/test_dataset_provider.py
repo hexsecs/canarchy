@@ -167,8 +167,62 @@ class PublicDatasetProviderTests(unittest.TestCase):
 
     def test_syncan_is_in_catalog(self) -> None:
         desc = self.provider.inspect("syncan")
-        self.assertEqual(desc.license, "MIT")
+        self.assertEqual(
+            desc.license,
+            "Non-commercial research use only (ETAS/Bosch terms); redistribution prohibited",
+        )
         self.assertIn("candump", desc.conversion_targets)
+
+    def test_syncan_access_notes_state_the_restrictive_conditions(self) -> None:
+        desc = self.provider.inspect("syncan")
+        notes = desc.access_notes or ""
+        self.assertIn("non-commercial", notes.lower())
+        self.assertIn("no redistribution", notes.lower())
+        self.assertIn("cite", notes.lower())
+        self.assertIn("etas/SynCAN/master/License%20terms.txt", notes)
+        self.assertNotIn("MIT", desc.description)
+
+    def test_no_entry_claims_an_unverified_permissive_license(self) -> None:
+        """Guard against recording a permissive license for restrictively licensed data.
+
+        A bare permissive SPDX-style identifier tells operators (and agents) that they
+        may redistribute, modify, and sell the data. Only entries that have been checked
+        against the terms the publisher actually states belong in the allowlist.
+        """
+        # name -> permissive license string this entry is allowed to advertise.
+        # Add a name here only after reading the dataset's own license text.
+        # - comma-car-segments: MIT, as stated on the HuggingFace dataset card.
+        # - road / candid: CC BY 4.0 as declared on their Zenodo / Figshare landing
+        #   pages when the entries were added; not re-verified during issue #513.
+        allowlisted_permissive = {
+            "comma-car-segments": "MIT",
+            "road": "CC BY 4.0",
+            "candid": "CC BY 4.0",
+        }
+        permissive_identifiers = {"MIT", "CC0", "CC0-1.0", "Unlicense", "ISC"}
+        for desc in self.provider.search(""):
+            value = desc.license.strip()
+            is_bare_permissive = (
+                value in permissive_identifiers
+                or value.startswith("Apache-2.0")
+                or value.startswith("BSD-")
+                or value.startswith("CC-BY")
+                or value.startswith("CC BY")
+            )
+            if not is_bare_permissive:
+                continue
+            with self.subTest(name=desc.name):
+                self.assertEqual(
+                    allowlisted_permissive.get(desc.name),
+                    value,
+                    f"Catalog entry {desc.name!r} advertises the permissive license "
+                    f"{value!r}. Read the dataset's own license text at "
+                    f"{desc.source_url} before trusting that. If the terms really are "
+                    f"{value!r}, add the entry to 'allowlisted_permissive' in this test. "
+                    f"If they are not, correct the 'license' value in "
+                    f"src/canarchy/dataset_catalog.py and state any no-redistribution, "
+                    f"non-commercial, or citation conditions in 'access_notes'.",
+                )
 
     def test_candid_is_in_catalog(self) -> None:
         desc = self.provider.inspect("candid")

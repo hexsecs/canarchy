@@ -23,6 +23,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+* **SynCAN is no longer catalogued as MIT-licensed (#513).** `datasets inspect syncan` reported a permissive MIT licence, but the dataset ships bespoke ETAS GmbH / Robert Bosch GmbH terms that allow non-commercial use only, forbid redistribution of the dataset or modified versions, and require a citation in any work that uses it. Operators and agents acting on the old label could have re-hosted or commercialised data they have no licence to. The catalog entry now states the real terms and links the licence text, and a new test fails whenever a catalog entry advertises a permissive licence identifier that has not been checked against the publisher's own terms.
+
 * **TUI capture drain no longer crashes during teardown (#509).** The 0.1s drain timer started at mount kept firing while the app exited, after the widget tree was gone, so a status refresh could raise `NoMatches` from an unhandled timer callback. The drain now stops once the app is shutting down, and the status, J1939 ribbon, and alert helpers tolerate an absent node.
 
 * **Guided-fuzz review fixes (#503).** Raw adapter I/O failures retain transport diagnostics rather than being reported as disk errors. Non-finite rate/duration values are rejected as usage errors before archive creation in active and dry-run modes.

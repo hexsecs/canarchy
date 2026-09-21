@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented (Phase 3) |
-| Issue | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #367 |
+| Issue | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #367, #513 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -121,7 +121,7 @@ Config section: `[datasets]` in `~/.canarchy/config.toml` (mirrors `[dbc]` and `
 | `hcrl-can-signal` | CAN | Research use | Unknown |
 | `hcrl-x-canids` | CAN | Research use | Unknown |
 | `hcrl-challenge-2020` | CAN | Research use | Unknown |
-| `syncan` | CAN | MIT | ~100 MB |
+| `syncan` | CAN | Non-commercial research only (ETAS/Bosch); no redistribution | ~100 MB |
 | `candid` | CAN | CC BY 4.0 | ~13.7 GB |
 | `pivot-auto-datasets` | CAN | Mixed / varies | Catalog / varies |
 
@@ -241,7 +241,7 @@ building a full in-memory frame list.
 
 ## Future Work
 
-- Automated download for small, openly-licensed datasets (e.g., SynCAN)
+- Automated download for small datasets that can be fetched directly from `source_url` (e.g., SynCAN, whose terms permit download but not redistribution)
 - Additional source formats (SynCAN CSV, ROAD CSV)
 - `datasets convert` reading from a provider ref after a future automated-download feature resolves the dataset payload
 - Richer commaCarSegments vehicle/platform metadata beyond the upstream `database.json` manifest

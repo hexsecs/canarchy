@@ -217,16 +217,23 @@ _CATALOG: list[dict[str, Any]] = [
         "name": "syncan",
         "version": "1.0",
         "source_url": "https://github.com/etas/SynCAN",
-        "license": "MIT",
+        "license": "Non-commercial research use only (ETAS/Bosch terms); redistribution prohibited",
         "protocol_family": "can",
         "formats": ("csv",),
         "size_description": "~100 MB",
         "description": (
             "SynCAN: Synthetic Controller Area Network dataset for intrusion detection benchmarks. "
             "Synthetic CAN signals generated with realistic timing distributions. "
-            "CSV format with Time and per-signal columns. MIT licensed."
+            "CSV format with Time and per-signal columns."
         ),
-        "access_notes": None,
+        "access_notes": (
+            "ETAS GmbH / Robert Bosch GmbH terms, not an open-source license: non-commercial use "
+            "only (academic research, teaching, publications, or simulation experiments; not field "
+            "use), no redistribution of the dataset or modified versions, and no commercial use of "
+            "the dataset or derivative works. You must cite the SynCAN Dataset in any work that "
+            "uses it. Full terms: "
+            "https://raw.githubusercontent.com/etas/SynCAN/master/License%20terms.txt"
+        ),
         "conversion_targets": ("candump", "jsonl"),
         "metadata": {
             "publisher": "ETAS GmbH",
