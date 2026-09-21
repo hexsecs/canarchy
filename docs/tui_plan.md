@@ -25,20 +25,29 @@ non-interactive runs — the CLI remains the authoritative contract.
 
 Commands and hotkeys (typed into the command entry):
 
-* `/capture <iface>` — start a **live** background capture on the interface
+* `/capture <iface>` — start a **live** background capture on the interface.
+  Exactly one interface: an empty token (`/capture ""`) or extra arguments
+  (`/capture can0 --candump`) are refused in the alerts log and leave a running
+  capture untouched — run the full `capture` command for anything with flags
 * `/stop` (or the `x` key) — stop the live capture
 * `/filter <pane> [text]` — substring-filter a pane (`traffic`, `decoded`,
   `j1939`, `uds`); no text clears the filter
 * `/sort <pane> [column]` — sort a pane by column index or name (toggles
   direction)
-* `/clear` (or the `c` key) — reset every pane
-* `/help` — list the shared hotkey table in the alerts log
+* `/clear` (or the `c` key) — reset every pane; this is the only slash command
+  that discards pane data
+* `/help` — list the shared hotkey table in the alerts log; it is read-only and
+  leaves rows, filters, counters, and the live capture untouched
 * `/save <name>`, `/load <name>` — session management
 * `/dbc <ref>` — inspect a DBC (local path or `opendbc:<name>`)
 * `/doctor`, `/config` — environment health / effective configuration
 * `/quit`, `/exit` (or the `q` key) — exit the TUI
 * Any real CANarchy command typed at the prompt runs through the shared parser
   and folds into the panes.
+
+A slash command whose arguments cannot be tokenised — an unmatched quote or a
+dangling backslash — is reported in the alerts log; the TUI keeps running and
+the current view is preserved.
 
 Keys: `space` pause/resume the live feed, `[` / `]` shrink/grow the backlog,
 `ctrl+f` maximize the focused pane, arrow keys navigate rows within a pane,

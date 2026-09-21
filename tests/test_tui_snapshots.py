@@ -605,11 +605,33 @@ def test_hotkey_help_lists_every_documented_entry():
     with contextlib.redirect_stdout(stdout):
         disposition, expansion = _handle_hotkey("/help", state)
     rendered = stdout.getvalue()
+    # LOCAL, not CLEARED: help is read-only and must leave pane data alone.
     assert disposition is _HotkeyResult.LOCAL
     assert expansion is None
     assert "Hotkeys:" in rendered
     for hotkey in ("/help", "/quit", "/clear", "/capture", "/save", "/load", "/dbc", "/doctor"):
         assert hotkey in rendered
+
+
+def test_hotkey_help_leaves_pane_state_untouched():
+    """`/help` is read-only — issue #517 had it sharing /clear's disposition."""
+
+    state = TuiState()
+    state.alerts = ["something"]
+    state.decoded_signals = ["M.S = 1"]
+    state.uds_recent = ["service=0x10"]
+    state.j1939_recent = ["pgn=65262"]
+    state.j1939_pgn_counts[65262] = 3
+    state.bus_status = ["interface: can0", "mode: capturing"]
+    with contextlib.redirect_stdout(io.StringIO()):
+        disposition, _ = _handle_hotkey("/help", state)
+    assert disposition is _HotkeyResult.LOCAL
+    assert state.alerts == ["something"]
+    assert state.decoded_signals == ["M.S = 1"]
+    assert state.uds_recent == ["service=0x10"]
+    assert state.j1939_recent == ["pgn=65262"]
+    assert state.j1939_pgn_counts == Counter({65262: 3})
+    assert state.bus_status == ["interface: can0", "mode: capturing"]
 
 
 def test_hotkey_quit_and_exit_signal_quit():
@@ -674,7 +696,9 @@ def test_hotkey_clear_resets_every_pane():
     state.j1939_recent = ["pgn=65262"]
     state.j1939_pgn_counts[65262] = 3
     disposition, argv = _handle_hotkey("/clear", state)
-    assert disposition is _HotkeyResult.LOCAL
+    # CLEARED, not LOCAL: the disposition is what tells a front end it may
+    # discard its own view state. /help returns LOCAL and must not.
+    assert disposition is _HotkeyResult.CLEARED
     assert argv is None
     assert state.alerts == []
     assert state.decoded_signals == []

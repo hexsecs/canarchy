@@ -33,6 +33,10 @@ This specification covers TUI launch, shared command execution, live capture lif
 | REQ-TUI-10 | Ubiquitous | The system shall expose immutable capture snapshots containing received, drained, dropped, current queue-depth, and high-water-mark counts. |
 | REQ-TUI-11 | Event-driven | When the bounded capture queue overflows, the system shall evict the oldest buffered event, increment the dropped count, and surface the loss in both alerts and status telemetry. |
 | REQ-TUI-12 | Event-driven | When buffered events are drained, the system shall update shared TUI state and render the applicable traffic and protocol panes without bypassing the command or protocol layers. |
+| REQ-TUI-13 | Ubiquitous | The system shall discard retained pane rows only in response to an explicit clearing action. |
+| REQ-TUI-14 | Event-driven | When an operator requests the in-TUI help, the system shall render the hotkey table into the alerts log and leave retained rows, pane row stores, filters, sort state, counters, and the capture lifecycle unchanged. |
+| REQ-TUI-15 | Unwanted behaviour | If a slash command's arguments cannot be tokenised, the system shall report the parse failure in the alerts log, leave capture and pane state unchanged, and continue accepting commands. |
+| REQ-TUI-16 | Unwanted behaviour | If `/capture` receives no interface, an empty interface token, or more than one argument, the system shall reject the command with an alerts diagnostic and shall neither stop nor replace a running capture. |
 
 ## Command Surface
 
@@ -40,7 +44,11 @@ This specification covers TUI launch, shared command execution, live capture lif
 canarchy tui
 ```
 
-Inside the TUI, `/capture [interface]`, `/stop`, `/clear`, `/filter`, and `/help` control presentation and capture; the spacebar pauses or resumes presentation. Other commands are delegated to the canonical command executor.
+Inside the TUI, `/capture <interface>`, `/stop`, `/clear`, `/filter`, and `/help` control presentation and capture; the spacebar pauses or resumes presentation. Other commands are delegated to the canonical command executor.
+
+`/capture` takes exactly one interface. It is a hotkey for the app-native live stream and carries no options, so an empty token, a whitespace-only token, or extra arguments are rejected with an alerts diagnostic rather than silently ignored; run the full `capture` command for anything that needs flags. Rejection happens before the capture session is touched, so malformed input never stops or replaces a running capture.
+
+`/clear` (and the `c` key) is the only slash command that discards pane data. The shared hotkey layer signals this to front ends with a dedicated disposition (`_HotkeyResult.CLEARED`) that is distinct from "handled locally without producing a command" (`_HotkeyResult.LOCAL`); a read-only handler such as `/help` returns `LOCAL` and front ends leave their view state alone.
 
 ## Data Model
 
@@ -74,6 +82,15 @@ Dropped-event alerts include the newly observed loss and cumulative count. TUI o
 | `CAPTURE_STOP_TIMEOUT` | Capture worker remains alive after the stop join budget | Wait for backend shutdown and inspect the configured adapter before retrying. |
 | `CAPTURE_FAILED` | Unexpected capture worker failure | Check transport configuration and retry. |
 | Transport error code | Backend raises a structured transport error | Follow the backend-provided hint. |
+
+Slash-command validation failures are presentation-level diagnostics, not structured command errors: they are written to the alerts log, carry no exit code, and leave the session running.
+
+| Alerts diagnostic | Condition |
+|---|---|
+| `error: could not parse /<name> arguments: <reason>` | Unmatched quote or dangling escape in a slash command's arguments |
+| `/capture requires an interface; e.g. /capture vcan0` | `/capture` submitted with no argument |
+| `/capture interface must not be empty; e.g. /capture vcan0` | `/capture ""` or a whitespace-only interface token |
+| `/capture takes a single interface; got N arguments. …` | `/capture` submitted with more than one token |
 
 ## Deferred Work
 
