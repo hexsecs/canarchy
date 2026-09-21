@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Related design spec | `docs/design/dataset-provider-workflow.md` |
-| Issues | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #270, #367 |
+| Issues | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #270, #367, #514 |
 | Test module | `tests/test_dataset_provider.py` |
 
 ---
@@ -348,10 +348,135 @@ And the resolved LFS URL is preserved in replay metadata
 
 ---
 
+### TEST-DATASET-ORDER-01: Default Bare Ref Prefers The Catalog
+
+```gherkin
+Given no `[datasets].search_order` in the operator config
+And two registered providers that both expose a dataset named `shared`
+When the operator inspects the bare ref `shared`
+Then the resolved descriptor comes from `catalog`
+And the effective search order is `catalog`, `offline`
+```
+
+**Fixture:** isolated `HOME`, `_provider_factories` patched with two stub providers sharing a dataset name
+
+---
+
+### TEST-DATASET-ORDER-02: Configured Order Reverses Bare Ref Resolution
+
+```gherkin
+Given `[datasets].search_order = ["offline", "catalog"]` in the operator config
+And two registered providers that both expose a dataset named `shared`
+When the operator inspects the bare ref `shared`
+Then the resolved descriptor comes from `offline`
+And the effective search order is `offline`, `catalog`
+```
+
+**Fixture:** isolated `HOME` with a written `config.toml`, two stub providers sharing a dataset name
+
+---
+
+### TEST-DATASET-ORDER-03: Enabled Provider Absent From The List Is Appended
+
+```gherkin
+Given `[datasets].search_order = ["offline"]` in the operator config
+When the registry is built
+Then the effective search order is `offline`, `catalog`
+And a `catalog:` prefixed ref still resolves
+```
+
+**Fixture:** isolated `HOME` with a written `config.toml`, two stub providers
+
+---
+
+### TEST-DATASET-ORDER-04: Disabled Provider Stays Unregistered Although Listed
+
+```gherkin
+Given `[datasets].search_order` names both providers
+And `[datasets.providers.offline].enabled = false`
+When the registry is built
+Then the effective search order contains only `catalog`
+And the `offline` provider is not registered
+```
+
+**Fixture:** isolated `HOME` with a written `config.toml`, two stub providers
+
+---
+
+### TEST-DATASET-ORDER-05: Unknown Provider Name Is A Structured Error
+
+```gherkin
+Given `[datasets].search_order` names a provider that does not exist
+When a datasets command builds the registry
+Then a `DATASET_PROVIDER_NOT_FOUND` error names the entry and the known providers
+And the CLI exits 1 with a structured JSON error rather than a traceback
+```
+
+**Fixture:** isolated `HOME` with a written `config.toml`
+
+---
+
+### TEST-DATASET-ORDER-06: Malformed search_order Is A Structured Error
+
+```gherkin
+Given `[datasets].search_order` is a bare string or contains a non-string entry
+When the registry is built
+Then a `DATASET_SEARCH_ORDER_INVALID` error is raised
+```
+
+**Fixture:** isolated `HOME` with a written `config.toml`
+
+---
+
+### TEST-DATASET-ORDER-07: Duplicate Entries Collapse
+
+```gherkin
+Given `[datasets].search_order` lists a provider twice
+When the registry is built
+Then the effective search order lists that provider once, in its first position
+```
+
+**Fixture:** isolated `HOME` with a written `config.toml`, two stub providers
+
+---
+
+### TEST-DATASET-ORDER-08: Built-in Providers Follow The Configured Order
+
+```gherkin
+Given `[datasets].search_order = ["offline", "catalog"]` in the operator config
+When the real catalog and offline providers are registered
+Then `datasets provider list` reports them in that order
+And `offline:can-basic` and `road` still resolve to their own providers
+```
+
+**Fixture:** isolated `HOME` with a written `config.toml`, no stubs
+
+---
+
+### TEST-DATASET-ORDER-09: Effective Order Is Inspectable From The CLI
+
+```gherkin
+Given a configured search order
+When the operator runs `datasets provider list`
+Then the JSON payload carries `search_order` and a per-provider `order` index
+And the text output carries a `Search order:` line
+```
+
+**Fixture:** isolated `HOME` with a written `config.toml`
+
+---
+
 ## Traceability
 
 | Requirement | Tests |
 |-------------|-------|
+| REQ-DATASET-ORDER-01 | TEST-DATASET-ORDER-02, TEST-DATASET-ORDER-07, TEST-DATASET-ORDER-08 |
+| REQ-DATASET-ORDER-02 | TEST-DATASET-ORDER-01 |
+| REQ-DATASET-ORDER-03 | TEST-DATASET-ORDER-03 |
+| REQ-DATASET-ORDER-04 | TEST-DATASET-ORDER-04 |
+| REQ-DATASET-ORDER-05 | TEST-DATASET-ORDER-05 |
+| REQ-DATASET-ORDER-06 | TEST-DATASET-ORDER-06 |
+| REQ-DATASET-ORDER-07 | TEST-DATASET-ORDER-09 |
 | REQ-DATASET-CATALOG-01 | TEST-DATASET-CATALOG-01, TEST-DATASET-CATALOG-02 |
 | REQ-DATASET-CATALOG-02 | TEST-DATASET-CATALOG-01 |
 | REQ-DATASET-CATALOG-03 | TEST-DATASET-CATALOG-01 |

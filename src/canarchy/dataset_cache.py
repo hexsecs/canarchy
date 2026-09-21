@@ -97,14 +97,24 @@ def cache_list() -> list[dict[str, Any]]:
     return entries
 
 
+#: Built-in provider resolution order, used when `[datasets].search_order` is
+#: absent and to place enabled providers the operator did not list. `catalog`
+#: stays first so a bare ref resolves to the real dataset of that name rather
+#: than to synthetic offline data (#514).
+DEFAULT_SEARCH_ORDER: tuple[str, ...] = ("catalog", "offline")
+
+
 def load_datasets_config() -> dict[str, Any]:
     defaults: dict[str, Any] = {
         "default_provider": os.environ.get("CANARCHY_DATASETS_DEFAULT_PROVIDER", "catalog"),
-        "search_order": ["catalog"],
+        "search_order": list(DEFAULT_SEARCH_ORDER),
         "providers": {
             "catalog": {
                 "enabled": True,
-            }
+            },
+            "offline": {
+                "enabled": True,
+            },
         },
     }
 

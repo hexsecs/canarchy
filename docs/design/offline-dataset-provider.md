@@ -81,7 +81,7 @@ such. The labelling requirements below exist to make that impossible to miss.
 | `REQ-ODS-04` | Ubiquitous | The system shall declare every offline dataset as synthetic in its `license`, its `description`, and a `synthetic: true` metadata flag, and shall surface that flag in machine-readable output. |
 | `REQ-ODS-05` | Ubiquitous | The system shall generate offline datasets from protocol rules only, and shall not embed, resample, or otherwise derive them from any third-party capture. |
 | `REQ-ODS-06` | State-driven | While a generated dataset is present in the cache, the system shall reuse it and report `is_cached: true` rather than regenerating it. |
-| `REQ-ODS-07` | Event-driven | When `datasets search` or `datasets inspect` runs without a provider prefix, the system shall include offline datasets alongside catalog datasets. |
+| `REQ-ODS-07` | Event-driven | When `datasets search` or `datasets inspect` runs without a provider prefix, the system shall include offline datasets alongside catalog datasets, after catalog datasets unless `[datasets].search_order` says otherwise (see `docs/design/dataset-provider-workflow.md`, REQ-DATASET-ORDER-01/02). |
 | `REQ-ODS-08` | Unwanted behaviour | If an unknown offline dataset name is requested, the system shall return a structured error with code `DATASET_NOT_FOUND` and exit code 1. |
 | `REQ-ODS-09` | Ubiquitous | The system shall write a provenance record for each fetched offline dataset stating that the data is synthetic and naming the generator version. |
 | `REQ-ODS-10` | Ubiquitous | The system shall cover each source format the conversion layer parses (`candump`, `hcrl-csv`, `decoded-signal-csv`) with at least one offline dataset. |

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 class DatasetError(Exception):
@@ -163,7 +164,19 @@ class DatasetProviderRegistry:
         return results[:limit]
 
     def list_providers(self) -> list[dict]:
-        return [{"name": name, "registered": True} for name in self._search_order]
+        """Return registered providers in effective resolution order.
+
+        `order` makes the effective `[datasets].search_order` inspectable: it
+        is the position a bare ref consults this provider at (#514).
+        """
+        return [
+            {"name": name, "registered": True, "order": index}
+            for index, name in enumerate(self._search_order)
+        ]
+
+    def search_order(self) -> list[str]:
+        """Return the effective provider resolution order for bare refs."""
+        return list(self._search_order)
 
 
 _registry: DatasetProviderRegistry | None = None
@@ -176,23 +189,75 @@ def get_registry() -> DatasetProviderRegistry:
     return _registry
 
 
-def _build_default_registry() -> DatasetProviderRegistry:
-    from canarchy.dataset_cache import load_datasets_config
+def _provider_factories() -> dict[str, Callable[[], DatasetProvider]]:
+    """Return the built-in providers by name, in built-in resolution order."""
     from canarchy.dataset_catalog import PublicDatasetProvider
     from canarchy.dataset_offline import OfflineDatasetProvider
 
+    return {"catalog": PublicDatasetProvider, "offline": OfflineDatasetProvider}
+
+
+def _invalid_search_order(known: Sequence[str]) -> DatasetError:
+    example = ", ".join(f'"{name}"' for name in known)
+    return DatasetError(
+        code="DATASET_SEARCH_ORDER_INVALID",
+        message="`[datasets].search_order` must be a list of provider names.",
+        hint=f"Set `search_order = [{example}]` in ~/.canarchy/config.toml.",
+    )
+
+
+def resolve_search_order(configured: Any, known: Sequence[str]) -> list[str]:
+    """Return the effective provider order for a configured `search_order`.
+
+    The configured names come first, in the order the operator wrote them, so
+    `[datasets].search_order` actually decides which provider a bare ref
+    resolves against. A known provider the operator did not list is appended
+    after them rather than dropped: `search_order` states a preference, not an
+    allow-list, so a partial list never silently makes `offline:can-basic`
+    unresolvable (#514).
+
+    An unknown name is an error rather than a no-op -- silently ignoring the
+    whole setting is the defect this replaces.
+    """
+    if isinstance(configured, str) or not isinstance(configured, (list, tuple)):
+        raise _invalid_search_order(known)
+
+    order: list[str] = []
+    for entry in configured:
+        if not isinstance(entry, str):
+            raise _invalid_search_order(known)
+        if entry not in known:
+            raise DatasetError(
+                code="DATASET_PROVIDER_NOT_FOUND",
+                message=f"Unknown dataset provider '{entry}' in `[datasets].search_order`.",
+                hint=(
+                    f"Known providers: {', '.join(known) or 'none'}. "
+                    "Fix `[datasets].search_order` in ~/.canarchy/config.toml."
+                ),
+            )
+        if entry not in order:
+            order.append(entry)
+
+    order.extend(name for name in known if name not in order)
+    return order
+
+
+def _build_default_registry() -> DatasetProviderRegistry:
+    from canarchy.dataset_cache import DEFAULT_SEARCH_ORDER, load_datasets_config
+
     cfg = load_datasets_config()
+    factories = _provider_factories()
+    known = [name for name in DEFAULT_SEARCH_ORDER if name in factories]
+    known.extend(name for name in factories if name not in known)
+
+    order = resolve_search_order(cfg.get("search_order", list(DEFAULT_SEARCH_ORDER)), known)
+
+    providers_cfg = cfg.get("providers", {}) or {}
     registry = DatasetProviderRegistry()
-
-    catalog_cfg = cfg.get("providers", {}).get("catalog", {})
-    if catalog_cfg.get("enabled", True):
-        registry.register(PublicDatasetProvider())
-
-    # Registered after the catalog so a bare ref still resolves to the real
-    # dataset of that name; synthetic data is opt-in via the `offline:` prefix.
-    offline_cfg = cfg.get("providers", {}).get("offline", {})
-    if offline_cfg.get("enabled", True):
-        registry.register(OfflineDatasetProvider())
+    for name in order:
+        provider_cfg = providers_cfg.get(name, {}) or {}
+        if provider_cfg.get("enabled", True):
+            registry.register(factories[name]())
 
     return registry
 
