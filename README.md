@@ -185,7 +185,7 @@ Fully implemented and tested:
 - `fuzz guided` — response-feedback coverage-guided fuzzing with a persisted seed corpus and independent, incremental payload/response evidence archives
 
 **Session, export, and utilities**
-- `session save`, `load`, `show` — session management
+- `session save`, `load`, `show`, `verify`, `annotate`, `attach`, `bundle`, `import` — research records with input provenance
 - `export` — structured artifact export
 - `doctor` — local environment health checks (Python, `python-can`, vendor backends, caches, MCP, config)
 - `mcp serve`, `mcp install` — Model Context Protocol server and client-config helper

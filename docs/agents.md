@@ -111,6 +111,11 @@ For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-
 | `session_save` | `canarchy session save` |
 | `session_load` | `canarchy session load` |
 | `session_show` | `canarchy session show` |
+| `session_verify` | `canarchy session verify` |
+| `session_annotate` | `canarchy session annotate` |
+| `session_attach` | `canarchy session attach` |
+| `session_bundle` | `canarchy session bundle` |
+| `session_import` | `canarchy session import` |
 | `j1939_monitor` | `canarchy j1939 monitor` |
 | `j1939_decode` | `canarchy j1939 decode` |
 | `j1939_pgn` | `canarchy j1939 pgn` |
@@ -206,6 +211,21 @@ canarchy j1939 compare --file baseline.candump --file after-start.candump --json
 ```
 
 If MCP is available, agents may use MCP for commands that are already exposed as tools, such as `j1939_summary`. The skill itself is still selected and fetched through the CLI in phase 1, and `compatibility.mcp=false` means the agent should not assume MCP invocation is supported for the skill workflow.
+
+### Research Record Workflow
+
+A session is the durable record of an analysis: what it consumed, what it produced, and whether that still holds. Agents that report a finding should record it so a human can check the finding later against the exact bytes it came from.
+
+Recommended flow:
+
+1. `session_save` with the capture and DBC under analysis. The record stores a SHA-256 hash, size, and modification time per input, the effective configuration, and the CANarchy version.
+2. Run the analysis tools as usual, writing the result to a file.
+3. `session_attach` that file with `command` set to the exact command that produced it and `derived_from` set to the input ids from step 1, so the artifact points at the inputs it came from. Pass `embed: true` to keep the result inside the record.
+4. `session_annotate` with the interpretation, targeting the input or artifact it refers to.
+5. `session_verify` before relying on an earlier record. It re-hashes everything offline and returns `verification.status`, per-entry `unchanged` / `changed` / `missing` / `unverifiable`, a `reproduce_command` per recorded invocation, and `required_actions`. A degraded verification returns `ok: false` with code `SESSION_VERIFICATION_FAILED` — the recorded conclusion no longer follows from the files on disk, so re-run the analysis rather than repeating the old finding.
+6. `session_bundle` to hand the whole record — manifest plus copies of its files — to another machine, and `session_import` to open it there.
+
+`session_verify` and `session_load` only read files: they never re-run a recorded command or touch the bus. A record saved before provenance existed reports `provenance_available: false` with a `SESSION_PROVENANCE_UNAVAILABLE` warning; re-run `session_save` with its inputs to upgrade it. Credentials are never recorded — omitted configuration keys are listed in `effective_config.redacted_keys`.
 
 ### Response Format
 
