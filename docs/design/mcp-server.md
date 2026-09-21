@@ -80,6 +80,11 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `session save` | `session_save` |
 | `session load` | `session_load` |
 | `session show` | `session_show` |
+| `session verify` | `session_verify` |
+| `session annotate` | `session_annotate` |
+| `session attach` | `session_attach` |
+| `session bundle` | `session_bundle` |
+| `session import` | `session_import` |
 | `j1939 monitor` | `j1939_monitor` |
 | `j1939 decode` | `j1939_decode` |
 | `j1939 pgn` | `j1939_pgn` |
@@ -157,7 +162,7 @@ landing here.
 | J1587/J1708 (`j1587 decode`, `j1587 pids`) | File-backed legacy heavy-vehicle decoding and a static PID catalog; safe, bounded, and deterministic. |
 | J2497/PLC4TRUCKS (`j2497 decode`, `j2497 mids`) | File-backed trailer power-line frame decoding and a static MID catalog; safe, bounded, and deterministic. Live PLC access requires external hardware and is not exposed. |
 | Reverse-engineering helpers (`re signals/counters/entropy/correlate/anomalies/match-dbc/shortlist-dbc`, and `re suggest` heuristic path) | File-backed analysis commands are safe and deterministic. `re_suggest` exposes the offline heuristic path only; the external `--llm` enrichment is a CLI-only operator action behind explicit confirmation. |
-| Session (`session save/load/show`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`), XCP (`xcp trace/read/commands`) | Bounded, non-interactive envelopes. |
+| Session (`session save/load/show/verify/annotate/attach/bundle/import`), `export`, `config show`, `doctor`, UDS (`uds scan/trace/services`), XCP (`xcp trace/read/commands`) | Bounded, non-interactive envelopes. |
 
 ### Excluded
 

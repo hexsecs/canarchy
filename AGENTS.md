@@ -463,6 +463,11 @@ canarchy
     save
     load
     show
+    verify
+    annotate
+    attach
+    bundle
+    import
   j1939
     monitor
     decode

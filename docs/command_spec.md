@@ -885,15 +885,18 @@ Notes:
 
 ### session save
 
-Save a named session with useful CLI context.
+Save a named session with useful CLI context, recording provenance for the inputs it names: a SHA-256 hash, size, and modification time per capture/DBC file, the provider commit and ref when the DBC came from the provider cache, the effective configuration, and an environment snapshot.
 
 ```bash
-canarchy session save <name> [--interface <name>] [--dbc <file>] [--capture <file>] [--json|--jsonl|--text]
+canarchy session save <name> [--interface <name>] [--dbc <file>] [--capture <file>]
+                             [--note <text>] [--artifact <file>]... [--json|--jsonl|--text]
 ```
+
+Re-saving an existing name refreshes the context and inputs while keeping that session's creation timestamp, annotations, artifacts, and earlier invocations.
 
 ### session load
 
-Load a previously saved session and mark it active.
+Load a previously saved session and mark it active. Sessions saved before provenance recording load unchanged and report `provenance_available: false` with a `SESSION_PROVENANCE_UNAVAILABLE` warning; loading never rewrites them.
 
 ```bash
 canarchy session load <name> [--json|--jsonl|--text]
@@ -901,10 +904,53 @@ canarchy session load <name> [--json|--jsonl|--text]
 
 ### session show
 
-Show saved sessions and the active session.
+Show saved sessions and the active session, with per-session manifest version and input/artifact/annotation counts.
 
 ```bash
 canarchy session show [--json|--jsonl|--text]
+```
+
+### session verify
+
+Re-hash every recorded input and artifact offline and report each as `unchanged`, `changed`, `missing`, or `unverifiable`, with the command to re-run per recorded invocation and a `required_actions` list. Exits 1 with `SESSION_VERIFICATION_FAILED` when anything changed or went missing. Reads files only — it never runs a recorded command or opens a transport.
+
+```bash
+canarchy session verify <name> [--root <dir>] [--json|--jsonl|--text]
+```
+
+`--root` resolves store-relative paths against another directory, which is how a relocated session is verified without its original absolute paths.
+
+### session annotate
+
+Append a timestamped operator annotation, optionally targeting recorded input or artifact identifiers.
+
+```bash
+canarchy session annotate <name> --note <text> [--target <id>]... [--json|--jsonl|--text]
+```
+
+### session attach
+
+Record an analysis output as session evidence with its content hash, the command that produced it, and the inputs it was derived from. `--embed` stores the content inside the record so the result survives deletion of the original file.
+
+```bash
+canarchy session attach <name> --artifact <file> [--kind <kind>] [--command <text>]
+                               [--derived-from <input-id>]... [--embed] [--json|--jsonl|--text]
+```
+
+### session bundle
+
+Write a portable bundle: the manifest plus copies of every available input and artifact, addressed by bundle-relative paths. A destination ending in `.zip` produces a zip archive; anything else produces a directory.
+
+```bash
+canarchy session bundle <name> --output <path> [--json|--jsonl|--text]
+```
+
+### session import
+
+Import a bundle into the local session store, copying its files in and rewriting the manifest to the imported copies.
+
+```bash
+canarchy session import <path> [--name <name>] [--json|--jsonl|--text]
 ```
 
 ### shell
@@ -1994,6 +2040,15 @@ canarchy datasets inspect catalog:candid --json
 
 ```bash
 canarchy session save lab-a --interface can0 --dbc tests/fixtures/sample.dbc --capture tests/fixtures/sample.candump --json
+```
+
+### Session Research Record
+
+```bash
+canarchy j1939 summary --file tests/fixtures/sample.candump --json > summary.json
+canarchy session attach lab-a --artifact summary.json --command "canarchy j1939 summary --file tests/fixtures/sample.candump --json" --embed --json
+canarchy session verify lab-a --json
+canarchy session bundle lab-a --output /tmp/lab-a-bundle.zip --json
 ```
 
 ### Shell One-Shot Command

@@ -496,6 +496,15 @@ _TOOLS: list[types.Tool] = [
                 "interface": {"type": "string", "description": "CAN interface to associate"},
                 "dbc": {"type": "string", "description": "DBC file to associate"},
                 "capture": {"type": "string", "description": "Capture file to associate"},
+                "note": {
+                    "type": "string",
+                    "description": "Operator annotation to record with the session",
+                },
+                "artifacts": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Analysis output paths to record as session evidence",
+                },
             },
             "required": ["name"],
         },
@@ -517,6 +526,101 @@ _TOOLS: list[types.Tool] = [
         inputSchema={
             "type": "object",
             "properties": {},
+        },
+    ),
+    types.Tool(
+        name="session_verify",
+        description=(
+            "Verify a saved session offline: re-hash every recorded capture, DBC, and "
+            "artifact and report what changed, what is missing, and what is needed to "
+            "reproduce the analysis. Reads files only; never runs a recorded command."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Session name to verify"},
+                "root": {
+                    "type": "string",
+                    "description": "Directory to resolve relocated session inputs against",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    types.Tool(
+        name="session_annotate",
+        description="Append a timestamped operator annotation to a saved session.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Session name"},
+                "note": {"type": "string", "description": "Annotation text"},
+                "targets": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Recorded input or artifact ids the note refers to",
+                },
+            },
+            "required": ["name", "note"],
+        },
+    ),
+    types.Tool(
+        name="session_attach",
+        description=(
+            "Record an analysis output in a session with its content hash, the command "
+            "that produced it, and the recorded inputs it was derived from."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Session name"},
+                "artifact": {"type": "string", "description": "Path to the analysis output"},
+                "kind": {"type": "string", "description": "Artifact kind label"},
+                "command": {
+                    "type": "string",
+                    "description": "Command that produced the artifact, recorded for reproduction",
+                },
+                "derived_from": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Recorded input ids this artifact was derived from",
+                },
+                "embed": {
+                    "type": "boolean",
+                    "description": "Store the artifact content inside the session record",
+                },
+            },
+            "required": ["name", "artifact"],
+        },
+    ),
+    types.Tool(
+        name="session_bundle",
+        description=(
+            "Write a portable session bundle containing the manifest and copies of every "
+            "recorded input and artifact, addressed by bundle-relative paths."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Session name to bundle"},
+                "output": {
+                    "type": "string",
+                    "description": "Destination directory, or a path ending in .zip",
+                },
+            },
+            "required": ["name", "output"],
+        },
+    ),
+    types.Tool(
+        name="session_import",
+        description="Import a portable session bundle into the local session store.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "bundle": {"type": "string", "description": "Bundle directory or .zip path"},
+                "name": {"type": "string", "description": "Import under this session name"},
+            },
+            "required": ["bundle"],
         },
     ),
     types.Tool(
@@ -2145,11 +2249,43 @@ def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
                 argv += ["--dbc", a["dbc"]]
             if a.get("capture"):
                 argv += ["--capture", a["capture"]]
+            if a.get("note"):
+                argv += ["--note", a["note"]]
+            for artifact in a.get("artifacts") or []:
+                argv += ["--artifact", artifact]
             return argv + ["--json"]
         case "session_load":
             return ["session", "load", a["name"], "--json"]
         case "session_show":
             return ["session", "show", "--json"]
+        case "session_verify":
+            argv = ["session", "verify", a["name"]]
+            if a.get("root"):
+                argv += ["--root", a["root"]]
+            return argv + ["--json"]
+        case "session_annotate":
+            argv = ["session", "annotate", a["name"], "--note", a["note"]]
+            for target in a.get("targets") or []:
+                argv += ["--target", target]
+            return argv + ["--json"]
+        case "session_attach":
+            argv = ["session", "attach", a["name"], "--artifact", a["artifact"]]
+            if a.get("kind"):
+                argv += ["--kind", a["kind"]]
+            if a.get("command"):
+                argv += ["--command", a["command"]]
+            for source in a.get("derived_from") or []:
+                argv += ["--derived-from", source]
+            if a.get("embed"):
+                argv.append("--embed")
+            return argv + ["--json"]
+        case "session_bundle":
+            return ["session", "bundle", a["name"], "--output", a["output"], "--json"]
+        case "session_import":
+            argv = ["session", "import", a["bundle"]]
+            if a.get("name"):
+                argv += ["--name", a["name"]]
+            return argv + ["--json"]
         case "j1939_monitor":
             argv = ["j1939", "monitor"]
             if a.get("interface"):
