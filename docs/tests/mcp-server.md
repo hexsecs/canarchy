@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Design doc | `docs/design/mcp-server.md` |
-| Test file | `tests/test_mcp.py` |
+| Test file | `tests/test_mcp.py` (plus `tests/test_cli.py` for the CLI-side stdin-pipeline regressions, TEST-MCP-57/58) |
 
 ## Requirement Traceability
 
@@ -35,6 +35,9 @@
 | REQ-MCP-21 | An in-tool exception returns a `TOOL_EXECUTION_ERROR` envelope and leaves the session usable | TEST-MCP-43 |
 | REQ-MCP-22 | Every flag an MCP tool forwards maps to a real CLI flag; `stats` exposes the same `top` knob on both surfaces | TEST-MCP-44, TEST-MCP-45, TEST-MCP-46 |
 | REQ-MCP-23 | A parse-level CLI failure relayed over MCP carries the invoked tool name, not the generic `cli` | TEST-MCP-47 |
+| REQ-MCP-24 | The `-` stdin sentinel is refused before argv construction on every stdin-capable parameter | TEST-MCP-48, TEST-MCP-49, TEST-MCP-50, TEST-MCP-51, TEST-MCP-52, TEST-MCP-53, TEST-MCP-56 |
+| REQ-MCP-25 | The refusal carries the canonical envelope and sets the MCP `isError` flag; the session survives it | TEST-MCP-48, TEST-MCP-55 |
+| REQ-MCP-26 | Guarded parameters document the restriction; CLI stdin pipelines are unchanged | TEST-MCP-54, TEST-MCP-57, TEST-MCP-58 |
 
 ## Representative Test Cases
 
@@ -598,3 +601,157 @@ And    `command` shall be `stats`, not the generic `cli`
 ```
 
 **Test:** `test_parse_level_error_envelope_carries_tool_name`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-48` — Stdin sentinel is refused with the canonical envelope and `isError`
+
+```gherkin
+Given  an initialised MCP server
+When   `handle_call_tool("capture_info", {"file": "-"})` is called
+Then   the result shall be a `CallToolResult` with `isError` set to true
+And    its single text item shall be the canonical envelope with `ok: false`
+And    `command` shall be `capture_info` with empty `data` and `warnings`
+And    the error code shall be `STDIN_MCP_EXCLUDED`
+And    the message shall name the offending parameter `file`
+And    the hint shall point at a real file path
+```
+
+**Test:** `test_capture_info_rejects_stdin_sentinel`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-49` — Refusal happens before any CLI reader or argv build
+
+```gherkin
+Given  `_build_argv` and `execute_command` are patched to raise if called
+When   `handle_call_tool("stats", {"file": "-"})` is called
+Then   neither patched function shall be invoked
+And    the response shall carry error code `STDIN_MCP_EXCLUDED`
+```
+
+**Test:** `test_stdin_rejection_never_reaches_a_cli_reader`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-50` — Refusal starts no worker thread, so none can leak
+
+```gherkin
+Given  `asyncio.to_thread` is patched to raise if called
+When   `handle_call_tool("capture_info", {"file": "-"})` is called
+Then   no worker thread shall be dispatched
+And    the live thread count shall not increase
+```
+
+**Test:** `test_stdin_rejection_starts_no_worker_thread`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-51` — Every stdin-capable parameter shape is refused
+
+```gherkin
+Given  the registered MCP tool surface
+When   a tool is called with `-` in a scalar path parameter (`file`, `dbc`,
+       `baseline`, `bundle`, `source`), in a path array (`files`,
+       `artifacts`), in a dry-run replay input, or on an acknowledged
+       active-transmit tool
+Then   each call shall be refused with `STDIN_MCP_EXCLUDED`
+And    the message shall name the offending parameter
+```
+
+**Test:** `test_stdin_sentinel_rejected_across_the_tool_surface`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-52` — No path parameter drifts out of the stdin guard
+
+```gherkin
+Given  the registered MCP tool schemas and `_STDIN_CAPABLE_PARAMS`
+When   every schema property whose name denotes a readable input path is inspected
+Then   each shall be registered in the guard or listed as a documented exemption
+```
+
+**Test:** `test_every_path_parameter_is_stdin_guarded_or_documented`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-53` — The stdin guard registry matches the tool schemas
+
+```gherkin
+Given  `_STDIN_CAPABLE_PARAMS`
+When   each registered tool and parameter is looked up in the tool schemas
+Then   every tool name shall exist
+And    every registered parameter shall be a declared property of that tool
+```
+
+**Test:** `test_stdin_guard_registry_matches_the_tool_schemas`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-54` — Guarded parameters document the restriction
+
+```gherkin
+Given  the tool list returned by `handle_list_tools()`
+When   the description of each guarded parameter is inspected
+Then   it shall mention the `-` sentinel and stdin
+```
+
+**Test:** `test_stdin_restricted_parameters_document_the_restriction`. **Fixture:** none.
+
+---
+
+### `TEST-MCP-55` — A rejected stdin call leaves the stdio session usable
+
+```gherkin
+Given  a real `canarchy mcp serve` process driven over stdio by `stdio_client`
+When   `capture_info` is called with `file: "-"`
+Then   the call shall return within the timeout with `isError` true and
+       error code `STDIN_MCP_EXCLUDED`
+When   `plugins_list` is called on the SAME session
+Then   it shall return promptly with `ok: true`
+And    the transport shall shut down cleanly afterwards
+```
+
+**Test:** `test_stdin_rejection_survives_a_real_stdio_session`. **Fixture:** none
+(spawns `python -m canarchy.cli mcp serve` with an isolated `HOME`).
+
+---
+
+### `TEST-MCP-56` — Ordinary file paths are unaffected by the guard
+
+```gherkin
+Given  a candump capture fixture
+When   `handle_call_tool("capture_info", {"file": <path>})` is called
+Then   the result shall be the normal `TextContent` list, not a refusal
+And    the envelope shall be `ok: true`
+```
+
+**Test:** `test_ordinary_file_paths_are_unaffected`. **Fixture:** `sample.candump`.
+
+---
+
+### `TEST-MCP-57` — CLI `capture-info --file -` pipeline is unchanged
+
+```gherkin
+Given  candump text piped on stdin
+When   `canarchy capture-info --file - --json` is run
+Then   it shall exit `0`
+And    `data.implementation` shall be `stdin-metadata` with the piped frame count
+```
+
+**Test:** `test_capture_info_stdin_pipeline_still_supported` (`tests/test_cli.py`).
+**Fixture:** none (inline candump text).
+
+---
+
+### `TEST-MCP-58` — CLI `filter --file -` pipeline is unchanged
+
+```gherkin
+Given  candump text piped on stdin
+When   `canarchy filter id==0x123 --file - --json` is run
+Then   it shall exit `0`
+And    `data.input` shall be `stdin-candump` with only the matching frame
+```
+
+**Test:** `test_filter_stdin_candump_pipeline_still_supported` (`tests/test_cli.py`).
+**Fixture:** none (inline candump text).

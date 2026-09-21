@@ -4,8 +4,11 @@ import asyncio
 import json
 import os
 import sys
+import threading
+import time
 from pathlib import Path
 
+import mcp.types as types
 import pytest
 
 from canarchy.mcp_server import (
@@ -2076,3 +2079,225 @@ def test_call_tool_exception_is_isolated_and_session_stays_usable(monkeypatch):
     results = asyncio.run(handle_call_tool("uds_services", {}))
     payload = json.loads(results[0].text)
     assert payload["ok"] is True
+
+
+# --- TEST-MCP-48..56: stdin sentinel rejection (#516) ----------------------
+#
+# `-` means "read the capture from stdin" on the CLI. Over MCP, stdin is the
+# JSON-RPC transport, so a reader started for `-` steals protocol bytes and
+# wedges the whole session. These tests pin the boundary rejection.
+
+
+def _stdin_rejection_payload(result) -> dict:
+    """Unwrap the envelope from a CallToolResult-shaped rejection."""
+    assert isinstance(result, types.CallToolResult), f"expected CallToolResult, got {type(result)}"
+    assert result.isError is True, "a stdin rejection must be reported as an MCP tool failure"
+    assert len(result.content) == 1
+    return json.loads(result.content[0].text)
+
+
+def test_capture_info_rejects_stdin_sentinel():
+    result = asyncio.run(handle_call_tool("capture_info", {"file": "-"}))
+    payload = _stdin_rejection_payload(result)
+    assert payload["ok"] is False
+    assert payload["command"] == "capture_info"
+    assert payload["data"] == {}
+    assert payload["warnings"] == []
+    error = payload["errors"][0]
+    assert error["code"] == "STDIN_MCP_EXCLUDED"
+    assert "`file`" in error["message"]
+    assert "capture.candump" in error["hint"]
+
+
+def test_stdin_rejection_never_reaches_a_cli_reader(monkeypatch):
+    """The guard must fire before argv construction and before dispatch."""
+
+    def _explode(argv):
+        raise AssertionError("a stdin sentinel must never reach the CLI")
+
+    def _explode_argv(name, args):
+        raise AssertionError("a stdin sentinel must never reach the argv builder")
+
+    monkeypatch.setattr("canarchy.mcp_server.execute_command", _explode)
+    monkeypatch.setattr("canarchy.mcp_server._build_argv", _explode_argv)
+    result = asyncio.run(handle_call_tool("stats", {"file": "-"}))
+    assert _stdin_rejection_payload(result)["errors"][0]["code"] == "STDIN_MCP_EXCLUDED"
+
+
+def test_stdin_rejection_starts_no_worker_thread(monkeypatch):
+    """No `asyncio.to_thread` worker is created, so none can leak (#516)."""
+
+    async def _explode(func, /, *args, **kwargs):
+        raise AssertionError("a stdin sentinel must not spawn a worker thread")
+
+    monkeypatch.setattr(asyncio, "to_thread", _explode)
+    before = threading.active_count()
+    result = asyncio.run(handle_call_tool("capture_info", {"file": "-"}))
+    assert _stdin_rejection_payload(result)["ok"] is False
+    assert threading.active_count() <= before
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "expected_param"),
+    [
+        ("capture_info", {"file": "-"}, "file"),
+        ("stats", {"file": "-"}, "file"),
+        ("filter", {"file": "-", "expression": "id==0x123"}, "file"),
+        ("decode", {"file": "-", "dbc": "truck.dbc"}, "file"),
+        ("decode", {"file": "a.candump", "dbc": "-"}, "dbc"),
+        ("j1939_compare", {"files": ["a.candump", "-"]}, "files"),
+        ("re_corpus", {"files": ["-"]}, "files"),
+        ("compare", {"files": ["a.candump", "b.candump"], "baseline": "-"}, "baseline"),
+        ("session_save", {"name": "lab", "artifacts": ["-"]}, "artifacts"),
+        ("session_import", {"bundle": "-"}, "bundle"),
+        ("export", {"source": "-", "destination": "out.json"}, "source"),
+        ("cannelloni_decode", {"file": "-"}, "file"),
+        ("datasets_replay_plan", {"source": "catalog:candid", "file": "-"}, "file"),
+        ("replay", {"file": "-", "ack_active": True, "dry_run": True}, "file"),
+        (
+            "fuzz_replay",
+            {"file": "-", "strategy": "bitflip", "ack_active": True, "dry_run": True},
+            "file",
+        ),
+    ],
+)
+def test_stdin_sentinel_rejected_across_the_tool_surface(tool, arguments, expected_param):
+    """Scalars, arrays, dry-run replay inputs and active tools all reject `-`."""
+    result = asyncio.run(handle_call_tool(tool, arguments))
+    payload = _stdin_rejection_payload(result)
+    assert payload["errors"][0]["code"] == "STDIN_MCP_EXCLUDED"
+    assert f"`{expected_param}`" in payload["errors"][0]["message"]
+
+
+def test_every_path_parameter_is_stdin_guarded_or_documented():
+    """New path parameters cannot silently drift out of the guard (#516)."""
+    from canarchy.mcp_server import _STDIN_CAPABLE_PARAMS
+
+    # Parameter names that name a readable input path on at least one tool.
+    path_param_names = {
+        "artifact",
+        "artifacts",
+        "baseline",
+        "bundle",
+        "capture",
+        "corpus",
+        "dbc",
+        "file",
+        "files",
+        "reference",
+        "reference_dbc",
+        "source",
+    }
+    # Documented exemptions: directory-valued, so they cannot resolve to stdin.
+    exempt = {("fuzz_guided", "corpus")}
+
+    unguarded = []
+    for tool in _TOOLS:
+        guarded = set(_STDIN_CAPABLE_PARAMS.get(tool.name, ()))
+        for param in tool.inputSchema.get("properties", {}):
+            if param not in path_param_names:
+                continue
+            if param in guarded or (tool.name, param) in exempt:
+                continue
+            unguarded.append(f"{tool.name}.{param}")
+    assert not unguarded, f"path parameters missing a stdin guard: {sorted(unguarded)}"
+
+
+def test_stdin_guard_registry_matches_the_tool_schemas():
+    """Every guarded parameter must exist on the tool it is registered for."""
+    from canarchy.mcp_server import _STDIN_CAPABLE_PARAMS
+
+    schemas = {tool.name: tool.inputSchema for tool in _TOOLS}
+    for tool_name, params in _STDIN_CAPABLE_PARAMS.items():
+        assert tool_name in schemas, f"unknown tool in stdin guard registry: {tool_name}"
+        properties = schemas[tool_name].get("properties", {})
+        for param in params:
+            assert param in properties, f"{tool_name}.{param} is not a declared parameter"
+
+
+def test_stdin_restricted_parameters_document_the_restriction():
+    """REQ-MCP-24: the schema tells the agent why `-` is refused."""
+    from canarchy.mcp_server import _STDIN_CAPABLE_PARAMS
+
+    tools = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    for tool_name, params in _STDIN_CAPABLE_PARAMS.items():
+        properties = tools[tool_name].inputSchema["properties"]
+        for param in params:
+            description = properties[param].get("description", "")
+            assert "`-`" in description, f"{tool_name}.{param} does not mention the sentinel"
+            assert "stdin" in description, f"{tool_name}.{param} does not mention stdin"
+
+
+def test_ordinary_file_paths_are_unaffected():
+    """The guard matches the exact sentinel only, not paths that merely contain `-`."""
+    results = asyncio.run(
+        handle_call_tool("capture_info", {"file": str(FIXTURES / "sample.candump")})
+    )
+    assert isinstance(results, list)
+    assert json.loads(results[0].text)["ok"] is True
+
+
+def test_stdin_rejection_survives_a_real_stdio_session(tmp_path):
+    """The defect's own reproduction, as a regression test (#516).
+
+    A direct `handle_call_tool` unit test cannot catch this: the defect was
+    that the *server process* blocked on the protocol stream, starving every
+    later call. So this drives a real `stdio_client` session: send the
+    rejected call, then an ordinary call that must return promptly on the
+    same session, then let the transport shut down cleanly.
+    """
+    mcp = pytest.importorskip("mcp")
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    assert mcp  # referenced so the import guard is meaningful
+
+    home = tmp_path / "home"
+    (home / ".canarchy").mkdir(parents=True)
+    (home / ".canarchy" / "config.toml").write_text(
+        '[transport]\nbackend = "scaffold"\n', encoding="utf-8"
+    )
+
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "canarchy.cli", "mcp", "serve"],
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+        },
+    )
+
+    async def _session() -> tuple[dict, bool, dict, float]:
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                # 1. The call that used to hang the session forever.
+                rejected = await asyncio.wait_for(
+                    session.call_tool("capture_info", {"file": "-"}), timeout=15
+                )
+                # 2. An ordinary call on the SAME session must still answer,
+                #    and answer promptly.
+                started = time.monotonic()
+                followup = await asyncio.wait_for(session.call_tool("plugins_list", {}), timeout=15)
+                elapsed = time.monotonic() - started
+                return (
+                    json.loads(rejected.content[0].text),
+                    bool(rejected.isError),
+                    json.loads(followup.content[0].text),
+                    elapsed,
+                )
+
+    rejected_payload, rejected_is_error, followup_payload, elapsed = asyncio.run(
+        asyncio.wait_for(_session(), timeout=120)
+    )
+
+    assert rejected_payload["ok"] is False
+    assert rejected_payload["errors"][0]["code"] == "STDIN_MCP_EXCLUDED"
+    # The rejection is reported as an MCP tool failure, not a successful call.
+    assert rejected_is_error is True
+    # The session survived: the next tool call answered, and answered fast.
+    assert followup_payload["ok"] is True
+    assert followup_payload["command"] == "plugins list"
+    assert elapsed < 15
