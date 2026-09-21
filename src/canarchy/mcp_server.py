@@ -2080,6 +2080,118 @@ _TOOLS: list[types.Tool] = [
 _TOOL_NAMES: frozenset[str] = frozenset(tool.name for tool in _TOOLS)
 
 
+# --- stdin sentinel rejection (#516) ----------------------------------------
+#
+# `-` is a documented CLI sentinel meaning "read the capture from stdin"
+# (`canarchy stats --file -`). Over MCP that sentinel is fatal: this server
+# owns `sys.stdin` as its JSON-RPC transport, so a reader opened for `-`
+# consumes protocol bytes instead of capture text. The call never returns and
+# every later call in the session is starved behind the stolen stream.
+#
+# The registry below names every tool parameter that the CLI resolves to a
+# readable input path, i.e. every parameter whose value can reach the shared
+# capture reader (`LocalTransport._capture_file_path` maps `-` to `None`,
+# which `iter_candump_file` reads from `sys.stdin`) or the `capture-info`
+# stdin branch. The guard runs before `_build_argv` and therefore before any
+# CLI reader — and before the `asyncio.to_thread` worker that would host it —
+# so no thread ever exists to leak on cancellation or shutdown.
+#
+# Directory-valued parameters (`fuzz_guided.corpus`, `session_verify.root`,
+# `fuzz_guided.findings_dir`) and output paths (`out`, `output`,
+# `destination`) are deliberately not listed: neither can resolve to stdin.
+
+_STDIN_SENTINEL = "-"
+
+_STDIN_CAPABLE_PARAMS: dict[str, tuple[str, ...]] = {
+    "replay": ("file",),
+    "sequence_replay": ("file",),
+    "filter": ("file",),
+    "stats": ("file",),
+    "capture_info": ("file",),
+    "decode": ("file", "dbc"),
+    "encode": ("dbc",),
+    "dbc_inspect": ("dbc",),
+    "dbc_signals": ("dbc",),
+    "dbc_convert": ("dbc",),
+    "export": ("source",),
+    "session_save": ("capture", "dbc", "artifacts"),
+    "session_attach": ("artifact",),
+    "session_import": ("bundle",),
+    "j1939_decode": ("file", "dbc"),
+    "j1939_pgn": ("file", "dbc"),
+    "j1939_spn": ("file", "dbc"),
+    "j1939_tp": ("file",),
+    "j1939_tp_compare": ("file",),
+    "j1939_dm1": ("file", "dbc"),
+    "j1939_faults": ("file", "dbc"),
+    "j1939_summary": ("file",),
+    "j1939_inventory": ("file",),
+    "j1939_compare": ("files",),
+    "j1939_map": ("file",),
+    "j1587_decode": ("file",),
+    "j2497_decode": ("file",),
+    "datasets_convert": ("file",),
+    "datasets_replay_plan": ("source", "file"),
+    "datasets_replay_files": ("source",),
+    "re_signals": ("file",),
+    "re_correlate": ("file", "reference"),
+    "re_anomalies": ("file", "baseline", "dbc"),
+    "re_counters": ("file",),
+    "re_entropy": ("file",),
+    "re_match_dbc": ("capture",),
+    "re_shortlist_dbc": ("capture",),
+    "re_corpus": ("files",),
+    "re_suggest": ("file", "reference_dbc"),
+    "compare": ("files", "baseline"),
+    "fuzz_payload": ("corpus",),
+    "fuzz_replay": ("file",),
+    "fuzz_signal": ("dbc",),
+    "plot": ("file", "dbc"),
+    "cannelloni_decode": ("file",),
+}
+
+_STDIN_PARAM_SCHEMA_NOTE = (
+    "Must be a real filesystem path: the `-` stdin sentinel is a CLI-only "
+    "pipeline feature and is refused over MCP, where stdin carries the "
+    "JSON-RPC transport."
+)
+
+
+def _annotate_stdin_restricted_params() -> None:
+    """Document the `-` restriction on every stdin-capable tool parameter (#516)."""
+    schemas = {tool.name: tool.inputSchema for tool in _TOOLS}
+    for tool_name, params in _STDIN_CAPABLE_PARAMS.items():
+        properties = schemas[tool_name].get("properties", {})
+        for param in params:
+            schema = properties[param]
+            description = schema.get("description", "").rstrip()
+            if _STDIN_PARAM_SCHEMA_NOTE in description:
+                continue
+            if description and not description.endswith((".", "!", "?")):
+                description += "."
+            separator = " " if description else ""
+            schema["description"] = f"{description}{separator}{_STDIN_PARAM_SCHEMA_NOTE}"
+
+
+_annotate_stdin_restricted_params()
+
+
+def _is_stdin_sentinel(value: Any) -> bool:
+    """True when ``value`` is the exact sentinel the CLI resolves to stdin."""
+    return isinstance(value, str) and value == _STDIN_SENTINEL
+
+
+def _stdin_sentinel_param(tool_name: str, arguments: dict[str, Any]) -> str | None:
+    """Return the first stdin-capable parameter set to `-`, or None (#516)."""
+    for param in _STDIN_CAPABLE_PARAMS.get(tool_name, ()):
+        value = arguments.get(param)
+        if _is_stdin_sentinel(value):
+            return param
+        if isinstance(value, (list, tuple)) and any(_is_stdin_sentinel(item) for item in value):
+            return param
+    return None
+
+
 def _build_argv(tool_name: str, arguments: dict[str, Any]) -> list[str]:
     """Convert an MCP tool name and arguments into a CLI argv list."""
     a = arguments
@@ -3039,6 +3151,31 @@ def _reference_only_violation_payload(name: str) -> dict[str, Any]:
     }
 
 
+def _stdin_sentinel_payload(name: str, param: str) -> dict[str, Any]:
+    """Envelope refusing a `-` stdin sentinel on an MCP file parameter (#516)."""
+    return {
+        "ok": False,
+        "command": name,
+        "data": {},
+        "warnings": [],
+        "errors": [
+            {
+                "code": "STDIN_MCP_EXCLUDED",
+                "message": (
+                    f"`{param}` was the stdin sentinel '-', which this tool cannot read: "
+                    "the MCP server owns stdin as its JSON-RPC transport stream."
+                ),
+                "hint": (
+                    f"Pass a real file path for `{param}`, for example "
+                    "`/path/to/capture.candump`. Reading from `-` is a CLI-only pipeline "
+                    "feature (`canarchy stats --file -`); over MCP, write the upstream "
+                    "stream to a file first and call the tool with that path."
+                ),
+            }
+        ],
+    }
+
+
 def _missing_ack_active_payload(name: str) -> dict[str, Any]:
     """Canonical envelope for an MCP active-transmit call without `ack_active=true`."""
     return {
@@ -3062,7 +3199,9 @@ def _missing_ack_active_payload(name: str) -> dict[str, Any]:
 
 
 @server.call_tool()
-async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[types.TextContent]:
+async def handle_call_tool(
+    name: str, arguments: dict[str, Any] | None
+) -> list[types.TextContent] | types.CallToolResult:
     if name not in _TOOL_NAMES:
         raise ValueError(f"Unknown tool: {name!r}")
     args = arguments or {}
@@ -3090,6 +3229,19 @@ async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[
     # (#405). Anything raised here is converted into a structured error
     # envelope instead of propagating to the protocol layer.
     try:
+        # Refuse the `-` stdin sentinel before argv construction, so no CLI
+        # reader — and no `asyncio.to_thread` worker to host one — is ever
+        # started against the JSON-RPC transport stream (#516). Reported as an
+        # MCP tool failure (`isError=true`) while still carrying the canonical
+        # envelope, so an agent sees both the protocol-level failure and the
+        # structured error code.
+        stdin_param = _stdin_sentinel_param(name, args)
+        if stdin_param is not None:
+            payload = _stdin_sentinel_payload(name, stdin_param)
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))],
+                isError=True,
+            )
         argv = _build_argv(name, args)
         expected_reference_argv = _REFERENCE_ONLY_TOOL_ARGV.get(name)
         if expected_reference_argv is not None and tuple(argv) != expected_reference_argv:
@@ -3130,6 +3282,11 @@ def run_server() -> None:
     # `docs/design/active-transmit-safety.md`). `setdefault` so external
     # operators can already have set it explicitly without us clobbering
     # their choice.
+    #
+    # That flag covers *prompts* only. The other way a handler could reach
+    # the protocol stream is a file input resolving to stdin: `_STDIN_SENTINEL`
+    # / `_stdin_sentinel_param` above refuse `-` at the tool boundary for the
+    # same reason (#516).
     os.environ.setdefault("CANARCHY_MCP_NONINTERACTIVE_ACK", "1")
 
     loop = asyncio.new_event_loop()

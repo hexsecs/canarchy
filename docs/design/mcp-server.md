@@ -41,6 +41,9 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-21` | Unwanted behaviour | If a tool call raises an unexpected exception, the server shall return a canonical envelope with error code `TOOL_EXECUTION_ERROR` instead of propagating the exception to the stdio transport, so one failing or oversized call never makes the remaining tools unavailable for the session. |
 | `REQ-MCP-22` | Ubiquitous | A tool's parameter surface shall match the underlying CLI command's flags: every flag `_build_argv` forwards shall be a real option of the target command (enforced by a contract test over all tools), and the `stats` tool shall expose the same `top`/`sa`/`pgn` knobs the CLI offers. |
 | `REQ-MCP-23` | Unwanted behaviour | When a relayed CLI result reports the generic command name `cli` (a parse-level failure that occurs before a subcommand resolves), the server shall relabel the envelope's `command` field with the invoked tool name so errors remain programmatically attributable. |
+| `REQ-MCP-24` | Unwanted behaviour | If an MCP tool call supplies the stdin sentinel `-` for any parameter that the CLI resolves to a readable input path, the server shall refuse the call with error code `STDIN_MCP_EXCLUDED` before building the CLI argv, so no reader and no `asyncio.to_thread` worker is started against the JSON-RPC transport stream. |
+| `REQ-MCP-25` | Event-driven | When the server refuses a stdin sentinel, the response shall carry the canonical envelope (`ok: false` with the `STDIN_MCP_EXCLUDED` error object) **and** set the MCP `isError` flag, so the failure is visible both structurally and at the protocol level. |
+| `REQ-MCP-26` | Ubiquitous | Every tool parameter covered by `REQ-MCP-24` shall document the restriction in its input-schema description; the CLI stdin pipelines (`capture-info --file -`, `stats --file -`, `filter --file -`, and the `--stdin` JSONL variants) shall remain unchanged. |
 
 ## Command Surface
 
@@ -198,6 +201,77 @@ does; plugin toggles and `dbc generate-c` are intentionally excluded because
 they write user/developer files. There are no missing mirrors, orphan tools,
 or ungated active-transmit MCP tools.
 
+## Stdin Sentinel Exclusion
+
+`-` is a documented CLI sentinel meaning "read the capture from stdin"
+(`canarchy stats --file -`, `canarchy capture-info --file -`,
+`canarchy filter --file -`, plus the `--stdin` JSONL variants). Those
+pipelines are unchanged and remain fully supported on the CLI.
+
+Over MCP the same sentinel is fatal. The server owns `sys.stdin` as its
+JSON-RPC transport, so a reader opened for `-` consumes protocol bytes
+instead of capture text: the call never returns, and every later call in the
+session is starved behind the stolen stream (#516). This is a
+**parameter-level exclusion**, analogous to the `doip://` target-level
+exclusion above.
+
+The server therefore refuses `-` at the tool boundary, *before*
+`_build_argv` and therefore before any CLI reader — and before the
+`asyncio.to_thread` worker that would host one — is created. Because no
+worker is ever started, there is nothing to leak on cancellation or
+shutdown.
+
+`_STDIN_CAPABLE_PARAMS` in `canarchy/mcp_server.py` is the authoritative
+registry of guarded parameters. It covers every parameter that the CLI
+resolves to a readable input path, i.e. every value that can reach the
+shared capture reader (`LocalTransport._capture_file_path` maps `-` to
+`None`, which `iter_candump_file` reads from `sys.stdin`) or the
+`capture-info` stdin branch:
+
+| Parameter | Tools |
+|-----------|-------|
+| `file` | `replay`, `sequence_replay`, `filter`, `stats`, `capture_info`, `decode`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_tp`, `j1939_tp_compare`, `j1939_dm1`, `j1939_faults`, `j1939_summary`, `j1939_inventory`, `j1939_map`, `j1587_decode`, `j2497_decode`, `datasets_convert`, `datasets_replay_plan`, `re_signals`, `re_correlate`, `re_anomalies`, `re_counters`, `re_entropy`, `re_suggest`, `fuzz_replay`, `plot`, `cannelloni_decode` |
+| `files` (array) | `j1939_compare`, `re_corpus`, `compare` |
+| `dbc` | `decode`, `encode`, `dbc_inspect`, `dbc_signals`, `dbc_convert`, `j1939_decode`, `j1939_pgn`, `j1939_spn`, `j1939_dm1`, `j1939_faults`, `session_save`, `re_anomalies`, `fuzz_signal`, `plot` |
+| `capture` | `session_save`, `re_match_dbc`, `re_shortlist_dbc` |
+| `baseline` | `re_anomalies`, `compare` |
+| `reference` / `reference_dbc` | `re_correlate` / `re_suggest` |
+| `source` | `export`, `datasets_replay_plan`, `datasets_replay_files` |
+| `artifact` / `artifacts` (array) | `session_attach` / `session_save` |
+| `bundle` | `session_import` |
+| `corpus` | `fuzz_payload` (seed-capture file) |
+
+Directory-valued parameters (`fuzz_guided.corpus`, `fuzz_guided.findings_dir`,
+`session_verify.root`) and output paths (`out`, `output`, `destination`) are
+deliberately **not** guarded: neither can resolve to stdin. A contract test
+(`test_every_path_parameter_is_stdin_guarded_or_documented`) enforces that a
+future path parameter is either registered or explicitly exempted.
+
+Each guarded parameter's input-schema description carries the restriction, so
+an agent reading `list_tools` learns the rule without having to trigger it.
+
+A refusal returns the canonical envelope **and** sets the MCP `isError` flag:
+
+```json
+{
+  "ok": false,
+  "command": "capture_info",
+  "data": {},
+  "warnings": [],
+  "errors": [
+    {
+      "code": "STDIN_MCP_EXCLUDED",
+      "message": "`file` was the stdin sentinel '-', which this tool cannot read: the MCP server owns stdin as its JSON-RPC transport stream.",
+      "hint": "Pass a real file path for `file`, for example `/path/to/capture.candump`. Reading from `-` is a CLI-only pipeline feature (`canarchy stats --file -`); over MCP, write the upstream stream to a file first and call the tool with that path."
+    }
+  ]
+}
+```
+
+This is the one response path that sets `isError`, because refusing the
+sentinel is a genuine tool failure rather than a domain result: the tool did
+not run at all. Relayed CLI domain failures keep their existing reporting.
+
 ## Response Envelope
 
 Every tool call returns a single `TextContent` item whose `text` field is a JSON object with the canonical command result shape:
@@ -224,6 +298,7 @@ canarchy mcp serve
   └─ mcp_server.py
        ├─ list_tools()     → returns _TOOLS catalogue
        └─ call_tool(name, args)          [async]
+            ├─ _stdin_sentinel_param(name, args) → refuse `-` (REQ-MCP-24)
             ├─ _build_argv(name, args) → CLI argv list
             └─ asyncio.to_thread(execute_command, argv)
                  └─ execute_command(argv)  → CommandResult   [thread pool]
@@ -254,3 +329,4 @@ Out of scope:
 * exposing every implemented CLI command automatically
 * exposing CANarchy skills as MCP tools, resources, prompts, or a separate MCP discovery surface in phase 1
 * streaming dataset frame output through MCP; agents should use `datasets_replay_plan` for preflight metadata and the CLI for actual stdout streaming
+* reading tool inputs from stdin (the `-` sentinel and the `--stdin` JSONL variants); stdin is the JSON-RPC transport, so those pipelines stay CLI-only (see *Stdin Sentinel Exclusion*). An inline-data parameter for small captures is a possible future addition, deliberately deferred.

@@ -4609,6 +4609,44 @@ class CliTests(unittest.TestCase):
         "canarchy.transport._load_user_config",
         return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
     )
+    def test_capture_info_stdin_pipeline_still_supported(self, _mock_cfg):
+        """`capture-info --file -` stays a documented CLI pipeline (#516).
+
+        Only the MCP surface refuses the `-` sentinel; the CLI keeps it.
+        """
+        input_data = "(0.000000) can0 123#112233\n(0.500000) can1 456#AABBCC\n"
+
+        exit_code, stdout, _ = run_cli("capture-info", "--file", "-", "--json", input=input_data)
+
+        self.assertEqual(exit_code, EXIT_OK)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["file"], "-")
+        self.assertEqual(data["implementation"], "stdin-metadata")
+        self.assertEqual(data["frame_count"], 2)
+        self.assertEqual(data["scan_mode"], "stdin")
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
+    def test_filter_stdin_candump_pipeline_still_supported(self, _mock_cfg):
+        """`filter --file -` stays a documented CLI pipeline (#516)."""
+        input_data = "(0.000000) can0 123#112233\n(0.100000) can0 456#AABBCC\n"
+
+        exit_code, stdout, _ = run_cli(
+            "filter", "id==0x123", "--file", "-", "--json", input=input_data
+        )
+
+        self.assertEqual(exit_code, EXIT_OK)
+        data = json.loads(stdout)["data"]
+        self.assertEqual(data["file"], "-")
+        self.assertEqual(data["input"], "stdin-candump")
+        self.assertEqual(data["frame_count"], 1)
+
+    @patch(
+        "canarchy.transport._load_user_config",
+        return_value={"CANARCHY_TRANSPORT_BACKEND": "scaffold"},
+    )
     def test_j1939_decode_stdin_jsonl_composition(self, _mock_cfg):
         """Test that j1939 decode can read JSONL FrameEvents from stdin and decode them."""
         # Generate a J1939 frame

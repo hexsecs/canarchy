@@ -525,7 +525,7 @@ For DBC reconnaissance, agents can use `canarchy dbc inspect <dbc> --layout --js
 
 For `compare`, identify each message by `(arbitration_id, is_extended_id)`. Standard and extended frames with the same numeric ID have separate rows. `id_count` and `summary.unique_ids` count these pairs. Use summary `*_identifiers` arrays (objects with `arbitration_id` and `is_extended_id`) for unambiguous category membership; legacy `*_ids` arrays remain sorted, deduplicated numeric views. Summaries include all findings even when `--top` limits rows.
 
-For stdin pipelines, `capture-info --file -`, `stats --file -`, and `filter --file -` read candump text from stdin. `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin regardless of output format.
+For stdin pipelines, `capture-info --file -`, `stats --file -`, and `filter --file -` read candump text from stdin. `filter --stdin`, `decode --stdin`, and `j1939 decode --stdin` read JSONL FrameEvents from stdin regardless of output format. These pipelines are CLI-only: the MCP server owns stdin as its JSON-RPC transport, so passing `-` to any MCP file or source parameter is refused before the command runs with error code `STDIN_MCP_EXCLUDED` and the MCP tool-failure flag set. MCP callers must pass a real file path; write a piped stream to a file first.
 
 For security workflow examples that combine commands into complete agent tasks, see `docs/security-use-cases.md`. The primary documented workflows are CAN/J1939 capture triage, dataset-driven IDS experimentation, DBC-assisted signal reconnaissance, protocol-aware incident reporting, and safe replay/regression testing.
 

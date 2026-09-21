@@ -1854,6 +1854,7 @@ Notes:
 
 * this command does not accept output flags
 * the current MCP tool surface is a curated non-interactive subset of the CLI, not every implemented command
+* the server owns stdin as its JSON-RPC transport, so the `-` stdin sentinel is refused on every MCP file/source parameter with error code `STDIN_MCP_EXCLUDED`; the CLI stdin pipelines (`--file -`, `--stdin`) are unaffected
 
 ---
 
