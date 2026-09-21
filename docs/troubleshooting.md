@@ -261,10 +261,25 @@ canarchy datasets search --json
 
 ### `DATASET_PROVIDER_NOT_FOUND`
 
-Symptom — `--provider <name>` does not match a registered dataset
-provider.
+Symptom — `--provider <name>`, a `provider:` ref prefix, or an entry in
+`[datasets].search_order` does not match a known dataset provider. When it
+comes from config, every `datasets` command fails until the config is fixed.
 
-Recovery — `canarchy datasets provider list --json`.
+Recovery — `canarchy datasets provider list --json` lists the registered
+providers and the effective `search_order`. Correct the spelling in
+`~/.canarchy/config.toml` or remove the entry.
+
+### `DATASET_SEARCH_ORDER_INVALID`
+
+Symptom — `[datasets].search_order` is not a list of provider names, for
+example `search_order = "offline"`.
+
+Recovery — write it as a list:
+
+```toml
+[datasets]
+search_order = ["catalog", "offline"]
+```
 
 ### `DATASET_REPLAY_UNAVAILABLE`
 

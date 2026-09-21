@@ -18,6 +18,7 @@ from canarchy.dataset_provider import (
     DatasetDescriptor,
     DatasetError,
     DatasetProviderRegistry,
+    DatasetResolution,
     get_registry,
     parse_dataset_ref,
     reset_registry,
@@ -2047,3 +2048,188 @@ class ReplayDryRunHumanFormattingTests(unittest.TestCase):
         self.assertTrue(data["data"]["would_stream"])
         self.assertEqual(data["data"]["ref"], "catalog:candid")
         self.assertEqual(data["data"]["max_frames"], 5)
+
+
+# ---------------------------------------------------------------------------
+# [datasets].search_order (#514)
+# ---------------------------------------------------------------------------
+
+
+class _StubProvider:
+    """Minimal provider that owns one dataset name shared with its sibling.
+
+    Two providers exposing the *same* dataset name is what makes resolution
+    order observable: a single-provider test cannot tell an honoured
+    `search_order` from an ignored one, which is how #514 survived.
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def _descriptor(self, dataset_name: str) -> DatasetDescriptor:
+        return DatasetDescriptor(
+            provider=self.name,
+            name=dataset_name,
+            version=None,
+            source_url="https://example.invalid/",
+            license="synthetic test fixture",
+            protocol_family="can",
+            formats=("candump",),
+            size_description="unknown",
+            description="stub",
+            access_notes=None,
+            conversion_targets=("candump",),
+        )
+
+    def search(self, query: str, limit: int = 20) -> list[DatasetDescriptor]:
+        return [self._descriptor("shared")]
+
+    def inspect(self, name: str) -> DatasetDescriptor:
+        if name != "shared":
+            raise DatasetError(
+                code="DATASET_NOT_FOUND",
+                message=f"No dataset named '{name}'.",
+            )
+        return self._descriptor(name)
+
+    def fetch(self, name: str) -> DatasetResolution:
+        return DatasetResolution(
+            descriptor=self.inspect(name),
+            cache_path=Path("/nonexistent"),
+            is_cached=False,
+            provenance={},
+        )
+
+    def refresh(self, name: str | None = None) -> list[DatasetDescriptor]:
+        return [self._descriptor("shared")]
+
+
+class ConfiguredSearchOrderTests(unittest.TestCase):
+    """`[datasets].search_order` must decide provider resolution order (#514)."""
+
+    def setUp(self) -> None:
+        reset_registry()
+        self.addCleanup(reset_registry)
+        # `Path.home()` is redirected at a per-test temporary directory by the
+        # suite's isolation fixture, so this writes a disposable config file.
+        self.config_path = Path.home() / ".canarchy" / "config.toml"
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _write_config(self, body: str) -> None:
+        self.config_path.write_text(body)
+
+    @contextlib.contextmanager
+    def _stub_providers(self):
+        factories = {
+            "catalog": lambda: _StubProvider("catalog"),
+            "offline": lambda: _StubProvider("offline"),
+        }
+        with patch("canarchy.dataset_provider._provider_factories", return_value=factories):
+            yield
+
+    def test_default_bare_ref_prefers_catalog_over_offline(self) -> None:
+        with self._stub_providers():
+            registry = get_registry()
+        self.assertEqual(registry.search_order(), ["catalog", "offline"])
+        self.assertEqual(registry.inspect("shared").provider, "catalog")
+
+    def test_configured_order_reverses_bare_ref_resolution(self) -> None:
+        self._write_config('[datasets]\nsearch_order = ["offline", "catalog"]\n')
+        with self._stub_providers():
+            registry = get_registry()
+        self.assertEqual(registry.search_order(), ["offline", "catalog"])
+        self.assertEqual(registry.inspect("shared").provider, "offline")
+
+    def test_enabled_provider_absent_from_search_order_is_appended(self) -> None:
+        self._write_config('[datasets]\nsearch_order = ["offline"]\n')
+        with self._stub_providers():
+            registry = get_registry()
+        # Listed first, unlisted-but-enabled appended: `search_order` states a
+        # preference, not an allow-list, so `catalog:` stays resolvable.
+        self.assertEqual(registry.search_order(), ["offline", "catalog"])
+        self.assertIsNotNone(registry.get_provider("catalog"))
+        self.assertEqual(registry.inspect("catalog:shared").provider, "catalog")
+
+    def test_disabled_provider_stays_unregistered_even_when_listed(self) -> None:
+        self._write_config(
+            '[datasets]\nsearch_order = ["catalog", "offline"]\n'
+            "[datasets.providers.offline]\nenabled = false\n"
+        )
+        with self._stub_providers():
+            registry = get_registry()
+        self.assertEqual(registry.search_order(), ["catalog"])
+        self.assertIsNone(registry.get_provider("offline"))
+
+    def test_unknown_provider_name_raises_structured_error(self) -> None:
+        self._write_config('[datasets]\nsearch_order = ["katalog", "offline"]\n')
+        with self._stub_providers(), self.assertRaises(DatasetError) as ctx:
+            get_registry()
+        self.assertEqual(ctx.exception.code, "DATASET_PROVIDER_NOT_FOUND")
+        self.assertIn("katalog", str(ctx.exception))
+        self.assertIn("search_order", str(ctx.exception))
+        self.assertIn("catalog", ctx.exception.hint or "")
+
+    def test_non_list_search_order_raises_structured_error(self) -> None:
+        self._write_config('[datasets]\nsearch_order = "offline"\n')
+        with self._stub_providers(), self.assertRaises(DatasetError) as ctx:
+            get_registry()
+        self.assertEqual(ctx.exception.code, "DATASET_SEARCH_ORDER_INVALID")
+
+    def test_non_string_entry_raises_structured_error(self) -> None:
+        self._write_config("[datasets]\nsearch_order = [1, 2]\n")
+        with self._stub_providers(), self.assertRaises(DatasetError) as ctx:
+            get_registry()
+        self.assertEqual(ctx.exception.code, "DATASET_SEARCH_ORDER_INVALID")
+
+    def test_duplicate_entries_are_collapsed(self) -> None:
+        self._write_config('[datasets]\nsearch_order = ["offline", "offline", "catalog"]\n')
+        with self._stub_providers():
+            registry = get_registry()
+        self.assertEqual(registry.search_order(), ["offline", "catalog"])
+
+    def test_real_providers_follow_configured_order(self) -> None:
+        """The built-in providers, not stubs, honour the configured order."""
+        self._write_config('[datasets]\nsearch_order = ["offline", "catalog"]\n')
+        registry = get_registry()
+        # Asserted through the pre-existing `list_providers` shape as well, so
+        # this fails against the unfixed code on behaviour rather than on a
+        # missing attribute.
+        self.assertEqual(
+            [entry["name"] for entry in registry.list_providers()], ["offline", "catalog"]
+        )
+        self.assertEqual(registry.search_order(), ["offline", "catalog"])
+        self.assertEqual(registry.inspect("offline:can-basic").provider, "offline")
+        self.assertEqual(registry.inspect("road").provider, "catalog")
+
+
+class SearchOrderCliTests(unittest.TestCase):
+    """The effective provider order stays inspectable from the CLI (#514)."""
+
+    def setUp(self) -> None:
+        reset_registry()
+        self.addCleanup(reset_registry)
+        self.config_path = Path.home() / ".canarchy" / "config.toml"
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def test_provider_list_json_reports_effective_search_order(self) -> None:
+        self.config_path.write_text('[datasets]\nsearch_order = ["offline", "catalog"]\n')
+        code, out, _ = run_cli("datasets", "provider", "list", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(data["data"]["search_order"], ["offline", "catalog"])
+        self.assertEqual([p["name"] for p in data["data"]["providers"]], ["offline", "catalog"])
+        self.assertEqual([p["order"] for p in data["data"]["providers"]], [0, 1])
+
+    def test_provider_list_text_reports_effective_search_order(self) -> None:
+        code, out, _ = run_cli("datasets", "provider", "list")
+        self.assertEqual(code, 0)
+        self.assertIn("Search order: catalog -> offline", out)
+
+    def test_unknown_provider_in_config_is_a_structured_cli_error(self) -> None:
+        self.config_path.write_text('[datasets]\nsearch_order = ["katalog"]\n')
+        code, out, _ = run_cli("datasets", "provider", "list", "--json")
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["errors"][0]["code"], "DATASET_PROVIDER_NOT_FOUND")
+        self.assertIn("katalog", data["errors"][0]["message"])
