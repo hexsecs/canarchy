@@ -1912,6 +1912,42 @@ J1939 `--text` output includes:
 * CAN identifier
 * payload bytes
 
+### Argument Errors
+
+Argument-parsing failures follow the same output contract as every other
+failure. `canarchy stats --unknown-option --json` returns the canonical error
+envelope as JSON, not a text block — this holds for an unrecognised option, an
+unknown command or subcommand, a missing required argument, and a value that
+fails type conversion. The envelope carries `command: "cli"` (the failure
+happened before a command was identified), the error code
+`INVALID_ARGUMENTS`, argparse's message verbatim, and exit code `1`:
+
+```json
+{
+  "ok": false,
+  "command": "cli",
+  "data": {},
+  "warnings": [],
+  "errors": [
+    {
+      "code": "INVALID_ARGUMENTS",
+      "message": "unrecognized arguments: --unknown-option",
+      "hint": "Run `canarchy --help` to inspect the available commands and flags."
+    }
+  ]
+}
+```
+
+The output flags are mutually exclusive, so passing more than one is itself an
+argument error. The envelope reporting it is rendered using a fixed precedence
+— `--json` beats `--jsonl` beats `--text` beats `--table` — independent of the
+order the flags appear in. `canarchy stats --file capture.log --jsonl --json`
+therefore exits `1` with a JSON envelope whose message is
+`argument --json: not allowed with argument --jsonl`.
+
+`--help` and `--version` are not errors: argparse prints them as text and
+exits `0`.
+
 ### JSON Result Shape
 
 Successful `--json` output uses this shape:

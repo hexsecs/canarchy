@@ -370,8 +370,16 @@ Recovery — retry (network), pass a valid `--platform` from
 
 ### `INVALID_ARGUMENTS`
 
-Symptom — the parser accepted the command but the values failed a deeper
-validation step.
+Symptom — either the command line failed to parse (unrecognised option,
+unknown command or subcommand, missing required argument, value that failed
+type conversion, or more than one output flag), or the parser accepted the
+command but the values failed a deeper validation step. A parse failure
+reports `command: "cli"`; a validation failure names the command.
+
+Both exit `1` and honour the requested output mode, so
+`canarchy stats --unknown-option --json` returns the JSON error envelope
+rather than a text block. Where output flags conflict, the envelope is
+rendered by the fixed precedence `--json` > `--jsonl` > `--text` > `--table`.
 
 Recovery — re-read the message and hint; they name the failing argument
 and constraint.

@@ -2550,6 +2550,18 @@ def format_name(args: argparse.Namespace) -> str:
 
 
 def requested_output_format(argv: Sequence[str] | None) -> str:
+    """Detect the output mode requested on the command line.
+
+    Used before argparse has produced a namespace, so that parse failures are
+    emitted in the format the caller asked for. Callers must pass the effective
+    argv (`sys.argv[1:]` when the console entry point supplies no explicit
+    list); `None` cannot be inspected and falls back to text (#519).
+
+    When more than one output flag is present the precedence is fixed —
+    `--json` > `--jsonl` > `--text` > `--table` — independent of the order on
+    the command line, matching `format_name` for successfully parsed
+    invocations.
+    """
     if argv is None:
         return "text"
 
@@ -12659,10 +12671,16 @@ def execute_command(argv: Sequence[str] | None = None) -> tuple[int, CommandResu
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    output_format = requested_output_format(argv)
+    # The installed console script calls `main()` with `argv=None`, so resolve
+    # the effective argv *before* detecting the requested output mode and hand
+    # the same list to argparse. Reading the mode from `None` made every parse
+    # failure fall back to text even when `--json`/`--jsonl` was on the command
+    # line, which only reproduced through the real entry point (#519).
+    effective_argv = list(sys.argv[1:] if argv is None else argv)
+    output_format = requested_output_format(effective_argv)
     parser = build_parser()
     try:
-        args = parser.parse_args(argv)
+        args = parser.parse_args(effective_argv)
     except CliUsageError as exc:
         result = error_result(
             "cli",
