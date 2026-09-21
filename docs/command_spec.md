@@ -710,6 +710,59 @@ Two providers are registered by default:
 | `catalog` | Metadata for well-known public research datasets. `fetch` records provenance; the data itself downloads from the publisher's host | Required to obtain data |
 | `offline` | Synthetic datasets generated locally from protocol rules | None |
 
+#### Provider resolution order
+
+Providers are listed, and searched, in resolution order. That order decides
+which provider a **bare ref** (`road`, with no `provider:` prefix) resolves
+against; a prefixed ref (`offline:can-basic`) always goes straight to the named
+provider. The default is `catalog` first, so a bare ref prefers the real
+dataset of that name over synthetic data.
+
+Override it with `[datasets].search_order` in `~/.canarchy/config.toml`:
+
+```toml
+[datasets]
+search_order = ["offline", "catalog"]
+```
+
+Rules:
+
+* Listed providers are searched first, in the order written. Duplicates collapse.
+* A registered provider that is **enabled but not listed** is appended after the
+  listed ones rather than dropped — `search_order` states a preference, not an
+  allow-list, so a partial list never makes `offline:` refs unresolvable.
+* Disabling a provider is a separate setting and always wins over listing it:
+
+  ```toml
+  [datasets.providers.offline]
+  enabled = false
+  ```
+
+* An unknown provider name fails loudly with `DATASET_PROVIDER_NOT_FOUND`
+  (exit 1) rather than being ignored; a `search_order` that is not a list of
+  names fails with `DATASET_SEARCH_ORDER_INVALID` (exit 1).
+
+The effective order is inspectable — `search_order` in the JSON payload, an
+`order` index on each provider entry, and a `Search order:` line in text mode:
+
+```bash
+canarchy datasets provider list --json
+```
+
+```json
+{
+  "ok": true,
+  "command": "datasets provider list",
+  "data": {
+    "providers": [
+      {"name": "catalog", "registered": true, "order": 0},
+      {"name": "offline", "registered": true, "order": 1}
+    ],
+    "search_order": ["catalog", "offline"]
+  }
+}
+```
+
 Every `catalog` download host (zenodo.org, figshare.com, huggingface.co,
 ocslab.hksecurity.net) is blocked under a typical sandboxed agent network
 policy. Where there is no egress, use `offline` refs instead: `datasets fetch
@@ -1139,7 +1192,9 @@ Notes:
 * a full-screen Textual application that requires an interactive terminal; in a non-TTY context it emits the canonical error envelope (`TUI_REQUIRES_TTY`, honouring `--json`/`--jsonl`) and exits non-zero
 * active-transmit commands (e.g. `send`, `generate`, `uds scan`) are refused from the TUI command entry — their `YES` confirmation prompt cannot be answered inside the full-screen app, so run them from the CLI
 * panes: bus status, live traffic, decoded signals, J1939 (summary ribbon + recent table), UDS transactions, and an alerts log
-* `/capture <iface>` streams the bus **live** in the background; `/stop` (or `x`) ends it
+* `/capture <iface>` streams the bus **live** in the background; `/stop` (or `x`) ends it. It takes exactly one interface — an empty or extra argument is rejected in the alerts log and leaves any running capture alone; use the full `capture` command when you need flags
+* `/clear` (or `c`) is the only slash command that discards pane data; `/help` and the other read-only hotkeys never clear rows
+* a slash command with an unmatched quote or a dangling backslash is reported in the alerts log; the TUI stays running
 * panes are interactive: `/filter <pane> [text]`, `/sort <pane> [column]`, arrow-key row navigation, `[`/`]` to resize the backlog, `space` to pause the feed
 * command entry runs existing CANarchy commands through the shared parser and result path; slash hotkeys (`/save`, `/load`, `/dbc`, `/doctor`, `/config`, …) expand to those commands
 * nested interactive front ends like `shell` or `tui` are rejected from TUI command entry (`TUI_COMMAND_UNSUPPORTED`)

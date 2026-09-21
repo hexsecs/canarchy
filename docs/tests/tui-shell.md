@@ -6,7 +6,7 @@
 |---|---|
 | Status | Implemented |
 | Related design spec | `docs/design/tui-shell.md` |
-| Test modules | `tests/test_tui.py`, `tests/test_tui_app.py`, `tests/test_tui_capture.py`, `tests/test_transport.py` |
+| Test modules | `tests/test_tui_snapshots.py`, `tests/test_tui_app.py`, `tests/test_tui_capture.py`, `tests/test_transport.py` |
 
 ## Test Cases
 
@@ -101,6 +101,54 @@ Then the worker exits and every buffered event is rendered before the session is
 
 **Fixture:** Textual test pilot with a stoppable 600-event burst transport.
 
+### TEST-TUI-10: Help Retains Pane Data
+
+```gherkin
+Given the TUI has folded a command result into the traffic and J1939 panes
+When the operator submits `/help` through the command input
+Then the system shall keep every displayed row and every retained row store entry
+And the hotkey table shall appear in the alerts log without a `panes cleared` alert
+And pane filters shall be unchanged and a filter round-trip shall restore every row
+And `/clear` shall still empty both the tables and the row stores
+```
+
+**Fixture:** Textual test pilot with the scaffold capture factory; fold-layer assertion on `_handle_hotkey` dispositions (`/help` → `LOCAL`, `/clear` → `CLEARED`).
+
+### TEST-TUI-11: Help During Capture And While Paused
+
+```gherkin
+Given a live capture session is running and has rendered its frames
+When the operator submits `/help` while capturing and again while presentation is paused
+Then the system shall retain the same capture session in the running state
+And displayed rows, retained row stores, and the paused flag shall be unchanged
+```
+
+**Fixture:** Textual test pilot with a capture transport that parks on the stop event so the session stays live.
+
+### TEST-TUI-12: Malformed Slash Quoting
+
+```gherkin
+Given a live capture session is running and the traffic pane holds rendered rows
+When the operator submits `/capture "` and then `/capture vcan0\` through the real Input event
+Then the system shall report each parse failure in the alerts log without raising out of the app
+And the running capture session and the displayed rows shall be unchanged
+And a subsequent valid command shall still execute and populate its pane
+```
+
+**Fixture:** Textual test pilot with a capture transport that parks on the stop event.
+
+### TEST-TUI-13: Capture Argument Validation
+
+```gherkin
+Given a live capture session is running on `vcan0`
+When the operator submits `/capture ""`, `/capture vcan1 --candump`, and `/capture`
+Then the system shall reject each form with its own alerts diagnostic
+And the capture factory shall not be invoked again
+And the running session, its interface, and the displayed rows shall be unchanged
+```
+
+**Fixture:** Textual test pilot with a recording capture factory over a parked capture transport.
+
 ## Traceability
 
 | Requirement | Tests |
@@ -117,6 +165,10 @@ Then the worker exits and every buffered event is rendered before the session is
 | REQ-TUI-10 | TEST-TUI-07 |
 | REQ-TUI-11 | TEST-TUI-07 |
 | REQ-TUI-12 | TEST-TUI-02, TEST-TUI-05, TEST-TUI-06 |
+| REQ-TUI-13 | TEST-TUI-10, TEST-TUI-11 |
+| REQ-TUI-14 | TEST-TUI-10, TEST-TUI-11 |
+| REQ-TUI-15 | TEST-TUI-12 |
+| REQ-TUI-16 | TEST-TUI-13 |
 
 ## Not Tested
 

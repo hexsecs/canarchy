@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Status | Implemented (Phase 3) |
-| Issue | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #367, #513 |
+| Issue | #216, #220, #233, #235, #241, #242, #243, #245, #246, #259, #367, #513, #514 |
 | Implementation | `src/canarchy/dataset_provider.py`, `dataset_cache.py`, `dataset_catalog.py`, `dataset_convert.py` |
 
 ---
@@ -79,7 +79,50 @@ Captures all metadata required to evaluate, cite, and convert a dataset:
 `DatasetProviderRegistry` follows the DBC/skills registry pattern: lazy singleton, `reset_registry()`
 for tests, config-driven search order.
 
-Ref resolution: `catalog:road` or bare `road`. Bare names search registered providers in order.
+Ref resolution: `catalog:road` or bare `road`. A prefixed ref goes straight to the named provider.
+A bare name is offered to each registered provider in resolution order, first match wins.
+
+### Provider resolution order
+
+The registry is built in the order `[datasets].search_order` specifies, so the configured order is
+the resolution order (#514). The built-in default is `["catalog", "offline"]`: a bare ref prefers
+the real dataset of a name over synthetic offline data, and synthetic data stays opt-in through the
+`offline:` prefix.
+
+`search_order` states a *preference*, not an allow-list. A registered provider that is enabled but
+absent from the list is appended after the listed providers rather than excluded, so a partial list
+such as `["offline"]` reorders resolution without making `offline`'s sibling unreachable. Excluding
+a provider is a separate, explicit setting — `[datasets.providers.<name>].enabled = false` — which
+always wins over listing it in `search_order`.
+
+An unknown provider name is an error, not a no-op: a silently ignored `search_order` is the defect
+this replaces. Building the registry is lazy, so the error surfaces on the first `datasets` command
+as a structured `DATASET_PROVIDER_NOT_FOUND` result rather than a traceback.
+
+```toml
+[datasets]
+search_order = ["offline", "catalog"]
+
+[datasets.providers.offline]
+enabled = false
+```
+
+The effective order is inspectable through `datasets provider list`: `search_order` in the payload,
+an `order` index on each provider entry, and a `Search order:` line in text mode. `config show`
+stays scoped to transport configuration (see `docs/design/config-show-command.md`,
+`REQ-CONFIG-01`) and deliberately does not restate `[datasets]` settings.
+
+### Provider Order Requirements
+
+| ID | Type | Requirement |
+|----|------|-------------|
+| REQ-DATASET-ORDER-01 | Ubiquitous | The system shall register dataset providers in the order given by `[datasets].search_order`, so that a bare ref resolves against the first listed provider that has a dataset of that name. |
+| REQ-DATASET-ORDER-02 | Ubiquitous | Where `[datasets].search_order` is absent, the system shall resolve bare refs against `catalog` before `offline`. |
+| REQ-DATASET-ORDER-03 | Optional feature | Where a registered provider is enabled but absent from `[datasets].search_order`, the system shall append it after the listed providers rather than excluding it. |
+| REQ-DATASET-ORDER-04 | State-driven | While a provider is configured with `enabled = false`, the system shall leave it unregistered even when `[datasets].search_order` names it. |
+| REQ-DATASET-ORDER-05 | Unwanted behaviour | If `[datasets].search_order` names a provider that is not known, the system shall return a structured `DATASET_PROVIDER_NOT_FOUND` error naming the entry and the known providers, with exit code 1. |
+| REQ-DATASET-ORDER-06 | Unwanted behaviour | If `[datasets].search_order` is not a list of provider names, the system shall return a structured `DATASET_SEARCH_ORDER_INVALID` error with exit code 1. |
+| REQ-DATASET-ORDER-07 | Ubiquitous | The system shall report the effective provider resolution order in `datasets provider list` output as a `search_order` list and a per-provider `order` index. |
 
 ---
 

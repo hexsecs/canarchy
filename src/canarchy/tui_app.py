@@ -223,10 +223,7 @@ class CanarchyTuiApp(App[int]):
         # App-native slash commands (live capture, view controls) take
         # precedence over the shared hotkey table.
         if name == "capture":
-            if not rest:
-                self._emit_alert("/capture requires an interface; e.g. /capture vcan0")
-                return
-            self._start_capture(shlex.split(rest)[0])
+            self._cmd_capture(rest)
             return
         if name == "stop":
             self.action_stop_capture()
@@ -242,11 +239,30 @@ class CanarchyTuiApp(App[int]):
         disposition, expanded = _handle_hotkey(text, self.tstate, self._emit_alert)
         if disposition is _HotkeyResult.QUIT:
             self.action_quit()
-        elif disposition is _HotkeyResult.LOCAL:
-            # /clear resets fold state; mirror that in the panes.
+        elif disposition is _HotkeyResult.CLEARED:
+            # /clear reset the fold state; mirror that in the panes. Only
+            # this disposition may discard rows — a read-only handler such
+            # as /help returns LOCAL and leaves the view alone (issue #517).
             self._reset_panes()
         elif disposition is _HotkeyResult.EXPANDED and expanded is not None:
             self._run_command(expanded)
+
+    def _split_slash_args(self, name: str, rest: str) -> list[str] | None:
+        """Tokenise a slash command's arguments, or report why it failed.
+
+        Mirrors the guard `_run_command` already has around `shlex.split`.
+        An unmatched quote or a dangling backslash raises `ValueError`;
+        that must surface as an Alerts diagnostic, not as a traceback that
+        tears down the full-screen app (issue #518). Returns `None` when
+        the text could not be parsed, in which case the caller does
+        nothing further.
+        """
+
+        try:
+            return shlex.split(rest)
+        except ValueError as exc:
+            self._emit_alert(f"error: could not parse /{name} arguments: {exc}")
+            return None
 
     def _run_command(self, command: str) -> None:
         try:
@@ -275,6 +291,36 @@ class CanarchyTuiApp(App[int]):
             self._ingest_result(result)
 
     # -- live capture -------------------------------------------------------
+
+    def _cmd_capture(self, rest: str) -> None:
+        """Validate `/capture <iface>` before touching the capture session.
+
+        Every rejection happens before `_start_capture`, so malformed input
+        can never stop or replace a running capture nor erase displayed
+        history. `/capture` takes exactly one interface: it is a hotkey for
+        the app-native live stream, which has nowhere to put flags. Extra
+        tokens are rejected rather than silently dropped so that
+        `/capture can0 --dbc truck.dbc` cannot look like it applied a DBC —
+        use the full `capture` command for anything with options.
+        """
+
+        tokens = self._split_slash_args("capture", rest)
+        if tokens is None:
+            return
+        if not tokens:
+            self._emit_alert("/capture requires an interface; e.g. /capture vcan0")
+            return
+        if len(tokens) > 1:
+            self._emit_alert(
+                "/capture takes a single interface; "
+                f"got {len(tokens)} arguments. Run the full `capture` command for options."
+            )
+            return
+        interface = tokens[0].strip()
+        if not interface:
+            self._emit_alert("/capture interface must not be empty; e.g. /capture vcan0")
+            return
+        self._start_capture(interface)
 
     def _start_capture(self, interface: str) -> None:
         if not self._stop_capture(release=False):

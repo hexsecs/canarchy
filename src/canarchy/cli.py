@@ -5981,10 +5981,27 @@ def datasets_payload(
     from canarchy.dataset_cache import cache_list
     from canarchy.dataset_provider import DatasetError, get_registry
 
-    registry = get_registry()
+    try:
+        # Building the registry reads `[datasets].search_order`, so a bad
+        # provider name in user config surfaces here as a structured error
+        # rather than a traceback (#514).
+        registry = get_registry()
+    except DatasetError as exc:
+        raise CommandError(
+            command=args.command,
+            exit_code=_dataset_error_exit_code(exc),
+            errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
+        ) from exc
 
     if args.command == "datasets provider list":
-        return ({"providers": registry.list_providers()}, [], [])
+        return (
+            {
+                "providers": registry.list_providers(),
+                "search_order": registry.search_order(),
+            },
+            [],
+            [],
+        )
 
     if args.command == "datasets search":
         query = getattr(args, "query", "") or ""
@@ -11654,6 +11671,9 @@ def format_datasets_table(result: CommandResult) -> list[str]:
         for provider in result.data.get("providers", []):
             status = "registered" if provider.get("registered") else "unregistered"
             lines.append(f"  {provider['name']} ({status})")
+        search_order = result.data.get("search_order") or []
+        if search_order:
+            lines.append(f"Search order: {' -> '.join(search_order)}")
         return lines
 
     if result.command != "datasets search":
