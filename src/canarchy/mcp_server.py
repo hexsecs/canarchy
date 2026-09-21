@@ -2850,6 +2850,16 @@ _ACTIVE_TRANSMIT_TOOLS: frozenset[str] = frozenset(
 )
 
 
+# Tools that answer from a static catalog and must never reach a transport.
+# They carry no `interface` in their schema and no acknowledgement parameter,
+# so an agent has no way to authorise transmission through them; this maps
+# each one to the exact argv it is allowed to produce, so a change to the
+# argv builder cannot quietly give one a bus target (#530).
+_REFERENCE_ONLY_TOOL_ARGV: dict[str, tuple[str, ...]] = {
+    "uds_services": ("uds", "services", "--json"),
+}
+
+
 # --- Response bounding (#405) -----------------------------------------------
 #
 # The stdio transport (and the agent on the other end of it) cannot absorb an
@@ -2999,6 +3009,36 @@ def _doip_excluded_payload(name: str) -> dict[str, Any]:
     }
 
 
+def _reference_only_violation_payload(name: str) -> dict[str, Any]:
+    """Envelope refusing a reference-only tool that resolved a bus target.
+
+    This should be unreachable: it fires only if the argv builder starts
+    handing a catalog lookup something other than its fixed reference form.
+    Failing closed here keeps a regression in the CLI or argv layer from
+    turning an unacknowledged MCP call into bus traffic (#530).
+    """
+    return {
+        "ok": False,
+        "command": name,
+        "data": {},
+        "warnings": [],
+        "errors": [
+            {
+                "code": "REFERENCE_ONLY_TOOL_VIOLATION",
+                "message": (
+                    f"{name} is a reference-only catalog lookup but resolved a "
+                    "transport target; refusing to run it."
+                ),
+                "hint": (
+                    "This is a CANarchy bug, not a usage error. Please report it. "
+                    "Run the equivalent active probe from the CLI with an explicit "
+                    "interface if that is what you intended."
+                ),
+            }
+        ],
+    }
+
+
 def _missing_ack_active_payload(name: str) -> dict[str, Any]:
     """Canonical envelope for an MCP active-transmit call without `ack_active=true`."""
     return {
@@ -3051,6 +3091,11 @@ async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[
     # envelope instead of propagating to the protocol layer.
     try:
         argv = _build_argv(name, args)
+        expected_reference_argv = _REFERENCE_ONLY_TOOL_ARGV.get(name)
+        if expected_reference_argv is not None and tuple(argv) != expected_reference_argv:
+            # Fail closed rather than run whatever the builder produced (#530).
+            payload = _reference_only_violation_payload(name)
+            return [types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))]
         _, result = await asyncio.to_thread(execute_command, argv)
         if result is None:
             payload = {

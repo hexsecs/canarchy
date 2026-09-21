@@ -2840,6 +2840,15 @@ def prepare_args(args: argparse.Namespace) -> None:
     if getattr(args, "interface", None):
         args.interface_source = "cli"
         return
+    # `uds services` lists the static service catalog unless a CLI caller
+    # supplies an interface. It is the only dual-mode command in this set, so
+    # it opts out of the default-interface fallback entirely: resolving
+    # `[transport].default_interface` or CANARCHY_DEFAULT_INTERFACE here would
+    # silently promote a reference lookup into active bus probing that the
+    # caller never asked for and never acknowledged (#530).
+    if args.command == "uds services":
+        args.interface_source = "missing"
+        return
     configured = default_can_interface()
     if configured:
         args.interface = configured
@@ -2861,9 +2870,6 @@ def prepare_args(args: argparse.Namespace) -> None:
     if args.command == "xcp scan" and getattr(args, "dry_run", False):
         return
     if args.command in ("xcp info", "xcp dump") and getattr(args, "dry_run", False):
-        return
-    # `uds services` without an interface lists the static catalog (reference mode).
-    if args.command == "uds services":
         return
     if args.command in UDS_ACTIVE_COMMANDS and getattr(args, "dry_run", False):
         return
@@ -7200,10 +7206,46 @@ def _uds_active_payload(
     raise AssertionError(f"unsupported uds active command: {command}")
 
 
+def _uds_services_is_reference(args: argparse.Namespace) -> bool:
+    """Whether `uds services` should answer from the static catalog (#530).
+
+    Active probing is operator intent expressed on the command line, so the
+    mode is decided by where the interface came from, not merely by whether
+    one is set. An interface resolved from `[transport].default_interface` or
+    CANARCHY_DEFAULT_INTERFACE is configuration, not a request to transmit.
+
+    `prepare_args` already declines to apply that fallback to this command;
+    checking the source here as well means a future regression there cannot
+    turn a catalog lookup into bus traffic.
+    """
+    if args.command != "uds services":
+        return False
+    if getattr(args, "dry_run", False):
+        # An explicit dry run is a request to *plan* an active probe. It
+        # transmits nothing, so it stays on the active path.
+        return False
+    if not getattr(args, "interface", None):
+        return True
+    return getattr(args, "interface_source", "cli") != "cli"
+
+
 def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     target = getattr(args, "interface", None)
     if args.command in ("uds scan", "uds trace") and is_doip_target(target):
         return _doip_uds_payload(args, target)
+    if _uds_services_is_reference(args):
+        # Answered before any transport client is constructed: a reference
+        # lookup must not build a live backend, let alone open a bus (#530).
+        services = uds_services_payload()
+        return (
+            {
+                "mode": "reference",
+                "service_count": len(services),
+                "services": services,
+            },
+            [],
+            [],
+        )
     transport = LocalTransport()
     backend_metadata = transport.backend_metadata()
     implementation = (
@@ -7238,17 +7280,6 @@ def uds_payload(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str
                 "implementation": implementation,
             },
             events,
-            [],
-        )
-    if args.command == "uds services" and not target and not getattr(args, "dry_run", False):
-        services = uds_services_payload()
-        return (
-            {
-                "mode": "reference",
-                "service_count": len(services),
-                "services": services,
-            },
-            [],
             [],
         )
     if args.command in UDS_COMMANDS - {"uds scan", "uds trace"}:

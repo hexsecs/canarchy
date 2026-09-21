@@ -103,7 +103,7 @@ The current MCP tool surface is a curated non-interactive subset of the CLI. It 
 | `j2497 mids` | `j2497_mids` |
 | `uds scan` | `uds_scan` |
 | `uds trace` | `uds_trace` |
-| `uds services` | `uds_services` |
+| `uds services` | `uds_services` (reference-only; see `REQ-UDS-ACT-17`) |
 | `config show` | `config_show` |
 | `datasets provider list` | `datasets_provider_list` |
 | `datasets search` | `datasets_search` |
