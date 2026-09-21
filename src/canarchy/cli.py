@@ -2888,6 +2888,19 @@ def prepare_args(args: argparse.Namespace) -> None:
     )
 
 
+def _dataset_error_exit_code(exc: Any) -> int:
+    """Map a `DatasetError` category onto the documented exit code.
+
+    A caller's mistake (unknown ref, unsupported operation) is a usage error
+    and exits 1; an environment failure (cache write, unreachable host) is a
+    backend error and exits 2, so a script can tell "I asked for the wrong
+    thing" apart from "this machine could not do it" (#460 review).
+    """
+    return (
+        EXIT_TRANSPORT_ERROR if getattr(exc, "category", "user") == "backend" else EXIT_USER_ERROR
+    )
+
+
 def _is_doip_active_command(args: argparse.Namespace) -> bool:
     """`uds scan` / `uds trace` over DoIP open a TCP session and transmit."""
     return args.command in ("uds scan", "uds trace") and is_doip_target(
@@ -5978,7 +5991,7 @@ def datasets_payload(
         except DatasetError as exc:
             raise CommandError(
                 command=args.command,
-                exit_code=EXIT_USER_ERROR,
+                exit_code=_dataset_error_exit_code(exc),
                 errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
             ) from exc
         return (dataset_descriptor_payload(descriptor, include_metadata=True), [], [])
@@ -5989,7 +6002,7 @@ def datasets_payload(
         except DatasetError as exc:
             raise CommandError(
                 command=args.command,
-                exit_code=EXIT_USER_ERROR,
+                exit_code=_dataset_error_exit_code(exc),
                 errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
             ) from exc
 
@@ -6001,6 +6014,17 @@ def datasets_payload(
         )
         source_type = metadata.get("source_type") if isinstance(metadata, dict) else None
         is_index = source_type == "curated-index" or "catalog" in resolution.descriptor.formats
+
+        # A provider may materialise real bytes into the cache rather than
+        # recording provenance for a remote file. Saying "no data was
+        # downloaded" and pointing at `datasets download` / `datasets replay`
+        # would be wrong twice over there: the data is already local, and both
+        # of those commands fail with DATASET_REPLAY_UNAVAILABLE because there
+        # is no remote file to stream (#460 review).
+        # The provider declares this rather than the CLI guessing from the
+        # filesystem: a provenance-only provider also leaves a non-empty file
+        # at `cache_path`, so "the path exists" would be true for both.
+        data_is_local = not is_index and getattr(resolution, "data_materialized", False)
 
         # Build appropriate instructions
         if is_index:
@@ -6015,6 +6039,15 @@ def datasets_payload(
                 + "\n  Use `canarchy datasets search` to find specific datasets from this index."
             )
             download_instructions = index_instructions
+        elif data_is_local:
+            download_instructions = (
+                f"Dataset generated locally at {resolution.cache_path}. Nothing was downloaded."
+                + (
+                    f" — Note: {resolution.descriptor.access_notes}"
+                    if resolution.descriptor.access_notes
+                    else ""
+                )
+            )
         else:
             download_instructions = (
                 f"Dataset provenance recorded. Download the data manually from: "
@@ -6038,10 +6071,22 @@ def datasets_payload(
                 "is_index": is_index,
                 "index_instructions": index_instructions if is_index else None,
                 "download_instructions": download_instructions,
+                "data_is_local": data_is_local,
                 "next_steps": (
-                    "Provenance only — no data was downloaded. "
-                    f"Run `canarchy datasets download {args.ref} --out <path>` to retrieve the "
-                    "data, or `canarchy datasets replay <ref>` to stream it."
+                    (
+                        f"Data is already on disk at {resolution.cache_path}. "
+                        f"Analyse it with `canarchy capture-info --file {resolution.cache_path}`, "
+                        f"`canarchy stats --file {resolution.cache_path}`, or "
+                        f"`canarchy replay --file {resolution.cache_path}`; "
+                        "`canarchy datasets convert` and `canarchy datasets stream` also take "
+                        "this path. Nothing needs downloading."
+                    )
+                    if data_is_local
+                    else (
+                        "Provenance only — no data was downloaded. "
+                        f"Run `canarchy datasets download {args.ref} --out <path>` to retrieve the "
+                        "data, or `canarchy datasets replay <ref>` to stream it."
+                    )
                 ),
             },
             [],
@@ -6072,7 +6117,7 @@ def datasets_payload(
         except DatasetError as exc:
             raise CommandError(
                 command=args.command,
-                exit_code=EXIT_USER_ERROR,
+                exit_code=_dataset_error_exit_code(exc),
                 errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
             ) from exc
         return (
@@ -6206,7 +6251,7 @@ def datasets_payload(
         except DatasetError as exc:
             raise CommandError(
                 command=args.command,
-                exit_code=EXIT_USER_ERROR,
+                exit_code=_dataset_error_exit_code(exc),
                 errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
             ) from exc
         return ({**result, **replay_source}, [], [])
@@ -6422,6 +6467,10 @@ def dataset_machine_fields(descriptor: Any) -> dict[str, Any]:
         "default_replay_file": default_replay_file,
         "download_url_available": bool(replay_download_url),
         "source_type": source_type or ("index" if is_index else "dataset"),
+        # Synthetic datasets carry real protocol structure but no vehicle
+        # behaviour, so agents need to be able to tell them apart from research
+        # data without parsing the description.
+        "synthetic": bool(metadata.get("synthetic", False)),
     }
 
 
@@ -11850,7 +11899,7 @@ def emit_dataset_replay(args: argparse.Namespace) -> int:
             errors=[ErrorDetail(code=exc.code, message=str(exc), hint=exc.hint)],
         )
         emit_result(result, "json")
-        return EXIT_USER_ERROR
+        return _dataset_error_exit_code(exc)
     return EXIT_OK
 
 
