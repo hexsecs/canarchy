@@ -743,7 +743,10 @@ Rules:
   names fails with `DATASET_SEARCH_ORDER_INVALID` (exit 1).
 
 The effective order is inspectable — `search_order` in the JSON payload, an
-`order` index on each provider entry, and a `Search order:` line in text mode:
+`order` index on each provider entry, and a `Search order:` line in text mode.
+When every provider is disabled, text mode says so explicitly (`(none registered)`,
+`Search order: (none)`, and the config key to re-enable one) rather than printing a
+bare heading; JSON returns empty `providers` and `search_order` lists:
 
 ```bash
 canarchy datasets provider list --json
@@ -1192,9 +1195,9 @@ Notes:
 * a full-screen Textual application that requires an interactive terminal; in a non-TTY context it emits the canonical error envelope (`TUI_REQUIRES_TTY`, honouring `--json`/`--jsonl`) and exits non-zero
 * active-transmit commands (e.g. `send`, `generate`, `uds scan`) are refused from the TUI command entry — their `YES` confirmation prompt cannot be answered inside the full-screen app, so run them from the CLI
 * panes: bus status, live traffic, decoded signals, J1939 (summary ribbon + recent table), UDS transactions, and an alerts log
-* `/capture <iface>` streams the bus **live** in the background; `/stop` (or `x`) ends it. It takes exactly one interface — an empty or extra argument is rejected in the alerts log and leaves any running capture alone; use the full `capture` command when you need flags
+* `/capture <iface>` streams the bus **live** in the background; `/stop` (or `x`) ends it. `/stop` takes no arguments — anything after it is rejected in the alerts log and the capture keeps running. `/capture` takes exactly one interface — an empty or extra argument is rejected in the alerts log and leaves any running capture alone; use the full `capture` command when you need flags
 * `/clear` (or `c`) is the only slash command that discards pane data; `/help` and the other read-only hotkeys never clear rows
-* a slash command with an unmatched quote or a dangling backslash is reported in the alerts log; the TUI stays running
+* `/capture` and `/stop` tokenise their arguments: an unmatched quote or a dangling backslash is reported in the alerts log and the TUI stays running. `/filter` and `/sort` take raw text instead, so a filter needle may contain a quote character; they validate their pane argument and leave state unchanged when it is not recognised
 * panes are interactive: `/filter <pane> [text]`, `/sort <pane> [column]`, arrow-key row navigation, `[`/`]` to resize the backlog, `space` to pause the feed
 * command entry runs existing CANarchy commands through the shared parser and result path; slash hotkeys (`/save`, `/load`, `/dbc`, `/doctor`, `/config`, …) expand to those commands
 * nested interactive front ends like `shell` or `tui` are rejected from TUI command entry (`TUI_COMMAND_UNSUPPORTED`)

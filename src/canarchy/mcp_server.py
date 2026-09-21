@@ -2150,10 +2150,16 @@ _STDIN_CAPABLE_PARAMS: dict[str, tuple[str, ...]] = {
     "cannelloni_decode": ("file",),
 }
 
+# Appended to every stdin-restricted parameter, so it must hold for all of
+# them. Registered parameters include dataset refs, remote URLs, manifest file
+# ids and session names as well as paths, so the note states only that the
+# exact value `-` is unavailable and says nothing about what the value must
+# otherwise be — each parameter's own description already covers that
+# (issue #544).
 _STDIN_PARAM_SCHEMA_NOTE = (
-    "Must be a real filesystem path: the `-` stdin sentinel is a CLI-only "
-    "pipeline feature and is refused over MCP, where stdin carries the "
-    "JSON-RPC transport."
+    "The `-` stdin sentinel is not accepted here: it is a CLI-only pipeline "
+    "feature, and over MCP stdin carries the JSON-RPC transport. Supply an "
+    "explicit value instead."
 )
 
 

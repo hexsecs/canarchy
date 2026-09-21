@@ -11668,12 +11668,22 @@ def format_datasets_replay_dry_run(result: CommandResult) -> list[str]:
 def format_datasets_table(result: CommandResult) -> list[str]:
     if result.command == "datasets provider list":
         lines = ["Dataset providers"]
-        for provider in result.data.get("providers", []):
+        providers = result.data.get("providers", [])
+        for provider in providers:
             status = "registered" if provider.get("registered") else "unregistered"
             lines.append(f"  {provider['name']} ({status})")
+        # This command is the documented way to inspect the effective
+        # provider configuration, so an empty set has to say so rather than
+        # leaving a bare heading and letting the operator guess (issue #543).
+        if not providers:
+            lines.append("  (none registered)")
         search_order = result.data.get("search_order") or []
-        if search_order:
-            lines.append(f"Search order: {' -> '.join(search_order)}")
+        lines.append(f"Search order: {' -> '.join(search_order) if search_order else '(none)'}")
+        if not providers:
+            lines.append(
+                "Every provider is disabled; re-enable one under "
+                "[datasets.providers.<name>] in ~/.canarchy/config.toml."
+            )
         return lines
 
     if result.command != "datasets search":

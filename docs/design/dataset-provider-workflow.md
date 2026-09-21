@@ -123,6 +123,7 @@ stays scoped to transport configuration (see `docs/design/config-show-command.md
 | REQ-DATASET-ORDER-05 | Unwanted behaviour | If `[datasets].search_order` names a provider that is not known, the system shall return a structured `DATASET_PROVIDER_NOT_FOUND` error naming the entry and the known providers, with exit code 1. |
 | REQ-DATASET-ORDER-06 | Unwanted behaviour | If `[datasets].search_order` is not a list of provider names, the system shall return a structured `DATASET_SEARCH_ORDER_INVALID` error with exit code 1. |
 | REQ-DATASET-ORDER-07 | Ubiquitous | The system shall report the effective provider resolution order in `datasets provider list` output as a `search_order` list and a per-provider `order` index. |
+| REQ-DATASET-ORDER-08 | State-driven | While no provider is registered, the system shall render an explicit empty state in `datasets provider list` text output — naming the empty provider set, an empty search order, and the configuration key that caused it — while leaving JSON output as empty `providers` and `search_order` lists. |
 
 ---
 

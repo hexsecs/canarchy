@@ -466,6 +466,31 @@ And the text output carries a `Search order:` line
 
 ---
 
+### TEST-DATASET-ORDER-10: Empty Provider Set Explains Itself
+
+```gherkin
+Given both built-in providers are configured with `enabled = false`
+When  the operator runs `canarchy datasets provider list`
+Then  the output shall state that no provider is registered
+And   the output shall show `Search order: (none)`
+And   the output shall name `[datasets.providers.<name>]` as the cause
+And   the exit code shall be 0
+```
+
+**Fixture:** none on disk; the config is written to a temporary HOME.
+
+### TEST-DATASET-ORDER-11: Empty State Does Not Leak Into JSON
+
+```gherkin
+Given both built-in providers are configured with `enabled = false`
+When  the operator runs `canarchy datasets provider list --json`
+Then  `data.providers` shall be an empty list
+And   `data.search_order` shall be an empty list
+And   no human-facing empty-state text shall appear in the output
+```
+
+**Fixture:** none on disk; the config is written to a temporary HOME.
+
 ## Traceability
 
 | Requirement | Tests |
@@ -477,6 +502,7 @@ And the text output carries a `Search order:` line
 | REQ-DATASET-ORDER-05 | TEST-DATASET-ORDER-05 |
 | REQ-DATASET-ORDER-06 | TEST-DATASET-ORDER-06 |
 | REQ-DATASET-ORDER-07 | TEST-DATASET-ORDER-09 |
+| REQ-DATASET-ORDER-08 | TEST-DATASET-ORDER-10, TEST-DATASET-ORDER-11 |
 | REQ-DATASET-CATALOG-01 | TEST-DATASET-CATALOG-01, TEST-DATASET-CATALOG-02 |
 | REQ-DATASET-CATALOG-02 | TEST-DATASET-CATALOG-01 |
 | REQ-DATASET-CATALOG-03 | TEST-DATASET-CATALOG-01 |

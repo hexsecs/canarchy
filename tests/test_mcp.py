@@ -2228,6 +2228,49 @@ def test_stdin_restricted_parameters_document_the_restriction():
             assert "stdin" in description, f"{tool_name}.{param} does not mention stdin"
 
 
+def test_stdin_note_makes_no_claim_about_the_value_shape():
+    """Issue #544: the note said every guarded value must be a real path.
+
+    The registry guards dataset refs, remote URLs, manifest file ids and
+    session names as well as paths, so a note appended to all of them may
+    only describe the `-` restriction. Saying more contradicted the
+    parameters' own descriptions and steered agents away from supported
+    values such as `catalog:candid`.
+    """
+    from canarchy.mcp_server import _STDIN_CAPABLE_PARAMS, _STDIN_PARAM_SCHEMA_NOTE
+
+    forbidden = ("filesystem path", "real path", "must be a path")
+    lowered_note = _STDIN_PARAM_SCHEMA_NOTE.lower()
+    for phrase in forbidden:
+        assert phrase not in lowered_note, f"stdin note over-claims: {phrase!r}"
+
+    tools = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+    for tool_name, params in _STDIN_CAPABLE_PARAMS.items():
+        properties = tools[tool_name].inputSchema["properties"]
+        for param in params:
+            lowered = properties[param].get("description", "").lower()
+            for phrase in forbidden:
+                assert phrase not in lowered, f"{tool_name}.{param} over-claims: {phrase!r}"
+
+
+def test_non_path_parameters_keep_their_own_contract():
+    """The parameters that motivated #544 still read as accepting non-paths."""
+    tools = {tool.name: tool for tool in asyncio.run(handle_list_tools())}
+
+    cases = {
+        ("datasets_replay_plan", "source"): "catalog:candid",
+        ("datasets_replay_plan", "file"): "manifest",
+        ("export", "source"): "session",
+    }
+    for (tool_name, param), expected in cases.items():
+        description = tools[tool_name].inputSchema["properties"][param]["description"]
+        assert expected in description.lower(), (
+            f"{tool_name}.{param} no longer documents {expected!r}"
+        )
+        # And the restriction is still stated on the same parameter.
+        assert "`-`" in description
+
+
 def test_ordinary_file_paths_are_unaffected():
     """The guard matches the exact sentinel only, not paths that merely contain `-`."""
     results = asyncio.run(

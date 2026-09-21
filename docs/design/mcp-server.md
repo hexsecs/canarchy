@@ -44,6 +44,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-24` | Unwanted behaviour | If an MCP tool call supplies the stdin sentinel `-` for any parameter that the CLI resolves to a readable input path, the server shall refuse the call with error code `STDIN_MCP_EXCLUDED` before building the CLI argv, so no reader and no `asyncio.to_thread` worker is started against the JSON-RPC transport stream. |
 | `REQ-MCP-25` | Event-driven | When the server refuses a stdin sentinel, the response shall carry the canonical envelope (`ok: false` with the `STDIN_MCP_EXCLUDED` error object) **and** set the MCP `isError` flag, so the failure is visible both structurally and at the protocol level. |
 | `REQ-MCP-26` | Ubiquitous | Every tool parameter covered by `REQ-MCP-24` shall document the restriction in its input-schema description; the CLI stdin pipelines (`capture-info --file -`, `stats --file -`, `filter --file -`, and the `--stdin` JSONL variants) shall remain unchanged. |
+| `REQ-MCP-27` | Ubiquitous | The appended restriction note shall describe only the unavailability of the `-` value and shall make no claim about the form a parameter's value must otherwise take, since the covered parameters include dataset refs, remote URLs, manifest file ids and session names as well as filesystem paths. |
 
 ## Command Surface
 
@@ -202,6 +203,12 @@ they write user/developer files. There are no missing mirrors, orphan tools,
 or ungated active-transmit MCP tools.
 
 ## Stdin Sentinel Exclusion
+
+Each covered parameter's schema description gains this sentence at import time:
+
+> The `-` stdin sentinel is not accepted here: it is a CLI-only pipeline feature, and over MCP stdin carries the JSON-RPC transport. Supply an explicit value instead.
+
+The wording is deliberately silent on what the value must otherwise be. An earlier version opened with "Must be a real filesystem path", which contradicted the parameters that accept a dataset ref, a remote URL, a manifest file id or a session name — `datasets_replay_plan.source` read "Dataset ref (e.g. catalog:candid) or remote candump URL. Must be a real filesystem path" and would have steered an agent away from the supported value (issue #544). One sentence appended to every covered parameter can only say what is true of all of them.
 
 `-` is a documented CLI sentinel meaning "read the capture from stdin"
 (`canarchy stats --file -`, `canarchy capture-info --file -`,

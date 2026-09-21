@@ -38,6 +38,7 @@
 | REQ-MCP-24 | The `-` stdin sentinel is refused before argv construction on every stdin-capable parameter | TEST-MCP-48, TEST-MCP-49, TEST-MCP-50, TEST-MCP-51, TEST-MCP-52, TEST-MCP-53, TEST-MCP-56 |
 | REQ-MCP-25 | The refusal carries the canonical envelope and sets the MCP `isError` flag; the session survives it | TEST-MCP-48, TEST-MCP-55 |
 | REQ-MCP-26 | Guarded parameters document the restriction; CLI stdin pipelines are unchanged | TEST-MCP-54, TEST-MCP-57, TEST-MCP-58 |
+| REQ-MCP-27 | The restriction note claims nothing about the value's shape, so it cannot contradict a parameter that takes a ref, URL, id or session name | TEST-MCP-59 |
 
 ## Representative Test Cases
 
@@ -716,6 +717,21 @@ And    the transport shall shut down cleanly afterwards
 (spawns `python -m canarchy.cli mcp serve` with an isolated `HOME`).
 
 ---
+
+### `TEST-MCP-59` — The restriction note claims nothing about value shape
+
+```gherkin
+Given the stdin restriction note appended to every covered parameter
+When  the published tool schemas are inspected
+Then  neither the note nor any covered parameter's description shall claim
+      that the value must be a filesystem path
+And   `datasets_replay_plan.source` shall still document `catalog:candid`
+And   `datasets_replay_plan.file` shall still document a manifest file id
+And   `export.source` shall still document a session name
+And   each shall still state the `-` restriction
+```
+
+**Fixture:** none; asserted against the live tool schemas.
 
 ### `TEST-MCP-56` — Ordinary file paths are unaffected by the guard
 
