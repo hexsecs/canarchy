@@ -734,6 +734,12 @@ def test_responsive_workspace_keeps_traffic_usable_at_small_sizes() -> None:
             await pilot.press("escape")
             assert traffic.display
             assert not app.query_one("#body").has_class("detail")
+            assert app.focused is traffic
+            await pilot.press("down")
+            assert traffic.cursor_row == min(1, traffic.row_count - 1)
+
+            await pilot.press("enter")
+            assert app.query_one("#body").has_class("detail")
 
             await pilot.resize_terminal(100, 35)
             await pilot.pause()
@@ -741,6 +747,9 @@ def test_responsive_workspace_keeps_traffic_usable_at_small_sizes() -> None:
             await pilot.resize_terminal(140, 45)
             await pilot.pause()
             assert not app.query_one("#body").has_class("narrow")
+            assert not app.query_one("#body").has_class("detail")
+            assert not app._detail_open
+            assert app.focused is traffic
             assert traffic.size.height >= 30
             assert app.query_one("#inspector", Static).display
 

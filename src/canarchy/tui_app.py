@@ -407,11 +407,14 @@ class CanarchyTuiApp(App[int]):
             self._set_result_visible(not self.query_one("#results", TextArea).display)
 
     def action_show_panes(self) -> None:
-        if self._detail_open:
+        closing_detail = self._detail_open
+        if closing_detail:
             self._detail_open = False
             self.query_one("#body").remove_class("detail")
             self._apply_width()
         self._set_result_visible(False)
+        if closing_detail and self.workspace in _PANES:
+            self.query_one(_PANES[self.workspace][0], DataTable).focus()
 
     def action_workspace(self, name: str) -> None:
         if name not in _WORKSPACES:
@@ -442,7 +445,12 @@ class CanarchyTuiApp(App[int]):
         body = self._find_widget("#body", Horizontal)
         if body is None:
             return
-        body.set_class(self.size.width < 110, "narrow")
+        narrow = self.size.width < 110
+        body.set_class(narrow, "narrow")
+        if not narrow and self._detail_open:
+            self._detail_open = False
+            body.remove_class("detail")
+            self.query_one(_PANES[self.workspace][0], DataTable).focus()
         traffic = self._find_widget("#traffic", DataTable)
         if traffic is not None and self._col_keys["traffic"]:
             widths = (
