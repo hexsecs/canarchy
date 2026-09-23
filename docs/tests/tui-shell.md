@@ -202,6 +202,17 @@ And the operator can close the view and continue using the panes
 
 **Fixture:** Textual test pilot at 80 by 24 cells.
 
+### TEST-TUI-18: Active Commands With Help-Looking Positionals
+
+```gherkin
+Given the TUI is running with a spy on the shared command executor
+When the operator submits an active command with --help or --version as a positional value after --
+Then the active command is refused before the executor is called
+And ordinary help and version requests still render in the result view
+```
+
+**Fixture:** Textual test pilot with spy executor; fuzz-identify and send argument vectors.
+
 ## Traceability
 
 | Requirement | Tests |
@@ -226,6 +237,7 @@ And the operator can close the view and continue using the panes
 | REQ-TUI-18 | TEST-TUI-15 |
 | REQ-TUI-19 | TEST-TUI-16, TEST-TUI-17 |
 | REQ-TUI-20 | TEST-TUI-16, TEST-TUI-17 |
+| REQ-TUI-21 | TEST-TUI-18 |
 
 ## Not Tested
 

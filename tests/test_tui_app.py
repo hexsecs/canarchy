@@ -220,6 +220,9 @@ def test_active_transmit_command_is_rejected_without_executing() -> None:
             await pilot.pause()
             await _submit(app, pilot, "send can0 0x123 0011 --ack-active")
             assert calls == []  # never dispatched
+            await _submit(app, pilot, "fuzz identify --interface can0 -- --help")
+            await _submit(app, pilot, "send can0 0x123 0011 -- --version")
+            assert calls == []
             assert app.query_one("#traffic", DataTable).row_count == 0
             # A passive command still runs.
             await _submit(app, pilot, "j1939 monitor --pgn 65262")

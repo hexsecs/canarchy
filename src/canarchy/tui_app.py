@@ -74,9 +74,6 @@ def _is_active_transmit_command(argv: list[str]) -> bool:
     command path still produces the normal structured parse error.
     """
 
-    if any(option in argv for option in ("-h", "--help", "--version")):
-        return False
-
     from canarchy.cli import (
         ACTIVE_TRANSMIT_COMMANDS,
         _is_doip_active_command,
@@ -84,7 +81,8 @@ def _is_active_transmit_command(argv: list[str]) -> bool:
     )
 
     try:
-        args = build_parser().parse_args(argv)
+        with redirect_stdout(StringIO()):
+            args = build_parser().parse_args(argv)
     except BaseException:
         # argparse errors (CliUsageError) and --help/--version (SystemExit)
         # are handled downstream by the shared command path.
