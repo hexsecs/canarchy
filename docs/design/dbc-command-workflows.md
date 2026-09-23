@@ -30,6 +30,7 @@ DBC-backed workflows are central to protocol-aware CAN analysis. Operators shoul
 | `REQ-DBC-08` | Ubiquitous | `encode` shall resolve message names by exact DBC name, case/spacing-insensitive match, or SAE PGN label/name from the bundled J1939 catalog (e.g. `EEC1` → the DBC message carrying PGN 61444), and shall resolve signal names by exact DBC name, case/spacing-insensitive match, or the bundled SAE SPN name of a signal carrying an SPN attribute — so a signal decoded by `j1939`/`decode` can be re-encoded by its displayed name. When a PGN label matches several messages, supplied signal names break the tie; a remaining ambiguity returns `DBC_MESSAGE_NOT_FOUND` listing the candidates. All non-exact resolutions are reported under `data.resolution` (message `via`, `signal_aliases`) and as warnings. |
 | `REQ-DBC-09` | Ubiquitous | `encode` shall default unsupplied signals (DBC initial value when declared, else 0 clamped into the declared range/choices; multiplexed messages excluded) so a single-signal encode succeeds, reporting every defaulted signal under `data.resolution.filled_signals` and in a warning. |
 | `REQ-DBC-10` | Unwanted behaviour | If a message or signal name cannot be resolved, the `DBC_MESSAGE_NOT_FOUND` / `DBC_SIGNAL_INVALID` error hint shall suggest the closest valid names (DBC names plus SAE PGN/SPN aliases). |
+| `REQ-DBC-11` | Event-driven | When a source frame is decoded, the system shall include the same zero-based, decode-invocation-local `frame_index` in the `decoded_message` payload and each of its `signal` payloads, preserving separate identities for repeated equal-valued frames. |
 
 ## Command Surface
 
@@ -55,6 +56,7 @@ Out of scope:
 ## Data Model
 
 `decode` returns decoded-message and signal events. `encode` returns a frame plus frame events and CLI metadata describing the encoding request.
+`frame_index` is additive payload metadata on DBC decode events; it does not replace the frame timestamp or claim global uniqueness across separate decode invocations.
 
 ## Output Contracts
 
