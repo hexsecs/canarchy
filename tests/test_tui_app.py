@@ -60,6 +60,21 @@ def test_command_populates_panes() -> None:
     _run(scenario())
 
 
+def test_decode_fixture_displays_six_distinct_signal_observations() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test() as pilot:
+            await _submit(
+                app,
+                pilot,
+                "decode --file tests/fixtures/sample.candump --dbc tests/fixtures/sample.dbc",
+            )
+            assert app.query_one("#decoded", DataTable).row_count == 6
+            assert len(app.tstate.decoded_signals) == 6
+
+    _run(scenario())
+
+
 def test_reference_and_diagnostic_results_are_visible_and_switchable() -> None:
     async def scenario() -> None:
         app = _make_app()

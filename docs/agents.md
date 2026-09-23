@@ -77,6 +77,8 @@ Active-transmit MCP tools (`send`, `generate`, `simulate`, `gateway`, `replay`, 
 
 For DBC reconnaissance, `dbc_inspect` accepts `layout=true` to include cantools-rendered message bit diagrams, signal trees, and choice tables as structured strings on each message payload.
 
+DBC decode emits a `decoded_message` event and individual `signal` events for the same source frame. Their payloads share a zero-based `frame_index` local to that decode invocation; use `(source, frame_index, message_name, signal_name)` to correlate them. Equal values at different indexes are distinct observations. Standalone signal timestamps remain null until #525; use the parent timestamp when joining, and do not infer missing identities from matching values.
+
 | MCP tool | CLI equivalent |
 |----------|---------------|
 | `capture` | `canarchy capture` |

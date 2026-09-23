@@ -33,6 +33,7 @@ Validate the shipped DBC-backed decode and encode workflows, including both libr
 | `REQ-DBC-08` | `TEST-DBC-08`, `TEST-DBC-09`, `TEST-DBC-11` |
 | `REQ-DBC-09` | `TEST-DBC-10` |
 | `REQ-DBC-10` | `TEST-DBC-11` |
+| `REQ-DBC-11` | `TEST-DBC-12` |
 
 ## Representative Test Cases
 
@@ -191,3 +192,16 @@ Then   `DBC_MESSAGE_NOT_FOUND` shall list both candidate DBC message names
 ```
 
 **Fixture:** `tests/fixtures/j1939_sample.dbc`.
+
+---
+
+### `TEST-DBC-12` — Parent and signal events share source-frame identity
+
+```gherkin
+Given  a capture with two DBC-matched frames
+When   the DBC decoder emits decoded-message and signal events
+Then   each signal event shall carry its parent's frame_index
+And    the two frames shall have different frame_index values even if their signals match
+```
+
+**Fixture:** `tests/fixtures/sample.candump`, `tests/fixtures/sample.dbc`.

@@ -213,6 +213,18 @@ And ordinary help and version requests still render in the result view
 
 **Fixture:** Textual test pilot with spy executor; fuzz-identify and send argument vectors.
 
+### TEST-TUI-19: Canonical Signal Observations
+
+```gherkin
+Given DBC decoding emits parent decoded-message and child signal events for two frames
+When the TUI folds the six-signal sample capture and equal-valued repeated frames
+Then each source-frame signal appears once with the child units and available timestamp
+And different frame indexes remain distinct despite equal values
+And parent-only, child-only, and unidentifiable events are retained without value-based guessing
+```
+
+**Fixture:** Sample DBC/candump; Textual pilot and mixed-producer fold fixtures.
+
 ## Traceability
 
 | Requirement | Tests |
@@ -238,6 +250,7 @@ And ordinary help and version requests still render in the result view
 | REQ-TUI-19 | TEST-TUI-16, TEST-TUI-17 |
 | REQ-TUI-20 | TEST-TUI-16, TEST-TUI-17 |
 | REQ-TUI-21 | TEST-TUI-18 |
+| REQ-TUI-22 | TEST-TUI-19 |
 
 ## Not Tested
 

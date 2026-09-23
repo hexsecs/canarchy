@@ -348,7 +348,7 @@ def database_timing_map_runtime(dbc_path: str) -> dict[int, dict[str, Any]]:
 def decode_frames_runtime(frames: list[CanFrame], dbc_path: str) -> list[dict[str, Any]]:
     database = load_runtime_database(dbc_path)
     events: list[dict[str, Any]] = []
-    for frame in frames:
+    for frame_index, frame in enumerate(frames):
         try:
             message = database.get_message_by_frame_id(frame.arbitration_id)
         except KeyError:
@@ -373,6 +373,7 @@ def decode_frames_runtime(frames: list[CanFrame], dbc_path: str) -> list[dict[st
                 frame=frame,
                 signals=decoded_signals,
                 source="dbc.decode",
+                frame_index=frame_index,
             ).to_event()
         )
         for signal_name, value in decoded_signals.items():
@@ -385,6 +386,7 @@ def decode_frames_runtime(frames: list[CanFrame], dbc_path: str) -> list[dict[st
                     value=value,
                     units=signal.unit,
                     source="dbc.decode",
+                    frame_index=frame_index,
                 ).to_event()
             )
 

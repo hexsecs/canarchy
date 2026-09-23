@@ -65,6 +65,7 @@ class TuiState:
     alerts: list[str] = field(default_factory=list)
     live_traffic: list[str] = field(default_factory=list)
     decoded_signals: list[str] = field(default_factory=list)
+    decoded_observations: list[DecodedSignalObservation] = field(default_factory=list)
     j1939_pgn_counts: Counter[int] = field(default_factory=Counter)
     j1939_source_addresses: Counter[int] = field(default_factory=Counter)
     j1939_recent: list[str] = field(default_factory=list)
@@ -116,6 +117,79 @@ def _signal_units_text(units: object) -> str:
     return "" if units in (None, "") else str(units)
 
 
+@dataclass(slots=True, frozen=True)
+class DecodedSignalObservation:
+    message: str
+    signal: str
+    value: Any
+    units: str
+    timestamp: float | None
+    from_child: bool
+
+
+def _decoded_signal_observations(result: CommandResult) -> list[DecodedSignalObservation]:
+    observations: list[DecodedSignalObservation] = []
+    positions: dict[tuple[str, int, str, str], int] = {}
+    for event in result.data.get("events", []) or []:
+        event_type = event.get("event_type")
+        if event_type not in {"decoded_message", "signal"}:
+            continue
+        payload = event.get("payload") or {}
+        message = str(payload.get("message_name") or "")
+        timestamp = event.get("timestamp")
+        if timestamp is None and event_type == "decoded_message":
+            timestamp = (payload.get("frame") or {}).get("timestamp")
+        if event_type == "decoded_message":
+            signal_values = [
+                (str(signal_name), value, None)
+                for signal_name, value in (payload.get("signals") or {}).items()
+            ]
+        else:
+            signal_values = [
+                (payload.get("signal_name", "(signal)"), payload.get("value"), payload.get("units"))
+            ]
+        frame_index = payload.get("frame_index")
+        has_identity = isinstance(frame_index, int) and not isinstance(frame_index, bool)
+        for signal_name, value, units in signal_values:
+            signal = str(signal_name)
+            observation = DecodedSignalObservation(
+                message=message,
+                signal=signal,
+                value=value,
+                units=_signal_units_text(units),
+                timestamp=timestamp,
+                from_child=event_type == "signal",
+            )
+            if not has_identity:
+                observations.append(observation)
+                continue
+            identity = (str(event.get("source") or ""), frame_index, message, signal)
+            position = positions.get(identity)
+            if position is None:
+                positions[identity] = len(observations)
+                observations.append(observation)
+                continue
+            previous = observations[position]
+            selected = observation if observation.from_child else previous
+            if previous.from_child and previous.timestamp is not None:
+                best_timestamp = previous.timestamp
+            elif observation.from_child and observation.timestamp is not None:
+                best_timestamp = observation.timestamp
+            else:
+                best_timestamp = (
+                    previous.timestamp if previous.timestamp is not None else observation.timestamp
+                )
+            observations[position] = DecodedSignalObservation(
+                message=message,
+                signal=signal,
+                value=selected.value,
+                units=observation.units or previous.units,
+                timestamp=best_timestamp,
+                from_child=observation.from_child or previous.from_child,
+            )
+    return observations
+
+
 #: Column headers for the Decoded Signals DataTable.
 DECODED_SIGNAL_COLUMNS = ("message", "signal", "value", "units")
 
@@ -144,24 +218,14 @@ def _decoded_signal_tuples(result: CommandResult) -> list[tuple[str, str, str, s
             _signal_units_text(units),
         )
 
-    rows: list[tuple[str, str, str, str]] = []
+    rows: list[tuple[str, str, str, str]] = [
+        _row(observation.message, observation.signal, observation.value, observation.units)
+        for observation in _decoded_signal_observations(result)
+    ]
     for event in result.data.get("events", []) or []:
         event_type = event.get("event_type")
         payload = event.get("payload", {}) or {}
-        if event_type == "decoded_message":
-            message = payload.get("message_name", "")
-            for signal_name, value in (payload.get("signals") or {}).items():
-                rows.append(_row(message, signal_name, value, None))
-        elif event_type == "signal":
-            rows.append(
-                _row(
-                    payload.get("message_name") or "",
-                    payload.get("signal_name", "(signal)"),
-                    payload.get("value"),
-                    payload.get("units"),
-                )
-            )
-        elif event_type == "j1939_pgn":
+        if event_type == "j1939_pgn":
             pgn_label = f"PGN {payload.get('pgn', '?')}"
             decoded = payload.get("decoded_signals")
             # `j1939 pgn` populates `decoded_signals` via
@@ -454,6 +518,7 @@ def _clear_panes(state: TuiState) -> None:
     state.alerts = []
     state.live_traffic = []
     state.decoded_signals = []
+    state.decoded_observations = []
     state.j1939_pgn_counts.clear()
     state.j1939_source_addresses.clear()
     state.j1939_recent = []
@@ -572,6 +637,11 @@ def _update_state(
 
     state.live_traffic = _traffic_lines(result, caps.traffic)
     new_signal_rows = _decoded_signal_rows(result)
+    new_observations = _decoded_signal_observations(result)
+    if new_observations:
+        state.decoded_observations = (new_observations + state.decoded_observations)[
+            : caps.decoded_signals
+        ]
     if new_signal_rows:
         # Keep the most recent rows; older entries fall off the bottom of
         # the pane so the display stays bounded. Newest at the top.

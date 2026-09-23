@@ -36,6 +36,20 @@ class DbcTests(unittest.TestCase):
         self.assertEqual(len(decoded_messages), 2)
         self.assertEqual(decoded_messages[0]["payload"]["message_name"], "EngineStatus1")
         self.assertEqual(decoded_messages[1]["payload"]["message_name"], "EngineSpeed1")
+        self.assertEqual([event["payload"]["frame_index"] for event in decoded_messages], [0, 1])
+        signal_events = [event for event in events if event["event_type"] == "signal"]
+        self.assertEqual(len(signal_events), 6)
+        self.assertEqual(
+            [event["payload"]["frame_index"] for event in signal_events], [0] * 4 + [1] * 2
+        )
+
+    def test_identical_frames_keep_distinct_decode_indexes(self) -> None:
+        frame = LocalTransport().frames_from_file(str(FIXTURES / "sample.candump"))[0]
+        events = decode_frames([frame, frame], str(FIXTURES / "sample.dbc"))
+        parents = [event for event in events if event["event_type"] == "decoded_message"]
+        children = [event for event in events if event["event_type"] == "signal"]
+        self.assertEqual([event["payload"]["frame_index"] for event in parents], [0, 1])
+        self.assertEqual([event["payload"]["frame_index"] for event in children], [0] * 4 + [1] * 4)
 
     def test_encode_message_returns_frame(self) -> None:
         frame, events, _ = encode_message(
@@ -71,6 +85,14 @@ class DbcTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["data"]["matched_messages"], 2)
         self.assertEqual(payload["data"]["events"][0]["payload"]["message_name"], "EngineStatus1")
+        self.assertEqual(
+            [
+                event["payload"]["frame_index"]
+                for event in payload["data"]["events"]
+                if event["event_type"] == "decoded_message"
+            ],
+            [0, 1],
+        )
 
     def test_encode_cli_returns_structured_frame(self) -> None:
         exit_code, stdout, stderr = run_cli(

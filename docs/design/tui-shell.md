@@ -42,6 +42,7 @@ This specification covers TUI launch, shared command execution, live capture lif
 | REQ-TUI-19 | Event-driven | When a submitted command returns non-event data, an error, help, or version text, the system shall display its output in a scrollable, selectable result view without discarding retained pane state. |
 | REQ-TUI-20 | Event-driven | When the operator switches between results and panes, the system shall preserve the latest result and all folded event rows while keeping the command entry accessible at small terminal sizes. |
 | REQ-TUI-21 | Unwanted behaviour | If a submitted command resolves to an active-transmit operation, the system shall refuse it before invoking the shared executor, even when a help- or version-looking token is a positional argument after `--`. |
+| REQ-TUI-22 | Event-driven | When decoded-message and signal events share a source, frame index, message, and signal name, the system shall render one signal observation using the child event's units and the available source timestamp, while preserving distinct frame indexes and retaining uncorrelated parent-only or child-only observations. |
 
 ## Command Surface
 
@@ -54,6 +55,8 @@ Inside the TUI, `/capture <interface>`, `/stop`, `/clear`, `/filter`, and `/help
 The latest command result is shown in a read-only TextArea using the CLI's text formatter (or JSON/JSONL when explicitly requested). Its border identifies the submitted command and completion/error status. Non-event answers and errors open the result view automatically; event-bearing answers retain the live panes in front. `F2` switches between the result and panes, and `Esc` returns to the panes. The result can be scrolled, selected, and copied with the TextArea controls. CLI help and version output are captured into this view rather than printed behind the full-screen interface. Live capture drains continue while results are open.
 
 The active-transmit precheck parses the command with the shared argument parser and suppresses only help/version text from that precheck. It never infers safety from raw token membership: `--help` and `--version` can be positional values after `--`, in which case an active command remains refused.
+
+The decoded-signal fold pairs parent and child events by `(source, frame_index, message_name, signal_name)`, never by value. It retains the child event's units and whichever event supplies a timestamp (including zero). When an event lacks `frame_index`, it remains a separate observation rather than risking a false merge. The current four-column Signals pane does not present time; the folded observation carries the numeric timestamp for future trend work, while #525 supplies timestamps directly on standalone signal events and #551 governs time-basis display.
 
 `/capture` takes exactly one interface. It is a hotkey for the app-native live stream and carries no options, so an empty token, a whitespace-only token, or extra arguments are rejected with an alerts diagnostic rather than silently ignored; run the full `capture` command for anything that needs flags. Rejection happens before the capture session is touched, so malformed input never stops or replaces a running capture.
 
