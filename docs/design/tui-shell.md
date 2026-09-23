@@ -39,6 +39,8 @@ This specification covers TUI launch, shared command execution, live capture lif
 | REQ-TUI-16 | Unwanted behaviour | If `/capture` receives no interface, an empty interface token, or more than one argument, the system shall reject the command with an alerts diagnostic and shall neither stop nor replace a running capture. |
 | REQ-TUI-17 | Unwanted behaviour | If `/stop` receives any argument, the system shall reject the command with an alerts diagnostic and shall not stop a running capture. |
 | REQ-TUI-18 | Ubiquitous | The system shall treat `/filter` and `/sort` arguments as raw text rather than shell tokens, so that a filter needle may contain quote characters. |
+| REQ-TUI-19 | Event-driven | When a submitted command returns non-event data, an error, help, or version text, the system shall display its output in a scrollable, selectable result view without discarding retained pane state. |
+| REQ-TUI-20 | Event-driven | When the operator switches between results and panes, the system shall preserve the latest result and all folded event rows while keeping the command entry accessible at small terminal sizes. |
 
 ## Command Surface
 
@@ -47,6 +49,8 @@ canarchy tui
 ```
 
 Inside the TUI, `/capture <interface>`, `/stop`, `/clear`, `/filter`, and `/help` control presentation and capture; the spacebar pauses or resumes presentation. Other commands are delegated to the canonical command executor.
+
+The latest command result is shown in a read-only TextArea using the CLI's text formatter (or JSON/JSONL when explicitly requested). Its border identifies the submitted command and completion/error status. Non-event answers and errors open the result view automatically; event-bearing answers retain the live panes in front. `F2` switches between the result and panes, and `Esc` returns to the panes. The result can be scrolled, selected, and copied with the TextArea controls. CLI help and version output are captured into this view rather than printed behind the full-screen interface. Live capture drains continue while results are open.
 
 `/capture` takes exactly one interface. It is a hotkey for the app-native live stream and carries no options, so an empty token, a whitespace-only token, or extra arguments are rejected with an alerts diagnostic rather than silently ignored; run the full `capture` command for anything that needs flags. Rejection happens before the capture session is touched, so malformed input never stops or replaces a running capture.
 

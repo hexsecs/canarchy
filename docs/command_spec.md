@@ -1200,6 +1200,7 @@ Notes:
 * `/capture` and `/stop` tokenise their arguments: an unmatched quote or a dangling backslash is reported in the alerts log and the TUI stays running. `/filter` and `/sort` take raw text instead, so a filter needle may contain a quote character; they validate their pane argument and leave state unchanged when it is not recognised
 * panes are interactive: `/filter <pane> [text]`, `/sort <pane> [column]`, arrow-key row navigation, `[`/`]` to resize the backlog, `space` to pause the feed
 * command entry runs existing CANarchy commands through the shared parser and result path; slash hotkeys (`/save`, `/load`, `/dbc`, `/doctor`, `/config`, …) expand to those commands
+* non-event answers, errors, help, and version output appear in a scrollable, selectable result view rather than disappearing behind the full-screen interface. `F2` switches between the result and the live panes; `Esc` returns to the panes. Event rows remain retained while the result is open
 * nested interactive front ends like `shell` or `tui` are rejected from TUI command entry (`TUI_COMMAND_UNSUPPORTED`)
 
 ### uds scan

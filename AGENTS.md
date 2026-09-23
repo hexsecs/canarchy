@@ -219,6 +219,8 @@ The TUI should:
 * trigger the same underlying commands/actions
 * avoid introducing unique features that cannot be expressed as commands
 
+The full-screen TUI shows non-event command answers, errors, help, and version text in a read-only result view. `F2` switches between that view and the event panes; `Esc` returns to the panes. Event rows and live capture continue while results are open. Agents should still use non-interactive CLI or MCP output for automation.
+
 ---
 
 ## Initial capability priorities
