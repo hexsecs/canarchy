@@ -280,6 +280,7 @@ Currently modeled event types:
 * `alert`
 
 These events are produced from typed Python dataclasses and then serialized deterministically for command output.
+DBC decode events additionally share a decode-invocation-local `frame_index` between each `decoded_message` and its child `signal` events. Front ends can correlate them without suppressing equal-valued signals from different frames; timestamps remain numeric source data rather than an identity substitute.
 
 Not every command returns event streams. Some command families, including DBC inspection, cache/provider management, and reverse-engineering ranking helpers, return structured result objects under `data` instead. For DBC-backed decode, encode, and inspect commands, `data` also includes `dbc_source` provenance so downstream automation can distinguish a local file from a provider-backed cached schema.
 

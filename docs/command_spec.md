@@ -352,6 +352,7 @@ Notes:
 * `--dbc` accepts a local file path or a provider ref such as `opendbc:<name>`
 * `--stdin` reads JSONL `frame` events from standard input instead of a `--file` capture source
 * structured output includes a `dbc_source` object describing the provider-backed or local DBC resolution that was used
+* each DBC `decoded_message` and its child `signal` events carry the same zero-based `payload.frame_index` within one decode invocation; correlate using that index plus source/message/signal names rather than a decoded value
 
 ### encode
 

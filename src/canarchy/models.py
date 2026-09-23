@@ -145,16 +145,20 @@ class DecodedMessageEvent:
     signals: dict[str, Any]
     source: str = "decoder"
     timestamp: float | None = None
+    frame_index: int | None = None
 
     def to_event(self) -> Event:
+        payload = {
+            "frame": self.frame.to_payload(),
+            "message_name": self.message_name,
+            "signals": self.signals,
+        }
+        if self.frame_index is not None:
+            payload["frame_index"] = self.frame_index
         return Event(
             event_type="decoded_message",
             source=self.source,
-            payload={
-                "frame": self.frame.to_payload(),
-                "message_name": self.message_name,
-                "signals": self.signals,
-            },
+            payload=payload,
             timestamp=self.timestamp if self.timestamp is not None else self.frame.timestamp,
         )
 
@@ -168,6 +172,7 @@ class SignalValueEvent:
     message_name: str | None = None
     source: str = "decoder"
     timestamp: float | None = None
+    frame_index: int | None = None
 
     def to_event(self) -> Event:
         payload = {
@@ -177,6 +182,8 @@ class SignalValueEvent:
             "units": self.units,
             "value": self.value,
         }
+        if self.frame_index is not None:
+            payload["frame_index"] = self.frame_index
         return Event(
             event_type="signal",
             source=self.source,

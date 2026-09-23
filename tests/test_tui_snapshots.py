@@ -18,6 +18,7 @@ from canarchy.tui import (
     TuiState,
     _clear_panes,
     _decoded_signal_rows,
+    _decoded_signal_observations,
     _handle_hotkey,
     _HotkeyResult,
     _j1939_pane_lines,
@@ -112,6 +113,171 @@ def test_decoded_signals_pane_extracts_from_signal_events_with_units():
     )
     (row,) = _decoded_signal_rows(result)
     assert row == "EngineStatus1.CoolantTemp = 85.5 [degC]"
+
+
+def test_decoded_signal_observations_join_by_frame_identity_not_value():
+    events = [
+        {
+            "event_type": "decoded_message",
+            "source": "dbc.decode",
+            "timestamp": timestamp,
+            "payload": {
+                "frame_index": frame_index,
+                "message_name": "Engine",
+                "signals": {"RPM": 100},
+            },
+        }
+        for frame_index, timestamp in ((0, 0.0), (1, 0.1))
+    ]
+    events.extend(
+        {
+            "event_type": "signal",
+            "source": "dbc.decode",
+            "timestamp": None,
+            "payload": {
+                "frame_index": frame_index,
+                "message_name": "Engine",
+                "signal_name": "RPM",
+                "value": 100,
+                "units": "rpm",
+            },
+        }
+        for frame_index in (0, 1)
+    )
+    result = _fake_result("decode", {"events": events})
+    observations = _decoded_signal_observations(result)
+    assert len(observations) == 2
+    assert [item.timestamp for item in observations] == [0.0, 0.1]
+    assert [item.units for item in observations] == ["rpm", "rpm"]
+    assert _decoded_signal_rows(result) == ["Engine.RPM = 100 [rpm]"] * 2
+
+
+def test_decoded_signal_observations_support_mixed_event_producers():
+    result = _fake_result(
+        "decode",
+        {
+            "events": [
+                {
+                    "event_type": "signal",
+                    "source": "dbc.decode",
+                    "timestamp": None,
+                    "payload": {
+                        "frame_index": 0,
+                        "message_name": "Engine",
+                        "signal_name": "RPM",
+                        "value": 100,
+                        "units": "rpm",
+                    },
+                },
+                {
+                    "event_type": "decoded_message",
+                    "source": "dbc.decode",
+                    "timestamp": 0.0,
+                    "payload": {
+                        "frame_index": 0,
+                        "message_name": "Engine",
+                        "signals": {"RPM": 100},
+                    },
+                },
+                {
+                    "event_type": "decoded_message",
+                    "source": "dbc.decode",
+                    "timestamp": 0.1,
+                    "payload": {
+                        "frame_index": 1,
+                        "message_name": "Engine",
+                        "signals": {"Load": 20},
+                    },
+                },
+                {
+                    "event_type": "signal",
+                    "source": "other.decoder",
+                    "timestamp": 0.1,
+                    "payload": {
+                        "frame_index": 1,
+                        "message_name": "Engine",
+                        "signal_name": "Load",
+                        "value": 20,
+                        "units": "%",
+                    },
+                },
+                {
+                    "event_type": "signal",
+                    "source": "dbc.decode",
+                    "timestamp": 0.2,
+                    "payload": {
+                        "frame_index": 2,
+                        "message_name": "Engine",
+                        "signal_name": "Oil",
+                        "value": 80,
+                    },
+                },
+            ]
+        },
+    )
+    observations = _decoded_signal_observations(result)
+    assert len(observations) == 4
+    assert [(item.signal, item.timestamp) for item in observations] == [
+        ("RPM", 0.0),
+        ("Load", 0.1),
+        ("Load", 0.1),
+        ("Oil", 0.2),
+    ]
+    assert observations[0].units == "rpm"
+
+
+def test_decoded_signal_observations_prefer_child_timestamp_when_available():
+    result = _fake_result(
+        "decode",
+        {
+            "events": [
+                {
+                    "event_type": "signal",
+                    "source": "dbc.decode",
+                    "timestamp": 0.1,
+                    "payload": {
+                        "frame_index": 0,
+                        "message_name": "Engine",
+                        "signal_name": "RPM",
+                        "value": 100,
+                        "units": "rpm",
+                    },
+                },
+                {
+                    "event_type": "decoded_message",
+                    "source": "dbc.decode",
+                    "timestamp": 0.0,
+                    "payload": {
+                        "frame_index": 0,
+                        "message_name": "Engine",
+                        "signals": {"RPM": 100},
+                    },
+                },
+            ]
+        },
+    )
+    (observation,) = _decoded_signal_observations(result)
+    assert observation.timestamp == 0.1
+    assert observation.units == "rpm"
+
+
+def test_decoded_signal_observations_do_not_guess_identity_from_values():
+    result = _fake_result(
+        "decode",
+        {
+            "events": [
+                {
+                    "event_type": "decoded_message",
+                    "payload": {"message_name": "Engine", "signals": {"RPM": 100}},
+                },
+                {
+                    "event_type": "signal",
+                    "payload": {"message_name": "Engine", "signal_name": "RPM", "value": 100},
+                },
+            ]
+        },
+    )
+    assert len(_decoded_signal_observations(result)) == 2
 
 
 def test_decoded_signals_pane_extracts_from_j1939_pgn_events_list_shape():
@@ -437,7 +603,8 @@ def test_decoded_signals_pane_end_to_end_against_sample_dbc():
     # The fixture produces at least one decoded signal; the assertion is
     # intentionally loose so a fixture refresh that changes signal names
     # doesn't break the test.
-    assert len(state.decoded_signals) > 0, "expected at least one decoded signal from sample.dbc"
+    assert len(state.decoded_signals) == 6
+    assert [item.timestamp for item in state.decoded_observations] == [0.0] * 4 + [0.1] * 2
     assert all(" = " in row for row in state.decoded_signals)
 
 

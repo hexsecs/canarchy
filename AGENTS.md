@@ -223,6 +223,8 @@ The full-screen TUI shows non-event command answers, errors, help, and version t
 
 The TUI's responsive workspaces are Traffic, Signals, J1939, UDS, and Findings (`Alt+1`–`Alt+5`). `F3` expands the activity band; `Enter` shows the selected row's full fields on narrow terminals and `Esc` returns to the table. These presentation controls do not alter the CLI command contract or the capture lifecycle.
 
+DBC `decoded_message` and `signal` events share a zero-based `payload.frame_index` local to each decode invocation. The TUI combines a parent/child signal only when `source`, `frame_index`, `message_name`, and `signal_name` match; repeated equal-valued frames stay separate. Missing indexes are not inferred from values. The TUI can recover a child observation's timestamp from its parent, but standalone signal-event timestamps remain the scope of #525.
+
 ---
 
 ## Initial capability priorities

@@ -213,7 +213,19 @@ And ordinary help and version requests still render in the result view
 
 **Fixture:** Textual test pilot with spy executor; fuzz-identify and send argument vectors.
 
-### TEST-TUI-19: Responsive Workspace And Detail
+### TEST-TUI-19: Canonical Signal Observations
+
+```gherkin
+Given DBC decoding emits parent decoded-message and child signal events for two frames
+When the TUI folds the six-signal sample capture and equal-valued repeated frames
+Then each source-frame signal appears once with the child units and available timestamp
+And different frame indexes remain distinct despite equal values
+And parent-only, child-only, and unidentifiable events are retained without value-based guessing
+```
+
+**Fixture:** Sample DBC/candump; Textual pilot and mixed-producer fold fixtures.
+
+### TEST-TUI-20: Responsive Workspace And Detail
 
 ```gherkin
 Given the TUI has folded traffic at 80 by 24
@@ -221,11 +233,13 @@ When the operator inspects a row and resizes through 100 by 35 to 140 by 45
 Then the active table retains usable height and payload visibility
 And the narrow drill-down shows the complete selected row
 And the wide layout shows the contextual inspector
+And closing drill-down restores table focus
+And widening the terminal closes drill-down
 ```
 
 **Fixture:** Textual test pilot and deterministic J1939 command result.
 
-### TEST-TUI-20: Workspace And Capture Continuity
+### TEST-TUI-21: Workspace And Capture Continuity
 
 ```gherkin
 Given a live capture has populated traffic and activity
@@ -261,10 +275,11 @@ And Findings contains the retained activity entries
 | REQ-TUI-19 | TEST-TUI-16, TEST-TUI-17 |
 | REQ-TUI-20 | TEST-TUI-16, TEST-TUI-17 |
 | REQ-TUI-21 | TEST-TUI-18 |
-| REQ-TUI-22 | TEST-TUI-19, TEST-TUI-20 |
-| REQ-TUI-23 | TEST-TUI-19 |
-| REQ-TUI-24 | TEST-TUI-19, TEST-TUI-20 |
-| REQ-TUI-25 | TEST-TUI-19 |
+| REQ-TUI-22 | TEST-TUI-19 |
+| REQ-TUI-23 | TEST-TUI-20, TEST-TUI-21 |
+| REQ-TUI-24 | TEST-TUI-20 |
+| REQ-TUI-25 | TEST-TUI-20, TEST-TUI-21 |
+| REQ-TUI-26 | TEST-TUI-20 |
 
 ## Not Tested
 

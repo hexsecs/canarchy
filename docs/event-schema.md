@@ -153,6 +153,7 @@ Emitted by: `decode`
   "timestamp": 0.0,
   "payload": {
     "frame": { },
+    "frame_index": 0,
     "message_name": "EngineStatus1",
     "signals": {
       "CoolantTemp": -23,
@@ -167,6 +168,7 @@ Emitted by: `decode`
 | Field | Type | Description |
 |-------|------|-------------|
 | `frame` | object | Raw `CanFrame` payload (same shape as `frame` event). |
+| `frame_index` | int | Zero-based position of the source frame in this decode invocation; shared with its `signal` events. |
 | `message_name` | string | DBC message name. |
 | `signals` | object | Signal name → decoded physical value map. |
 
@@ -184,6 +186,7 @@ Emitted by: `decode`
   "source": "dbc.decode",
   "timestamp": null,
   "payload": {
+    "frame_index": 0,
     "message_name": "EngineStatus1",
     "signal_name": "CoolantTemp",
     "units": "degC",
@@ -195,9 +198,12 @@ Emitted by: `decode`
 | Field | Type | Description |
 |-------|------|-------------|
 | `message_name` | string \| null | Parent DBC message name. |
+| `frame_index` | int | Same decode-invocation frame index as the parent `decoded_message`; use it with `source`, `message_name`, and `signal_name` to correlate the events without conflating equal values from separate frames. |
 | `signal_name` | string | DBC signal name. |
 | `units` | string \| null | Physical unit string from the DBC (empty string if not defined). |
 | `value` | number | Decoded physical value after scaling and offset. |
+
+The frame index is local to one decode invocation, not a globally unique capture ID. Older or third-party events may omit it; consumers should retain those observations separately rather than deduplicating by value. Signal-event timestamps remain `null` until #525 supplies source-frame timestamps; the parent event has the frame timestamp when known.
 
 ---
 
