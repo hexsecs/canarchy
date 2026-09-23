@@ -237,7 +237,7 @@ And closing drill-down restores table focus
 And widening the terminal closes drill-down
 ```
 
-**Fixture:** Textual test pilot and deterministic J1939 command result.
+**Fixture:** Textual test pilot and `tests/fixtures/sample.candump` through the shared `filter all` command; the Traffic identifier summary is the active table.
 
 ### TEST-TUI-21: Workspace And Capture Continuity
 

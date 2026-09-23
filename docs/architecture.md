@@ -196,6 +196,7 @@ Relevant modules:
 * `src/canarchy/tui.py`
 * `src/canarchy/tui_app.py`
 * `src/canarchy/tui_capture.py`
+* `src/canarchy/tui_explorer.py`
 * `src/canarchy/completion.py`
 * `src/canarchy/mcp_server.py`
 
@@ -232,6 +233,8 @@ Current behavior:
 This is deliberate. The shell, TUI, and MCP server are convenience or integration surfaces, not separate applications.
 
 The TUI capture boundary uses a bounded producer queue so transport reads never block on rendering. Each capture exposes received, drained, dropped, queue-depth, and high-water telemetry. Completed producers remain attached until the UI consumes their buffered events and errors; pausing presentation does not discard completed sessions. A shared stop event reaches the live transport, where `python-can` receive calls use bounded polling before bus shutdown, preventing idle hardware from orphaning a capture worker.
+
+The Traffic workspace's rate, changed-byte, activity, and bounded-history analysis lives in the presentation-independent `tui_explorer` module, not Textual. It consumes canonical frame events and keys identifiers by bus, numeric ID, and standard/extended flag. `tui_app` only renders that model and owns focus, view mode, and follow/freeze state. Typed traffic filters reuse the transport command's frame predicate, including the J1939 `sa==` atom; the CLI remains authoritative.
 
 ## Transport Boundary
 

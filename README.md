@@ -124,9 +124,9 @@ Active-transmit tools require an explicit acknowledgement, so an agent can't put
 
 `canarchy tui` opens an interactive, full-screen dashboard that streams the bus live:
 
-- **Responsive workspaces:** `Alt+1`–`Alt+5` switch Traffic, Signals (one row per decoded observation), J1939, UDS, and Findings. The active table uses the available height; wide terminals show a selected-row inspector, while `Enter` opens complete row details on narrow terminals (`Esc` returns).
+- **Responsive workspaces:** `Alt+1`–`Alt+5` switch Traffic, Signals (one row per decoded observation), J1939, UDS, and Findings. Traffic opens as a per-bus, standard/extended-ID summary with counts, rate, changed-byte offsets, and activity; `v` switches to the chronological event log. The active table uses the available height; wide terminals show a selected-row inspector, while `Enter` opens complete raw hex/bit details on narrow terminals (`Esc` returns).
 - **Background capture:** `/capture <iface>` starts streaming; `/stop` (or `x`) ends it.
-- **Interactive:** `/filter <pane> <text>`, `/sort <pane> <column>`, arrow-key row navigation, `F3` to expand activity, `space` to pause the feed, `[`/`]` to resize the backlog, `ctrl+f` to maximize a table.
+- **Interactive:** `/filter traffic 'id==0x123'` (also `pgn==` and `sa==`), `/sort traffic <column>`, arrow-key row navigation, `F4` to freeze inspection or return live, `F3` to expand activity, `space` to pause the feed, `[`/`]` to resize the backlog, `ctrl+f` to maximize a table. Other panes keep `/filter <pane> <text>` and `/sort <pane> <column>`.
 - Type any real CANarchy command at the prompt — event output folds into the panes, while stats, DBC inspection, diagnostics, reference lookups, errors, and help appear in a scrollable result view. Press `F2` to switch views or `Esc` to return to the panes.
 
 <details>
