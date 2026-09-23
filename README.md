@@ -127,7 +127,7 @@ Active-transmit tools require an explicit acknowledgement, so an agent can't put
 - **Live panes:** Live Traffic, Decoded Signals, J1939 (summary ribbon + recent table), UDS transactions, and an append-only Alerts log.
 - **Background capture:** `/capture <iface>` starts streaming; `/stop` (or `x`) ends it.
 - **Interactive:** `/filter <pane> <text>`, `/sort <pane> <column>`, arrow-key row navigation, `space` to pause the feed, `[`/`]` to resize the backlog, `ctrl+f` to maximize a pane.
-- Type any real CANarchy command at the prompt — it runs through the shared parser and folds into the panes.
+- Type any real CANarchy command at the prompt — event output folds into the panes, while stats, DBC inspection, diagnostics, reference lookups, errors, and help appear in a scrollable result view. Press `F2` to switch views or `Esc` to return to the panes.
 
 <details>
 <summary><strong>Full command catalog</strong> (click to expand)</summary>

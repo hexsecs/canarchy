@@ -15,6 +15,8 @@ command entry that accepts real CANarchy commands and slash hotkeys.
 from __future__ import annotations
 
 import shlex
+from contextlib import redirect_stdout
+from io import StringIO
 from collections import deque
 from typing import Any, TypeVar
 
@@ -25,7 +27,7 @@ from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import DataTable, Footer, Header, Input, RichLog, Static
+from textual.widgets import DataTable, Footer, Header, Input, RichLog, Static, TextArea
 
 from canarchy.tui import (
     DECODED_SIGNAL_COLUMNS,
@@ -79,7 +81,8 @@ def _is_active_transmit_command(argv: list[str]) -> bool:
     )
 
     try:
-        args = build_parser().parse_args(argv)
+        with redirect_stdout(StringIO()):
+            args = build_parser().parse_args(argv)
     except BaseException:
         # argparse errors (CliUsageError) and --help/--version (SystemExit)
         # are handled downstream by the shared command path.
@@ -112,6 +115,11 @@ class CanarchyTuiApp(App[int]):
     #body {
         height: 1fr;
     }
+    #results {
+        display: none;
+        height: 1fr;
+        border: round $accent;
+    }
     .column {
         width: 1fr;
     }
@@ -135,6 +143,8 @@ class CanarchyTuiApp(App[int]):
         ("x", "stop_capture", "Stop capture"),
         ("space", "toggle_pause", "Pause/Resume"),
         ("ctrl+f", "maximize_pane", "Maximize pane"),
+        ("f2", "toggle_results", "Results/Panes"),
+        ("escape", "show_panes", "Panes"),
         ("left_square_bracket", "shrink_backlog", "Backlog -"),
         ("right_square_bracket", "grow_backlog", "Backlog +"),
     ]
@@ -161,6 +171,7 @@ class CanarchyTuiApp(App[int]):
         self._col_keys: dict[str, list] = {name: [] for name in _PANES}
         self._pane_filters: dict[str, str] = {}
         self._sort_reverse: dict[str, bool] = {}
+        self._has_result = False
 
     # -- composition --------------------------------------------------------
 
@@ -175,6 +186,7 @@ class CanarchyTuiApp(App[int]):
                 yield Static("(no J1939 summary)", id="j1939-ribbon")
                 yield DataTable(id="j1939", classes="pane")
                 yield DataTable(id="uds", classes="pane")
+        yield TextArea(read_only=True, soft_wrap=False, id="results")
         yield RichLog(id="alerts", classes="pane", highlight=False, markup=False, wrap=True)
         yield Input(id="command", placeholder="CANarchy command or /help")
         yield Footer()
@@ -193,6 +205,7 @@ class CanarchyTuiApp(App[int]):
             table.border_title = titles[name]
             self._col_keys[name] = list(table.add_columns(*columns))
         self.query_one("#alerts", RichLog).border_title = "Alerts & Replay"
+        self.query_one("#results", TextArea).border_title = "Command Result — F2 panes, Esc close"
         self._emit_alert("CANarchy TUI ready — /capture <iface> to watch the bus live.")
         self.query_one("#command", Input).focus()
         # Poll the capture queue on the UI thread; the CaptureSession's own
@@ -282,13 +295,58 @@ class CanarchyTuiApp(App[int]):
                 "CLI (its confirmation prompt cannot be answered here)."
             )
             return
+        output = StringIO()
         try:
-            _exit_code, result = self._execute_command(argv)
+            with redirect_stdout(output):
+                _exit_code, result = self._execute_command(argv)
         except SystemExit:
-            # --help / --version call sys.exit(); stay in the TUI.
+            if output.getvalue():
+                self._show_result(command, output.getvalue(), status="complete")
             return
         if result is not None:
             self._ingest_result(result)
+            from canarchy.cli import emit_result
+
+            output_format = "json" if "--json" in argv else "jsonl" if "--jsonl" in argv else "text"
+            with redirect_stdout(output):
+                emit_result(result, output_format)
+            self._show_result(
+                command,
+                output.getvalue(),
+                status="complete" if result.ok else f"error (exit {_exit_code})",
+                reveal=not self._result_has_rows(result) or not result.ok,
+            )
+
+    def _result_has_rows(self, result: Any) -> bool:
+        return any(
+            (
+                _traffic_row_tuples(result),
+                _decoded_signal_tuples(result),
+                _j1939_row_tuples(result),
+                _uds_row_tuples(result),
+            )
+        )
+
+    def _show_result(self, command: str, output: str, *, status: str, reveal: bool = True) -> None:
+        result_view = self.query_one("#results", TextArea)
+        result_view.border_title = f"{command} — {status} — F2 panes, Esc close"
+        result_view.load_text(output.rstrip("\n") or "(no output)")
+        self._has_result = True
+        if reveal:
+            self._set_result_visible(True)
+
+    def _set_result_visible(self, visible: bool) -> None:
+        self.query_one("#body", Horizontal).display = not visible
+        result_view = self.query_one("#results", TextArea)
+        result_view.display = visible
+        (result_view if visible else self.query_one("#command", Input)).focus()
+
+    def action_toggle_results(self) -> None:
+        if self._has_result:
+            self._set_result_visible(not self.query_one("#results", TextArea).display)
+
+    def action_show_panes(self) -> None:
+        self._set_result_visible(False)
 
     # -- live capture -------------------------------------------------------
 

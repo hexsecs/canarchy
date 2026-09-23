@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 
-from textual.widgets import DataTable, Input, RichLog, Static
+from textual.widgets import DataTable, Input, RichLog, Static, TextArea
 
 from canarchy.cli import execute_command
 from canarchy.transport import LocalTransport, ScaffoldCanBackend
@@ -58,6 +58,63 @@ def test_command_populates_panes() -> None:
             assert app.query_one("#traffic", DataTable).row_count >= 1
 
     _run(scenario())
+
+
+def test_reference_and_diagnostic_results_are_visible_and_switchable() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await _submit(app, pilot, "j1939 monitor --pgn 65262")
+            rows = app.query_one("#j1939", DataTable).row_count
+            await _submit(app, pilot, "/filter traffic 0x")
+            filters = dict(app._pane_filters)
+            for command, expected in (
+                ("stats --file tests/fixtures/sample.candump", "command: stats"),
+                ("dbc inspect tests/fixtures/complex.dbc", "dbc"),
+                ("/doctor", "checks:"),
+                ("/config", "Effective transport configuration:"),
+                ("j1939 pgn 65262", "65262"),
+                ("j1939 spn 175", "175"),
+            ):
+                await _submit(app, pilot, command)
+                result = app.query_one("#results", TextArea)
+                assert result.display
+                assert result.size.height >= 3
+                assert expected in result.text
+                assert app.query_one("#body").display is False
+                if command.startswith("stats"):
+                    copied: list[str] = []
+                    app.copy_to_clipboard = copied.append
+                    await pilot.press("f7", "ctrl+c")
+                    assert copied == [result.text]
+                await pilot.press("f2")
+                assert app.query_one("#body").display
+                assert app.query_one("#j1939", DataTable).row_count == rows
+                assert app._pane_filters == filters
+
+    _run(scenario())
+
+
+def test_help_version_and_errors_use_results_view(capsys) -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(80, 24)) as pilot:
+            for command, expected in (
+                ("--help", "usage:"),
+                ("--version", "canarchy"),
+                ("not-a-command", "INVALID_ARGUMENTS"),
+            ):
+                await _submit(app, pilot, command)
+                result = app.query_one("#results", TextArea)
+                assert result.display
+                assert expected in result.text
+                if command == "not-a-command":
+                    assert "error (exit 1)" in str(result.border_title)
+                await pilot.press("escape")
+                assert not result.display
+
+    _run(scenario())
+    assert capsys.readouterr().out == ""
 
 
 def test_live_capture_streams_scaffold_frames() -> None:
@@ -163,6 +220,9 @@ def test_active_transmit_command_is_rejected_without_executing() -> None:
             await pilot.pause()
             await _submit(app, pilot, "send can0 0x123 0011 --ack-active")
             assert calls == []  # never dispatched
+            await _submit(app, pilot, "fuzz identify --interface can0 -- --help")
+            await _submit(app, pilot, "send can0 0x123 0011 -- --version")
+            assert calls == []
             assert app.query_one("#traffic", DataTable).row_count == 0
             # A passive command still runs.
             await _submit(app, pilot, "j1939 monitor --pgn 65262")
