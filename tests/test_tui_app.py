@@ -711,3 +711,64 @@ def test_filter_still_accepts_raw_text_with_a_quote() -> None:
             assert "/sort <" in _alert_text(app)
 
     _run(scenario())
+
+
+def test_responsive_workspace_keeps_traffic_usable_at_small_sizes() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await _submit(app, pilot, "j1939 monitor --pgn 65262")
+            traffic = app.query_one("#traffic", DataTable)
+            assert traffic.display
+            assert traffic.size.height >= 10
+            assert app.query_one("#body").has_class("narrow")
+            assert app.query_one("#empty-state", Static).display is False
+            assert traffic.columns[app._col_keys["traffic"][-1]].width >= 16
+            assert len(app.query_one("#workspace-nav", Static).render().plain) <= 78
+            first_row = traffic.get_row_at(0)
+            traffic.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.query_one("#body").has_class("detail")
+            assert str(first_row[-1]) in str(app.query_one("#inspector", Static).render())
+            await pilot.press("escape")
+            assert traffic.display
+            assert not app.query_one("#body").has_class("detail")
+
+            await pilot.resize_terminal(100, 35)
+            await pilot.pause()
+            assert app.query_one("#body").has_class("narrow")
+            await pilot.resize_terminal(140, 45)
+            await pilot.pause()
+            assert not app.query_one("#body").has_class("narrow")
+            assert traffic.size.height >= 30
+            assert app.query_one("#inspector", Static).display
+
+    _run(scenario())
+
+
+def test_workspace_navigation_preserves_rows_capture_and_activity() -> None:
+    async def scenario() -> None:
+        app = CanarchyTuiApp(execute_command, capture_factory=_holding_factory)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await _submit(app, pilot, "/capture vcan0")
+            await _await_rows(app, pilot, "#traffic", 2)
+            capture = app._capture
+            traffic = app.query_one("#traffic", DataTable)
+            traffic.cursor_coordinate = (1, 0)
+            await pilot.press("alt+3")
+            assert app.workspace == "j1939"
+            await pilot.press("alt+5")
+            assert app.workspace == "findings"
+            findings = app.query_one("#findings", DataTable)
+            assert findings.row_count >= 2
+            await pilot.press("f3")
+            assert app.query_one("#alerts", RichLog).has_class("expanded")
+            await pilot.press("alt+1")
+            assert app.workspace == "traffic"
+            assert traffic.cursor_row == 1
+            assert traffic.row_count == 2
+            assert app._capture is capture
+            app.action_stop_capture()
+
+    _run(scenario())

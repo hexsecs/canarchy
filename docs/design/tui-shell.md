@@ -42,6 +42,10 @@ This specification covers TUI launch, shared command execution, live capture lif
 | REQ-TUI-19 | Event-driven | When a submitted command returns non-event data, an error, help, or version text, the system shall display its output in a scrollable, selectable result view without discarding retained pane state. |
 | REQ-TUI-20 | Event-driven | When the operator switches between results and panes, the system shall preserve the latest result and all folded event rows while keeping the command entry accessible at small terminal sizes. |
 | REQ-TUI-21 | Unwanted behaviour | If a submitted command resolves to an active-transmit operation, the system shall refuse it before invoking the shared executor, even when a help- or version-looking token is a positional argument after `--`. |
+| REQ-TUI-22 | Ubiquitous | The system shall present one dominant workspace at a time for Traffic, Signals, J1939, UDS, or Findings, without dividing terminal height equally among empty panes. |
+| REQ-TUI-23 | State-driven | While the terminal is narrower than 110 columns, the system shall give the active table the full body width and make the complete selected row available through a drill-down view; at wider widths it shall show a contextual inspector beside the table. |
+| REQ-TUI-24 | Event-driven | When the operator switches workspaces, opens results or activity, or resizes the terminal, the system shall retain folded rows, per-table selection, and capture state. |
+| REQ-TUI-25 | State-driven | While no traffic has been observed, the system shall show first-run capture and offline-demo guidance; after traffic arrives, the guidance shall yield space to the table. |
 
 ## Command Surface
 
@@ -50,6 +54,8 @@ canarchy tui
 ```
 
 Inside the TUI, `/capture <interface>`, `/stop`, `/clear`, `/filter`, and `/help` control presentation and capture; the spacebar pauses or resumes presentation. Other commands are delegated to the canonical command executor.
+
+The body is a single active workspace rather than a fixed four-pane grid. `Alt+1` through `Alt+5` select Traffic, Signals, J1939, UDS, and Findings. The current workspace owns the available height; the J1939 ribbon appears only in its workspace. At 110 columns or wider, a side inspector shows the selected row's complete field values. Narrower terminals show a full-width table; `Enter` drills into the same inspector and `Esc` returns. The activity log rests as a one-line band and `F3` expands or collapses it. The source/capture status band and command entry remain visible. An empty Traffic workspace offers the live-capture and offline dataset starting paths. These are presentation controls only; commands and event folding remain shared with CLI/REPL.
 
 The latest command result is shown in a read-only TextArea using the CLI's text formatter (or JSON/JSONL when explicitly requested). Its border identifies the submitted command and completion/error status. Non-event answers and errors open the result view automatically; event-bearing answers retain the live panes in front. `F2` switches between the result and panes, and `Esc` returns to the panes. The result can be scrolled, selected, and copied with the TextArea controls. CLI help and version output are captured into this view rather than printed behind the full-screen interface. Live capture drains continue while results are open.
 

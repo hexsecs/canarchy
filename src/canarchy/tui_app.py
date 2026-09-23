@@ -58,6 +58,8 @@ _PANES: dict[str, tuple[str, tuple[str, ...]]] = {
 _MIN_BACKLOG = 50
 _MAX_BACKLOG = 100000
 _DEFAULT_BACKLOG = 1000
+_WORKSPACES = ("traffic", "decoded", "j1939", "uds", "findings")
+_WORKSPACE_LABELS = ("Traffic", "Signals", "J1939", "UDS", "Findings")
 
 
 def _row_matches(row: tuple[Any, ...], needle: str) -> bool:
@@ -95,6 +97,11 @@ def _is_active_transmit_command(argv: list[str]) -> bool:
 _WidgetT = TypeVar("_WidgetT", bound=Widget)
 
 
+class WorkspaceBody(Horizontal):
+    def on_resize(self) -> None:
+        self.app._apply_width()
+
+
 class CanarchyTuiApp(App[int]):
     """The CANarchy full-screen TUI application."""
 
@@ -115,21 +122,52 @@ class CanarchyTuiApp(App[int]):
     #body {
         height: 1fr;
     }
+    #workspace-nav {
+        height: 1;
+        padding: 0 1;
+        background: $surface;
+    }
+    #workspace-content {
+        width: 1fr;
+        height: 1fr;
+    }
+    #inspector {
+        width: 36;
+        height: 1fr;
+        border: round $accent;
+        padding: 0 1;
+    }
+    #body.narrow #inspector {
+        display: none;
+    }
+    #body.detail #workspace-content {
+        display: none;
+    }
+    #body.detail #inspector {
+        display: block;
+        width: 1fr;
+    }
+    #empty-state {
+        height: auto;
+        padding: 0 1;
+        color: $text-muted;
+    }
     #results {
         display: none;
         height: 1fr;
         border: round $accent;
-    }
-    .column {
-        width: 1fr;
     }
     .pane {
         border: round $accent;
         height: 1fr;
     }
     #alerts {
+        border: none;
+        height: 1;
+    }
+    #alerts.expanded {
         border: round $warning;
-        height: 8;
+        height: 7;
     }
     #command {
         dock: bottom;
@@ -144,6 +182,13 @@ class CanarchyTuiApp(App[int]):
         ("space", "toggle_pause", "Pause/Resume"),
         ("ctrl+f", "maximize_pane", "Maximize pane"),
         ("f2", "toggle_results", "Results/Panes"),
+        ("f3", "toggle_activity", "Activity"),
+        ("alt+1", "workspace('traffic')", "Traffic"),
+        ("alt+2", "workspace('decoded')", "Signals"),
+        ("alt+3", "workspace('j1939')", "J1939"),
+        ("alt+4", "workspace('uds')", "UDS"),
+        ("alt+5", "workspace('findings')", "Findings"),
+        ("enter", "show_detail", "Inspect"),
         ("escape", "show_panes", "Panes"),
         ("left_square_bracket", "shrink_backlog", "Backlog -"),
         ("right_square_bracket", "grow_backlog", "Backlog +"),
@@ -172,20 +217,31 @@ class CanarchyTuiApp(App[int]):
         self._pane_filters: dict[str, str] = {}
         self._sort_reverse: dict[str, bool] = {}
         self._has_result = False
+        self.workspace = "traffic"
+        self._detail_open = False
+        self._alert_count = 0
 
     # -- composition --------------------------------------------------------
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Static("interface: none  mode: idle", id="bus-status")
-        with Horizontal(id="body"):
-            with Vertical(classes="column"):
+        yield Static(id="workspace-nav")
+        with WorkspaceBody(id="body"):
+            with Vertical(id="workspace-content"):
+                yield Static(
+                    "Start: /capture <iface> for a live bus, or run "
+                    "datasets fetch offline:can-basic and inspect its cache_path. "
+                    "Use Alt+1–5 for workspaces, F2 for results, F3 for activity.",
+                    id="empty-state",
+                )
                 yield DataTable(id="traffic", classes="pane")
                 yield DataTable(id="decoded", classes="pane")
-            with Vertical(classes="column"):
                 yield Static("(no J1939 summary)", id="j1939-ribbon")
                 yield DataTable(id="j1939", classes="pane")
                 yield DataTable(id="uds", classes="pane")
+                yield DataTable(id="findings", classes="pane")
+            yield Static("Select a row to inspect its complete fields.", id="inspector")
         yield TextArea(read_only=True, soft_wrap=False, id="results")
         yield RichLog(id="alerts", classes="pane", highlight=False, markup=False, wrap=True)
         yield Input(id="command", placeholder="CANarchy command or /help")
@@ -205,7 +261,12 @@ class CanarchyTuiApp(App[int]):
             table.border_title = titles[name]
             self._col_keys[name] = list(table.add_columns(*columns))
         self.query_one("#alerts", RichLog).border_title = "Alerts & Replay"
+        findings = self.query_one("#findings", DataTable)
+        findings.border_title = "Findings & Activity"
+        findings.add_column("event")
         self.query_one("#results", TextArea).border_title = "Command Result — F2 panes, Esc close"
+        self._apply_workspace()
+        self._apply_width()
         self._emit_alert("CANarchy TUI ready — /capture <iface> to watch the bus live.")
         self.query_one("#command", Input).focus()
         # Poll the capture queue on the UI thread; the CaptureSession's own
@@ -346,7 +407,103 @@ class CanarchyTuiApp(App[int]):
             self._set_result_visible(not self.query_one("#results", TextArea).display)
 
     def action_show_panes(self) -> None:
+        if self._detail_open:
+            self._detail_open = False
+            self.query_one("#body").remove_class("detail")
+            self._apply_width()
         self._set_result_visible(False)
+
+    def action_workspace(self, name: str) -> None:
+        if name not in _WORKSPACES:
+            return
+        self.workspace = name
+        self._detail_open = False
+        self.query_one("#body").remove_class("detail")
+        self._apply_workspace()
+        self._apply_width()
+        if name in _PANES:
+            self.query_one(_PANES[name][0], DataTable).focus()
+        else:
+            self.query_one("#findings", DataTable).focus()
+
+    def action_toggle_activity(self) -> None:
+        drawer = self.query_one("#alerts", RichLog)
+        drawer.toggle_class("expanded")
+        self._refresh_nav()
+
+    def action_show_detail(self) -> None:
+        if self.workspace not in _PANES or not self.query_one("#body").has_class("narrow"):
+            return
+        self._detail_open = True
+        self.query_one("#body").add_class("detail")
+        self.query_one("#inspector", Static).focus()
+
+    def _apply_width(self) -> None:
+        body = self._find_widget("#body", Horizontal)
+        if body is None:
+            return
+        body.set_class(self.size.width < 110, "narrow")
+        traffic = self._find_widget("#traffic", DataTable)
+        if traffic is not None and self._col_keys["traffic"]:
+            widths = (
+                12,
+                8,
+                7,
+                10,
+                3,
+                max(16, self.size.width - (54 if body.has_class("narrow") else 90)),
+            )
+            for key, width in zip(self._col_keys["traffic"], widths):
+                traffic.columns[key].width = width
+            traffic.refresh()
+        if self._find_widget("#alerts", RichLog) is not None:
+            self._refresh_nav()
+
+    def _apply_workspace(self) -> None:
+        for name, (selector, _) in _PANES.items():
+            self.query_one(selector).display = name == self.workspace
+        self.query_one("#findings", DataTable).display = self.workspace == "findings"
+        self.query_one("#j1939-ribbon", Static).display = self.workspace == "j1939"
+        self.query_one("#empty-state", Static).display = (
+            self.workspace == "traffic" and not self._rows["traffic"]
+        )
+        self._refresh_nav()
+        self._refresh_inspector()
+
+    def _refresh_nav(self) -> None:
+        labels = [
+            f"[{index} {label}]" if name == self.workspace else f"{index} {label}"
+            for index, (name, label) in enumerate(zip(_WORKSPACES, _WORKSPACE_LABELS), 1)
+        ]
+        drawer = "open" if self.query_one("#alerts", RichLog).has_class("expanded") else "closed"
+        prefix = "Alt+ "
+        suffix = f"  F2 Results  F3 Activity ({self._alert_count}, {drawer})"
+        if self.size.width < 110:
+            suffix = "  F2 Result  F3 Log"
+        self.query_one("#workspace-nav", Static).update(Text(prefix + "  ".join(labels) + suffix))
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.data_table.id == self.workspace:
+            self._refresh_inspector()
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.data_table.id == self.workspace:
+            self.action_show_detail()
+
+    def _refresh_inspector(self) -> None:
+        inspector = self._find_widget("#inspector", Static)
+        if inspector is None:
+            return
+        if self.workspace not in _PANES:
+            inspector.update(Text("Activity and findings from the current session."))
+            return
+        table = self.query_one(_PANES[self.workspace][0], DataTable)
+        if not table.row_count:
+            inspector.update(Text("No rows yet. Run a command or start a capture."))
+            return
+        row = table.get_row_at(table.cursor_row)
+        labels = _PANES[self.workspace][1]
+        inspector.update(Text("\n".join(f"{label}: {value}" for label, value in zip(labels, row))))
 
     # -- live capture -------------------------------------------------------
 
@@ -542,6 +699,10 @@ class CanarchyTuiApp(App[int]):
             except Exception:
                 pass
         table.scroll_end(animate=False)
+        if pane == "traffic":
+            self.query_one("#empty-state", Static).display = False
+        if pane == self.workspace:
+            self._refresh_inspector()
 
     def _rebuild_pane(self, pane: str) -> None:
         table = self.query_one(_PANES[pane][0], DataTable)
@@ -554,6 +715,8 @@ class CanarchyTuiApp(App[int]):
                 continue
             keys.append(table.add_row(*(str(cell) for cell in row)))
         table.scroll_end(animate=False)
+        if pane == self.workspace:
+            self._refresh_inspector()
 
     def _reset_panes(self) -> None:
         for pane in _PANES:
@@ -562,6 +725,7 @@ class CanarchyTuiApp(App[int]):
             self.query_one(_PANES[pane][0], DataTable).clear()
         self._refresh_status()
         self._refresh_j1939_ribbon()
+        self._apply_workspace()
         self._emit_alert("panes cleared")
 
     # -- filter / sort ------------------------------------------------------
@@ -636,6 +800,13 @@ class CanarchyTuiApp(App[int]):
         alerts = self._find_widget("#alerts", RichLog)
         if alerts is not None:
             alerts.write(line)
+            findings = self._find_widget("#findings", DataTable)
+            if findings is not None:
+                findings.add_row(line)
+                while findings.row_count > self.backlog_cap:
+                    findings.remove_row(next(iter(findings.rows)))
+            self._alert_count += 1
+            self._refresh_nav()
 
     def _refresh_status(self, *, mode: str | None = None, interface: str | None = None) -> None:
         lines = [line for line in self.tstate.bus_status if not line.startswith("capture:")]

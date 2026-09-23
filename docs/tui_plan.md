@@ -8,7 +8,8 @@ Current status: `canarchy tui` is a **full-screen Textual application** with bus
 status, live traffic, **decoded signals**, **J1939 activity** (summary ribbon +
 recent table), **UDS transactions**, an append-only **alerts** log (including
 replay activity), and a command entry. It streams the bus **live** in the
-background, and every pane is an interactive, sortable/filterable table with
+background, and the active Traffic, Signals, J1939, UDS, or Findings workspace
+uses the available body height. Tables remain sortable/filterable with an
 operator-controlled backlog. The full-screen + live-streaming milestone
 (Suggested Implementation Order items 1, 2, and 6) is now implemented; the
 text-mode shell and its one-shot `tui --command` mode have been retired.
@@ -50,10 +51,12 @@ dangling backslash — is reported in the alerts log; the TUI keeps running and
 the current view is preserved.
 
 Keys: `space` pause/resume the live feed, `[` / `]` shrink/grow the backlog,
-`ctrl+f` maximize the focused pane, arrow keys navigate rows within a pane,
-`tab` moves focus between panes.
+`ctrl+f` maximize the focused table, arrow keys navigate rows, `Alt+1`–`Alt+5`
+select workspaces, `F3` expands activity, and `Enter` inspects a complete row
+at narrow widths. `F2` switches to the latest command result; `Esc` returns.
 
-This document remains the forward-looking plan for the pane model.
+This document remains the forward-looking plan for protocol enrichment; the
+responsive workspace layout is implemented.
 
 ## Goal
 
