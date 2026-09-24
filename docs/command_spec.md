@@ -152,8 +152,8 @@ Notes:
 * `--file -` reads candump text from standard input instead of a file and still honors `--offset`, `--max-frames`, and `--seconds`
 * `--stdin` reads JSONL `frame` events from standard input regardless of output format
 * For `filter --stdin`, each line must be a valid `frame` event JSON object
-* expression operands for `id==` / `pgn==` accept decimal, `0x`-prefixed hex, or bare hex, and all operators tolerate surrounding whitespace (e.g. `pgn == 61444`)
-* supported atoms: `all`, `id==<id>`, `pgn==<pgn>`, `dlc><n>`, `data~=<hex>`, `extended`, `standard`, combined with `&&` / `||`
+* expression operands for `id==` / `pgn==` / `sa==` accept decimal, `0x`-prefixed hex, or bare hex, and all operators tolerate surrounding whitespace (e.g. `pgn == 61444`); `sa` matches the J1939 source address of extended frames only
+* supported atoms: `all`, `id==<id>`, `pgn==<pgn>`, `sa==<address>`, `dlc><n>`, `data~=<hex>`, `extended`, `standard`, combined with `&&` / `||`
 * on an invalid expression the JSON error envelope carries no `frames` / `frame_count` block, so an error can never read as a successful zero-match
 
 ### capture-info
@@ -1196,11 +1196,12 @@ Notes:
 * a full-screen Textual application that requires an interactive terminal; in a non-TTY context it emits the canonical error envelope (`TUI_REQUIRES_TTY`, honouring `--json`/`--jsonl`) and exits non-zero
 * active-transmit commands (e.g. `send`, `generate`, `uds scan`) are refused from the TUI command entry — their `YES` confirmation prompt cannot be answered inside the full-screen app, so run them from the CLI
 * responsive workspaces: Traffic, Signals, J1939 (summary ribbon + recent table), UDS, and Findings; the source/capture status band, compact activity log, and command entry remain visible
-* `Alt+1`–`Alt+5` switch workspaces, `F3` expands activity, and `Enter` inspects a selected row on narrow terminals; wide terminals show a contextual inspector
+* Traffic also folds DBC `decoded_message` events with embedded frames into its identifier summary and chronological log, correlating child `signal` events for inspection
+* `Alt+1`–`Alt+5` switch workspaces, `v` switches Traffic between its per-bus typed identifier summary and chronological event log, `F4` freezes inspection or returns live, `F3` expands activity, and `Enter` inspects a selected row on narrow terminals; wide terminals show a contextual inspector
 * `/capture <iface>` streams the bus **live** in the background; `/stop` (or `x`) ends it. `/stop` takes no arguments — anything after it is rejected in the alerts log and the capture keeps running. `/capture` takes exactly one interface — an empty or extra argument is rejected in the alerts log and leaves any running capture alone; use the full `capture` command when you need flags
 * `/clear` (or `c`) is the only slash command that discards pane data; `/help` and the other read-only hotkeys never clear rows
 * `/capture` and `/stop` tokenise their arguments: an unmatched quote or a dangling backslash is reported in the alerts log and the TUI stays running. `/filter` and `/sort` take raw text instead, so a filter needle may contain a quote character; they validate their pane argument and leave state unchanged when it is not recognised
-* panes are interactive: `/filter <pane> [text]`, `/sort <pane> [column]`, arrow-key row navigation, `[`/`]` to resize the backlog, `space` to pause the feed
+* panes are interactive: `/filter <pane> [text]`, `/sort <pane> [column]`, arrow-key row navigation, `[`/`]` to resize the backlog, `space` to pause the feed. Traffic also accepts canonical typed `id==`, `pgn==`, and `sa==` filters; unknown sort fields and invalid typed filters are reported without replacing the current state
 * command entry runs existing CANarchy commands through the shared parser and result path; slash hotkeys (`/save`, `/load`, `/dbc`, `/doctor`, `/config`, …) expand to those commands
 * non-event answers, errors, help, and version output appear in a scrollable, selectable result view rather than disappearing behind the full-screen interface. `F2` switches between the result and the live panes; `Esc` returns to the panes. Event rows remain retained while the result is open
 * nested interactive front ends like `shell` or `tui` are rejected from TUI command entry (`TUI_COMMAND_UNSUPPORTED`)

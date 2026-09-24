@@ -621,6 +621,7 @@ def _parse_filter_number(token: str) -> int | None:
 
 _FILTER_ID_RE = re.compile(r"id\s*==\s*(\S+)$")
 _FILTER_PGN_RE = re.compile(r"pgn\s*==\s*(\S+)$")
+_FILTER_SA_RE = re.compile(r"sa\s*==\s*(\S+)$")
 _FILTER_DLC_RE = re.compile(r"dlc\s*>\s*(\d+)$")
 _FILTER_DATA_RE = re.compile(r"data\s*~=\s*([0-9a-f]+)$")
 
@@ -643,6 +644,13 @@ def _compile_filter_atom(expr: str) -> Callable[[CanFrame], bool]:
             return lambda frame, w=wanted: (
                 frame.is_extended_id and decompose_arbitration_id(frame.arbitration_id).pgn == w
             )
+    elif match := _FILTER_SA_RE.fullmatch(n):
+        wanted = _parse_filter_number(match.group(1))
+        if wanted is not None and 0 <= wanted <= 0xFF:
+            return lambda frame, w=wanted: (
+                frame.is_extended_id
+                and decompose_arbitration_id(frame.arbitration_id).source_address == w
+            )
     elif match := _FILTER_DLC_RE.fullmatch(n):
         threshold = int(match.group(1))
         return lambda frame, t=threshold: frame.dlc > t
@@ -659,8 +667,9 @@ def _raise_invalid_filter(expr: str) -> NoReturn:
     raise TransportError(
         "INVALID_FILTER_EXPRESSION",
         f"Filter expression '{expr}' is not recognised.",
-        "Supported: all, id==<id>, pgn==<pgn>, dlc><n>, data~=<hex>, extended, standard. "
-        "IDs/PGNs accept decimal, 0x-prefixed hex, or bare hex; whitespace around "
+        "Supported: all, id==<id>, pgn==<pgn>, sa==<address>, dlc><n>, "
+        "data~=<hex>, extended, standard. IDs/PGNs/source addresses accept decimal, "
+        "0x-prefixed hex, or bare hex; whitespace around "
         "operators is allowed. Combine with && (AND) or || (OR).",
     )
 

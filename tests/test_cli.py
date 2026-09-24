@@ -915,6 +915,20 @@ class CliTests(unittest.TestCase):
         frame = payload["data"]["frames"][0]
         self.assertEqual(frame["arbitration_id"], 0x18FEEE31)
 
+    def test_filter_source_address_uses_j1939_identifier(self) -> None:
+        for expression in ("sa==0x31", "sa == 49"):
+            with self.subTest(expression=expression):
+                exit_code, stdout, _ = run_cli(
+                    "filter", expression, "--file", str(FIXTURES / "sample.candump"), "--json"
+                )
+                self.assertEqual(exit_code, EXIT_OK)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["data"]["frame_count"], 2)
+                self.assertEqual(
+                    {frame["arbitration_id"] for frame in payload["data"]["frames"]},
+                    {0x18FEEE31, 0x18F00431},
+                )
+
     def test_filter_accepts_bare_hex_and_decimal_id(self) -> None:
         """#414: id== accepts decimal, 0x-prefixed hex, and bare hex."""
         for expression in ("id==0x18FEEE31", f"id=={0x18FEEE31}", "id==18FEEE31"):

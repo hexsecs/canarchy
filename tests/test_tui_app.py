@@ -9,13 +9,16 @@ path a deterministic two-frame stream.
 from __future__ import annotations
 
 import asyncio
+import time
 
 from textual.widgets import DataTable, Input, RichLog, Static, TextArea
 
 from canarchy.cli import execute_command
+from canarchy.models import CanFrame, FrameEvent
 from canarchy.transport import LocalTransport, ScaffoldCanBackend
-from canarchy.tui_app import CanarchyTuiApp
+from canarchy.tui_app import CanarchyTuiApp, _FoldResult
 from canarchy.tui_capture import CaptureSession, CaptureStats
+from canarchy.tui_explorer import IdentifierKey
 
 
 def _scaffold_factory(interface: str) -> CaptureSession:
@@ -34,6 +37,24 @@ async def _submit(app: CanarchyTuiApp, pilot, command: str) -> None:
     app.query_one("#command", Input).value = command
     await pilot.press("enter")
     await pilot.pause()
+
+
+def _frame_event(
+    arbitration_id: int,
+    data: bytes,
+    *,
+    bus: str = "can0",
+    extended: bool = False,
+    timestamp: float = 1.0,
+) -> dict:
+    frame = CanFrame(
+        arbitration_id,
+        data,
+        timestamp=timestamp,
+        interface=bus,
+        is_extended_id=extended,
+    )
+    return FrameEvent(frame, source="capture").to_event().to_payload()
 
 
 def test_app_mounts_with_empty_panes() -> None:
@@ -71,6 +92,13 @@ def test_decode_fixture_displays_six_distinct_signal_observations() -> None:
             )
             assert app.query_one("#decoded", DataTable).row_count == 6
             assert len(app.tstate.decoded_signals) == 6
+            assert app.query_one("#identifiers", DataTable).row_count == 2
+            assert app.query_one("#traffic", DataTable).row_count == 2
+            assert all(
+                "Decoded: " in app.explorer.detail(key)
+                and "Decoded: (not available)" not in app.explorer.detail(key)
+                for key in app._summary_keys
+            )
 
     _run(scenario())
 
@@ -204,6 +232,9 @@ def test_backlog_controls_adjust_cap() -> None:
             assert app.backlog_cap == max(50, start // 2)
             app.action_grow_backlog()
             assert app.backlog_cap == start
+            assert app.explorer.capacity == start
+            app.action_grow_backlog()
+            assert app.explorer.capacity == app.backlog_cap == start * 2
 
     _run(scenario())
 
@@ -732,20 +763,19 @@ def test_responsive_workspace_keeps_traffic_usable_at_small_sizes() -> None:
     async def scenario() -> None:
         app = _make_app()
         async with app.run_test(size=(80, 24)) as pilot:
-            await _submit(app, pilot, "j1939 monitor --pgn 65262")
-            traffic = app.query_one("#traffic", DataTable)
+            await _submit(app, pilot, "filter all --file tests/fixtures/sample.candump")
+            traffic = app.query_one("#identifiers", DataTable)
             assert traffic.display
             assert traffic.size.height >= 10
             assert app.query_one("#body").has_class("narrow")
             assert app.query_one("#empty-state", Static).display is False
-            assert traffic.columns[app._col_keys["traffic"][-1]].width >= 16
+            assert traffic.columns[next(iter(traffic.columns))].width >= 6
             assert len(app.query_one("#workspace-nav", Static).render().plain) <= 78
-            first_row = traffic.get_row_at(0)
             traffic.focus()
             await pilot.press("enter")
             await pilot.pause()
             assert app.query_one("#body").has_class("detail")
-            assert str(first_row[-1]) in str(app.query_one("#inspector", Static).render())
+            assert "Raw hex:" in str(app.query_one("#inspector", Static).render())
             await pilot.press("escape")
             assert traffic.display
             assert not app.query_one("#body").has_class("detail")
@@ -794,5 +824,162 @@ def test_workspace_navigation_preserves_rows_capture_and_activity() -> None:
             assert traffic.row_count == 2
             assert app._capture is capture
             app.action_stop_capture()
+
+    _run(scenario())
+
+
+def test_identifier_selection_survives_updates_filters_and_eviction() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(100, 35)) as pilot:
+            events = [
+                _frame_event(0x123, b"\x00\x01", timestamp=1.0),
+                _frame_event(0x123, b"\x02", extended=True, timestamp=2.0),
+                _frame_event(0x123, b"\x03", bus="can1", timestamp=3.0),
+            ]
+            app._ingest_result(_FoldResult("capture", {"events": events, "interface": "can0"}))
+            await pilot.pause()
+            table = app.query_one("#identifiers", DataTable)
+            assert table.row_count == 3
+            assert set(app._summary_keys) == {
+                IdentifierKey("can0", 0x123, False),
+                IdentifierKey("can0", 0x123, True),
+                IdentifierKey("can1", 0x123, False),
+            }
+            table.focus()
+            await pilot.press("down")
+            selected = app._selected_identifier
+            assert selected is not None
+            assert not app.follow_live
+            frozen = app._selected_detail
+
+            app._cmd_sort("traffic id")
+            app._cmd_filter("traffic id==0x123")
+            app.action_workspace("j1939")
+            app.action_workspace("traffic")
+            assert app._selected_identifier == selected
+            assert app._selected_detail == frozen
+
+            app.backlog_cap = 2
+            app._trim_all_panes()
+            app._ingest_result(
+                _FoldResult(
+                    "capture",
+                    {"events": [_frame_event(0x222, b"\x04", timestamp=4.0)]},
+                )
+            )
+            assert app._selected_identifier == selected
+            assert app._selected_detail == frozen
+            assert app._incoming_since_inspect == 1
+            assert "INSPECTING" in str(app.query_one("#traffic-mode", Static).render())
+            app.action_toggle_follow()
+            assert app.follow_live
+            assert app._selected_identifier in app._summary_keys
+            assert app._selected_identifier != IdentifierKey("can0", 0x222, False)
+
+    _run(scenario())
+
+
+def test_traffic_filter_sort_and_log_use_shared_frame_values() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(80, 24)) as pilot:
+            events = [
+                _frame_event(0x18FEEE31, b"\x01", extended=True, timestamp=86399.0),
+                _frame_event(0x123, b"\x02", timestamp=86401.0),
+                _frame_event(0x18F00431, b"\x03", extended=True, timestamp=86402.0),
+            ]
+            app._ingest_result(_FoldResult("capture", {"events": events}))
+            table = app.query_one("#identifiers", DataTable)
+            app._cmd_filter("traffic sa==0x31")
+            assert table.row_count == 2
+            app._cmd_filter("traffic pgn==65262")
+            assert table.row_count == 1
+            assert app._summary_keys == [IdentifierKey("can0", 0x18FEEE31, True)]
+            app._cmd_filter("traffic id==invalid")
+            assert table.row_count == 1
+            assert "INVALID_FILTER_EXPRESSION" in _alert_text(app)
+            app._cmd_filter("traffic")
+            before = app._identifier_sort
+            app._cmd_sort("traffic nonexistent")
+            assert app._identifier_sort == before
+            assert "unknown column" in _alert_text(app)
+            app._cmd_sort("traffic id")
+            assert [key.arbitration_id for key in app._summary_keys] == sorted(
+                (0x18FEEE31, 0x123, 0x18F00431), reverse=True
+            )
+
+            table.focus()
+            await pilot.press("v")
+            assert app.traffic_view == "log"
+            log = app.query_one("#traffic", DataTable)
+            assert log.display
+            app._cmd_sort("traffic time")
+            assert app._visible_log_ids == [0, 1, 2]
+            app._cmd_filter("traffic sa==0x31")
+            assert log.row_count == 2
+            app.action_toggle_follow()
+            log.focus()
+            log.cursor_coordinate = (1, 0)
+            await pilot.press("up")
+            assert not app.follow_live
+            assert "INSPECTING" in str(app.query_one("#traffic-mode", Static).render())
+            frozen = str(app.query_one("#inspector", Static).render())
+            assert "Raw hex: 01" in frozen
+            app._ingest_result(
+                _FoldResult(
+                    "capture",
+                    {
+                        "events": [
+                            _frame_event(0x18FEEE31, b"\xff", extended=True, timestamp=86403.0)
+                        ]
+                    },
+                )
+            )
+            assert str(app.query_one("#inspector", Static).render()).find("Raw hex: 01") >= 0
+            app.action_toggle_follow()
+            assert app.follow_live
+            assert app._selected_log_id == max(app._visible_log_ids)
+            app._cmd_sort("traffic time")
+            assert app._visible_log_ids[log.cursor_row] == max(app._visible_log_ids)
+            assert app.follow_live
+
+    _run(scenario())
+
+
+def test_live_inspector_ignores_frames_hidden_by_typed_filter() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(100, 35)) as pilot:
+            matching = _frame_event(0x18FEEE31, b"\x01", extended=True, timestamp=1.0)
+            hidden = _frame_event(0x18F00431, b"\x02", extended=True, timestamp=2.0)
+            app._cmd_filter("traffic pgn==65262")
+            app._ingest_result(_FoldResult("capture", {"events": [matching, hidden]}))
+            await pilot.pause()
+            assert app.follow_live
+            assert app._selected_identifier == IdentifierKey("can0", 0x18FEEE31, True)
+            assert "Raw hex: 01" in str(app.query_one("#inspector", Static).render())
+            app._ingest_result(_FoldResult("capture", {"events": [hidden]}))
+            assert app._selected_identifier == IdentifierKey("can0", 0x18FEEE31, True)
+            assert "Raw hex: 01" in str(app.query_one("#inspector", Static).render())
+
+    _run(scenario())
+
+
+def test_identifier_ui_synthetic_batch_stays_responsive() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(100, 35)) as pilot:
+            events = [
+                _frame_event(0x100 + index % 32, bytes((index % 256,)), timestamp=float(index))
+                for index in range(1000)
+            ]
+            started = time.perf_counter()
+            app._ingest_result(_FoldResult("capture", {"events": events}))
+            await pilot.pause()
+            assert time.perf_counter() - started < 10.0
+            assert app.query_one("#identifiers", DataTable).row_count == 32
+            assert app.query_one("#traffic", DataTable).row_count == 1000
+            assert len(app.explorer.observations) == app.backlog_cap
 
     _run(scenario())

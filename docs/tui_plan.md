@@ -52,8 +52,11 @@ the current view is preserved.
 
 Keys: `space` pause/resume the live feed, `[` / `]` shrink/grow the backlog,
 `ctrl+f` maximize the focused table, arrow keys navigate rows, `Alt+1`–`Alt+5`
-select workspaces, `F3` expands activity, and `Enter` inspects a complete row
-at narrow widths. `F2` switches to the latest command result; `Esc` returns.
+select workspaces, `v` switches Traffic between identifier summary and event log,
+`F4` freezes inspection or returns live, `F3` expands activity, and `Enter`
+inspects a complete row at narrow widths. `F2` switches to the latest command
+result; `Esc` returns. Traffic filters can use the shared `id==`, `pgn==`, and
+`sa==` frame predicates; plain text remains a substring filter.
 
 This document remains the forward-looking plan for protocol enrichment; the
 responsive workspace layout is implemented.

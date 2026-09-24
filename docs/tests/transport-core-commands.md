@@ -38,7 +38,7 @@ Validate the shipped passive, active, and file-backed transport workflows, inclu
 | `REQ-TRANSPORT-10` | `TEST-TRANSPORT-10`, `TEST-TRANSPORT-25` |
 | `REQ-TRANSPORT-11` | `TEST-TRANSPORT-13`, `TEST-TRANSPORT-14` |
 | `REQ-TRANSPORT-12` | `TEST-TRANSPORT-15`, `TEST-TRANSPORT-16` |
-| `REQ-TRANSPORT-15` | `TEST-TRANSPORT-24` |
+| `REQ-TRANSPORT-15` | `TEST-TRANSPORT-24`, `TEST-TRANSPORT-26` |
 
 ## Representative Test Cases
 
@@ -381,6 +381,19 @@ Given  an unrecognised filter expression
 When   `canarchy filter badexpr --file <capture> --json` is invoked
 Then   the envelope shall report `ok: false` with error code `INVALID_FILTER_EXPRESSION` and exit code 2
 And    `data` shall contain neither `frames` nor `frame_count`
+```
+
+**Fixture:** `tests/fixtures/sample.candump`.
+
+---
+
+### `TEST-TRANSPORT-26` — J1939 source-address filter
+
+```gherkin
+Given  a capture with two extended frames from source address 0x31 and one from another source
+When   `canarchy filter sa==0x31 --file <capture> --json` or `sa == 49` is invoked
+Then   the system shall return exactly the two frames from source address 0x31
+And    the existing JSON envelope shall be unchanged
 ```
 
 **Fixture:** `tests/fixtures/sample.candump`.
