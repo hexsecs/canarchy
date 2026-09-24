@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import tracemalloc
 
-from canarchy.models import CanFrame, FrameEvent
+from canarchy.models import CanFrame, DecodedMessageEvent, FrameEvent, SignalValueEvent
 from canarchy.tui_explorer import IdentifierKey, TrafficExplorer
 from canarchy.transport import _compile_filter
 
@@ -76,6 +76,30 @@ def test_bounded_history_and_decode_evidence() -> None:
     assert len(explorer.observations) == 2
     assert IdentifierKey("can0", 0x100, False) not in explorer.activities
     assert "History evicted" in explorer.detail(IdentifierKey("can0", 0x100, False))
+
+
+def test_decoded_message_correlates_signals_by_source_and_frame_index() -> None:
+    frame = CanFrame(0x123, b"\x01", interface="can0", timestamp=0.0)
+    parent = DecodedMessageEvent("Engine", frame, {"RPM": 1200}, source="dbc.decode", frame_index=7)
+    child = SignalValueEvent(
+        "RPM", 1200, "rpm", message_name="Engine", source="dbc.decode", frame_index=7
+    )
+    unrelated = SignalValueEvent(
+        "RPM", 999, "rpm", message_name="Engine", source="other", frame_index=7
+    )
+    explorer = TrafficExplorer()
+    added = explorer.ingest(
+        [
+            parent.to_event().to_payload(),
+            child.to_event().to_payload(),
+            unrelated.to_event().to_payload(),
+        ]
+    )
+    assert len(added) == 1
+    assert added[0].event_index == 0
+    detail = explorer.detail(IdentifierKey("can0", 0x123, False))
+    assert "Engine.RPM=1200 rpm" in detail
+    assert "999" not in detail
 
 
 def test_source_address_filter_excludes_standard_ids() -> None:

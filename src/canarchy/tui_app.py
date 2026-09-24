@@ -234,6 +234,7 @@ class CanarchyTuiApp(App[int]):
         self._selected_identifier: IdentifierKey | None = None
         self._selected_detail: str | None = None
         self._rendering_identifiers = False
+        self._rendering_log = False
         self._summary_keys: list[IdentifierKey] = []
         self._traffic_filter_predicate: Callable[[Any], bool] | None = None
         self._identifier_sort = "time"
@@ -488,9 +489,14 @@ class CanarchyTuiApp(App[int]):
         self._incoming_since_inspect = 0
         if self.follow_live:
             self._selected_detail = None
-            if self.explorer.observations:
-                self._selected_identifier = self.explorer.observations[-1].key
             self._render_identifier_table()
+            for observation in reversed(self.explorer.observations):
+                if observation.key in self._summary_keys:
+                    self._selected_identifier = observation.key
+                    break
+            self._align_identifier_cursor()
+            self._selected_log_id = None
+            self._rebuild_pane("traffic")
         else:
             self._freeze_selection()
         self._refresh_traffic_mode()
@@ -577,6 +583,8 @@ class CanarchyTuiApp(App[int]):
                     self._freeze_selection()
             return
         if event.data_table.id == "traffic" and self.workspace == "traffic":
+            if self._rendering_log:
+                return
             if event.data_table.has_focus and 0 <= event.cursor_row < len(self._visible_log_ids):
                 selected = self._visible_log_ids[event.cursor_row]
                 if selected != self._selected_log_id:
@@ -699,6 +707,19 @@ class CanarchyTuiApp(App[int]):
                 table.cursor_coordinate = (0, 0)
             if rows and self.follow_live:
                 table.scroll_to(y=table.cursor_row, animate=False)
+        finally:
+            self._rendering_identifiers = False
+
+    def _align_identifier_cursor(self) -> None:
+        if self._selected_identifier not in self._summary_keys:
+            return
+        table = self.query_one("#identifiers", DataTable)
+        coordinate = self._summary_keys.index(self._selected_identifier)
+        self._rendering_identifiers = True
+        try:
+            table.cursor_coordinate = (coordinate, 0)
+            if self.follow_live:
+                table.scroll_to(y=coordinate, animate=False)
         finally:
             self._rendering_identifiers = False
 
@@ -884,12 +905,16 @@ class CanarchyTuiApp(App[int]):
         events = result.data.get("events", []) or []
         added = self.explorer.ingest(events)
         if added:
-            if self.follow_live:
-                self._selected_identifier = added[-1].key
-                self._selected_detail = None
-            else:
+            if not self.follow_live:
                 self._incoming_since_inspect += len(added)
             self._render_identifier_table()
+            if self.follow_live:
+                for observation in reversed(added):
+                    if observation.key in self._summary_keys:
+                        self._selected_identifier = observation.key
+                        self._selected_detail = None
+                        self._align_identifier_cursor()
+                        break
             self._refresh_traffic_mode()
         observations_by_event = {observation.event_index: observation for observation in added}
         traffic_frames: list[Any | None] = []
@@ -898,6 +923,7 @@ class CanarchyTuiApp(App[int]):
         for event_index, event in enumerate(events):
             if event.get("event_type") not in {
                 "frame",
+                "decoded_message",
                 "j1939_pgn",
                 "uds_transaction",
                 "replay_event",
@@ -986,7 +1012,15 @@ class CanarchyTuiApp(App[int]):
                 table.remove_row(old)
             except Exception:
                 pass
-        if pane != "traffic" or self.follow_live:
+        if pane == "traffic" and self.follow_live and self._visible_log_ids:
+            self._rendering_log = True
+            try:
+                self._selected_log_id = self._visible_log_ids[-1]
+                table.cursor_coordinate = (len(self._visible_log_ids) - 1, 0)
+                table.scroll_end(animate=False)
+            finally:
+                self._rendering_log = False
+        elif pane != "traffic":
             table.scroll_end(animate=False)
         if pane == "traffic":
             self.query_one("#empty-state", Static).display = False
@@ -1000,28 +1034,34 @@ class CanarchyTuiApp(App[int]):
         keys.clear()
         needle = self._pane_filters.get(pane, "")
         if pane == "traffic":
-            self._visible_log_ids.clear()
-            indices = list(range(len(self._rows[pane])))
-            if self._traffic_log_sort is not None:
-                indices.sort(
-                    key=self._traffic_log_sort_value,
-                    reverse=self._sort_reverse.get(pane, False),
-                )
-            for index in indices:
-                row = self._rows[pane][index]
-                frame = self._traffic_log_frames[index]
-                if self._traffic_filter_predicate is not None:
-                    if frame is None or not self._traffic_filter_predicate(frame):
+            self._rendering_log = True
+            try:
+                self._visible_log_ids.clear()
+                indices = list(range(len(self._rows[pane])))
+                if self._traffic_log_sort is not None:
+                    indices.sort(
+                        key=self._traffic_log_sort_value,
+                        reverse=self._sort_reverse.get(pane, False),
+                    )
+                for index in indices:
+                    row = self._rows[pane][index]
+                    frame = self._traffic_log_frames[index]
+                    if self._traffic_filter_predicate is not None:
+                        if frame is None or not self._traffic_filter_predicate(frame):
+                            continue
+                    elif needle and not _row_matches(row, needle):
                         continue
-                elif needle and not _row_matches(row, needle):
-                    continue
-                entry_id = self._traffic_log_ids[index]
-                keys.append(table.add_row(*(str(cell) for cell in row), key=f"log-{entry_id}"))
-                self._visible_log_ids.append(entry_id)
-            if self._selected_log_id in self._visible_log_ids:
-                table.cursor_coordinate = (self._visible_log_ids.index(self._selected_log_id), 0)
-            elif self.follow_live:
-                table.scroll_end(animate=False)
+                    entry_id = self._traffic_log_ids[index]
+                    keys.append(table.add_row(*(str(cell) for cell in row), key=f"log-{entry_id}"))
+                    self._visible_log_ids.append(entry_id)
+                if self.follow_live and self._visible_log_ids:
+                    self._selected_log_id = max(self._visible_log_ids)
+                if self._selected_log_id in self._visible_log_ids:
+                    coordinate = self._visible_log_ids.index(self._selected_log_id)
+                    table.cursor_coordinate = (coordinate, 0)
+                    table.scroll_to(y=coordinate, animate=False)
+            finally:
+                self._rendering_log = False
             return
         for row in self._rows[pane]:
             if needle and not _row_matches(row, needle):
@@ -1091,6 +1131,14 @@ class CanarchyTuiApp(App[int]):
         self._rebuild_pane(pane)
         if pane == "traffic":
             self._render_identifier_table()
+            if self.follow_live:
+                for observation in reversed(self.explorer.observations):
+                    if observation.key in self._summary_keys:
+                        self._selected_identifier = observation.key
+                        self._selected_detail = None
+                        self._align_identifier_cursor()
+                        break
+                self._refresh_inspector()
 
     def _cmd_sort(self, rest: str) -> None:
         parts = rest.split()
@@ -1252,6 +1300,7 @@ class CanarchyTuiApp(App[int]):
 
     def action_grow_backlog(self) -> None:
         self.backlog_cap = min(_MAX_BACKLOG, self.backlog_cap * 2)
+        self.explorer.resize(self.backlog_cap)
         self._refresh_status()
 
     def _trim_all_panes(self) -> None:

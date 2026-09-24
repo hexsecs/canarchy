@@ -225,6 +225,8 @@ The TUI's responsive workspaces are Traffic, Signals, J1939, UDS, and Findings (
 
 Traffic defaults to a bounded summary keyed by `(bus, arbitration_id, is_extended_id)`; `v` switches to the chronological event log, and `F4` freezes inspection independently of capture or returns live. The inspector shows complete raw hex/bit data, changed-byte offsets with a textual legend, decoded evidence when available, and recent history. `/filter traffic` uses the shared CLI frame-filter grammar for typed `id==`, `pgn==`, and `sa==` expressions; plain text remains a substring filter. The CLI `filter` command also accepts `sa==<source-address>` for extended J1939 frames. Invalid typed filters and unknown TUI sort fields are reported without changing the previous view state.
 
+DBC `decoded_message` events with embedded frames populate the Traffic identifier summary and event log, with child signals correlated by source, frame index, and message name. Live follow selects only visible traffic under the active filter; returning live from a historical log row advances to the newest visible event.
+
 DBC `decoded_message` and `signal` events share a zero-based `payload.frame_index` local to each decode invocation. The TUI combines a parent/child signal only when `source`, `frame_index`, `message_name`, and `signal_name` match; repeated equal-valued frames stay separate. Missing indexes are not inferred from values. The TUI can recover a child observation's timestamp from its parent, but standalone signal-event timestamps remain the scope of #525.
 
 ---

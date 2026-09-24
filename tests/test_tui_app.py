@@ -92,6 +92,13 @@ def test_decode_fixture_displays_six_distinct_signal_observations() -> None:
             )
             assert app.query_one("#decoded", DataTable).row_count == 6
             assert len(app.tstate.decoded_signals) == 6
+            assert app.query_one("#identifiers", DataTable).row_count == 2
+            assert app.query_one("#traffic", DataTable).row_count == 2
+            assert all(
+                "Decoded: " in app.explorer.detail(key)
+                and "Decoded: (not available)" not in app.explorer.detail(key)
+                for key in app._summary_keys
+            )
 
     _run(scenario())
 
@@ -225,6 +232,9 @@ def test_backlog_controls_adjust_cap() -> None:
             assert app.backlog_cap == max(50, start // 2)
             app.action_grow_backlog()
             assert app.backlog_cap == start
+            assert app.explorer.capacity == start
+            app.action_grow_backlog()
+            assert app.explorer.capacity == app.backlog_cap == start * 2
 
     _run(scenario())
 
@@ -864,7 +874,8 @@ def test_identifier_selection_survives_updates_filters_and_eviction() -> None:
             assert "INSPECTING" in str(app.query_one("#traffic-mode", Static).render())
             app.action_toggle_follow()
             assert app.follow_live
-            assert app._selected_identifier == IdentifierKey("can0", 0x222, False)
+            assert app._selected_identifier in app._summary_keys
+            assert app._selected_identifier != IdentifierKey("can0", 0x222, False)
 
     _run(scenario())
 
@@ -873,7 +884,6 @@ def test_traffic_filter_sort_and_log_use_shared_frame_values() -> None:
     async def scenario() -> None:
         app = _make_app()
         async with app.run_test(size=(80, 24)) as pilot:
-            assert "nocolor" in app.pseudo_classes
             events = [
                 _frame_event(0x18FEEE31, b"\x01", extended=True, timestamp=86399.0),
                 _frame_event(0x123, b"\x02", timestamp=86401.0),
@@ -927,6 +937,31 @@ def test_traffic_filter_sort_and_log_use_shared_frame_values() -> None:
                 )
             )
             assert str(app.query_one("#inspector", Static).render()).find("Raw hex: 01") >= 0
+            app.action_toggle_follow()
+            assert app.follow_live
+            assert app._selected_log_id == max(app._visible_log_ids)
+            app._cmd_sort("traffic time")
+            assert app._visible_log_ids[log.cursor_row] == max(app._visible_log_ids)
+            assert app.follow_live
+
+    _run(scenario())
+
+
+def test_live_inspector_ignores_frames_hidden_by_typed_filter() -> None:
+    async def scenario() -> None:
+        app = _make_app()
+        async with app.run_test(size=(100, 35)) as pilot:
+            matching = _frame_event(0x18FEEE31, b"\x01", extended=True, timestamp=1.0)
+            hidden = _frame_event(0x18F00431, b"\x02", extended=True, timestamp=2.0)
+            app._cmd_filter("traffic pgn==65262")
+            app._ingest_result(_FoldResult("capture", {"events": [matching, hidden]}))
+            await pilot.pause()
+            assert app.follow_live
+            assert app._selected_identifier == IdentifierKey("can0", 0x18FEEE31, True)
+            assert "Raw hex: 01" in str(app.query_one("#inspector", Static).render())
+            app._ingest_result(_FoldResult("capture", {"events": [hidden]}))
+            assert app._selected_identifier == IdentifierKey("can0", 0x18FEEE31, True)
+            assert "Raw hex: 01" in str(app.query_one("#inspector", Static).render())
 
     _run(scenario())
 

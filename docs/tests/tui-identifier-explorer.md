@@ -43,9 +43,10 @@ When   another frame evicts the original history
 Then   the system shall bound the retained observations and report the evicted key
 And    the original detail shall include the decoded signal before eviction
 And    malformed frame events shall not shift metadata onto later valid rows
+And    DBC decoded-message events shall populate the identifier summary and log with correlated signal evidence
 ```
 
-**Fixture:** Synthetic frame and signal event dictionaries.
+**Fixture:** Synthetic frame and signal event dictionaries plus `tests/fixtures/sample.candump` and `tests/fixtures/sample.dbc` through `decode`.
 
 ### TEST-TUIX-03 — Stable Selection
 
@@ -66,6 +67,8 @@ When   the operator applies SA/PGN/ID filters, sorts, and switches to the event 
 Then   the system shall use canonical frame predicates and underlying numeric timestamps
 And    invalid typed filters and unknown sort names shall leave the prior view state unchanged
 And    selecting a historical log row shall retain that frame's payload while newer frames arrive
+And    returning live shall select the newest visible log row instead of the historical row
+And    frames hidden by the active typed filter shall not replace the live inspector selection
 ```
 
 **Fixture:** Textual Pilot at 80×24 and synthetic frame events.
@@ -89,6 +92,7 @@ When   the explorer ingests 100 batches of 100 frames
 Then   the system shall retain no more than 512 observations and 64 identifiers
 And    model processing shall finish within eight seconds with peak traced memory below 16 MB
 And    a 1,000-frame Textual batch shall render summary and log within ten seconds
+And    growing the backlog shall increase the explorer capacity as well as the log capacity
 ```
 
 **Fixture:** In-memory generated frames and Textual Pilot; no adapter, socket, or network.

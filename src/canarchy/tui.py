@@ -667,7 +667,7 @@ def _traffic_row_tuples(result: CommandResult) -> list[tuple[str, str, str, str,
     """Structured Live Traffic rows over the canonical event types.
 
     Columns are `TRAFFIC_COLUMNS`. Covers the streaming/observable event
-    types (`frame`, `j1939_pgn`, `uds_transaction`, `replay_event`,
+    types (`frame`, `decoded_message`, `j1939_pgn`, `uds_transaction`, `replay_event`,
     `alert`); command-specific non-event fallbacks that `_traffic_lines`
     handles are surfaced through their dedicated panes instead.
     """
@@ -678,7 +678,7 @@ def _traffic_row_tuples(result: CommandResult) -> list[tuple[str, str, str, str,
         payload = event.get("payload", {}) or {}
         src = str(event.get("source") or "")
         ts = _fmt_ts(event.get("timestamp"))
-        if event_type == "frame":
+        if event_type in {"frame", "decoded_message"}:
             frame = payload.get("frame", {}) or {}
             arb = frame.get("arbitration_id")
             id_text = f"0x{arb:X}" if isinstance(arb, int) else "?"
@@ -686,7 +686,7 @@ def _traffic_row_tuples(result: CommandResult) -> list[tuple[str, str, str, str,
                 (
                     ts or _fmt_ts(frame.get("timestamp")),
                     src or str(frame.get("interface") or ""),
-                    "frame",
+                    "decoded" if event_type == "decoded_message" else "frame",
                     id_text,
                     str(frame.get("dlc", "")),
                     str(frame.get("data", "")),

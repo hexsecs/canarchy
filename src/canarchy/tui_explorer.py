@@ -110,7 +110,7 @@ class TrafficExplorer:
     ) -> list[FrameObservation]:
         event_list = list(events)
         arrival = monotonic() if received_at is None else received_at
-        decoded: dict[int, list[str]] = {}
+        decoded: dict[tuple[str, int, str], list[str]] = {}
         for event in event_list:
             if event.get("event_type") != "signal":
                 continue
@@ -118,16 +118,28 @@ class TrafficExplorer:
             index = payload.get("frame_index")
             if isinstance(index, int) and not isinstance(index, bool):
                 units = payload.get("units") or ""
-                decoded.setdefault(index, []).append(
+                identity = (
+                    str(event.get("source") or ""),
+                    index,
+                    str(payload.get("message_name") or ""),
+                )
+                decoded.setdefault(identity, []).append(
                     f"{payload.get('message_name', '?')}.{payload.get('signal_name', '?')}="
                     f"{payload.get('value', '?')} {units}".rstrip()
                 )
         added: list[FrameObservation] = []
         frame_index = 0
         for event_index, event in enumerate(event_list):
-            if event.get("event_type") != "frame":
+            event_type = event.get("event_type")
+            if event_type not in {"frame", "decoded_message"}:
                 continue
-            payload = (event.get("payload") or {}).get("frame") or {}
+            envelope = event.get("payload") or {}
+            payload = envelope.get("frame") or {}
+            source = str(event.get("source") or "")
+            source_index = (
+                envelope.get("frame_index") if event_type == "decoded_message" else frame_index
+            )
+            message_name = str(envelope.get("message_name") or "")
             try:
                 frame = CanFrame(
                     arbitration_id=int(payload["arbitration_id"]),
@@ -142,19 +154,36 @@ class TrafficExplorer:
                     frame_format=payload.get("frame_format", "can"),
                 )
             except (KeyError, TypeError, ValueError):
-                frame_index += 1
+                if event_type == "frame":
+                    frame_index += 1
                 continue
             bus = frame.interface or str(event.get("source") or "")
             key = IdentifierKey(bus, frame.arbitration_id, frame.is_extended_id)
+            signal_lines = (
+                decoded.get((source, source_index, message_name), [])
+                if event_type == "decoded_message"
+                else [
+                    line
+                    for (signal_source, signal_index, _), lines in decoded.items()
+                    if signal_source == source and signal_index == source_index
+                    for line in lines
+                ]
+            )
+            if event_type == "decoded_message" and not signal_lines:
+                signal_lines = [
+                    f"{message_name}.{signal_name}={value}"
+                    for signal_name, value in (envelope.get("signals") or {}).items()
+                ]
             self.sequence += 1
             observation = FrameObservation(
-                self.sequence, event_index, key, frame, arrival, tuple(decoded.get(frame_index, ()))
+                self.sequence, event_index, key, frame, arrival, tuple(signal_lines)
             )
             activity = self.activities.setdefault(key, IdentifierActivity(key))
             activity.observe(observation)
             self.observations.append(observation)
             added.append(observation)
-            frame_index += 1
+            if event_type == "frame":
+                frame_index += 1
         self._trim()
         return added
 

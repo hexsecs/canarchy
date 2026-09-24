@@ -21,15 +21,15 @@ A fixed append-only table makes repeated IDs hard to compare, scrolls away from 
 
 | ID | Type | Requirement |
 |---|---|---|
-| REQ-TUIX-01 | Event-driven | When frame events arrive, the system shall group them by `(interface or source, arbitration_id, is_extended_id)` and keep standard/extended IDs and buses distinct. |
+| REQ-TUIX-01 | Event-driven | When frame or decoded-message events with embedded frames arrive, the system shall group them by `(interface or source, arbitration_id, is_extended_id)` and keep standard/extended IDs and buses distinct. |
 | REQ-TUIX-02 | Ubiquitous | The system shall show each retained identifier's count, recent rate, age, last payload, changed-byte offsets, and activity plot, and shall provide a separate chronological event-log mode. |
-| REQ-TUIX-03 | Event-driven | When the operator selects an identifier or historical event, the system shall freeze its inspector independently of capture and show incoming and dropped counts with a return-to-live action. |
+| REQ-TUIX-03 | Event-driven | When the operator selects an identifier or historical event, the system shall freeze its inspector independently of capture and show incoming and dropped counts with a return-to-live action that advances the log cursor to the newest visible event. |
 | REQ-TUIX-04 | State-driven | While inspection is frozen, the system shall preserve the selected key and detail snapshot across arrivals, sorts, filters, workspace switches, and backlog eviction. |
 | REQ-TUIX-05 | Ubiquitous | The system shall show raw timestamp, identifier type and flags, complete payload hex and bits, decoded signals when present, and bounded recent history; changed bytes shall use zero-based offsets and a textual caret legend. |
-| REQ-TUIX-06 | Event-driven | When an operator filters traffic by ID, PGN, or J1939 source address, the system shall apply the same frame predicate used by `canarchy filter`, with `sa==` matching extended frames only. |
+| REQ-TUIX-06 | Event-driven | When an operator filters traffic by ID, PGN, or J1939 source address, the system shall apply the same frame predicate used by `canarchy filter`, with `sa==` matching extended frames only; while following live traffic, hidden frames shall not replace the inspector selection. |
 | REQ-TUIX-07 | Unwanted behaviour | If an operator requests an unknown sort field or invalid typed filter, the system shall show a diagnostic and leave the previous sort or filter unchanged. |
 | REQ-TUIX-08 | Ubiquitous | The system shall sort identifier counts, rates, age, and IDs by underlying numeric values and event-log time by the underlying timestamp rather than formatted cells. |
-| REQ-TUIX-09 | Ubiquitous | The system shall bound retained frame observations by the configured backlog cap and keep rate/change analysis outside Textual. |
+| REQ-TUIX-09 | Ubiquitous | The system shall bound retained frame observations by the configured backlog cap, resize that cap in both directions, and keep rate/change analysis outside Textual. |
 
 ## Command Surface
 
@@ -48,7 +48,7 @@ canarchy filter 'sa==0x31' --file capture.log --json
 
 ## Responsibilities And Boundaries
 
-`canarchy.tui_explorer` owns frame grouping, bounded history, rate, change offsets, activity plots, and detail text. It uses `CanFrame` and the shared J1939 identifier decomposition. `canarchy.transport._compile_filter` owns the CLI/TUI filter predicate. `canarchy.tui_app` owns only keyboard actions, table rendering, focus, follow state, and status labels. The app continues to consume canonical event envelopes and the same command executor as CLI/REPL. No new transmit path or output schema is introduced.
+`canarchy.tui_explorer` owns frame grouping, bounded history, rate, change offsets, activity plots, and detail text. It accepts raw `frame` events and `decoded_message` events with embedded frames, correlating child `signal` events by source, frame index, and message name. It uses `CanFrame` and the shared J1939 identifier decomposition. `canarchy.transport._compile_filter` owns the CLI/TUI filter predicate. `canarchy.tui_app` owns only keyboard actions, table rendering, focus, follow state, and status labels. The app continues to consume canonical event envelopes and the same command executor as CLI/REPL. No new transmit path or output schema is introduced.
 
 ## Data Model
 
