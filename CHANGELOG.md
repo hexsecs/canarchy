@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-29
+
 ### Security
 
 * **Running the tests no longer touches the operator's own configuration, state, or CAN bus (#531).** The suite depended on the machine it ran on. A single full run left two fuzz campaign directories in the real `~/.canarchy/findings` (thirty-eight had accumulated on the machine where this was found), and with a `~/.canarchy/config.toml` selecting `udp_multicast` and a default interface, nine tests failed and python-can opened a real multicast socket. The default transport backend is `python-can` on `socketcan`, so on a machine with a live interface an ordinary `pytest` run could reach real hardware. Two autouse fixtures now apply by default: state is redirected to a per-test temporary directory with every `CANARCHY_*` variable cleared, and any attempt to open a real CAN interface fails immediately, naming the test and the interface. python-can's in-process `virtual` bus is still allowed, as is the localhost server the web tests bind. Tests that genuinely need the real environment are marked `integration`, excluded from the default run, and selected with `-m integration`. Configuration-sensitivity is deliberately *not* hidden: the `uds services` regressions from #530 still set a configured default interface through their own fixtures, verified by reintroducing that defect and confirming they still fail under isolation. The suite now reports the same result with and without an operator config present.
