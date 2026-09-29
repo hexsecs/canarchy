@@ -67,25 +67,58 @@ def test_metadata_is_preserved(homepage: str) -> None:
     assert '"@type": "SoftwareApplication"' in homepage
 
 
-def test_release_labels_match_the_package_version(homepage: str) -> None:
-    """The hero and install labels must track the released version.
+def _issue_tag(version: str) -> str:
+    """`0.4.1` -> `ISSUE 04.1`: drop the leading `0.`, zero-pad the minor."""
+    _, minor, patch = version.split(".")[:3]
+    return f"ISSUE {int(minor):02d}.{patch}"
+
+
+def _latest_released_version() -> str:
+    """The newest versioned heading in the changelog, i.e. the last release."""
+    changelog = (HOMEPAGE_DIR.parents[1] / "CHANGELOG.md").read_text(encoding="utf-8")
+    match = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.MULTILINE)
+    assert match is not None, "changelog has no versioned release heading"
+    return match.group(1)
+
+
+def test_release_labels_match_the_released_version(homepage: str) -> None:
+    """The hero and install labels must advertise the current release.
 
     `docs/docs_site.md` requires both to be updated on each release, but
     nothing enforced it, so 0.10.0 was prepared with the page still
-    advertising 0.9.2 (caught in review on #557). The issue tag drops the
-    leading `0.` and zero-pads the minor to two digits: 0.4.1 shipped as
-    `ISSUE 04.1`, 0.9.2 as `ISSUE 09.2`, 0.10.0 as `ISSUE 10.0`.
+    advertising 0.9.2 (caught in review on #557).
+
+    The labels track the released version, not `__version__`, because
+    between releases `main` carries a `.devN` version that has never
+    shipped -- advertising it would be wrong. On a `.dev` version the
+    expected label therefore comes from the newest changelog release
+    heading; on a final version it must equal `__version__` itself, which
+    is what catches a release commit that forgot to update the page.
     """
     from canarchy import __version__
 
-    release = __version__.split(".dev")[0]
-    major, minor, patch = release.split(".")[:3]
-    assert f"canarchy v{release}" in homepage, (
-        f"install shell tag does not advertise {release}; "
+    if ".dev" in __version__:
+        expected = _latest_released_version()
+    else:
+        expected = __version__
+        assert expected == _latest_released_version(), (
+            f"__version__ is {expected} but the newest changelog release is "
+            f"{_latest_released_version()}; promote the [Unreleased] section"
+        )
+
+    assert f"canarchy v{expected}" in homepage, (
+        f"install shell tag does not advertise {expected}; "
         "see docs/docs_site.md on updating the homepage on each release"
     )
-    expected_issue = f"ISSUE {int(minor):02d}.{patch}"
-    assert expected_issue in homepage, (
-        f"hero issue tag is not {expected_issue!r}; "
+    assert _issue_tag(expected) in homepage, (
+        f"hero issue tag is not {_issue_tag(expected)!r}; "
         "see docs/docs_site.md on updating the homepage on each release"
     )
+
+
+def test_issue_tag_convention_matches_shipped_releases() -> None:
+    """Pin the padding rule against the labels real releases used."""
+    assert _issue_tag("0.4.1") == "ISSUE 04.1"
+    assert _issue_tag("0.7.0") == "ISSUE 07.0"
+    assert _issue_tag("0.9.2") == "ISSUE 09.2"
+    assert _issue_tag("0.10.0") == "ISSUE 10.0"
