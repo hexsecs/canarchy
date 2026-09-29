@@ -14,6 +14,8 @@ Before publishing, confirm:
 
 * package metadata in `pyproject.toml` is complete and correct
 * `src/canarchy/__init__.py` contains the intended release version
+* `src/homepage/index.html` advertises that same version in its hero issue tag
+  and install shell tag
 * `CHANGELOG.md` has an `Unreleased` section and the upcoming release is summarized clearly
 * `README.md` renders correctly as the long project description
 
@@ -27,14 +29,18 @@ For the first public release, use TestPyPI first.
 ## Recommended Release Order
 
 1. Update version metadata in `src/canarchy/__init__.py`.
-2. Move relevant entries from `CHANGELOG.md` `Unreleased` into a new versioned release section.
-3. Commit the release preparation changes.
-4. Tag the release with `vX.Y.Z`.
-5. Build and verify artifacts locally from the release version.
-6. Publish to TestPyPI first if this is the first release or if the release workflow changed.
-7. Publish to PyPI from the same release version or tag.
-8. Create the GitHub release notes from the full versioned changelog section for `X.Y.Z`; do not summarize or shorten the release notes.
-9. After the release is cut and the release artifacts are published, advance `src/canarchy/__init__.py` on `main` to the next development version in a follow-up commit.
+2. Update the release version and issue tag in the hero and install sections of
+   `src/homepage/index.html` (see [docs site](docs_site.md)). The issue tag drops the
+   leading `0.` and zero-pads the minor to two digits, so `0.10.0` is `ISSUE 10.0`.
+   `tests/test_homepage.py` enforces both labels against `__version__`.
+3. Move relevant entries from `CHANGELOG.md` `Unreleased` into a new versioned release section.
+4. Commit the release preparation changes.
+5. Tag the release with `vX.Y.Z`.
+6. Build and verify artifacts locally from the release version.
+7. Publish to TestPyPI first if this is the first release or if the release workflow changed.
+8. Publish to PyPI from the same release version or tag.
+9. Create the GitHub release notes from the full versioned changelog section for `X.Y.Z`; do not summarize or shorten the release notes.
+10. After the release is cut and the release artifacts are published, advance `src/canarchy/__init__.py` on `main` to the next development version in a follow-up commit.
 
 ## Development Version Naming
 
