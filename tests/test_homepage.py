@@ -65,3 +65,27 @@ def test_metadata_is_preserved(homepage: str) -> None:
     assert '<link rel="canonical" href="https://hexsecs.github.io/canarchy/" />' in homepage
     assert 'property="og:image"' in homepage
     assert '"@type": "SoftwareApplication"' in homepage
+
+
+def test_release_labels_match_the_package_version(homepage: str) -> None:
+    """The hero and install labels must track the released version.
+
+    `docs/docs_site.md` requires both to be updated on each release, but
+    nothing enforced it, so 0.10.0 was prepared with the page still
+    advertising 0.9.2 (caught in review on #557). The issue tag drops the
+    leading `0.` and zero-pads the minor to two digits: 0.4.1 shipped as
+    `ISSUE 04.1`, 0.9.2 as `ISSUE 09.2`, 0.10.0 as `ISSUE 10.0`.
+    """
+    from canarchy import __version__
+
+    release = __version__.split(".dev")[0]
+    major, minor, patch = release.split(".")[:3]
+    assert f"canarchy v{release}" in homepage, (
+        f"install shell tag does not advertise {release}; "
+        "see docs/docs_site.md on updating the homepage on each release"
+    )
+    expected_issue = f"ISSUE {int(minor):02d}.{patch}"
+    assert expected_issue in homepage, (
+        f"hero issue tag is not {expected_issue!r}; "
+        "see docs/docs_site.md on updating the homepage on each release"
+    )
