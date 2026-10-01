@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+* **The homepage release-label check no longer fails on every development build.** 0.10.0 added a test tying the landing page's `ISSUE` tag and install shell tag to the package version, so a release can no longer ship a page advertising the previous one. It compared the labels to `__version__` directly, which meant the moment `main` reopened development on `0.10.1.dev0` it demanded a page advertising `0.10.1` — a version that has never shipped — and the suite went red. The labels track the last *released* version, so on a development build the check now reads it from the newest versioned changelog heading; on a release build it still requires `__version__`, the changelog, and the page to agree, which is what catches a release that forgot to update the page.
+
 ## [0.10.0] - 2026-09-29
 
 ### Security
