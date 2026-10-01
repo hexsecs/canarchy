@@ -184,7 +184,7 @@ Emitted by: `decode`
 {
   "event_type": "signal",
   "source": "dbc.decode",
-  "timestamp": null,
+  "timestamp": 0.0,
   "payload": {
     "frame_index": 0,
     "message_name": "EngineStatus1",
@@ -203,7 +203,7 @@ Emitted by: `decode`
 | `units` | string \| null | Physical unit string from the DBC (empty string if not defined). |
 | `value` | number | Decoded physical value after scaling and offset. |
 
-The frame index is local to one decode invocation, not a globally unique capture ID. Older or third-party events may omit it; consumers should retain those observations separately rather than deduplicating by value. Signal-event timestamps remain `null` until #525 supplies source-frame timestamps; the parent event has the frame timestamp when known.
+The frame index is local to one decode invocation, not a globally unique capture ID. Older or third-party events may omit it; consumers should retain those observations separately rather than deduplicating by value. DBC signal-event timestamps preserve the source-frame timestamp, including zero, in the same time basis as the parent. Unknown source timestamps remain `null`; decode time is never substituted. A signal-only stream therefore retains observation timing without parent-event joins.
 
 ---
 

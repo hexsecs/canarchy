@@ -19,7 +19,8 @@
 | `REQ-WEB-05` | `TEST-WEB-02` |
 | `REQ-WEB-06` | `TEST-WEB-05`, `TEST-WEB-06` |
 | `REQ-WEB-07` | `TEST-WEB-03`, `TEST-WEB-05` |
-| `REQ-WEB-08` | `TEST-WEB-06` |
+| `REQ-WEB-08` | `TEST-WEB-06`, `TEST-WEB-07` |
+| `REQ-WEB-09` | `TEST-WEB-07` |
 
 ## Representative Test Cases
 
@@ -102,3 +103,21 @@ And    a read-only warning shall be present
 ```
 
 **Fixture:** `tests/fixtures/j1939_heavy_vehicle.candump`.
+
+
+---
+
+### `TEST-WEB-07` — Piped launchers receive the complete startup result
+
+```gherkin
+Given a CLI subprocess with stdout and stderr piped and PYTHONUNBUFFERED unset
+And an ephemeral loopback bind address and JSON, JSONL, text, or table output
+When the dashboard starts
+Then the complete startup result shall be readable within the ten-second deadline
+And the advertised URL shall contain the resolved nonzero port
+And JSON and JSONL output shall parse as a successful web serve envelope
+And GET requests to that URL and /api/status shall succeed while the subprocess remains running
+And HTTP requests shall not add unrelated logging to structured stdout
+```
+
+**Fixture:** `tests/fixtures/j1939_heavy_vehicle.candump`, isolated temporary configuration directory, subprocess pipes, localhost TCP sockets. The subprocess is terminated and reaped after each case.

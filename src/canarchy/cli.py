@@ -2807,7 +2807,42 @@ def _normalize_file_arguments(args: argparse.Namespace) -> None:
         args.files = files
 
 
+def _validate_finite_float_arguments(args: argparse.Namespace) -> None:
+    """Reject non-finite numeric options before reading files or opening transports.
+
+    Do not echo the offending float into result data: NaN and Infinity are
+    not JSON numbers. Existing command-specific range and zero rules follow.
+    """
+    for name, value in vars(args).items():
+        if not isinstance(value, float) or math.isfinite(value):
+            continue
+        option = "--" + name.replace("_", "-")
+        code = {
+            "seconds": "INVALID_ANALYSIS_SECONDS",
+            "rate": "INVALID_RATE",
+            "max_seconds": "INVALID_MAX_SECONDS",
+            "timeout": "INVALID_TIMEOUT",
+            "duration": "INVALID_DURATION",
+            "max_duration": "INVALID_MAX_DURATION",
+            "gap": "INVALID_GAP",
+        }.get(name, "INVALID_ARGUMENTS")
+        if args.command == "fuzz guided" and name in {"rate", "max_seconds"}:
+            code = "FUZZ_GUIDED_INVALID_TIMING"
+        raise CommandError(
+            command=args.command,
+            exit_code=EXIT_USER_ERROR,
+            errors=[
+                ErrorDetail(
+                    code=code,
+                    message=f"{option} must be finite; got {value}.",
+                    hint=f"Pass a finite value within the documented range for {option}.",
+                )
+            ],
+        )
+
+
 def prepare_args(args: argparse.Namespace) -> None:
+    _validate_finite_float_arguments(args)
     _normalize_file_arguments(args)
     if args.command == "send":
         send_args = getattr(args, "send_args", [])
@@ -12195,6 +12230,9 @@ def emit_web_serve(args: argparse.Namespace, output_format: str) -> int:
         output_format,
     )
     try:
+        # Launchers need the resolved URL before the long-running serving loop,
+        # including when stdout is block-buffered because it is a pipe (#522).
+        sys.stdout.flush()
         server.serve_forever()
     except KeyboardInterrupt:
         pass

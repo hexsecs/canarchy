@@ -25,7 +25,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-02` | Ubiquitous | Each command selected for the MCP surface shall surface as an MCP tool whose name is the command string with spaces replaced by underscores (e.g. `j1939 monitor` → `j1939_monitor`). |
 | `REQ-MCP-03` | Ubiquitous | Each MCP tool's input schema shall be derived from the argparse parameter definitions of the corresponding CLI command. |
 | `REQ-MCP-04` | Event-driven | When an MCP tool call is received, the system shall return the canonical command result envelope (`ok`, `command`, `data`, `warnings`, `errors`) serialised as JSON text content. |
-| `REQ-MCP-05` | Event-driven | When an MCP tool call is received with invalid inputs, the system shall return the same structured error codes as the equivalent CLI invocation. |
+| `REQ-MCP-05` | Event-driven | When schema-valid inputs fail command validation, the system shall return the same structured error codes as the equivalent CLI invocation. |
 | `REQ-MCP-06` | Event-driven | When a `list_tools` request is received, the system shall return all registered MCP tools with name, description, and input schema. |
 | `REQ-MCP-07` | Ubiquitous | The MCP server shall use stdio transport only. |
 | `REQ-MCP-08` | Unwanted behaviour | If a `call_tool` request names an unregistered tool, the system shall raise an error indicating the tool is unknown. |
@@ -37,7 +37,7 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-14` | Ubiquitous | Skills provider workflows selected for MCP shall expose provider list, search, fetch, cache list, and cache refresh tools while preserving the same CLI result envelope. |
 | `REQ-MCP-15` | Ubiquitous | Reverse-engineering helpers selected for MCP shall include `re signals`, `re counters`, `re entropy`, `re correlate`, `re match-dbc`, `re shortlist-dbc`, and `re suggest` (heuristic path only; the external `--llm` enrichment is CLI-only). |
 | `REQ-MCP-16` | Ubiquitous | Every implemented CLI command shall be either exposed as an MCP tool or listed in the documented exclusion set (`shell`, `tui`, `mcp serve`, `mcp install`, `completion`, `datasets stream`, `datasets download`, `dbc generate-c`); a test shall enforce this invariant so new commands cannot silently drift out of coverage. |
-| `REQ-MCP-20` | Ubiquitous | No tool response shall exceed the configured output cap (`CANARCHY_MCP_MAX_RESPONSE_BYTES`, default 512000 bytes). Oversized list-shaped data shall be truncated with `data.truncated: true` and a `data.truncation` block recording, per trimmed list, the original `total_items` and `returned_items`, plus a hint pointing at the CLI for the full result; data that cannot be reduced by list truncation shall be replaced by a stub that preserves the envelope. |
+| `REQ-MCP-20` | Ubiquitous | No canonical CANarchy JSON tool envelope shall exceed the configured output cap (`CANARCHY_MCP_MAX_RESPONSE_BYTES`, default 512000 bytes, minimum 1024; smaller positive settings shall be rejected before transport startup). The cap shall measure the final serialized JSON text in UTF-8, including warnings and metadata; MCP transport wrapping and SDK-generated schema-validation or protocol errors are excluded. Oversized list-shaped data shall be truncated with `data.truncated: true` and a `data.truncation` block recording, per trimmed list, the original `total_items` and `returned_items` for paths surviving in the final output (removed descendants shall not appear), plus a hint pointing at the CLI for the full result; data that cannot be reduced by list truncation shall be replaced by an actionable stub that preserves `ok` and a bounded command identifier; oversized diagnostics shall preserve a bounded original error code or use `RESPONSE_TRUNCATED` when unavailable. |
 | `REQ-MCP-21` | Unwanted behaviour | If a tool call raises an unexpected exception, the server shall return a canonical envelope with error code `TOOL_EXECUTION_ERROR` instead of propagating the exception to the stdio transport, so one failing or oversized call never makes the remaining tools unavailable for the session. |
 | `REQ-MCP-22` | Ubiquitous | A tool's parameter surface shall match the underlying CLI command's flags: every flag `_build_argv` forwards shall be a real option of the target command (enforced by a contract test over all tools), and the `stats` tool shall expose the same `top`/`sa`/`pgn` knobs the CLI offers. |
 | `REQ-MCP-23` | Unwanted behaviour | When a relayed CLI result reports the generic command name `cli` (a parse-level failure that occurs before a subcommand resolves), the server shall relabel the envelope's `command` field with the invoked tool name so errors remain programmatically attributable. |
@@ -45,6 +45,8 @@ Agents that already call tools via MCP (Claude, OpenCode, etc.) can integrate CA
 | `REQ-MCP-25` | Event-driven | When the server refuses a stdin sentinel, the response shall carry the canonical envelope (`ok: false` with the `STDIN_MCP_EXCLUDED` error object) **and** set the MCP `isError` flag, so the failure is visible both structurally and at the protocol level. |
 | `REQ-MCP-26` | Ubiquitous | Every tool parameter covered by `REQ-MCP-24` shall document the restriction in its input-schema description; the CLI stdin pipelines (`capture-info --file -`, `stats --file -`, `filter --file -`, and the `--stdin` JSONL variants) shall remain unchanged. |
 | `REQ-MCP-27` | Ubiquitous | The appended restriction note shall describe only the unavailability of the `-` value and shall make no claim about the form a parameter's value must otherwise take, since the covered parameters include dataset refs, remote URLs, manifest file ids and session names as well as filesystem paths. |
+| `REQ-MCP-28` | Event-driven | When a canonical tool envelope reports `ok=false`, the system shall return an explicit MCP result with `isError=true`, retaining its JSON errors; successful envelopes shall set `isError=false`. |
+| `REQ-MCP-29` | Unwanted behaviour | If SDK input-schema validation rejects a request, the system shall retain validation and return SDK error text with `isError=true` before command execution. |
 
 ## Command Surface
 
@@ -275,9 +277,9 @@ A refusal returns the canonical envelope **and** sets the MCP `isError` flag:
 }
 ```
 
-This is the one response path that sets `isError`, because refusing the
-sentinel is a genuine tool failure rather than a domain result: the tool did
-not run at all. Relayed CLI domain failures keep their existing reporting.
+This refusal sets `isError=true`, as do all canonical envelopes with
+`ok=false`, including relayed CLI failures. The structured error remains
+available in the JSON text.
 
 ## Response Envelope
 
@@ -294,6 +296,8 @@ Every tool call returns a single `TextContent` item whose `text` field is a JSON
 ```
 
 Error responses set `"ok": false` and populate `errors` with structured error objects (`code`, `message`, optional `hint`), matching CLI exit-code semantics exactly.
+
+MCP tool results set `isError=true` whenever the canonical JSON envelope has `ok=false`, including command failures, excluded targets, missing active-transmit acknowledgement, and isolated unexpected exceptions. Codes, messages, and hints remain in the JSON text. Successful calls set `isError=false`. SDK input-schema validation runs before the command handler: missing required fields or invalid schema types return `isError=true` with SDK validation text rather than a CANarchy JSON envelope. Correct the input and retry; ordinary errors leave the session available for later calls.
 
 ## Architecture
 

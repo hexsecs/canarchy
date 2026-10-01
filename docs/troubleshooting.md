@@ -392,13 +392,13 @@ Recovery — pass a positive integer such as `--max-frames 1000`.
 
 ### `INVALID_ANALYSIS_SECONDS`
 
-Symptom — `--seconds` value was zero, negative, or non-numeric.
+Symptom — `--seconds` value was negative or non-finite (NaN or infinity).
 
-Recovery — pass a positive float such as `--seconds 60.0`.
+Recovery — pass a finite non-negative float such as `--seconds 60.0`. Zero retains the capture window at its initial timestamp. Non-numeric input returns `INVALID_ARGUMENTS`.
 
 ### `INVALID_MAX_SECONDS`
 
-Symptom — `--max-seconds` value was zero, negative, or non-numeric.
+Symptom — `--max-seconds` value was zero, negative, or non-finite. Non-numeric input returns `INVALID_ARGUMENTS`.
 Used by `datasets replay`.
 
 Recovery — pass a positive float such as `--max-seconds 10.0`.

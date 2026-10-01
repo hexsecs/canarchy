@@ -323,7 +323,8 @@ class McpGateTests(unittest.TestCase):
         self.assertIn("fuzz_guided", _ACTIVE_TRANSMIT_TOOLS)
         # Without ack_active the MCP gate refuses before any transport call.
         result = asyncio.run(handle_call_tool("fuzz_guided", {"id": "0x123"}))
-        payload = json.loads(result[0].text)
+        payload = json.loads(result.content[0].text)
+        self.assertTrue(result.isError)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["errors"][0]["code"], "ACTIVE_TRANSMIT_REQUIRES_ACK")
 

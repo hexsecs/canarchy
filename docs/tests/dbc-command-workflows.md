@@ -34,6 +34,7 @@ Validate the shipped DBC-backed decode and encode workflows, including both libr
 | `REQ-DBC-09` | `TEST-DBC-10` |
 | `REQ-DBC-10` | `TEST-DBC-11` |
 | `REQ-DBC-11` | `TEST-DBC-12` |
+| `REQ-DBC-12` | `TEST-DBC-13` |
 
 ## Representative Test Cases
 
@@ -205,3 +206,15 @@ And    the two frames shall have different frame_index values even if their sign
 ```
 
 **Fixture:** `tests/fixtures/sample.candump`, `tests/fixtures/sample.dbc`.
+
+### `TEST-DBC-13` — Signal-only streams retain source-frame timing
+
+```gherkin
+Given  repeated equal-valued DBC frames at timestamps zero and 1.25
+When   they are decoded through file, JSONL stdin, or MCP decode
+Then   selecting only signal events shall retain distinct observation timestamps and frame indexes
+And    the core decoder and stdin path shall preserve unknown timestamps as null
+And    no decode wall-clock timestamp shall be substituted
+```
+
+**Fixture:** `tests/fixtures/sample.dbc`, temporary repeated candump frames and JSONL FrameEvents; `tests/test_signal_timestamps.py`.

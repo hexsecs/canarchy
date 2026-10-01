@@ -6,6 +6,11 @@ import base64
 import concurrent.futures
 import json
 import os
+import re
+import selectors
+import subprocess
+import sys
+import time
 import socket
 import urllib.error
 import urllib.request
@@ -285,3 +290,76 @@ def test_cli_web_serve_starts_and_reports_url(capsys) -> None:
     assert payload["data"]["url"].startswith("http://127.0.0.1:")
     assert payload["data"]["event_count"] > 0
     assert any("read-only" in warning for warning in payload["warnings"])
+
+
+# --- TEST-WEB-07: piped subprocess startup ----------------------------------
+
+
+@pytest.mark.parametrize("output_format", ["json", "jsonl", "text", "table"])
+def test_cli_web_serve_flushes_piped_startup(output_format, tmp_path) -> None:
+    env = os.environ.copy()
+    env.pop("PYTHONUNBUFFERED", None)
+    env["CANARCHY_CONFIG_DIR"] = str(tmp_path)
+    root = Path(__file__).resolve().parents[1]
+    env["PYTHONPATH"] = str(root / "src")
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "canarchy.cli",
+            "web",
+            "serve",
+            "--file",
+            str(FIXTURES / "j1939_heavy_vehicle.candump"),
+            "--bind",
+            "127.0.0.1:0",
+            f"--{output_format}",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        cwd=root,
+    )
+    try:
+        assert process.stdout is not None
+        output = b""
+        deadline = time.monotonic() + 10
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while time.monotonic() < deadline:
+                if not selector.select(timeout=max(0, deadline - time.monotonic())):
+                    break
+                chunk = os.read(process.stdout.fileno(), 65536)
+                assert chunk, "dashboard exited before advertising its URL"
+                output += chunk
+                if b"Press Ctrl+C to stop the server." in output and output.endswith(b"\n"):
+                    break
+            else:
+                pytest.fail("dashboard startup output exceeded the deadline")
+        assert b"Press Ctrl+C to stop the server." in output, "startup envelope stayed buffered"
+        startup = output.decode("utf-8")
+        if output_format in {"json", "jsonl"}:
+            payload = json.loads(startup)
+            assert payload["ok"] is True
+            assert payload["command"] == "web serve"
+            assert payload["data"]["read_only"] is True
+            url = payload["data"]["url"]
+        else:
+            match = re.search(r"http://127\.0\.0\.1:(\d+)/", startup)
+            assert match is not None
+            url = match.group(0)
+        assert ":0/" not in url
+        with urllib.request.urlopen(url, timeout=5) as response:
+            assert response.status == 200
+            assert b"CANarchy Dashboard" in response.read()
+        with urllib.request.urlopen(url + "api/status", timeout=5) as response:
+            assert json.load(response)["read_only"] is True
+        # HTTP access must not add unrelated logging to structured stdout.
+        if output_format in {"json", "jsonl"}:
+            with selectors.DefaultSelector() as selector:
+                selector.register(process.stdout, selectors.EVENT_READ)
+                assert not selector.select(timeout=0.1)
+        assert process.poll() is None
+    finally:
+        process.terminate()
+        process.communicate(timeout=5)

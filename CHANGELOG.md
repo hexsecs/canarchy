@@ -9,6 +9,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+* DBC signal events now preserve source-frame timestamps, including zero, across file, stdin, and MCP decoding (#525). Signal-only streams retain observation timing without parent-event joins; unknown timestamps remain null.
+
+* **Dashboard launchers can discover the URL through piped stdout (#522).** `web serve` now flushes its complete startup result before serving in JSON, JSONL, text, and table modes, including the resolved port for `--bind 127.0.0.1:0`. Operators no longer need `PYTHONUNBUFFERED` to launch the dashboard from a subprocess.
+
+* Numeric bounds and timing options reject NaN and infinities before reading captures or opening transports (#523). File `--seconds` bounds retain zero semantics; valid finite rates, durations, timeouts, and analytical thresholds retain their existing ranges. Errors remain valid strict JSON and JSONL. DoIP URI and discovery timeouts also require finite positive values.
+
+* MCP command failures now set the protocol `isError` flag consistently with `ok=false`, while retaining CANarchy error codes and hints. Successful calls and later requests remain available; schema-validation errors retain SDK validation text (#520).
+
+* **MCP output caps now include final warnings and truncation metadata (#524).** Small supported caps, Unicode data, and oversized diagnostics stay within the configured JSON text budget. Metadata describes only surviving lists; removed child lists cannot claim retained rows. Caps below 1024 bytes are rejected before server startup, and oversized scalar results retain an actionable CLI hint.
+
 * **The publish workflow refuses to upload anything but a tagged release to PyPI (#559).** `publish.yml` built and uploaded whatever ref it was dispatched from, and the GitHub UI's "Use workflow from" control defaults to `main`. While cutting 0.10.0 it was dispatched from `main` and uploaded `0.10.1.dev0` to PyPI in place of the release; because PyPI never accepts a version twice, that upload can only be yanked, not replaced. Publishing to `pypi` now fails in the build job, before anything is built or uploaded, unless the run comes from a tag that is exactly `v` plus the package version and that version is a final `X.Y.Z` release. The failure names the problem and the fix. TestPyPI remains unrestricted for rehearsing workflow changes.
 
 * **The homepage release-label check no longer fails on every development build.** 0.10.0 added a test tying the landing page's `ISSUE` tag and install shell tag to the package version, so a release can no longer ship a page advertising the previous one. It compared the labels to `__version__` directly, which meant the moment `main` reopened development on `0.10.1.dev0` it demanded a page advertising `0.10.1` — a version that has never shipped — and the suite went red. The labels track the last *released* version, so on a development build the check now reads it from the newest versioned changelog heading; on a release build it still requires `__version__`, the changelog, and the page to agree, which is what catches a release that forgot to update the page.
