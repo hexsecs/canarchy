@@ -352,6 +352,7 @@ Notes:
 * `--dbc` accepts a local file path or a provider ref such as `opendbc:<name>`
 * `--stdin` reads JSONL `frame` events from standard input instead of a `--file` capture source
 * structured output includes a `dbc_source` object describing the provider-backed or local DBC resolution that was used
+* DBC `signal.timestamp` inherits the source-frame timestamp, including zero; unknown timestamps remain null without substituting wall-clock time, so signal-only streams retain observation timing
 * each DBC `decoded_message` and its child `signal` events carry the same zero-based `payload.frame_index` within one decode invocation; correlate using that index plus source/message/signal names rather than a decoded value
 
 ### encode
@@ -2166,3 +2167,6 @@ These deeper capabilities are not fully implemented yet even where the command s
 
 * deeper live transport integration beyond the current `python-can` transport path
 * the follow-up active-transmit safety controls tracked in the `fuzz` section (configurable rate-cap ceiling, TOML target allowlist, explicit `KILL_SWITCH_TRIGGERED` alert)
+
+
+Numeric CLI options must be finite: NaN and positive/negative infinity fail with a structured usage error before file processing or transport access. This includes `--seconds`, rates, gaps, durations, timeouts, and analytical thresholds. File `--seconds 0` keeps its existing initial-timestamp window semantics; other documented zero/range rules are unchanged. Invalid floats are described in error text, never echoed as non-standard JSON numbers. DoIP `?timeout=` also requires a finite positive value.

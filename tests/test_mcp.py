@@ -239,8 +239,8 @@ def test_each_tool_has_description_and_schema():
 
 def test_call_tool_config_show():
     results = asyncio.run(handle_call_tool("config_show", {}))
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "config show"
     assert "backend" in payload["data"]
@@ -248,8 +248,8 @@ def test_call_tool_config_show():
 
 def test_call_tool_doctor_returns_checks():
     results = asyncio.run(handle_call_tool("doctor", {}))
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "doctor"
     assert "checks" in payload["data"]
@@ -262,8 +262,8 @@ def test_call_tool_doctor_returns_checks():
 
 def test_call_tool_plugins_list():
     results = asyncio.run(handle_call_tool("plugins_list", {}))
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "plugins list"
     assert "plugins" in payload["data"]
@@ -283,8 +283,8 @@ def test_build_argv_plugins_info():
 
 def test_call_tool_uds_services():
     results = asyncio.run(handle_call_tool("uds_services", {}))
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["service_count"] > 0
 
@@ -310,7 +310,7 @@ def test_uds_services_ignores_configured_default_interface(monkeypatch, require_
         },
     )
     results = asyncio.run(handle_call_tool("uds_services", {}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["mode"] == "reference"
     assert payload["data"]["service_count"] > 0
@@ -333,7 +333,7 @@ def test_uds_services_never_builds_a_transport(monkeypatch):
 
     monkeypatch.setattr("canarchy.cli.LocalTransport", _explode)
     results = asyncio.run(handle_call_tool("uds_services", {}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["mode"] == "reference"
 
@@ -351,7 +351,7 @@ def test_uds_services_fails_closed_if_argv_gains_a_target(monkeypatch):
         lambda name, args: ["uds", "services", "vcan7", "--json"],
     )
     results = asyncio.run(handle_call_tool("uds_services", {}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "REFERENCE_ONLY_TOOL_VIOLATION"
 
@@ -423,8 +423,8 @@ def test_call_tool_capture_info():
     results = asyncio.run(
         handle_call_tool("capture_info", {"file": str(FIXTURES / "sample.candump")})
     )
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "capture-info"
     assert payload["data"]["frame_count"] == 3
@@ -433,8 +433,8 @@ def test_call_tool_capture_info():
 
 def test_call_tool_stats_uses_file_flag():
     results = asyncio.run(handle_call_tool("stats", {"file": str(FIXTURES / "sample.candump")}))
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "stats"
     assert payload["data"]["total_frames"] == 3
@@ -449,7 +449,7 @@ def test_call_tool_compare_preserves_identifier_type(tmp_path):
     results = asyncio.run(
         handle_call_tool("compare", {"files": [str(baseline), str(after)], "top": 0})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     data = payload["data"]
     assert data["id_count"] == 2
@@ -473,7 +473,7 @@ def test_call_tool_stats_top_limits_detailed_ids():
     results = asyncio.run(
         handle_call_tool("stats", {"file": str(FIXTURES / "sample.candump"), "top": 1})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["top_ids_returned"] == 1
 
@@ -483,7 +483,7 @@ def test_parse_level_error_envelope_carries_tool_name():
     # subcommand resolves, so the CLI reports command "cli"; the MCP layer must
     # relabel it with the invoked tool name for attribution (#446).
     results = asyncio.run(handle_call_tool("stats", {"file": "x", "pgn": "notanint"}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["command"] == "stats"
     assert payload["errors"][0]["code"] == "INVALID_ARGUMENTS"
@@ -493,8 +493,8 @@ def test_call_tool_j1587_decode_uses_file_flag():
     results = asyncio.run(
         handle_call_tool("j1587_decode", {"file": str(FIXTURES / "j1708_sample.j1708")})
     )
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "j1587 decode"
     assert payload["data"]["message_count"] == 7
@@ -503,8 +503,8 @@ def test_call_tool_j1587_decode_uses_file_flag():
 
 def test_call_tool_j1587_pids():
     results = asyncio.run(handle_call_tool("j1587_pids", {}))
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "j1587 pids"
     assert payload["data"]["mode"] == "reference"
@@ -514,8 +514,8 @@ def test_call_tool_j2497_decode_uses_file_flag():
     results = asyncio.run(
         handle_call_tool("j2497_decode", {"file": str(FIXTURES / "j2497_sample.j2497")})
     )
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "j2497 decode"
     assert payload["data"]["frame_count"] == 6
@@ -524,8 +524,8 @@ def test_call_tool_j2497_decode_uses_file_flag():
 
 def test_call_tool_j2497_mids():
     results = asyncio.run(handle_call_tool("j2497_mids", {}))
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "j2497 mids"
     assert payload["data"]["mode"] == "reference"
@@ -538,8 +538,8 @@ def test_call_tool_filter_orders_expression_before_file_flag():
             {"file": str(FIXTURES / "sample.candump"), "expression": "id==0x18FEEE31"},
         )
     )
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "filter"
     assert len(payload["data"]["events"]) == 1
@@ -549,8 +549,8 @@ def test_call_tool_filter_orders_expression_before_file_flag():
 
 def test_call_tool_datasets_search_returns_machine_fields():
     results = asyncio.run(handle_call_tool("datasets_search", {"query": "candid"}))
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "datasets search"
     assert payload["data"]["count"] >= 1
@@ -564,8 +564,8 @@ def test_call_tool_datasets_inspect_index_returns_machine_fields():
     results = asyncio.run(
         handle_call_tool("datasets_inspect", {"ref": "catalog:pivot-auto-datasets"})
     )
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "datasets inspect"
     assert payload["data"]["is_index"] is True
@@ -587,8 +587,8 @@ def test_call_tool_datasets_replay_plan_does_not_stream():
             },
         )
     )
-    assert len(results) == 1
-    payload = json.loads(results[0].text)
+    assert len(results.content) == 1
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "datasets replay"
     assert payload["data"]["dry_run"] is True
@@ -604,7 +604,7 @@ def test_call_tool_datasets_replay_plan_index_error():
     results = asyncio.run(
         handle_call_tool("datasets_replay_plan", {"source": "catalog:pivot-auto-datasets"})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["command"] == "datasets replay"
     assert payload["errors"][0]["code"] == "DATASET_INDEX_NOT_REPLAYABLE"
@@ -612,7 +612,7 @@ def test_call_tool_datasets_replay_plan_index_error():
 
 def test_call_tool_datasets_replay_files_lists_manifest():
     results = asyncio.run(handle_call_tool("datasets_replay_files", {"source": "catalog:candid"}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "datasets replay"
     assert payload["data"]["count"] >= 1
@@ -621,7 +621,7 @@ def test_call_tool_datasets_replay_files_lists_manifest():
 
 def test_call_tool_skills_provider_list():
     results = asyncio.run(handle_call_tool("skills_provider_list", {}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["command"] == "skills provider list"
     assert "providers" in payload["data"]
@@ -642,7 +642,7 @@ def test_call_tool_send_invalid_frame_id():
             },
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert any(e["code"] == "INVALID_FRAME_ID" for e in payload["errors"])
 
@@ -654,28 +654,28 @@ def test_call_tool_replay_invalid_rate():
     results = asyncio.run(
         handle_call_tool("replay", {"file": "any.candump", "rate": 0.0, "ack_active": True})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert any(e["code"] == "INVALID_RATE" for e in payload["errors"])
 
 
 def test_call_tool_replay_without_ack_active_returns_structured_error():
     results = asyncio.run(handle_call_tool("replay", {"file": "any.candump"}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
 
 def test_call_tool_replay_ack_active_false_returns_structured_error():
     results = asyncio.run(handle_call_tool("replay", {"file": "any.candump", "ack_active": False}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
 
 def test_call_tool_replay_defaults_to_dry_run():
     results = asyncio.run(handle_call_tool("replay", {"file": "any.candump", "ack_active": True}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     # Should return INVALID_RATE since no file path matches, but the
     # important assertion is that dry_run was set, so we reach the CLI
     # without an ACTIVE_TRANSMIT_REQUIRES_ACK gate rejection.
@@ -804,7 +804,7 @@ def test_call_tool_dbc_inspect_layout_returns_layout_strings():
             },
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     message = payload["data"]["messages"][0]
     assert "CoolantTemp" in message["layout"]
@@ -844,7 +844,7 @@ def test_call_tool_dbc_convert_returns_content():
             {"dbc": str(FIXTURES / "sample.dbc"), "to": "kcd"},
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["target_format"] == "kcd"
     assert "NetworkDefinition" in payload["data"]["content"]
@@ -886,7 +886,7 @@ def test_build_argv_j1939_pgn_reference_omits_file():
 
 def test_call_tool_j1939_pgn_reference_lookup():
     results = asyncio.run(handle_call_tool("j1939_pgn", {"pgn": 61444}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["mode"] == "reference"
     assert payload["data"]["label"] == "EEC1"
@@ -894,7 +894,7 @@ def test_call_tool_j1939_pgn_reference_lookup():
 
 def test_call_tool_j1939_spn_reference_lookup():
     results = asyncio.run(handle_call_tool("j1939_spn", {"spn": 190}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["mode"] == "reference"
     assert payload["data"]["units"] == "rpm"
@@ -1227,7 +1227,7 @@ def test_build_argv_unknown_raises():
 
 def test_call_tool_j1939_monitor_returns_events():
     results = asyncio.run(handle_call_tool("j1939_monitor", {}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert "events" in payload["data"]
 
@@ -1527,7 +1527,7 @@ def test_run_server_handles_sigint():
 
 def test_send_without_ack_active_returns_structured_error():
     results = asyncio.run(handle_call_tool("send", {"frame_id": "0x100", "data": "1122"}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1536,7 +1536,7 @@ def test_send_ack_active_false_returns_structured_error():
     results = asyncio.run(
         handle_call_tool("send", {"frame_id": "0x100", "data": "1122", "ack_active": False})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1545,7 +1545,7 @@ def test_send_with_ack_active_defaults_to_dry_run():
     results = asyncio.run(
         handle_call_tool("send", {"frame_id": "0x100", "data": "1122", "ack_active": True})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["mode"] == "dry_run"
@@ -1553,14 +1553,14 @@ def test_send_with_ack_active_defaults_to_dry_run():
 
 def test_generate_without_ack_active_returns_structured_error():
     results = asyncio.run(handle_call_tool("generate", {"interface": "can0"}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
 
 def test_generate_ack_active_false_returns_structured_error():
     results = asyncio.run(handle_call_tool("generate", {"interface": "can0", "ack_active": False}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1571,7 +1571,7 @@ def test_generate_with_ack_active_defaults_to_dry_run():
             "generate", {"id": "0x100", "dlc": "2", "data": "1122", "ack_active": True}
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["mode"] == "dry_run"
@@ -1588,7 +1588,7 @@ def test_generate_live_without_count_returns_structured_error():
             {"interface": "can0", "ack_active": True, "dry_run": False},
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "MISSING_COUNT"
 
@@ -1597,7 +1597,7 @@ def test_simulate_without_ack_active_returns_structured_error():
     results = asyncio.run(
         handle_call_tool("simulate", {"profile": "heavy-truck", "interface": "vcan0"})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1608,7 +1608,7 @@ def test_simulate_ack_active_false_returns_structured_error():
             "simulate", {"profile": "heavy-truck", "interface": "vcan0", "ack_active": False}
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1627,7 +1627,7 @@ def test_simulate_with_ack_active_defaults_to_dry_run():
             },
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["mode"] == "dry_run"
@@ -1637,7 +1637,7 @@ def test_simulate_with_ack_active_defaults_to_dry_run():
 
 def test_gateway_without_ack_active_returns_structured_error():
     results = asyncio.run(handle_call_tool("gateway", {"src": "can0", "dst": "can1"}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1646,7 +1646,7 @@ def test_gateway_ack_active_false_returns_structured_error():
     results = asyncio.run(
         handle_call_tool("gateway", {"src": "can0", "dst": "can1", "ack_active": False})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1655,7 +1655,7 @@ def test_gateway_with_ack_active_defaults_to_dry_run():
     results = asyncio.run(
         handle_call_tool("gateway", {"src": "can0", "dst": "can1", "ack_active": True})
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["mode"] == "dry_run"
@@ -1681,7 +1681,7 @@ def test_fuzz_payload_without_ack_active_returns_structured_error():
             {"interface": "can0", "id": "0x100", "strategy": "bitflip"},
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1700,7 +1700,7 @@ def test_fuzz_payload_ack_active_false_returns_structured_error():
             },
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1721,7 +1721,7 @@ def test_fuzz_payload_with_ack_active_defaults_to_dry_run():
             },
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     # Envelope shape — the CLI translates --jsonl into the canonical
     # event stream; ok=True means dry-run completed without opening a
     # transport.
@@ -1740,7 +1740,7 @@ def test_fuzz_replay_without_ack_active_returns_structured_error():
             },
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1752,7 +1752,7 @@ def test_fuzz_arbitration_id_without_ack_active_returns_structured_error():
             {"interface": "can0", "range": "0x100:0x103"},
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1770,7 +1770,7 @@ def test_fuzz_signal_without_ack_active_returns_structured_error():
             },
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1790,7 +1790,7 @@ def test_fuzz_signal_with_ack_active_defaults_to_dry_run():
             },
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["mode"] == "dry_run"
@@ -1825,7 +1825,7 @@ def test_fuzz_spn_without_ack_active_returns_structured_error():
             {"interface": "can0", "spn": 110, "mode": "not_available"},
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ACTIVE_TRANSMIT_REQUIRES_ACK"
 
@@ -1837,7 +1837,7 @@ def test_fuzz_spn_with_ack_active_defaults_to_dry_run():
             {"spn": 110, "mode": "boundary", "count": 5, "ack_active": True},
         )
     )
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["mode"] == "dry_run"
@@ -2051,8 +2051,8 @@ def test_call_tool_high_rate_j1939_pgn_is_bounded(tmp_path, monkeypatch):
 
     results = asyncio.run(handle_call_tool("j1939_pgn", {"pgn": 61444, "file": str(capture)}))
 
-    assert len(results) == 1
-    text = results[0].text
+    assert len(results.content) == 1
+    text = results.content[0].text
     assert len(text.encode("utf-8")) <= 65_536
     payload = json.loads(text)  # bounded AND still well-formed JSON
     assert payload["ok"] is True
@@ -2068,7 +2068,7 @@ def test_call_tool_exception_is_isolated_and_session_stays_usable(monkeypatch):
 
     monkeypatch.setattr("canarchy.mcp_server.execute_command", _boom)
     results = asyncio.run(handle_call_tool("uds_services", {}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "TOOL_EXECUTION_ERROR"
     assert "synthetic tool crash" in payload["errors"][0]["message"]
@@ -2077,7 +2077,7 @@ def test_call_tool_exception_is_isolated_and_session_stays_usable(monkeypatch):
     # The next call on the same server module succeeds: one failure does not
     # poison the session.
     results = asyncio.run(handle_call_tool("uds_services", {}))
-    payload = json.loads(results[0].text)
+    payload = json.loads(results.content[0].text)
     assert payload["ok"] is True
 
 
@@ -2276,8 +2276,8 @@ def test_ordinary_file_paths_are_unaffected():
     results = asyncio.run(
         handle_call_tool("capture_info", {"file": str(FIXTURES / "sample.candump")})
     )
-    assert isinstance(results, list)
-    assert json.loads(results[0].text)["ok"] is True
+    assert isinstance(results, types.CallToolResult)
+    assert json.loads(results.content[0].text)["ok"] is True
 
 
 def test_stdin_rejection_survives_a_real_stdio_session(tmp_path):
@@ -2344,3 +2344,168 @@ def test_stdin_rejection_survives_a_real_stdio_session(tmp_path):
     assert followup_payload["ok"] is True
     assert followup_payload["command"] == "plugins list"
     assert elapsed < 15
+
+
+# TEST-MCP-60: protocol failure status and recovery over actual stdio (#520).
+@pytest.mark.parametrize("cap", [1024, 512_000])
+def test_domain_failures_and_exception_survive_real_stdio(tmp_path, cap):
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    # Install a deterministic crash only in the child server process. The
+    # actual SDK transport and request validation still run unchanged.
+    launcher = tmp_path / "server.py"
+    launcher.write_text(
+        "import canarchy.mcp_server as server\n"
+        "original = server.execute_command\n"
+        "def execute(argv):\n"
+        "    if argv[:2] == ['config', 'show']:\n"
+        "        raise RuntimeError('synthetic stdio failure 🚚' * 1000)\n"
+        "    return original(argv)\n"
+        "server.execute_command = execute\n"
+        "server.run_server()\n",
+        encoding="utf-8",
+    )
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=[str(launcher)],
+        env={
+            **os.environ,
+            "CANARCHY_TRANSPORT_BACKEND": "scaffold",
+            "CANARCHY_MCP_MAX_RESPONSE_BYTES": str(cap),
+            "CANARCHY_CONFIG_DIR": str(tmp_path / "config"),
+        },
+    )
+
+    async def run():
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                layout = await session.call_tool(
+                    "dbc_inspect", {"dbc": str(FIXTURES / "complex.dbc"), "layout": True}
+                )
+                assert layout.isError is False
+                assert len(layout.content[0].text.encode("utf-8")) <= cap
+                if cap == 1024:
+                    assert json.loads(layout.content[0].text)["data"]["truncated"] is True
+                plugins = await session.call_tool("plugins_list", {})
+                assert plugins.isError is False
+                assert len(plugins.content[0].text.encode("utf-8")) <= cap
+                cases = [
+                    ("stats", {"file": str(tmp_path / "absent.log")}, "CAPTURE_SOURCE_UNAVAILABLE"),
+                    (
+                        "stats",
+                        {"file": str(FIXTURES / "sample.candump"), "max_frames": -1},
+                        "INVALID_MAX_FRAMES",
+                    ),
+                    ("uds_scan", {"interface": "doip://127.0.0.1:13400"}, "DOIP_MCP_EXCLUDED"),
+                    ("config_show", {}, "TOOL_EXECUTION_ERROR"),
+                ]
+                for tool, arguments, code in cases:
+                    result = await asyncio.wait_for(session.call_tool(tool, arguments), timeout=15)
+                    assert result.isError is True
+                    assert len(result.content[0].text.encode("utf-8")) <= cap
+                    payload = json.loads(result.content[0].text)
+                    assert payload["ok"] is False
+                    assert payload["errors"][0]["code"] == code
+                    assert payload["errors"][0]["message"]
+                    if code in ("ACTIVE_TRANSMIT_REQUIRES_ACK", "DOIP_MCP_EXCLUDED"):
+                        assert payload["errors"][0]["hint"]
+                    followup = await asyncio.wait_for(
+                        session.call_tool("uds_services", {}), timeout=15
+                    )
+                    assert followup.isError is False
+                    assert len(followup.content[0].text.encode("utf-8")) <= cap
+                    assert json.loads(followup.content[0].text)["ok"] is True
+                # SDK validation rejects missing acknowledgement before the
+                # handler, just as it rejects a missing required capture file.
+                for tool, arguments, field in [
+                    ("stats", {}, "file"),
+                    ("send", {"frame_id": "0x100", "data": "11"}, "ack_active"),
+                ]:
+                    schema_error = await session.call_tool(tool, arguments)
+                    assert schema_error.isError is True
+                    assert field in schema_error.content[0].text
+                    with pytest.raises(json.JSONDecodeError):
+                        json.loads(schema_error.content[0].text)
+                valid = await session.call_tool("stats", {"file": str(FIXTURES / "sample.candump")})
+                assert valid.isError is False
+                assert json.loads(valid.content[0].text)["ok"] is True
+
+    asyncio.run(asyncio.wait_for(run(), timeout=120))
+
+
+@pytest.mark.parametrize("cap", [1024, 2048, 512_000])
+def test_bound_payload_final_size_and_surviving_nested_paths(cap):
+    from canarchy.mcp_server import bound_payload
+
+    payload = {
+        "ok": True,
+        "command": "dbc inspect",
+        "warnings": [],
+        "errors": [],
+        "data": {
+            "messages": [{"signals": [{"name": "🚚" * 30} for _ in range(40)]} for _ in range(50)]
+        },
+    }
+    result = bound_payload(payload, cap)
+    assert len(json.dumps(result, sort_keys=True).encode("utf-8")) <= cap
+    assert result["data"]["truncated"] is True
+    slots = []
+    from canarchy.mcp_server import _list_slots
+
+    _list_slots(result["data"].get("messages", []), "data.messages", slots)
+    actual = {path: size for _, _, path, size in slots}
+    actual["data.messages"] = len(result["data"].get("messages", []))
+    for entry in result["data"]["truncation"].get("lists", []):
+        assert entry["path"] in actual
+        assert entry["returned_items"] == actual[entry["path"]]
+        assert entry["total_items"] > entry["returned_items"]
+
+
+@pytest.mark.parametrize("field", ["data", "warnings", "errors", "command"])
+def test_bound_payload_small_cap_handles_giant_scalars_and_envelopes(field):
+    from canarchy.mcp_server import bound_payload
+
+    payload = {"ok": False, "command": "stats", "data": {}, "warnings": [], "errors": []}
+    giant = "🚚" * 10000
+    payload[field] = (
+        {"blob": giant}
+        if field == "data"
+        else ([giant] if field in ("warnings", "errors") else giant)
+    )
+    result = bound_payload(payload, 1024)
+    assert len(json.dumps(result, sort_keys=True).encode("utf-8")) <= 1024
+    assert result["ok"] is False
+    assert result["data"]["truncated"] is True
+    assert "CLI" in result["data"]["truncation"]["hint"]
+
+
+def test_response_cap_rejects_unsupported_positive_value_before_transport(monkeypatch):
+    from canarchy.mcp_server import _response_byte_limit, bound_payload, run_server
+
+    monkeypatch.setenv("CANARCHY_MCP_MAX_RESPONSE_BYTES", "1023")
+    with pytest.raises(ValueError, match="at least 1024"):
+        _response_byte_limit()
+    with pytest.raises(ValueError, match="at least 1024"):
+        run_server()
+    with pytest.raises(ValueError, match="at least 1024"):
+        bound_payload({}, 1)
+
+
+def test_call_tool_small_cap_dbc_layout_and_session_usability(monkeypatch):
+    monkeypatch.setenv("CANARCHY_MCP_MAX_RESPONSE_BYTES", "1024")
+    results = asyncio.run(
+        handle_call_tool(
+            "dbc_inspect",
+            {
+                "dbc": "tests/fixtures/complex.dbc",
+                "layout": True,
+            },
+        )
+    )
+    assert len(results.content[0].text.encode("utf-8")) <= 1024
+    assert json.loads(results.content[0].text)["data"]["truncated"] is True
+    results = asyncio.run(handle_call_tool("plugins_list", {}))
+    assert len(results.content[0].text.encode("utf-8")) <= 1024
+    assert json.loads(results.content[0].text)["ok"] is True

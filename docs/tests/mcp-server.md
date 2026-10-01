@@ -31,7 +31,7 @@
 | REQ-MCP-17 | J1939 tools `j1939_compare`, `j1939_faults`, `j1939_tp_compare` shall be exposed as MCP tools | TEST-MCP-33, TEST-MCP-34, TEST-MCP-35 |
 | REQ-MCP-18 | `re signals` shall be exposed as MCP tool `re_signals` | TEST-MCP-36 |
 | REQ-MCP-19 | `datasets convert` and `datasets replay --list-files` shall be exposed as MCP tools | TEST-MCP-37, TEST-MCP-38 |
-| REQ-MCP-20 | Tool responses are bounded by the output cap with explicit truncation markers and totals | TEST-MCP-39, TEST-MCP-40, TEST-MCP-41, TEST-MCP-42 |
+| REQ-MCP-20 | Tool responses are bounded by the output cap with explicit truncation markers and totals | TEST-MCP-39, TEST-MCP-40, TEST-MCP-41, TEST-MCP-42, TEST-MCP-61 |
 | REQ-MCP-21 | An in-tool exception returns a `TOOL_EXECUTION_ERROR` envelope and leaves the session usable | TEST-MCP-43 |
 | REQ-MCP-22 | Every flag an MCP tool forwards maps to a real CLI flag; `stats` exposes the same `top` knob on both surfaces | TEST-MCP-44, TEST-MCP-45, TEST-MCP-46 |
 | REQ-MCP-23 | A parse-level CLI failure relayed over MCP carries the invoked tool name, not the generic `cli` | TEST-MCP-47 |
@@ -39,6 +39,8 @@
 | REQ-MCP-25 | The refusal carries the canonical envelope and sets the MCP `isError` flag; the session survives it | TEST-MCP-48, TEST-MCP-55 |
 | REQ-MCP-26 | Guarded parameters document the restriction; CLI stdin pipelines are unchanged | TEST-MCP-54, TEST-MCP-57, TEST-MCP-58 |
 | REQ-MCP-27 | The restriction note claims nothing about the value's shape, so it cannot contradict a parameter that takes a ref, URL, id or session name | TEST-MCP-59 |
+| REQ-MCP-28 | Canonical tool failures match protocol failure status; subsequent calls remain usable | TEST-MCP-60 |
+| REQ-MCP-29 | SDK validation is retained and distinguished from domain envelopes | TEST-MCP-60 |
 
 ## Representative Test Cases
 
@@ -771,3 +773,36 @@ And    `data.input` shall be `stdin-candump` with only the matching frame
 
 **Test:** `test_filter_stdin_candump_pipeline_still_supported` (`tests/test_cli.py`).
 **Fixture:** none (inline candump text).
+
+### `TEST-MCP-60` — Protocol error status and recovery over actual stdio
+
+```gherkin
+Given a real SDK stdio client connected to a CANarchy server with an injected deterministic command crash
+When calls fail for a missing capture, negative frame limit, DoIP exclusion, or unexpected exception
+Then each result shall set isError true and retain the canonical JSON error code, message, and applicable hint
+And a successful service-catalog call after each failure shall set isError false
+When stats is called without its required file field or send without its required acknowledgement
+Then SDK validation shall return plain error text with isError true
+And a later valid stats call shall succeed on the same session
+And canonical responses at both the 1024-byte and default caps shall remain bounded, including oversized exception diagnostics
+```
+
+**Fixture:** `sample.candump`, nonexistent temporary capture path, child-only crash injection; scaffold backend, no live hardware or network egress.
+
+### `TEST-MCP-61` — Final byte cap and surviving metadata
+
+```gherkin
+Given nested lists containing Unicode, oversized scalars, or large envelope diagnostics
+When responses are bounded at 1024, 2048, or the default 512000 bytes
+Then the final serialized UTF-8 JSON shall fit the configured cap
+And metadata paths and returned counts shall describe surviving output only
+And a compact fallback shall retain an actionable CLI hint
+Given a positive configured cap below 1024 bytes
+When the server starts
+Then it shall reject the setting before opening the transport
+Given the complex DBC layout result with a 1024-byte cap
+When dbc_inspect is followed by plugins_list
+Then both JSON text responses shall fit and the session shall remain usable
+```
+
+**Fixture:** `tests/fixtures/complex.dbc`; generated nested Unicode lists and scalar/envelope data. Covered by `test_bound_payload_final_size_and_surviving_nested_paths`, `test_bound_payload_small_cap_handles_giant_scalars_and_envelopes`, `test_response_cap_rejects_unsupported_positive_value_before_transport`, `test_call_tool_small_cap_dbc_layout_and_session_usability`, and `test_domain_failures_and_exception_survive_real_stdio` (real SDK stdio at 1024 and 512000 bytes, including early refusals and oversized exceptions). Traces to `REQ-MCP-20`.

@@ -25,6 +25,7 @@ is a CLI-only operator action (not exposed through the MCP server).
 from __future__ import annotations
 
 import contextlib
+import math
 import socket
 import struct
 import time
@@ -214,10 +215,10 @@ def parse_doip_target(target: str) -> DoipTarget:
                 message=f"DoIP timeout {timeout_values[0]!r} is not a number.",
                 hint="Pass ?timeout=<seconds> as a positive number.",
             ) from exc
-        if timeout <= 0:
+        if not math.isfinite(timeout) or timeout <= 0:
             raise DoipError(
                 code="DOIP_INVALID_TARGET",
-                message="DoIP timeout must be positive.",
+                message="DoIP timeout must be finite and positive.",
                 hint="Pass ?timeout=<seconds> greater than zero.",
             )
 
@@ -635,10 +636,10 @@ def discover_entities(
     sender: IdentificationSender | None = None,
 ) -> list[DoipEntity]:
     """Broadcast a DoIP vehicle-identification request and collect responders."""
-    if timeout <= 0:
+    if not math.isfinite(timeout) or timeout <= 0:
         raise DoipError(
             code="DOIP_INVALID_TARGET",
-            message="DoIP discovery timeout must be positive.",
+            message="DoIP discovery timeout must be finite and positive.",
             hint="Pass --timeout greater than zero.",
         )
     sender = sender or _udp_identification_sender

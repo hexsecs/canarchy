@@ -31,6 +31,7 @@ DBC-backed workflows are central to protocol-aware CAN analysis. Operators shoul
 | `REQ-DBC-09` | Ubiquitous | `encode` shall default unsupplied signals (DBC initial value when declared, else 0 clamped into the declared range/choices; multiplexed messages excluded) so a single-signal encode succeeds, reporting every defaulted signal under `data.resolution.filled_signals` and in a warning. |
 | `REQ-DBC-10` | Unwanted behaviour | If a message or signal name cannot be resolved, the `DBC_MESSAGE_NOT_FOUND` / `DBC_SIGNAL_INVALID` error hint shall suggest the closest valid names (DBC names plus SAE PGN/SPN aliases). |
 | `REQ-DBC-11` | Event-driven | When a source frame is decoded, the system shall include the same zero-based, decode-invocation-local `frame_index` in the `decoded_message` payload and each of its `signal` payloads, preserving separate identities for repeated equal-valued frames. |
+| `REQ-DBC-12` | Event-driven | When a source frame is decoded through file, stdin, or MCP workflows, the system shall copy its timestamp to every signal event, preserving zero and null without substituting wall-clock decode time. |
 
 ## Command Surface
 

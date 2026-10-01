@@ -342,7 +342,8 @@ class DoipMcpExclusionTests(unittest.TestCase):
         for tool in ("uds_scan", "uds_trace"):
             with self.subTest(tool=tool):
                 result = asyncio.run(handle_call_tool(tool, {"interface": target}))
-                payload = json.loads(result[0].text)
+                payload = json.loads(result.content[0].text)
+                self.assertTrue(result.isError)
                 self.assertFalse(payload["ok"])
                 self.assertEqual(payload["errors"][0]["code"], "DOIP_MCP_EXCLUDED")
 

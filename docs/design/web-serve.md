@@ -33,13 +33,15 @@ the structured-output model or installing a heavy GUI.
 | `REQ-WEB-07` | Ubiquitous | The WebSocket implementation shall be a minimal RFC 6455 server (handshake accept key, unmasked server→client text frames with 7/16/64-bit lengths, masked client-frame reads, ping→pong, close handling) with no third-party dependency. |
 | `REQ-WEB-08` | Ubiquitous | On startup the CLI shall emit a canonical envelope reporting the dashboard `url`, `read_only: true`, source metadata, and `event_count`, then serve until interrupted; `web serve` shall not be exposed as an MCP tool (long-running front end, like `shell`/`tui`). |
 
+| `REQ-WEB-09` | Event-driven | When startup output is written to a pipe, the CLI shall flush the complete startup result before entering the serving loop in JSON, JSONL, text, and table modes, so launchers can read the resolved URL without enabling unbuffered Python output. |
+
 ## Command Surface
 
 ```text
 canarchy web serve --file <capture> [--dbc <path|provider:ref>] \
     [--bind <host:port>] [--rate <multiplier>] [--loop] \
     [--offset <n>] [--max-frames <n>] [--seconds <s>] \
-    [--json|--jsonl|--text]
+    [--json|--jsonl|--text|--table]
 ```
 
 Default bind: `127.0.0.1:8474`. Port `0` selects an ephemeral port (the

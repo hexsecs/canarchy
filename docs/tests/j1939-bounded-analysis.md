@@ -6,7 +6,7 @@
 |-------|-------|
 | Status | Implemented |
 | Design doc | `docs/design/j1939-bounded-analysis.md` |
-| Test file | `tests/test_cli.py`, `tests/test_transport.py` |
+| Test file | `tests/test_cli.py`, `tests/test_transport.py`, `tests/test_finite_bounds.py` |
 
 ## Requirement Traceability
 
@@ -19,6 +19,7 @@
 | `REQ-J1939WIN-05` | Invalid `--seconds` returns structured error | `TEST-J1939WIN-06` |
 | `REQ-J1939WIN-06` | Bounded analysis is rejected with `j1939 decode --stdin` | `TEST-J1939WIN-07` |
 | `REQ-J1939WIN-07` | Auto-cap for j1939 summary/dm1/faults/inventory/compare on large files | `TEST-J1939WIN-08`, `TEST-J1939WIN-09`, `TEST-J1939WIN-10`, `TEST-J1939WIN-11`, `TEST-J1939WIN-12`, `TEST-J1939WIN-13` |
+| `REQ-J1939WIN-08` | All numeric options reject non-finite values before processing | `TEST-J1939WIN-14` |
 
 ## Test Cases
 
@@ -204,3 +205,15 @@ Then   the response shall include a warning containing "Large file"
 * later-window selection such as `--from` / `--to`
 * sampling or every-Nth-frame semantics
 * performance benchmarking on production-sized captures, which remains a separate performance concern
+
+### TEST-J1939WIN-14 — Non-finite numeric options fail before processing
+
+```gherkin
+Given a file analysis, dry-run active command, or live special dispatch path
+When its numeric option is NaN, positive infinity, or negative infinity
+Then it shall return exit code 1 before command dispatch or transport creation
+And JSON and JSONL shall parse with a parser that rejects non-standard constants
+And finite values and intentional zero values shall retain their semantics
+```
+
+**Fixture:** `tests/test_finite_bounds.py`; missing capture paths, mocked command/transport entry points, `sample.candump`, and fake DoIP discovery sender. The parser audit covers every float option, including rates, gaps, durations, timeouts, bounds, and analytical thresholds. Live vehicle hardware is not used.

@@ -386,6 +386,7 @@ def decode_frames_runtime(frames: list[CanFrame], dbc_path: str) -> list[dict[st
                     value=value,
                     units=signal.unit,
                     source="dbc.decode",
+                    timestamp=frame.timestamp,
                     frame_index=frame_index,
                 ).to_event()
             )

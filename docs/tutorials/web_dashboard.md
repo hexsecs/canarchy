@@ -33,6 +33,11 @@ The startup envelope reports the URL and confirms the read-only surface:
 }
 ```
 
+The complete startup result is flushed before the server enters its serving
+loop, even when stdout is a pipe. Launchers can read `data.url` immediately
+without setting `PYTHONUNBUFFERED`; use `--bind 127.0.0.1:0` to obtain an
+available port. JSONL, text, and table startup output are also flushed.
+
 Open `http://127.0.0.1:8474/` in a browser. The frame pane fills as the
 capture replays at recorded speed; the J1939 pane aggregates PGN activity
 with bundled labels and source-address names.

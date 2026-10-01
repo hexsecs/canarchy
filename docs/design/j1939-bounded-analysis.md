@@ -25,7 +25,7 @@ Large heavy-vehicle captures often contain millions of frames. Analysts need to 
 | `REQ-J1939WIN-02` | Optional feature | Where a file-backed J1939 analysis command supports bounded analysis, the system shall accept `--seconds <n>` to limit work to frames whose timestamps fall within the first `<n>` seconds of the capture window. |
 | `REQ-J1939WIN-03` | Event-driven | When `j1939 decode`, `j1939 pgn`, `j1939 spn`, `j1939 tp sessions`, or `j1939 dm1` is invoked with bounded-analysis flags against a capture file, the system shall apply those bounds during file iteration rather than after a full-file read. |
 | `REQ-J1939WIN-04` | Unwanted behaviour | If `--max-frames` is less than `1`, the system shall return a structured user error with code `INVALID_MAX_FRAMES`. |
-| `REQ-J1939WIN-05` | Unwanted behaviour | If `--seconds` is negative, the system shall return a structured user error with code `INVALID_ANALYSIS_SECONDS`. |
+| `REQ-J1939WIN-05` | Unwanted behaviour | If `--seconds` is negative or non-finite, the system shall return a structured user error with code `INVALID_ANALYSIS_SECONDS`. |
 | `REQ-J1939WIN-06` | Unwanted behaviour | If bounded-analysis flags are used with `j1939 decode --stdin`, the system shall return a structured user error with code `ANALYSIS_WINDOW_REQUIRES_FILE`. |
 | `REQ-J1939WIN-07` | Performance | When `j1939 summary`, `j1939 dm1`, `j1939 faults`, `j1939 inventory`, or `j1939 compare` is invoked on a file larger than 50 MB without an explicit `--max-frames` or `--seconds` bound, the system shall automatically cap analysis at 500,000 frames and include a warning in the response instructing the operator to use `--max-frames` or `--seconds` to override. |
 
@@ -67,7 +67,7 @@ All existing output modes remain available. `--json` and `--jsonl` continue to e
 | Code | Trigger | Exit code |
 |------|---------|-----------|
 | `INVALID_MAX_FRAMES` | `--max-frames` is less than `1` | 1 |
-| `INVALID_ANALYSIS_SECONDS` | `--seconds` is negative | 1 |
+| `INVALID_ANALYSIS_SECONDS` | `--seconds` is negative or non-finite | 1 |
 | `ANALYSIS_WINDOW_REQUIRES_FILE` | bounded-analysis flags are used with `j1939 decode --stdin` | 1 |
 
 ## Deferred Decisions
@@ -75,3 +75,11 @@ All existing output modes remain available. `--json` and `--jsonl` continue to e
 * whether later-window selection should use `--from` / `--to` capture timestamps or relative offsets
 * whether bounded-analysis metadata should be echoed explicitly in command payloads
 * whether sampling controls should share this command surface or land as a separate follow-on feature
+
+## Numeric Option Validation
+
+Numeric CLI options must be finite: NaN and positive/negative infinity fail with a structured usage error before file processing or transport access. This includes `--seconds`, rates, gaps, durations, timeouts, and analytical thresholds. File `--seconds 0` keeps its existing initial-timestamp window semantics; other documented zero/range rules are unchanged. Invalid floats are described in error text, never echoed as non-standard JSON numbers. DoIP `?timeout=` also requires a finite positive value.
+
+| ID | Type | Requirement |
+|----|------|-------------|
+| `REQ-J1939WIN-08` | Unwanted behaviour | If a CLI float option is non-finite, the system shall reject it before file processing or transport access and return strict JSON-compatible error data. |

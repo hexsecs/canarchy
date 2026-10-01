@@ -2988,8 +2988,7 @@ _REFERENCE_ONLY_TOOL_ARGV: dict[str, tuple[str, ...]] = {
 # cannot fit is replaced by a stub envelope rather than crashing the server.
 
 _DEFAULT_MAX_RESPONSE_BYTES = 512_000
-# Reserve headroom for the truncation marker added after trimming.
-_TRUNCATION_MARKER_RESERVE = 4_096
+_MIN_MAX_RESPONSE_BYTES = 1_024
 _TRUNCATION_HINT = (
     "The response exceeded the MCP output cap and was truncated. Re-run the "
     "equivalent canarchy CLI command for the full result, or bound the input "
@@ -3003,6 +3002,8 @@ def _response_byte_limit() -> int:
         value = int(raw)
     except ValueError:
         return _DEFAULT_MAX_RESPONSE_BYTES
+    if 0 < value < _MIN_MAX_RESPONSE_BYTES:
+        raise ValueError("CANARCHY_MCP_MAX_RESPONSE_BYTES must be at least 1024 bytes")
     return value if value > 0 else _DEFAULT_MAX_RESPONSE_BYTES
 
 
@@ -3024,59 +3025,73 @@ def _payload_bytes(payload: dict[str, Any]) -> int:
 
 
 def bound_payload(payload: dict[str, Any], max_bytes: int) -> dict[str, Any]:
-    """Return ``payload`` reduced to fit in ``max_bytes`` of serialized JSON.
-
-    Oversized payloads are trimmed by repeatedly halving the longest list in
-    ``data``; each trimmed list is recorded with its original total so an
-    agent can distinguish "truncated" from "zero matches". If no list can be
-    trimmed further, ``data`` is replaced by a stub. The envelope itself
-    (``ok`` / ``command`` / ``warnings`` / ``errors``) is always preserved.
-    """
+    """Bound the final JSON text, including warnings and surviving list metadata."""
+    if max_bytes < _MIN_MAX_RESPONSE_BYTES:
+        raise ValueError("MCP response cap must be at least 1024 bytes")
     if _payload_bytes(payload) <= max_bytes:
         return payload
 
-    payload = copy.deepcopy(payload)
-    budget = max(max_bytes - _TRUNCATION_MARKER_RESERVE, 1_024)
-    truncated_lists: dict[str, dict[str, int]] = {}
-
-    while _payload_bytes(payload) > budget:
+    working = copy.deepcopy(payload)
+    totals: dict[str, int] = {}
+    while True:
         slots: list[tuple[Any, Any, str, int]] = []
-        _list_slots(payload.get("data", {}), "data", slots)
-        trimmable = [slot for slot in slots if slot[3] > 0]
-        if not trimmable:
-            # No list left to trim (e.g. one enormous string): keep the
-            # envelope, drop the data block, and say so explicitly.
-            payload["data"] = {
-                "truncated": True,
-                "truncation": {
-                    "max_response_bytes": max_bytes,
-                    "reason": "non-list data exceeded the output cap",
-                    "hint": _TRUNCATION_HINT,
-                },
-            }
-            break
-        container, key, path, length = max(trimmable, key=lambda slot: slot[3])
-        keep = length // 2
-        truncated_lists.setdefault(path, {"total_items": length})
-        truncated_lists[path]["returned_items"] = keep
-        container[key] = container[key][:keep]
-
-    if truncated_lists:
-        data = payload.get("data")
+        _list_slots(working.get("data", {}), "data", slots)
+        # Recompute paths after every trim: descendants removed with an ancestor
+        # must not claim that their previously retained rows are still present.
+        surviving = [
+            {"path": path, "total_items": totals[path], "returned_items": length}
+            for _, _, path, length in slots
+            if path in totals
+        ]
+        candidate = copy.deepcopy(working)
+        data = candidate.get("data")
         if isinstance(data, dict):
             data["truncated"] = True
             data["truncation"] = {
                 "max_response_bytes": max_bytes,
                 "hint": _TRUNCATION_HINT,
-                "lists": [
-                    {"path": path, **counts} for path, counts in sorted(truncated_lists.items())
-                ],
+                "lists": sorted(surviving, key=lambda entry: entry["path"]),
             }
-        warnings = payload.setdefault("warnings", [])
-        if isinstance(warnings, list):
-            warnings.append(_TRUNCATION_HINT)
+            candidate.setdefault("warnings", []).append(_TRUNCATION_HINT)
+            if _payload_bytes(candidate) <= max_bytes:
+                return candidate
+        trimmable = [slot for slot in slots if slot[3] > 0]
+        if not trimmable:
+            break
+        container, key, path, length = max(trimmable, key=lambda slot: slot[3])
+        totals.setdefault(path, length)
+        container[key] = container[key][: length // 2]
 
-    return payload
+    # Scalars and the envelope itself may be arbitrarily large. Try preserving
+    # diagnostics first, then use a compact envelope with an actionable hint.
+    working["data"] = {
+        "truncated": True,
+        "truncation": {
+            "max_response_bytes": max_bytes,
+            "reason": "data or diagnostics exceeded the output cap",
+            "hint": _TRUNCATION_HINT,
+        },
+    }
+    if _payload_bytes(working) <= max_bytes:
+        return working
+    command = payload.get("command", "mcp")
+    if not isinstance(command, str) or len(json.dumps(command)) > 128:
+        command = "mcp"
+    errors = payload.get("errors", [])
+    code = errors[0].get("code") if errors and isinstance(errors[0], dict) else None
+    if not isinstance(code, str) or len(json.dumps(code)) > 128:
+        code = "RESPONSE_TRUNCATED"
+    return {
+        "ok": payload.get("ok", False),
+        "command": command,
+        "data": working["data"],
+        "warnings": [],
+        "errors": (
+            [{"code": code, "message": "Diagnostics exceeded output cap; re-run via CLI."}]
+            if payload.get("errors")
+            else []
+        ),
+    }
 
 
 def _tool_execution_error_payload(name: str, exc: BaseException) -> dict[str, Any]:
@@ -3204,10 +3219,17 @@ def _missing_ack_active_payload(name: str) -> dict[str, Any]:
     }
 
 
+def _tool_result(payload: dict[str, Any]) -> types.CallToolResult:
+    """Keep MCP failure status consistent with the canonical command envelope."""
+    payload = bound_payload(payload, _response_byte_limit())
+    return types.CallToolResult(
+        content=[types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))],
+        isError=payload.get("ok") is False,
+    )
+
+
 @server.call_tool()
-async def handle_call_tool(
-    name: str, arguments: dict[str, Any] | None
-) -> list[types.TextContent] | types.CallToolResult:
+async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> types.CallToolResult:
     if name not in _TOOL_NAMES:
         raise ValueError(f"Unknown tool: {name!r}")
     args = arguments or {}
@@ -3216,7 +3238,7 @@ async def handle_call_tool(
         # consistent with the `cannelloni send` exclusion. See the "Excluded"
         # table in docs/design/mcp-server.md.
         payload = _doip_excluded_payload(name)
-        return [types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))]
+        return _tool_result(payload)
     if name in _ACTIVE_TRANSMIT_TOOLS:
         # The CLI surface already enforces `--ack-active`; the MCP gate
         # is the *separate* opt-in token that prevents a confused agent
@@ -3225,7 +3247,7 @@ async def handle_call_tool(
         # `REQ-ATS-11` / `REQ-ATS-12`.
         if args.get("ack_active") is not True:
             payload = _missing_ack_active_payload(name)
-            return [types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))]
+            return _tool_result(payload)
         # Default dry_run=true for agent-initiated calls (REQ-ATS-13).
         # The argv builder respects an explicit `dry_run=false` and
         # otherwise emits --dry-run.
@@ -3244,16 +3266,13 @@ async def handle_call_tool(
         stdin_param = _stdin_sentinel_param(name, args)
         if stdin_param is not None:
             payload = _stdin_sentinel_payload(name, stdin_param)
-            return types.CallToolResult(
-                content=[types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))],
-                isError=True,
-            )
+            return _tool_result(payload)
         argv = _build_argv(name, args)
         expected_reference_argv = _REFERENCE_ONLY_TOOL_ARGV.get(name)
         if expected_reference_argv is not None and tuple(argv) != expected_reference_argv:
             # Fail closed rather than run whatever the builder produced (#530).
             payload = _reference_only_violation_payload(name)
-            return [types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))]
+            return _tool_result(payload)
         _, result = await asyncio.to_thread(execute_command, argv)
         if result is None:
             payload = {
@@ -3271,13 +3290,13 @@ async def handle_call_tool(
         # invoked so errors are attributable programmatically (#446).
         if isinstance(payload, dict) and payload.get("command") == "cli":
             payload["command"] = name
-        payload = bound_payload(payload, _response_byte_limit())
     except Exception as exc:  # noqa: BLE001 - isolation boundary by design
         payload = _tool_execution_error_payload(name, exc)
-    return [types.TextContent(type="text", text=json.dumps(payload, sort_keys=True))]
+    return _tool_result(payload)
 
 
 def run_server() -> None:
+    _response_byte_limit()  # Reject unsupported caps before opening the transport.
     # The MCP stdio server owns `sys.stdin` / `sys.stdout` as the
     # JSON-RPC protocol stream. Any CLI command we invoke from inside
     # `handle_call_tool` must NOT block on `sys.stdin.readline()` —
