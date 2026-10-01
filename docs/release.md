@@ -38,7 +38,8 @@ For the first public release, use TestPyPI first.
 5. Tag the release with `vX.Y.Z`.
 6. Build and verify artifacts locally from the release version.
 7. Publish to TestPyPI first if this is the first release or if the release workflow changed.
-8. Publish to PyPI from the same release version or tag.
+8. Publish to PyPI from the release tag `vX.Y.Z` — not from `main`, which carries the next
+   `.devN` version once development reopens. The workflow refuses any other ref.
 9. Create the GitHub release notes from the full versioned changelog section for `X.Y.Z`; do not summarize or shorten the release notes.
 10. After the release is cut and the release artifacts are published, advance `src/canarchy/__init__.py` on `main` to the next development version in a follow-up commit.
 
@@ -106,12 +107,26 @@ The repository includes a manual GitHub Actions workflow at `.github/workflows/p
 How to use it:
 
 1. Open the `publish` workflow in GitHub Actions.
-2. Run it manually with `repository=testpypi` for the first dry run.
-3. Verify the published package from TestPyPI.
-4. Run it again with `repository=pypi` for the real publication.
+2. Under **Use workflow from**, switch to the **Tags** tab and select the release tag
+   `vX.Y.Z`. The control defaults to the `main` branch, which is the wrong ref for a release.
+3. Run it with `repository=testpypi` for a dry run when one is warranted.
+4. Verify the published package from TestPyPI.
+5. Run it again from the same tag with `repository=pypi` for the real publication.
+
+From the command line, the equivalent real publication is:
+
+```bash
+gh workflow run publish.yml --ref vX.Y.Z -f repository=pypi
+```
 
 Workflow behavior:
 
+* when publishing to `pypi`, refuses to build unless the run was dispatched from a tag,
+  the tag is exactly `v` plus `__version__`, and that version is a final `X.Y.Z` release
+  with no `.dev`, pre-release, post-release or local segment
+  (`scripts/check_release_ref.py`, tested in `tests/test_release_ref.py`)
+* does not restrict `testpypi`, which stays available for rehearsing workflow changes
+  from any ref
 * builds sdist and wheel artifacts with `uv build`
 * runs `twine check` before any upload
 * publishes to separate GitHub environments for `testpypi` and `pypi`
@@ -131,6 +146,9 @@ If trusted publishing is not ready yet, use an API token with the narrowest poss
 
 * Use the [distribution and launch packet](launch-packet.md) for ecosystem listing copy, launch announcements, and search-engine submission instructions after publication.
 * Release tags should match the package version exactly, prefixed with `v`.
+* The ref check exists because dispatching `publish` from `main` while cutting 0.10.0
+  uploaded `0.10.1.dev0` to PyPI instead (#559). PyPI never accepts a version twice, so a
+  wrong upload cannot be replaced, only yanked.
 * GitHub release notes should use the complete text from the matching `CHANGELOG.md` version section verbatim.
 * If the release introduces breaking CLI or output-contract changes, bump the major version according to the documented SemVer policy.
 * If publication metadata or workflow changes, repeat the TestPyPI path before the next real PyPI release.
