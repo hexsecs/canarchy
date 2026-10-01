@@ -31,6 +31,15 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v8.1.0
 
+      # Fails the run before anything is built when publishing to PyPI from
+      # anything but the release tag matching a final __version__. Dispatching
+      # from the default `main` once uploaded a .dev build instead of the
+      # release (issue #559), and PyPI never accepts a version twice.
+      - name: Verify release ref
+        env:
+          PUBLISH_TARGET: ${{ inputs.repository }}
+        run: python scripts/check_release_ref.py --target "$PUBLISH_TARGET"
+
       - name: Build distribution artifacts
         run: uv build
 
