@@ -8,7 +8,7 @@ non-trivial changes.
 
 ## Project shape
 
-* CANarchy is implemented in Python and targets Python 3.12 or newer.
+* CANarchy is implemented in Python and targets Python 3.11 or newer.
 * `uv` is the dependency / environment / build tool.
 * The CLI is the project contract; the REPL and TUI are views over the
   same engine. New behaviour goes through the command layer.
@@ -59,7 +59,7 @@ hand — let `uv` do that.
 Every push to `main` and every pull request runs two workflows:
 
 * [`.github/workflows/test.yml`](.github/workflows/test.yml) — `pytest`
-  matrix on Python 3.12 and 3.13. Match locally with
+  matrix on Python 3.11, 3.12, and 3.13. Match locally with
   `uv run pytest tests/ -q`.
 * [`.github/workflows/lint.yml`](.github/workflows/lint.yml) — `ruff check`
   and `ruff format --check`. Match locally with `uv run ruff check`

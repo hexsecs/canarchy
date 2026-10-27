@@ -90,12 +90,12 @@ def _fail(name: str, detail: str, hint: str) -> CheckPayload:
 def _check_python_version() -> CheckPayload:
     major, minor, micro = sys.version_info[:3]
     version = f"Python {major}.{minor}.{micro}"
-    if (major, minor) >= (3, 12):
+    if (major, minor) >= (3, 11):
         return _ok("python_version", version)
     return _fail(
         "python_version",
-        f"{version} is below the required 3.12 baseline",
-        "Install Python 3.12 or newer and re-run `canarchy doctor`.",
+        f"{version} is below the required 3.11 baseline",
+        "Install Python 3.11 or newer and re-run `canarchy doctor`.",
     )
 
 
@@ -177,7 +177,7 @@ def _check_config_file() -> CheckPayload:
         return _warn(
             "config_file",
             "Cannot parse TOML — Python is missing the tomllib module.",
-            "Upgrade to Python 3.12 or newer.",
+            "Upgrade to Python 3.11 or newer.",
         )
     try:
         with path.open("rb") as handle:
@@ -303,11 +303,11 @@ def _check_mcp_server() -> CheckPayload:
 def _check_version_consistency() -> CheckPayload:
     try:
         from importlib.metadata import PackageNotFoundError, version as installed_version
-    except ImportError:  # pragma: no cover — Python 3.12+ has importlib.metadata
+    except ImportError:  # pragma: no cover — Python 3.11+ has importlib.metadata
         return _warn(
             "version_consistency",
             "importlib.metadata not available",
-            "Upgrade to Python 3.12 or newer.",
+            "Upgrade to Python 3.11 or newer.",
         )
     try:
         installed = installed_version("canarchy")

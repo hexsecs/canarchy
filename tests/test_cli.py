@@ -7129,13 +7129,20 @@ class DoctorCommandTests(unittest.TestCase):
         self.assertIn("summary:", stdout)
         self.assertIn("python_version", stdout)
 
-    def test_doctor_returns_fail_when_python_too_old(self) -> None:
+    def test_doctor_accepts_python_311(self) -> None:
         from canarchy import doctor as doctor_module
 
         with patch.object(doctor_module.sys, "version_info", (3, 11, 0, "final", 0)):
             check = doctor_module._check_python_version()
+        self.assertEqual(check["status"], "ok")
+
+    def test_doctor_returns_fail_when_python_too_old(self) -> None:
+        from canarchy import doctor as doctor_module
+
+        with patch.object(doctor_module.sys, "version_info", (3, 10, 0, "final", 0)):
+            check = doctor_module._check_python_version()
         self.assertEqual(check["status"], "fail")
-        self.assertIn("3.11.0", check["detail"])
+        self.assertIn("3.10.0", check["detail"])
         self.assertIsNotNone(check["hint"])
 
     def test_doctor_returns_fail_when_python_can_missing(self) -> None:

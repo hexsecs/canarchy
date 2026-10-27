@@ -11,7 +11,7 @@ Recheck destination rules and the released version before sending.
 
 ## Project facts and destinations
 
-CANarchy is a Python 3.12+ CLI-first CAN security research toolkit with JSON/JSONL
+CANarchy is a Python 3.11+ CLI-first CAN security research toolkit with JSON/JSONL
 events, J1939 workflows, and an MCP server. It is licensed GPL-3.0-or-later.
 
 | Purpose | Destination |
@@ -130,7 +130,7 @@ includes installation and examples.
 > without connecting to a vehicle.
 >
 > The project includes J1939 workflows, DBC decoding, and capture analysis.
-> It requires Python 3.12+ and is GPL-3.0-or-later. I'd welcome feedback on
+> It requires Python 3.11+ and is GPL-3.0-or-later. I'd welcome feedback on
 > the CLI and event format, particularly from people building repeatable
 > CAN analysis workflows.
 

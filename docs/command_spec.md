@@ -1691,7 +1691,7 @@ canarchy doctor [--json|--jsonl|--text]
 
 Covered checks:
 
-* `python_version` — Python is at least 3.12.
+* `python_version` — Python is at least 3.11.
 * `python_can` — `python-can` is importable in the active environment.
 * `transport_backend` — the effective transport backend resolves to a known backend.
 * `python_can_interface_dependency` — when the effective python-can interface is a known vendor backend such as `pcan`, `vector`, or `kvaser`, the corresponding python-can interface module is importable. This is an offline import check only; it does not open hardware.

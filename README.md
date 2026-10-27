@@ -37,7 +37,7 @@ pipx install canarchy          # isolated, on PATH everywhere
 # or:  pip install --user canarchy
 ```
 
-Requires Python 3.12+. Live transport uses [`python-can`](https://python-can.readthedocs.io/) (socketcan, virtual bus, UDP multicast, and more).
+Requires Python 3.11+. Live transport uses [`python-can`](https://python-can.readthedocs.io/) (socketcan, virtual bus, UDP multicast, and more).
 
 ## Try it in 60 seconds — no hardware required
 

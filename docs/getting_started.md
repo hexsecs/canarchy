@@ -8,13 +8,13 @@ This guide walks through the fastest way to see CANarchy produce familiar `candu
 
 ## Install
 
-CANarchy targets Python 3.12 or newer. Pick the install path that matches your use case.
+CANarchy targets Python 3.11 or newer. Pick the install path that matches your use case.
 
 ### Windows 11 quickstart
 
 Use **Windows Terminal with PowerShell 7** when possible. The commands below also work in Windows PowerShell 5.1 unless noted. `cmd.exe` is usable for CANarchy commands, but PowerShell is clearer for environment variables and JSON output.
 
-1. Install Python 3.12 or newer from [python.org](https://www.python.org/downloads/windows/) or with `winget`:
+1. Install Python 3.11 or newer from [python.org](https://www.python.org/downloads/windows/) or with `winget`:
 
    ```powershell
    winget install Python.Python.3.12
