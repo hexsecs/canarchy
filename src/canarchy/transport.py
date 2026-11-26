@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import os
 import queue
 import random
@@ -194,7 +195,7 @@ CANDUMP_CLASSIC_LINE_RE = re.compile(
 CANDUMP_FD_LINE_RE = re.compile(
     r"^\((?P<timestamp>\d+(?:\.\d+)?)\)\s+(?P<interface>\S+)\s+(?P<frame_id>[0-9A-Fa-f]+)##(?P<flags>[0-9A-Fa-f])(?P<data>[0-9A-Fa-f]*)$"
 )
-SUPPORTED_CAPTURE_SUFFIXES = {".candump", ".log", ".pcap", ".pcapng"}
+SUPPORTED_CAPTURE_SUFFIXES = {".candump", ".log", ".pcap", ".pcapng", ".jsonl"}
 CAN_ERR_FLAG = 0x20000000
 SUPPORTED_CANDUMP_FD_FLAGS = 0x3
 CAPTURE_INFO_MAX_FRAMES_HINT = 500_000
@@ -836,6 +837,10 @@ class LocalTransport:
                 yield from iter_pcap_file(
                     path, offset=offset, max_frames=max_frames, seconds=seconds
                 )
+            elif path is not None and self._is_jsonl_path(path):
+                yield from iter_jsonl_file(
+                    path, offset=offset, max_frames=max_frames, seconds=seconds
+                )
             else:
                 yield from iter_candump_file(
                     path, offset=offset, max_frames=max_frames, seconds=seconds
@@ -1218,6 +1223,9 @@ class LocalTransport:
     def _is_pcap_path(self, path: Path) -> bool:
         return path.suffix.lower() in {".pcap", ".pcapng"}
 
+    def _is_jsonl_path(self, path: Path) -> bool:
+        return path.suffix.lower() == ".jsonl"
+
     def _capture_file_path(self, file_name: str) -> Path | None:
         if file_name == "-":
             return None  # Signal to use stdin
@@ -1238,7 +1246,8 @@ class LocalTransport:
             raise TransportError(
                 "CAPTURE_FORMAT_UNSUPPORTED",
                 f"Capture source '{file_name}' uses an unsupported file format.",
-                "Use a candump log file (.candump, .log) or pcap file (.pcap, .pcapng).",
+                "Use a candump log file (.candump, .log), a pcap file (.pcap, .pcapng), "
+                "or a JSONL frame-event file (.jsonl).",
             )
         return path
 
@@ -1350,6 +1359,12 @@ def candump_parse_warnings(reports: list[CandumpParseReport]) -> list[str]:
             continue
         seen.add(report.path)
         source = "stdin" if report.path == "-" else report.path
+        if report.path.lower().endswith(".jsonl"):
+            warnings.append(
+                f"0 of {report.total_lines} lines matched JSONL frame-event format "
+                f"in {source}; the file may be malformed or not a JSONL capture."
+            )
+            continue
         warnings.append(
             f"0 of {report.total_lines} lines matched candump format in {source}; "
             "the file may be malformed or not a candump capture."
@@ -1413,6 +1428,107 @@ def iter_candump_file(
 def load_candump_file(path: Path) -> list[CanFrame]:
     frames: list[CanFrame] = []
     for frame in iter_candump_file(path):
+        frames.append(frame)
+    return frames
+
+
+def frame_from_jsonl_event(event: object) -> CanFrame | None:
+    """Build a :class:`CanFrame` from one decoded JSONL event, or ``None``.
+
+    Accepts the FrameEvent shape canarchy itself writes (``--jsonl`` output
+    and ``datasets convert``): ``{"event_type": "frame", "payload": {"frame":
+    {...}}}`` where the frame mapping is :meth:`CanFrame.to_payload` output.
+    Anything else — non-frame events such as alerts, malformed payloads,
+    frames that fail validation — returns ``None`` so readers can skip the
+    line the way the candump reader skips lines it cannot parse.
+    """
+
+    if not isinstance(event, dict) or event.get("event_type") != "frame":
+        return None
+    payload = event.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    frame_data = payload.get("frame")
+    if not isinstance(frame_data, dict):
+        return None
+    timestamp = frame_data.get("timestamp")
+    if timestamp is None:
+        timestamp = event.get("timestamp")
+    try:
+        return CanFrame(
+            arbitration_id=frame_data["arbitration_id"],
+            data=bytes.fromhex(frame_data["data"]),
+            timestamp=timestamp,
+            interface=frame_data.get("interface"),
+            is_extended_id=frame_data.get("is_extended_id", False),
+            is_remote_frame=frame_data.get("is_remote_frame", False),
+            is_error_frame=frame_data.get("is_error_frame", False),
+            bitrate_switch=frame_data.get("bitrate_switch", False),
+            error_state_indicator=frame_data.get("error_state_indicator", False),
+            frame_format=frame_data.get("frame_format", "can"),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def iter_jsonl_file(
+    path: Path,
+    *,
+    offset: int = 0,
+    max_frames: int | None = None,
+    seconds: float | None = None,
+) -> Iterator[CanFrame]:
+    """Yield frames from a JSONL frame-event capture file.
+
+    Mirrors :func:`iter_candump_file` semantics: blank lines, non-frame
+    events, and unparseable lines are skipped rather than fatal; ``offset``,
+    ``max_frames``, and ``seconds`` bound the read the same way; and a parse
+    report is recorded for capture-info warnings.
+    """
+
+    yielded = 0
+    parsed_count = 0
+    total_lines = 0
+    start_timestamp: float | None = None
+
+    handle = path.open(encoding="utf-8")
+    try:
+        for raw_line in handle:
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            total_lines += 1
+            try:
+                event = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+            frame = frame_from_jsonl_event(event)
+            if frame is None:
+                continue
+            parsed_count += 1
+            if parsed_count <= offset:
+                continue
+            if start_timestamp is None:
+                start_timestamp = frame.timestamp
+            if (
+                seconds is not None
+                and start_timestamp is not None
+                and frame.timestamp is not None
+                and frame.timestamp - start_timestamp > seconds
+            ):
+                break
+            yield frame
+            yielded += 1
+            if max_frames is not None and yielded >= max_frames:
+                break
+    finally:
+        handle.close()
+        _record_parse_report(path, total_lines, parsed_count)
+
+
+def load_jsonl_file(path: Path) -> list[CanFrame]:
+    frames: list[CanFrame] = []
+    for frame in iter_jsonl_file(path):
         frames.append(frame)
     return frames
 
@@ -1573,9 +1689,61 @@ def _pcap_capture_metadata(path: Path) -> CaptureMetadata:
     )
 
 
+def _jsonl_capture_metadata(path: Path) -> CaptureMetadata:
+    """Read metadata from a JSONL frame-event file (always a full scan).
+
+    The candump fast-scan estimation does not apply: JSONL frame lines vary
+    too much in length for a size-based estimate to be meaningful.
+    """
+
+    first_timestamp: float | None = None
+    last_timestamp: float | None = None
+    interfaces: set[str] = set()
+    arbitration_ids: set[int] = set()
+    frame_count = 0
+
+    for frame in iter_jsonl_file(path):
+        if frame.timestamp is not None:
+            if first_timestamp is None:
+                first_timestamp = frame.timestamp
+            last_timestamp = frame.timestamp
+        frame_count += 1
+        interfaces.add(frame.interface or "unknown")
+        arbitration_ids.add(frame.arbitration_id)
+
+    if frame_count == 0:
+        raise TransportError(
+            "CAPTURE_SOURCE_INVALID",
+            f"Capture source '{path}' contains no valid frames.",
+            "Verify the file contains JSONL frame events.",
+        )
+
+    if first_timestamp is None or last_timestamp is None:
+        first_timestamp = 0.0
+        last_timestamp = 0.0
+
+    duration_seconds = max(0.0, last_timestamp - first_timestamp)
+    suggested_max_frames, suggested_seconds = _capture_info_suggestions(
+        frame_count, duration_seconds
+    )
+
+    return CaptureMetadata(
+        frame_count=frame_count,
+        duration_seconds=duration_seconds,
+        unique_ids=len(arbitration_ids),
+        interfaces=sorted(interfaces),
+        first_timestamp=first_timestamp,
+        last_timestamp=last_timestamp,
+        suggested_max_frames=suggested_max_frames,
+        suggested_seconds=suggested_seconds,
+    )
+
+
 def capture_metadata(path: Path) -> CaptureMetadata:
     if path.suffix.lower() in {".pcap", ".pcapng"}:
         return _pcap_capture_metadata(path)
+    if path.suffix.lower() == ".jsonl":
+        return _jsonl_capture_metadata(path)
     if path.stat().st_size >= FAST_SCAN_THRESHOLD_BYTES:
         return _fast_capture_metadata(path)
     return _full_capture_metadata(path)
