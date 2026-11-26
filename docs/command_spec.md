@@ -112,7 +112,8 @@ Supported file input today:
 * file-backed commands consume standard timestamped candump logs in the form `(timestamp) interface frame#data`
 * supported additional candump forms include classic RTR `id#R`, CAN FD `id##<flags><data>`, and error frames using a CAN error-flagged identifier
 * supported CAN FD flags today are the BRS and ESI bits in the single-nibble candump flags field
-* supported capture-file suffixes today are `.candump`, `.log`, `.pcap`, and `.pcapng`; `--file -` reads candump text from stdin for commands that explicitly support it
+* supported capture-file suffixes today are `.candump`, `.log`, `.pcap`, `.pcapng`, and `.jsonl`; `--file -` reads candump text from stdin for commands that explicitly support it
+* `.jsonl` capture files hold one JSON FrameEvent per line in the format canarchy itself emits (`--jsonl` output, `datasets convert`); non-frame events and malformed lines are skipped during parsing, as with candump input
 * pcap/pcapng support requires the file to use the CAN SocketCAN linktype (DLT 227); files with other linktypes are rejected with a clear error
 * pcap/pcapng files are always fully scanned (no fast-scan estimation); the binary format does not support text-based head/tail estimation
 * malformed log lines are skipped during capture parsing rather than falling back to fixture data; commands that require capture metadata or explicitly validate stdin emptiness return structured errors when no valid frames are available

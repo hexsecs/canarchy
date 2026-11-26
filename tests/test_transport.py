@@ -26,9 +26,12 @@ from canarchy.transport import (
     _fast_capture_metadata,
     build_live_backend,
     capture_metadata,
+    collect_parse_reports,
     iter_candump_file,
     iter_generated_frames,
+    iter_jsonl_file,
     load_candump_file,
+    load_jsonl_file,
     parse_candump_line,
     python_can,
 )
@@ -913,6 +916,83 @@ class PcapSupportTests(unittest.TestCase):
         with self.assertRaises(TransportError) as ctx:
             transport.frames_from_file(str(FIXTURES / "sample.dbc"))
         self.assertEqual(ctx.exception.code, "CAPTURE_FORMAT_UNSUPPORTED")
+
+
+class JsonlSupportTests(unittest.TestCase):
+    """JSONL frame-event read support (issue #565).
+
+    The fixture holds five frame events plus one malformed line, one blank
+    line, and a trailing non-frame alert event — the shape `simulate --jsonl`
+    actually produces.
+    """
+
+    def test_iter_jsonl_yields_correct_frames(self) -> None:
+        frames = list(iter_jsonl_file(FIXTURES / "sample.jsonl"))
+        self.assertEqual(len(frames), 5)
+
+        self.assertEqual(frames[0].arbitration_id, 0x0CF00400)
+        self.assertEqual(frames[0].data, bytes.fromhex("0001020304050607"))
+        self.assertAlmostEqual(frames[0].timestamp, 0.0)
+        self.assertTrue(frames[0].is_extended_id)
+        self.assertEqual(frames[0].interface, "can0")
+
+        self.assertEqual(frames[3].arbitration_id, 0x123)
+        self.assertFalse(frames[3].is_extended_id)
+
+        self.assertEqual(frames[4].frame_format, "can_fd")
+        self.assertTrue(frames[4].bitrate_switch)
+        self.assertEqual(len(frames[4].data), 16)
+
+    def test_iter_jsonl_records_parse_report(self) -> None:
+        with collect_parse_reports() as reports:
+            list(iter_jsonl_file(FIXTURES / "sample.jsonl"))
+        self.assertEqual(len(reports), 1)
+        # 7 non-empty lines: 5 frame events, 1 malformed line, 1 alert event.
+        self.assertEqual(reports[0].total_lines, 7)
+        self.assertEqual(reports[0].parsed_lines, 5)
+
+    def test_iter_jsonl_respects_max_frames(self) -> None:
+        frames = list(iter_jsonl_file(FIXTURES / "sample.jsonl", max_frames=2))
+        self.assertEqual(len(frames), 2)
+
+    def test_iter_jsonl_respects_offset(self) -> None:
+        frames = list(iter_jsonl_file(FIXTURES / "sample.jsonl", offset=3))
+        self.assertEqual(len(frames), 2)
+        self.assertEqual(frames[0].arbitration_id, 0x123)
+
+    def test_iter_jsonl_respects_seconds_window(self) -> None:
+        frames = list(iter_jsonl_file(FIXTURES / "sample.jsonl", seconds=0.5))
+        self.assertEqual(len(frames), 3)
+        self.assertAlmostEqual(frames[-1].timestamp, 0.5)
+
+    def test_load_jsonl_file(self) -> None:
+        frames = load_jsonl_file(FIXTURES / "sample.jsonl")
+        self.assertEqual(len(frames), 5)
+
+    def test_jsonl_round_trip_through_own_writer_shape(self) -> None:
+        from canarchy.models import FrameEvent, serialize_events
+
+        originals = load_jsonl_file(FIXTURES / "sample.jsonl")
+        events = serialize_events(
+            [FrameEvent(frame=frame, source="test.roundtrip").to_event() for frame in originals]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "roundtrip.jsonl"
+            path.write_text("".join(json.dumps(event) + "\n" for event in events))
+            reread = load_jsonl_file(path)
+        self.assertEqual(reread, originals)
+
+    def test_transport_reads_jsonl_capture(self) -> None:
+        frames = LocalTransport().frames_from_file(str(FIXTURES / "sample.jsonl"))
+        self.assertEqual(len(frames), 5)
+        self.assertEqual(frames[0].arbitration_id, 0x0CF00400)
+
+    def test_jsonl_capture_metadata(self) -> None:
+        meta = capture_metadata(FIXTURES / "sample.jsonl")
+        self.assertEqual(meta.frame_count, 5)
+        self.assertAlmostEqual(meta.duration_seconds, 1.5)
+        self.assertEqual(meta.unique_ids, 4)
+        self.assertEqual(meta.interfaces, ["can0"])
 
 
 class StdinSupportTests(unittest.TestCase):
