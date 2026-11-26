@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-26
+
 ### Added
 
 * **Capture readers accept canarchy's own JSONL frame-event files (#565).** Commands that read captures (`stats`, `capture-info`, `j1939 decode`, `filter`, `compare`, the `re` suite, and their MCP equivalents) now accept `.jsonl` files in the FrameEvent format the toolkit itself emits via `--jsonl` and `datasets convert`, so `simulate --jsonl > traffic.jsonl` can be fed straight back into analysis. Non-frame events (such as a simulate run's trailing alert), blank lines, and malformed lines are skipped with the same parse-report discipline as candump input, and `offset` / `max_frames` / `seconds` bounds behave identically.
